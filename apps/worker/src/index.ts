@@ -2,6 +2,7 @@ import { Container } from "./core/container";
 import { Router } from "./core/router/router";
 import { mountAll } from "./core/router/mount";
 import { tokenAuth } from "./core/router/middlewares/auth";
+import { AutoMigration, ensureR2Bucket } from "./core/auto-migration";
 
 import { AuthModule } from "./modules/auth/routes";
 import { ProductsModule } from "./modules/products/routes";
@@ -11,24 +12,23 @@ import { SeoModule } from "./modules/seo/routes";
 
 import { AuthRepo } from "./modules/auth/repo";
 import { AuthService } from "./modules/auth/service";
-
 import { ProductsRepo } from "./modules/products/repo";
 import { ProductsService } from "./modules/products/service";
-
 import { MediaRepo } from "./modules/media/repo";
 import { MediaService } from "./modules/media/service";
-
 import { AddonsRepo } from "./modules/addons/repo";
 import { AddonsService } from "./modules/addons/service";
-
 import { SeoRepo } from "./modules/seo/repo";
 import { SeoService } from "./modules/seo/service";
+
+// Global auto-setup state
+let autoSetupDone = false;
 
 function buildContainer(env: any) {
   const c = new Container();
 
   c.bind("auth.repo", () => new AuthRepo(env.DB));
-  c.bind("auth.service", (x) => new AuthService(x.get("auth.repo"), env.TOKEN_SECRET));
+  c.bind("auth.service", (x) => new AuthService(x.get("auth.repo"), env.TOKEN_SECRET || "default-secret-change-me"));
 
   c.bind("products.repo", () => new ProductsRepo(env.DB));
   c.bind("products.service", (x) => new ProductsService(x.get("products.repo")));
@@ -48,29 +48,63 @@ function buildContainer(env: any) {
 function buildRouter(c: Container) {
   const r = new Router();
 
-  // Global token parsing (sets ctx.user if token is valid)
-  const withAuth = (h: any) => async (ctx: any, next: any) => h(ctx, next);
-
-  // Apply tokenAuth to all routes by wrapping handlers in modules (simple approach):
-  // Here we mount a small "preflight" route group pattern: each route will call tokenAuth first.
-  // (Keep it explicit and predictable.)
-  const originalGet = r.get.bind(r);
-  const originalPost = r.post.bind(r);
-
-  r.get = (path: string, ...handlers: any[]) => originalGet(path, tokenAuth as any, ...handlers);
-  r.post = (path: string, ...handlers: any[]) => originalPost(path, tokenAuth as any, ...handlers);
-
-  mountAll(r, c, [AuthModule, ProductsModule, MediaModule, AddonsModule, SeoModule]);
-
-  r.get("/", async (ctx: any) => ctx.json({ ok: true, name: "product-worker" }));
+  mountAll(r, [
+    AuthModule(c),
+    tokenAuth(c, [
+      ProductsModule(c),
+      MediaModule(c),
+      AddonsModule(c),
+      SeoModule(c),
+    ]),
+  ]);
 
   return r;
 }
 
 export default {
-  async fetch(req: Request, env: any): Promise<Response> {
+  async fetch(request: Request, env: any, ctx: any): Promise<Response> {
+    // Auto-setup on first request (only runs once)
+    if (!autoSetupDone) {
+      console.log("🧠 First request - running auto-setup...");
+      
+      try {
+        const migration = new AutoMigration(env);
+        const result = await migration.autoSetup();
+        
+        if (!result.success) {
+          console.error("Auto-setup failed:", result.error);
+          // Continue anyway - might be permissions issue
+        }
+        
+        // Check R2 bucket
+        await ensureR2Bucket(env);
+        
+        autoSetupDone = true;
+        console.log("✅ Auto-setup complete - ready for requests!");
+        
+      } catch (error) {
+        console.error("Auto-setup error:", error);
+        // Don't block requests even if setup fails
+      }
+    }
+
     const c = buildContainer(env);
     const router = buildRouter(c);
-    return router.handle(req, env);
+
+    try {
+      return await router.handle(request);
+    } catch (error: any) {
+      console.error("Request error:", error);
+      return new Response(
+        JSON.stringify({ 
+          error: "Internal Server Error",
+          message: error.message 
+        }), 
+        { 
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
   },
 };
