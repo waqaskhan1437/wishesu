@@ -1,14 +1,11 @@
 {
-  "name": "product-cloudflare-monorepo",
-  "version": "1.0.0",
+  "name": "product-cloudflare-auto",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
-    "setup": "echo 'Follow SETUP.md instructions'",
-    "dev": "cd apps/worker && npm run dev",
-    "deploy": "npx wrangler deploy",
-    "db:create": "npx wrangler d1 create product_db",
-    "db:migrate": "npx wrangler d1 execute product_db --file=apps/worker/src/core/db/migrations/0001_init.sql",
-    "r2:create": "npx wrangler r2 bucket create product-media"
+    "setup": "./auto-setup.sh",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^3.0.0"

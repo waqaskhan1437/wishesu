@@ -1,78 +1,53 @@
-# Product Website + Admin (Cloudflare Workers + D1 + R2) — Modular Starter
+# 🚀 AUTO DEPLOY - Product API
 
-This is a **foundation-first** scaffold:
-- Strict modular structure (each responsibility in its own file)
-- Modules communicate through a **Container/Connector**
-- RBAC + Auth are **first-class** (no admin routes without roles)
+## ⚡ ONE COMMAND SETUP
 
-## Apps
-- `apps/worker` — Cloudflare Worker API (D1 + R2)
-- `apps/admin` — static admin panel (ES Modules, lazy-loaded tabs)
-
----
-
-## 1) Worker setup
-
-### Prereqs
-- Node 18+
-- Wrangler
-
-### Install
+### For Mac/Linux:
 ```bash
-cd apps/worker
-npm i
+chmod +x auto-setup.sh
+./auto-setup.sh
 ```
 
-### Configure Wrangler
-Edit `wrangler.toml`:
-- D1 database id/name
-- R2 bucket name
-
-### Create tables (D1)
-```bash
-wrangler d1 execute product_db --file=src/core/db/migrations/0001_init.sql
+### For Windows:
+```cmd
+auto-setup.bat
 ```
 
-### Dev
+That's it! The script will:
+✅ Create D1 database automatically
+✅ Update configuration automatically  
+✅ Run migrations automatically
+✅ Create R2 bucket automatically
+✅ Set security token automatically
+✅ Deploy to Cloudflare automatically
+
+## 🔄 For GitHub Auto-Deploy
+
+After running auto-setup once locally:
+
+1. Commit and push to GitHub:
 ```bash
-wrangler dev
+git add .
+git commit -m "Setup complete"
+git push
 ```
 
-### Create first owner user (one-time)
-```bash
-curl -X POST http://localhost:8787/setup/owner \
-  -H "content-type: application/json" \
-  -d '{"email":"owner@example.com","password":"ChangeMe123!"}'
-```
+2. Connect to Cloudflare Pages:
+   - Go to Cloudflare Dashboard
+   - Workers & Pages → Create
+   - Connect to Git → Select your repo
+   - Build command: `echo "No build needed"`
+   - Deploy!
 
-### Login
-```bash
-curl -X POST http://localhost:8787/auth/login \
-  -H "content-type: application/json" \
-  -d '{"email":"owner@example.com","password":"ChangeMe123!"}'
-```
+## 🌐 Your API Endpoints
 
----
+After deployment:
+- `POST /auth/register` - Register user
+- `POST /auth/login` - Login
+- `GET /products` - List products
+- `POST /products` - Create product
+- And more...
 
-## 2) Admin setup
+## 📚 Full Documentation
 
-This admin is **pure static** (no bundler). It uses ES module lazy-loading for tabs.
-
-### Run a simple static server
-From repo root:
-```bash
-cd apps/admin
-npx serve .
-```
-
-Open the URL shown by `serve`.
-
-Set API base URL in `apps/admin/src/core/apiClient.js` if needed.
-
----
-
-## Notes
-- Keep files under ~200 lines. Add features as new modules/files.
-- Do not import feature modules directly into each other. Use:
-  - Worker: `Container`
-  - Admin: `Connector`
+See `SETUP.md` for detailed manual setup.
