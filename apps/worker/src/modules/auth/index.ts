@@ -1,4 +1,3 @@
-// 📦 AUTH MODULE - Max 50 lines
 import { AuthRepository } from "./repository";
 import { AuthService } from "./service";
 import { AuthController } from "./controller";
@@ -9,19 +8,9 @@ export function AuthModule(container: any) {
   const controller = new AuthController(service);
 
   return {
-    name: "auth",
-    version: "1.0.0",
     routes: [
-      {
-        method: "POST",
-        path: "/auth/register",
-        handler: (req: Request) => controller.handle(req)
-      },
-      {
-        method: "POST",
-        path: "/auth/login",
-        handler: (req: Request) => controller.handle(req)
-      }
+      { method: "POST", path: "/auth/register", handler: (req: Request) => controller.handle(req) },
+      { method: "POST", path: "/auth/login", handler: (req: Request) => controller.handle(req) }
     ]
   };
 }

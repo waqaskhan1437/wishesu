@@ -1,5 +1,4 @@
-// 🗄️ AUTH REPOSITORY - Max 100 lines
-import { BaseRepository } from "../core/base/repository";
+import { BaseRepository } from "../../core/base/repository";
 
 export interface User {
   id: string;
@@ -18,10 +17,5 @@ export class AuthRepository extends BaseRepository<User> {
       .bind(email)
       .first();
     return result || null;
-  }
-
-  async emailExists(email: string): Promise<boolean> {
-    const user = await this.findByEmail(email);
-    return !!user;
   }
 }

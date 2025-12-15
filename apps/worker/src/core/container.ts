@@ -1,19 +1,13 @@
-export type Factory<T> = (c: Container) => T;
-
 export class Container {
-  private singletons = new Map<string, any>();
-  private factories = new Map<string, Factory<any>>();
+  private services = new Map();
 
-  bind<T>(key: string, factory: Factory<T>) {
-    this.factories.set(key, factory);
+  bind(name: string, factory: any) {
+    this.services.set(name, factory);
   }
 
-  get<T>(key: string): T {
-    if (this.singletons.has(key)) return this.singletons.get(key);
-    const f = this.factories.get(key);
-    if (!f) throw new Error(`Container missing: ${key}`);
-    const v = f(this);
-    this.singletons.set(key, v);
-    return v;
+  get(name: string) {
+    const factory = this.services.get(name);
+    if (!factory) throw new Error(`Service not found: ${name}`);
+    return typeof factory === 'function' ? factory(this) : factory;
   }
 }

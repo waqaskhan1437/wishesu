@@ -1,4 +1,3 @@
-// 🎮 AUTH CONTROLLER - Max 100 lines
 import { BaseController } from "../../core/base/controller";
 import { AuthService } from "./service";
 
@@ -9,13 +8,12 @@ export class AuthController extends BaseController {
 
   async handle(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    const path = url.pathname;
 
-    if (path === "/auth/register" && request.method === "POST") {
+    if (url.pathname === "/auth/register" && request.method === "POST") {
       return this.register(request);
     }
 
-    if (path === "/auth/login" && request.method === "POST") {
+    if (url.pathname === "/auth/login" && request.method === "POST") {
       return this.login(request);
     }
 
@@ -35,8 +33,8 @@ export class AuthController extends BaseController {
   private async login(request: Request): Promise<Response> {
     try {
       const { email, password } = await this.parseBody<any>(request);
-      const token = await this.service.login(email, password);
-      return this.success({ token });
+      const result = await this.service.login(email, password);
+      return this.success(result);
     } catch (error: any) {
       return this.error(error.message, 401);
     }

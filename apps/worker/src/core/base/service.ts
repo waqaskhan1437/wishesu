@@ -1,6 +1,3 @@
-// 🔧 BASE SERVICE - Max 150 lines
-// Business logic layer
-
 import { IService } from "../interfaces";
 
 export abstract class BaseService<T> implements IService<T> {
@@ -15,7 +12,6 @@ export abstract class BaseService<T> implements IService<T> {
   }
 
   async create(data: any): Promise<T> {
-    // Validation happens here
     const validated = await this.validate(data);
     return await this.repository.create(validated);
   }
@@ -29,15 +25,5 @@ export abstract class BaseService<T> implements IService<T> {
     return await this.repository.delete(id);
   }
 
-  // Abstract validation - each service implements own rules
   protected abstract validate(data: any): Promise<Partial<T>>;
-
-  // Helper: Check if entity exists
-  protected async ensureExists(id: string): Promise<T> {
-    const entity = await this.get(id);
-    if (!entity) {
-      throw new Error(\`Entity not found: \${id}\`);
-    }
-    return entity;
-  }
 }
