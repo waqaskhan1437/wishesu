@@ -1,0 +1,13 @@
+name = "product-worker"
+main = "src/index.ts"
+compatibility_date = "2025-12-16"
+
+# Update these bindings for your account
+[[d1_databases]]
+binding = "DB"
+database_name = "product_db"
+database_id = "REPLACE_ME"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "product-media"

@@ -1,0 +1,10 @@
+.grid{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+.list{ display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+.item{
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px;
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+}
