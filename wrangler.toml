@@ -1,6 +1,6 @@
 name = "product-worker"
 main = "apps/worker/src/index.ts"
-compatibility_date = "2025-12-16"
+compatibility_date = "2025-12-14"
 
 # D1 Database - Will be auto-created by setup script
 [[d1_databases]]
