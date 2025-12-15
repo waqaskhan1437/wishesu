@@ -1,0 +1,24 @@
+name = "product-worker"
+main = "apps/worker/src/index.ts"
+compatibility_date = "2025-12-16"
+
+# D1 Database Configuration
+# IMPORTANT: Run these commands to set up your database:
+#   1. npx wrangler d1 create product_db
+#   2. Copy the database_id from output
+#   3. Replace YOUR_DATABASE_ID below with the actual ID
+[[d1_databases]]
+binding = "DB"
+database_name = "product_db"
+database_id = "YOUR_DATABASE_ID"
+
+# R2 Storage for Media
+# IMPORTANT: Run this command to create the bucket:
+#   npx wrangler r2 bucket create product-media
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "product-media"
+
+# Build configuration
+[build]
+command = "cd apps/worker && npx tsc"
