@@ -6,7 +6,7 @@ compatibility_date = "2025-12-16"
 [[d1_databases]]
 binding = "DB"
 database_name = "product_db"
-database_id = "YOUR_DATABASE_ID"
+database_id = "ac278da2-eb9a-4cb6-bdeb-be3eb17b22f5"
 
 # R2 Bucket - Will be auto-created by setup script
 [[r2_buckets]]
