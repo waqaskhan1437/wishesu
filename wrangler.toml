@@ -2,13 +2,11 @@ name = "product-worker"
 main = "apps/worker/src/index.ts"
 compatibility_date = "2025-12-14"
 
-# D1 Database - Will be auto-created by setup script
 [[d1_databases]]
 binding = "DB"
 database_name = "product_db"
 database_id = "ac278da2-eb9a-4cb6-bdeb-be3eb17b22f5"
 
-# R2 Bucket - Will be auto-created by setup script
 [[r2_buckets]]
 binding = "MEDIA"
 bucket_name = "product-media"

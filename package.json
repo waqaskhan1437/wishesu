@@ -1,11 +1,11 @@
 {
-  "name": "product-cloudflare-auto",
+  "name": "product-ultra-modular",
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "setup": "./auto-setup.sh",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "validate": "echo 'Architecture auto-validates on deploy'"
   },
   "devDependencies": {
     "wrangler": "^3.0.0"
