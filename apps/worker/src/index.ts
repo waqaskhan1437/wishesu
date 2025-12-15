@@ -1,0 +1,300 @@
+import { AutoMigration } from "./core/auto-migration";
+import { Container } from "./core/container";
+import { Router } from "./core/router";
+import { loadModules } from "./modules/loader";
+
+let initialized = false;
+
+const ADMIN_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --primary: #4f46e5; --primary-dark: #4338ca;
+      --bg: #f9fafb; --card: #fff; --border: #e5e7eb;
+      --text: #1f2937; --text-light: #6b7280;
+      --success: #10b981; --error: #ef4444;
+    }
+    body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    h1 { margin-bottom: 2rem; font-size: 2rem; }
+    .card { background: var(--card); border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-bottom: 2rem; }
+    .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 2rem; border-bottom: 2px solid var(--border); }
+    .tab { padding: 1rem 1.5rem; background: none; border: none; border-bottom: 3px solid transparent; 
+           cursor: pointer; font-weight: 500; color: var(--text-light); transition: all 0.2s; }
+    .tab:hover { color: var(--text); background: rgba(79,70,229,0.05); }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab.completed { color: var(--success); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .form-group { margin-bottom: 1.5rem; }
+    label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 500; }
+    input, textarea, select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); 
+                               border-radius: 8px; font-size: 0.875rem; font-family: inherit; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); }
+    small { color: var(--text-light); font-size: 0.75rem; }
+    .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 500; 
+           cursor: pointer; transition: all 0.2s; background: var(--border); }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .tab-nav { display: flex; justify-content: space-between; margin-top: 2rem; 
+               padding-top: 2rem; border-top: 1px solid var(--border); }
+    .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .media-item { position: relative; aspect-ratio: 1; border: 2px solid var(--border); 
+                  border-radius: 8px; overflow: hidden; background: #fafafa; }
+    .media-item img { width: 100%; height: 100%; object-fit: cover; }
+    .media-item .remove { position: absolute; top: 0.5rem; right: 0.5rem; background: var(--error); 
+                          color: white; border: none; border-radius: 50%; width: 28px; height: 28px; 
+                          cursor: pointer; font-size: 18px; line-height: 1; }
+    .addon-item { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; 
+                  margin-bottom: 1rem; background: #fafafa; }
+    .addon-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .addon-fields { display: grid; grid-template-columns: 2fr 1fr auto; gap: 1rem; align-items: end; }
+    .addon-remove { background: var(--error); color: white; border: none; padding: 0.75rem 1rem; 
+                    border-radius: 6px; cursor: pointer; font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📦 Product Manager</h1>
+    <div class="card">
+      <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+      <div class="tabs" id="tabs"></div>
+      <form id="form">
+        <div class="tab-content active" data-tab="0">
+          <div class="form-group"><label>Product Title *</label><input type="text" id="title" required></div>
+          <div class="form-group"><label>Slug *</label><input type="text" id="slug" required><small>Auto from title</small></div>
+          <div class="form-group"><label>Description</label><textarea id="description" rows="4"></textarea></div>
+          <div class="form-group"><label>Status</label>
+            <select id="status">
+              <option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option>
+            </select>
+          </div>
+        </div>
+        <div class="tab-content" data-tab="1">
+          <div class="form-group"><label>Price *</label><input type="number" id="price" min="0" step="0.01" required></div>
+          <div class="form-group"><label>Currency</label>
+            <select id="currency">
+              <option value="USD">USD ($)</option><option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option><option value="PKR">PKR (₨)</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Stock</label><input type="number" id="stock" min="0" value="0"></div>
+          <div class="form-group"><label>SKU</label><input type="text" id="sku"></div>
+        </div>
+        <div class="tab-content" data-tab="2">
+          <div class="form-group"><label>Images</label><input type="file" id="media" accept="image/*" multiple></div>
+          <div id="media-preview" class="media-grid"></div>
+        </div>
+        <div class="tab-content" data-tab="3">
+          <div class="form-group"><label>Addons</label><button type="button" class="btn btn-primary" id="add-addon">+ Add</button></div>
+          <div id="addons-list"></div>
+        </div>
+        <div class="tab-content" data-tab="4">
+          <div class="form-group"><label>Meta Title</label><input type="text" id="meta-title" maxlength="60">
+            <small><span id="tc">0</span>/60</small></div>
+          <div class="form-group"><label>Meta Description</label><textarea id="meta-desc" rows="3" maxlength="160"></textarea>
+            <small><span id="dc">0</span>/160</small></div>
+          <div class="form-group"><label>Keywords</label><input type="text" id="keywords"></div>
+          <div class="form-group"><label>Canonical URL</label><input type="url" id="canonical"></div>
+        </div>
+      </form>
+      <div class="tab-nav">
+        <button type="button" class="btn" id="prev" disabled>← Prev</button>
+        <button type="button" class="btn btn-primary" id="next">Next →</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const S={tab:0,completed:new Set(),images:[],addons:[]};
+    const tabs=['📝 Basic','💰 Pricing','🖼️ Media','➕ Addons','🔍 SEO'];
+    
+    function init(){
+      document.getElementById('tabs').innerHTML=tabs.map((t,i)=>
+        \`<button type="button" class="tab \${i===0?'active':''}" onclick="switchTab(\${i})">\${t}</button>\`).join('');
+      document.getElementById('prev').onclick=()=>switchTab(S.tab-1);
+      document.getElementById('next').onclick=()=>{
+        if(S.tab===4)save();else{S.completed.add(S.tab);switchTab(S.tab+1);}
+      };
+      document.getElementById('title').oninput=()=>{
+        if(!new URLSearchParams(location.search).get('id')){
+          document.getElementById('slug').value=document.getElementById('title').value
+            .toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+        }
+      };
+      document.getElementById('media').onchange=e=>{
+        for(const f of e.target.files){
+          const r=new FileReader();
+          r.onload=ev=>{S.images.push({id:Date.now()+Math.random(),preview:ev.target.result,file:f});renderMedia();};
+          r.readAsDataURL(f);
+        }
+      };
+      document.getElementById('add-addon').onclick=()=>{
+        S.addons.push({id:Date.now(),name:'',price:0,required:false});renderAddons();
+      };
+      document.getElementById('meta-title').oninput=e=>document.getElementById('tc').textContent=e.target.value.length;
+      document.getElementById('meta-desc').oninput=e=>document.getElementById('dc').textContent=e.target.value.length;
+      load();
+    }
+    
+    function switchTab(i){
+      if(i<0||i>4)return;
+      S.tab=i;
+      document.querySelectorAll('.tab').forEach((b,idx)=>{
+        b.className='tab'+(idx===i?' active':'')+(S.completed.has(idx)?' completed':'');
+      });
+      document.querySelectorAll('.tab-content').forEach((c,idx)=>{
+        c.className='tab-content'+(idx===i?' active':'');
+      });
+      document.getElementById('prev').disabled=i===0;
+      document.getElementById('next').textContent=i===4?'Save Product':'Next →';
+      document.getElementById('progress').style.width=((i+1)/5*100)+'%';
+    }
+    
+    function renderMedia(){
+      document.getElementById('media-preview').innerHTML=S.images.map((img,i)=>
+        \`<div class="media-item"><img src="\${img.preview}"><button type="button" class="remove" onclick="S.images.splice(\${i},1);renderMedia()">×</button></div>\`
+      ).join('');
+    }
+    
+    function renderAddons(){
+      document.getElementById('addons-list').innerHTML=S.addons.map((a,i)=>
+        \`<div class="addon-item">
+          <div class="addon-header"><strong>Addon \${i+1}</strong>
+            <button type="button" class="addon-remove" onclick="S.addons.splice(\${i},1);renderAddons()">Remove</button>
+          </div>
+          <div class="addon-fields">
+            <div class="form-group"><label>Name</label><input type="text" value="\${a.name}" onchange="S.addons[\${i}].name=this.value"></div>
+            <div class="form-group"><label>Price</label><input type="number" value="\${a.price}" step="0.01" onchange="S.addons[\${i}].price=parseFloat(this.value)||0"></div>
+            <div class="form-group"><label>Required</label>
+              <select onchange="S.addons[\${i}].required=this.value==='true'">
+                <option value="false" \${!a.required?'selected':''}>No</option>
+                <option value="true" \${a.required?'selected':''}>Yes</option>
+              </select>
+            </div>
+          </div>
+        </div>\`
+      ).join('');
+    }
+    
+    async function load(){
+      const id=new URLSearchParams(location.search).get('id');
+      if(!id)return;
+      try{
+        const r=await fetch('/products/'+id);
+        const p=await r.json();
+        document.getElementById('title').value=p.title||'';
+        document.getElementById('slug').value=p.slug||'';
+        document.getElementById('description').value=p.description||'';
+        document.getElementById('status').value=p.status||'draft';
+        document.getElementById('price').value=p.price||0;
+        document.getElementById('currency').value=p.currency||'USD';
+        document.getElementById('stock').value=p.stock||0;
+        document.getElementById('sku').value=p.sku||'';
+        if(p.images){S.images=p.images;renderMedia();}
+        if(p.addons){S.addons=p.addons;renderAddons();}
+        if(p.seo){
+          document.getElementById('meta-title').value=p.seo.meta_title||'';
+          document.getElementById('meta-desc').value=p.seo.meta_description||'';
+          document.getElementById('keywords').value=p.seo.keywords||'';
+          document.getElementById('canonical').value=p.seo.canonical_url||'';
+        }
+      }catch(e){console.error(e);alert('Load failed');}
+    }
+    
+    async function save(){
+      const btn=document.getElementById('next');
+      btn.disabled=true;btn.textContent='Saving...';
+      try{
+        const data={
+          title:document.getElementById('title').value,
+          slug:document.getElementById('slug').value,
+          description:document.getElementById('description').value,
+          status:document.getElementById('status').value,
+          price:parseFloat(document.getElementById('price').value)||0,
+          currency:document.getElementById('currency').value,
+          stock:parseInt(document.getElementById('stock').value)||0,
+          sku:document.getElementById('sku').value,
+          images:S.images,addons:S.addons,
+          seo:{
+            meta_title:document.getElementById('meta-title').value,
+            meta_description:document.getElementById('meta-desc').value,
+            keywords:document.getElementById('keywords').value,
+            canonical_url:document.getElementById('canonical').value
+          }
+        };
+        const id=new URLSearchParams(location.search).get('id');
+        const r=await fetch(id?'/products/'+id:'/products',{
+          method:id?'PUT':'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(data)
+        });
+        if(!r.ok)throw new Error('Save failed');
+        const res=await r.json();
+        alert('✅ Saved!');
+        if(!id&&res.id)location.href='?id='+res.id;
+      }catch(e){alert('❌ '+e.message);}
+      finally{btn.disabled=false;btn.textContent='Save Product';}
+    }
+    
+    init();
+  </script>
+</body>
+</html>`;
+
+export default {
+  async fetch(request: Request, env: any, ctx: any): Promise<Response> {
+    const url = new URL(request.url);
+    
+    // Serve admin dashboard
+    if (url.pathname === '/admin' || url.pathname === '/admin/') {
+      return new Response(ADMIN_HTML, {
+        headers: { 
+          'Content-Type': 'text/html',
+          'Cache-Control': 'no-cache'
+        }
+      });
+    }
+    
+    // Auto-setup on first API request
+    if (!initialized) {
+      const migration = new AutoMigration(env);
+      await migration.autoSetup();
+      initialized = true;
+    }
+
+    const container = new Container();
+    container.bind("db", () => env.DB);
+    container.bind("storage", () => env.MEDIA);
+    container.bind("secret", () => env.TOKEN_SECRET || "default-secret");
+
+    const router = new Router();
+    const modules = loadModules(container);
+    
+    modules.forEach(module => {
+      module.routes.forEach(route => {
+        router.add(route.method, route.path, route.handler);
+      });
+    });
+
+    try {
+      return await router.handle(request);
+    } catch (error: any) {
+      return new Response(
+        JSON.stringify({ error: error.message }), 
+        { 
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+  },
+};
