@@ -93,54 +93,60 @@
           const setPlayerSource = (videoUrl, posterUrl) => {
             if (!videoUrl) return;
 
-            const currentPlayerEl = document.getElementById('player');
-            if (!currentPlayerEl) return;
+            // Use UniversalVideoPlayer for all video types
+            const playerContainer = document.getElementById('universal-player-container');
+            if (playerContainer && typeof window.UniversalVideoPlayer !== 'undefined') {
+              // Re-render the player with the new video URL
+              window.UniversalVideoPlayer.render('universal-player-container', videoUrl, {
+                poster: posterUrl || '',
+                thumbnailUrl: posterUrl || ''
+              });
+            } else {
+              // Fallback: try old player element if UniversalVideoPlayer not available
+              const currentPlayerEl = document.getElementById('player');
+              if (!currentPlayerEl) return;
 
-            try {
-              if (window.productPlayer && window.productPlayer.source) {
-                window.productPlayer.source = {
-                  type: 'video',
-                  sources: [{ src: videoUrl }]
-                };
-                if (posterUrl && currentPlayerEl.tagName && currentPlayerEl.tagName.toLowerCase() === 'video') {
-                  currentPlayerEl.poster = posterUrl;
+              try {
+                if (window.productPlayer && window.productPlayer.source) {
+                  window.productPlayer.source = {
+                    type: 'video',
+                    sources: [{ src: videoUrl }]
+                  };
+                  if (posterUrl && currentPlayerEl.tagName && currentPlayerEl.tagName.toLowerCase() === 'video') {
+                    currentPlayerEl.poster = posterUrl;
+                  }
+                  if (typeof window.productPlayer.play === 'function') {
+                    window.productPlayer.play();
+                  }
+                  return;
                 }
-                if (typeof window.productPlayer.play === 'function') {
-                  window.productPlayer.play();
-                }
-                return;
+              } catch (e) {
+                console.warn('Failed to update player source. Rebuilding player...', e);
               }
-            } catch (e) {
-              console.warn('Failed to update player source. Rebuilding player...', e);
-            }
 
-            // Fallback: if the current player element isn't a <video> (e.g., YouTube embed), rebuild as HTML5 video
-            const playerEl = document.getElementById('player');
-            if (!playerEl) return;
+              // Last resort: rebuild as HTML5 video
+              const playerEl = document.getElementById('player');
+              if (!playerEl) return;
 
-            let videoEl = playerEl;
-            if (!videoEl.tagName || videoEl.tagName.toLowerCase() !== 'video') {
-              try {
-                if (window.productPlayer && typeof window.productPlayer.destroy === 'function') {
-                  window.productPlayer.destroy();
-                }
-              } catch (_) {}
+              let videoEl = playerEl;
+              if (!videoEl.tagName || videoEl.tagName.toLowerCase() !== 'video') {
+                try {
+                  if (window.productPlayer && typeof window.productPlayer.destroy === 'function') {
+                    window.productPlayer.destroy();
+                  }
+                } catch (_) {}
 
-              videoEl = document.createElement('video');
-              videoEl.id = 'player';
-              videoEl.playsInline = true;
-              videoEl.controls = true;
-              if (posterUrl) videoEl.poster = posterUrl;
-              playerEl.replaceWith(videoEl);
-            }
+                videoEl = document.createElement('video');
+                videoEl.id = 'player';
+                videoEl.playsInline = true;
+                videoEl.controls = true;
+                videoEl.style.cssText = 'width: 100%; height: 100%; border-radius: 12px;';
+                if (posterUrl) videoEl.poster = posterUrl;
+                playerEl.replaceWith(videoEl);
+              }
 
-            videoEl.src = videoUrl;
-            videoEl.play().catch(() => {});
-
-            if (window.Plyr) {
-              try {
-                window.productPlayer = new window.Plyr('#player', PLAYER_OPTIONS);
-              } catch (_) {}
+              videoEl.src = videoUrl;
+              videoEl.play().catch(() => {});
             }
           };
 

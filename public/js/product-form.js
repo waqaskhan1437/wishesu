@@ -62,35 +62,159 @@
       }
     });
 
+  // Upload file to R2 with progress tracking
+  async function uploadFileWithProgress(file, label) {
+    return new Promise((resolve, reject) => {
+      const sessionId = Date.now().toString();
+      const filename = file.name;
+
+      // Create or get progress container
+      let progressContainer = document.getElementById('upload-progress-container');
+      if (!progressContainer) {
+        progressContainer = document.createElement('div');
+        progressContainer.id = 'upload-progress-container';
+        progressContainer.style.cssText = 'margin: 15px 0; padding: 10px; background: #f3f4f6; border-radius: 8px;';
+        form.insertBefore(progressContainer, form.querySelector('button[type="submit"]'));
+      }
+
+      // Create progress element
+      const progressEl = document.createElement('div');
+      progressEl.style.cssText = 'margin: 8px 0;';
+      progressEl.innerHTML = `
+        <div style="font-size: 14px; margin-bottom: 5px; color: #374151;">
+          <strong>${label}:</strong> ${filename}
+        </div>
+        <div style="background: #e5e7eb; border-radius: 4px; height: 20px; overflow: hidden;">
+          <div id="progress-${label}" style="background: linear-gradient(90deg, #10b981, #059669); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;"></div>
+        </div>
+      `;
+      progressContainer.appendChild(progressEl);
+
+      const progressBar = progressEl.querySelector(`#progress-${label}`);
+
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = (e.loaded / e.total) * 100;
+          progressBar.style.width = percentComplete + '%';
+          progressBar.textContent = Math.round(percentComplete) + '%';
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            if (response.success && response.tempUrl) {
+              progressBar.style.width = '100%';
+              progressBar.textContent = '✓ Done';
+              progressBar.style.background = '#10b981';
+
+              // Convert r2:// URL to public URL format
+              const r2Key = response.tempUrl.replace('r2://', '');
+              const publicUrl = `/api/r2/file?key=${encodeURIComponent(r2Key)}`;
+
+              setTimeout(() => {
+                progressEl.remove();
+                if (progressContainer.children.length === 0) {
+                  progressContainer.remove();
+                }
+              }, 2000);
+
+              resolve(publicUrl);
+            } else {
+              throw new Error(response.error || 'Upload failed');
+            }
+          } catch (err) {
+            progressBar.style.background = '#ef4444';
+            progressBar.textContent = '✗ Failed';
+            reject(err);
+          }
+        } else {
+          progressBar.style.background = '#ef4444';
+          progressBar.textContent = '✗ Error';
+          reject(new Error(`Upload failed with status ${xhr.status}`));
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        progressBar.style.background = '#ef4444';
+        progressBar.textContent = '✗ Error';
+        reject(new Error('Upload failed'));
+      });
+
+      xhr.open('POST', `/api/upload/temp-file?sessionId=${sessionId}&filename=${encodeURIComponent(filename)}`);
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.send(file);
+    });
+  }
+
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const btn = form.querySelector('button[type="submit"]');
     const originalText = btn.textContent;
-    btn.textContent = 'Saving...';
+    btn.textContent = 'Uploading files...';
     btn.disabled = true;
 
     try {
+      // First, upload all selected files
       const base = collectBase(form);
       const media = readMediaFields(form);
       const seo = typeof readSeoFields === 'function' ? readSeoFields(form) : { meta: {} };
       const addons = typeof readAddonsConfig === 'function' ? readAddonsConfig(form) : [];
-      
+
+      // Upload thumbnail file if selected
+      if (media.files.thumbnail_file) {
+        btn.textContent = 'Uploading thumbnail...';
+        const uploadedUrl = await uploadFileWithProgress(media.files.thumbnail_file, 'thumbnail');
+        if (uploadedUrl) {
+          media.meta.thumbnail_url = uploadedUrl;
+        }
+      }
+
+      // Upload video file if selected
+      if (media.files.video_file) {
+        btn.textContent = 'Uploading video...';
+        const uploadedUrl = await uploadFileWithProgress(media.files.video_file, 'video');
+        if (uploadedUrl) {
+          media.meta.video_url = uploadedUrl;
+        }
+      }
+
+      // Upload gallery files if selected
+      if (media.files.gallery_files && media.files.gallery_files.length > 0) {
+        btn.textContent = `Uploading gallery images (0/${media.files.gallery_files.length})...`;
+        const uploadedGalleryUrls = [];
+        for (let i = 0; i < media.files.gallery_files.length; i++) {
+          btn.textContent = `Uploading gallery images (${i + 1}/${media.files.gallery_files.length})...`;
+          const file = media.files.gallery_files[i];
+          const uploadedUrl = await uploadFileWithProgress(file, `gallery-${i}`);
+          if (uploadedUrl) {
+            uploadedGalleryUrls.push(uploadedUrl);
+          }
+        }
+        // Merge uploaded gallery URLs with existing text input URLs
+        media.meta.gallery_urls = [...uploadedGalleryUrls, ...media.meta.gallery_urls];
+      }
+
+      btn.textContent = 'Saving product...';
+
       const payload = { ...base, ...media.meta, ...seo.meta, addons };
       if(productId) payload.id = Number(productId);
-      
-      // --- FIX: URL Se '/admin' hata diya hai ---
+
       const resp = await fetch('/api/product/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
+
       const data = await resp.json();
-      
+
       if(!resp.ok || !data.success){
         throw new Error(data.error || 'Save failed');
       }
-      
+
       alert('Product saved successfully! ID: ' + data.id);
       if(!productId) {
         window.location.href = `product-form.html?id=${data.id}`;
