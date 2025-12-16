@@ -575,77 +575,108 @@ export default {
         });
       }
 
-      // Clear pending checkouts - DEBUG VERSION (shows API response)
+      // Clear pending checkouts - FINAL (deletes Checkout Links from Whop)
       if ((method === 'POST' || method === 'GET') && path === '/api/admin/clear-pending-checkouts') {
         try {
           if (!env.WHOP_API_KEY) {
             return json({ 
               success: false, 
-              error: 'WHOP_API_KEY not configured',
-              debug: 'No API key found'
+              error: 'WHOP_API_KEY not configured'
             }, 500);
           }
 
-          console.log('🔍 Testing Whop API endpoints...');
+          console.log('🔍 Fetching checkout links from Whop...');
           
-          // Try different API endpoints
-          const endpoints = [
-            'https://api.whop.com/api/v2/checkout_sessions',
-            'https://api.whop.com/api/v5/checkout_sessions',
-            'https://api.whop.com/api/v2/checkouts',
-            'https://api.whop.com/api/v5/checkouts'
-          ];
+          let allLinks = [];
+          let page = 1;
+          const perPage = 100;
           
-          const results = {};
-          
-          for (const endpoint of endpoints) {
+          // Fetch all checkout links with pagination
+          while (page <= 10) {
             try {
-              console.log(`Testing: ${endpoint}`);
-              const testResp = await fetch(endpoint, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
-              });
+              const listResp = await fetch(
+                `https://api.whop.com/api/v5/checkout_links?page=${page}&per=${perPage}`,
+                {
+                  method: 'GET',
+                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
+                }
+              );
               
-              const statusCode = testResp.status;
-              let data = null;
-              
-              try {
-                data = await testResp.json();
-              } catch (e) {
-                data = await testResp.text();
+              if (!listResp.ok) {
+                console.error('Failed to fetch links:', listResp.status);
+                break;
               }
               
-              results[endpoint] = {
-                status: statusCode,
-                ok: testResp.ok,
-                dataPreview: JSON.stringify(data).substring(0, 500)
-              };
+              const data = await listResp.json();
+              const links = data.data || [];
               
-              console.log(`  Status: ${statusCode}`);
-              console.log(`  Data preview: ${JSON.stringify(data).substring(0, 200)}`);
-              
+              if (links.length > 0) {
+                allLinks.push(...links);
+                console.log(`📄 Page ${page}: ${links.length} links`);
+                
+                // Check if more pages exist
+                if (data.pagination && data.pagination.current_page < data.pagination.total_page) {
+                  page++;
+                } else {
+                  break;
+                }
+              } else {
+                break;
+              }
             } catch (err) {
-              results[endpoint] = {
-                error: err.message
-              };
-              console.error(`  Error: ${err.message}`);
+              console.error('Page fetch error:', err);
+              break;
+            }
+          }
+          
+          console.log(`✅ Total checkout links found: ${allLinks.length}`);
+          
+          let deleted = 0;
+          let failed = 0;
+          const errors = [];
+          
+          // Delete each checkout link
+          for (const link of allLinks) {
+            try {
+              const linkId = link.id;
+              
+              const deleteResp = await fetch(
+                `https://api.whop.com/api/v5/checkout_links/${linkId}`,
+                {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
+                }
+              );
+              
+              if (deleteResp.ok || deleteResp.status === 404) {
+                deleted++;
+                console.log('✅ Deleted link:', linkId);
+              } else {
+                failed++;
+                errors.push(`${linkId}: HTTP ${deleteResp.status}`);
+                console.error('❌ Failed:', linkId, deleteResp.status);
+              }
+            } catch (e) {
+              failed++;
+              errors.push(`${link.id}: ${e.message}`);
+              console.error('❌ Error:', link.id, e.message);
             }
           }
           
           return json({
             success: true,
-            debug: true,
-            message: 'API endpoint test complete - check results',
-            apiKey: env.WHOP_API_KEY ? 'Present (hidden)' : 'Missing',
-            endpointTests: results
+            total: allLinks.length,
+            deleted: deleted,
+            failed: failed,
+            message: `Successfully deleted ${deleted} checkout link(s)${failed > 0 ? `, ${failed} failed` : ''}`,
+            errors: errors.length > 0 ? errors.slice(0, 10) : undefined
           });
           
         } catch (err) {
-          console.error('Debug error:', err);
+          console.error('Clear checkout links error:', err);
           return json({ 
             success: false, 
-            error: err.message,
-            debug: true
+            error: err.message
           }, 500);
         }
       }
