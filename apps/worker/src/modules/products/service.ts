@@ -16,7 +16,7 @@ export class ProductsService extends BaseService<Product> {
       throw new Error("Slug already exists");
     }
 
-    return {
+    const productData: any = {
       id: data.id || crypto.randomUUID(),
       title: data.title,
       slug: data.slug,
@@ -27,13 +27,19 @@ export class ProductsService extends BaseService<Product> {
       stock: parseInt(data.stock) || 0,
       sku: data.sku || '',
       status: data.status || 'draft',
+      created_by: data.created_by || 'admin',
       galleries: JSON.stringify(data.galleries || []),
       videos: JSON.stringify(data.videos || []),
       addons: JSON.stringify(data.addons || []),
       seo: JSON.stringify(data.seo || {}),
-      created_at: data.created_at || Date.now(),
       updated_at: Date.now()
-    } as any;
+    };
+
+    if (!data.id) {
+      productData.created_at = Date.now();
+    }
+
+    return productData;
   }
 
   async getWithParsedData(id: string): Promise<any> {
