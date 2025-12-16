@@ -46,14 +46,14 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tab-nav { display: flex; justify-content: space-between; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border); }
 .media-section { margin-bottom: 2rem; padding: 1.5rem; background: #fafafa; border-radius: 8px; border: 1px solid var(--border); }
-.media-section h3 { font-size: 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.media-section h3 { font-size: 1rem; margin-bottom: 1rem; }
 .gallery-group { border: 2px solid var(--primary); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: #fff; }
 .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .gallery-header input { flex: 1; margin-right: 0.5rem; font-weight: 600; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-top: 1rem; }
 .media-item { position: relative; border: 2px solid var(--border); border-radius: 8px; background: #fff; cursor: move; }
 .media-item.dragging { opacity: 0.5; }
-.media-item img, .media-item video { width: 100%; height: 150px; object-fit: cover; border-radius: 6px 6px 0 0; }
+.media-item img { width: 100%; height: 150px; object-fit: cover; border-radius: 6px 6px 0 0; }
 .media-info { padding: 0.5rem; }
 .media-info input { padding: 0.5rem; font-size: 0.75rem; margin-bottom: 0.5rem; }
 .media-item .remove { position: absolute; top: 0.5rem; right: 0.5rem; background: var(--error); 
@@ -62,10 +62,12 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .media-item .order { position: absolute; top: 0.5rem; left: 0.5rem; background: var(--primary); 
                      color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; 
                      align-items: center; justify-content: center; font-weight: 600; font-size: 0.75rem; }
-.video-item { border: 2px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: #fff; }
-.video-header { display: flex; gap: 1rem; margin-bottom: 1rem; }
-.video-thumbnail-preview { width: 200px; height: 150px; object-fit: cover; border-radius: 8px; background: #eee; 
-                            display: flex; align-items: center; justify-content: center; font-size: 3rem; }
+.video-card { border: 2px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; background: #fff; }
+.video-layout { display: grid; grid-template-columns: 200px 1fr; gap: 1.5rem; }
+.thumbnail-area { display: flex; flex-direction: column; gap: 0.5rem; }
+.thumbnail-preview { width: 200px; height: 150px; background: #eee; border-radius: 8px; display: flex; 
+                     align-items: center; justify-content: center; font-size: 3rem; overflow: hidden; }
+.thumbnail-preview img { width: 100%; height: 100%; object-fit: cover; }
 .addons-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
 .btn-add-type { padding: 12px 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; 
                 cursor: pointer; transition: all 0.3s; display: flex; align-items: center; 
@@ -81,7 +83,6 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .btn-add-type[data-type="checkbox_group"] { background: linear-gradient(135deg, #ff9a9e, #fecfef); }
 .addon-field { border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; background: #fff; }
 .addon-header { display: flex; justify-content: space-between; margin-bottom: 1rem; align-items: center; }
-.addon-row { display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 1rem; }
 .addon-config { margin-top: 1rem; padding: 1rem; background: #f9fafb; border-radius: 6px; }
 .addon-option { border: 1px solid var(--border); padding: 1rem; margin-bottom: 0.75rem; border-radius: 6px; background: #fff; }
 .addon-option-main { display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem; }
@@ -91,7 +92,6 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .delivery-config { margin-top: 0.5rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; }
 .btn-sm { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
 .section-divider { margin: 2rem 0; border-top: 2px solid var(--border); }
-.price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 </style>
 </head>
 <body>
@@ -110,7 +110,7 @@ small { color: var(--text-light); font-size: 0.75rem; }
         </div>
       </div>
       <div class="tab-content" data-tab="1">
-        <div class="price-grid">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
           <div class="form-group"><label>Regular Price *</label><input type="number" id="price" min="0" step="0.01" required></div>
           <div class="form-group"><label>Sale Price</label><input type="number" id="sale-price" min="0" step="0.01"><small>Leave empty if no sale</small></div>
         </div>
@@ -167,7 +167,7 @@ small { color: var(--text-light); font-size: 0.75rem; }
   </div>
 </div>
 <script>
-const S={tab:0,completed:new Set(),galleries:[],videos:[],addons:[],dragSrc:null,dragType:'',dragGallery:null};
+const S={tab:0,completed:new Set(),galleries:[],videos:[],addons:[]};
 const tabs=['📝 Basic','💰 Pricing','🖼️ Media','➕ Addons','🔍 SEO'];
 
 function init(){
@@ -207,7 +207,7 @@ function addGallery(){
   renderGalleries();
 }
 
-function addGalleryImage(galleryIndex){
+function addGalleryImage(gi){
   const input=document.createElement('input');
   input.type='file';
   input.accept='image/*';
@@ -216,7 +216,7 @@ function addGalleryImage(galleryIndex){
     for(const f of e.target.files){
       const r=new FileReader();
       r.onload=ev=>{
-        S.galleries[galleryIndex].images.push({id:Date.now()+Math.random(),preview:ev.target.result,url:'',type:'upload'});
+        S.galleries[gi].images.push({id:Date.now()+Math.random(),preview:ev.target.result,url:'',type:'upload'});
         renderGalleries();
       };
       r.readAsDataURL(f);
@@ -225,10 +225,10 @@ function addGalleryImage(galleryIndex){
   input.click();
 }
 
-function addGalleryImageUrl(galleryIndex){
+function addGalleryImageUrl(gi){
   const url=prompt('Image URL:');
   if(url){
-    S.galleries[galleryIndex].images.push({id:Date.now(),preview:url,url:url,type:'url'});
+    S.galleries[gi].images.push({id:Date.now(),preview:url,url:url,type:'url'});
     renderGalleries();
   }
 }
@@ -242,7 +242,7 @@ function renderGalleries(){
         <div style="display:flex;gap:0.5rem">
           <button type="button" class="btn btn-sm btn-primary" onclick="addGalleryImage(\${gi})">+ Upload</button>
           <button type="button" class="btn btn-sm" onclick="addGalleryImageUrl(\${gi})">+ URL</button>
-          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.galleries.splice(\${gi},1);renderGalleries()">Remove Gallery</button>
+          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.galleries.splice(\${gi},1);renderGalleries()">Remove</button>
         </div>
       </div>
       <div class="media-grid">
@@ -257,7 +257,7 @@ function renderGalleries(){
           </div>\`
         ).join('')}
       </div>
-      \${gallery.images.length===0?'<p style="text-align:center;color:var(--text-light);padding:2rem">No images. Click + Upload or + URL</p>':''}
+      \${gallery.images.length===0?'<p style="text-align:center;color:var(--text-light);padding:2rem">No images</p>':''}
     </div>\`
   ).join('');
   setupGalleryDrag();
@@ -265,19 +265,17 @@ function renderGalleries(){
 
 function setupGalleryDrag(){
   document.querySelectorAll('.gallery-group .media-item').forEach(el=>{
-    el.ondragstart=e=>{
-      S.dragSrc=parseInt(e.target.dataset.index);
-      S.dragGallery=parseInt(e.target.dataset.gallery);
-    };
+    el.ondragstart=e=>{e.dataTransfer.setData('gallery',e.target.dataset.gallery);e.dataTransfer.setData('index',e.target.dataset.index);};
     el.ondragover=e=>e.preventDefault();
     el.ondrop=e=>{
       e.preventDefault();
-      const dst=parseInt(e.currentTarget.dataset.index);
-      const dstGallery=parseInt(e.currentTarget.dataset.gallery);
-      
-      if(S.dragGallery===dstGallery && S.dragSrc!==dst){
-        const item=S.galleries[S.dragGallery].images.splice(S.dragSrc,1)[0];
-        S.galleries[S.dragGallery].images.splice(dst,0,item);
+      const srcGal=parseInt(e.dataTransfer.getData('gallery'));
+      const srcIdx=parseInt(e.dataTransfer.getData('index'));
+      const dstGal=parseInt(e.currentTarget.dataset.gallery);
+      const dstIdx=parseInt(e.currentTarget.dataset.index);
+      if(srcGal===dstGal && srcIdx!==dstIdx){
+        const item=S.galleries[srcGal].images.splice(srcIdx,1)[0];
+        S.galleries[srcGal].images.splice(dstIdx,0,item);
         renderGalleries();
       }
     };
@@ -289,7 +287,7 @@ function addVideo(){
   renderVideos();
 }
 
-function uploadVideoThumbnail(videoIndex){
+function uploadThumbnail(vi){
   const input=document.createElement('input');
   input.type='file';
   input.accept='image/*';
@@ -298,7 +296,7 @@ function uploadVideoThumbnail(videoIndex){
     if(f){
       const r=new FileReader();
       r.onload=ev=>{
-        S.videos[videoIndex].thumbnailPreview=ev.target.result;
+        S.videos[vi].thumbnailPreview=ev.target.result;
         renderVideos();
       };
       r.readAsDataURL(f);
@@ -309,25 +307,31 @@ function uploadVideoThumbnail(videoIndex){
 
 function renderVideos(){
   const c=document.getElementById('videos-container');
+  if(S.videos.length===0){
+    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No videos added yet</p>';
+    return;
+  }
   c.innerHTML=S.videos.map((vid,i)=>
-    \`<div class="video-item">
-      <div class="video-header">
-        <div class="video-thumbnail-preview">
-          \${vid.thumbnailPreview?\`<img src="\${vid.thumbnailPreview}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">\`:\`🎥\`}
+    \`<div class="video-card">
+      <div class="video-layout">
+        <div class="thumbnail-area">
+          <div class="thumbnail-preview">
+            \${vid.thumbnailPreview?\`<img src="\${vid.thumbnailPreview}">\`:'🎥'}
+          </div>
+          <button type="button" class="btn btn-sm" onclick="uploadThumbnail(\${i})">📤 Upload Thumbnail</button>
         </div>
-        <div style="flex:1">
-          <div class="form-group"><label>Video URL *</label>
-            <input type="url" placeholder="https://youtube.com/..." value="\${vid.url||''}" onchange="S.videos[\${i}].url=this.value" required>
+        <div>
+          <div class="form-group">
+            <label>Video URL *</label>
+            <input type="url" placeholder="https://youtube.com/watch?v=..." value="\${vid.url||''}" onchange="S.videos[\${i}].url=this.value" required>
           </div>
           <div class="form-group">
-            <label>Thumbnail</label>
-            <div style="display:flex;gap:0.5rem">
-              <button type="button" class="btn btn-sm" onclick="uploadVideoThumbnail(\${i})">📤 Upload</button>
-              <input type="url" placeholder="Thumbnail URL" value="\${vid.thumbnail||''}" onchange="S.videos[\${i}].thumbnail=this.value;S.videos[\${i}].thumbnailPreview=this.value;renderVideos()" style="flex:1">
-            </div>
+            <label>Thumbnail URL (optional)</label>
+            <input type="url" placeholder="https://img.youtube.com/vi/..." value="\${vid.thumbnail||''}" onchange="S.videos[\${i}].thumbnail=this.value;S.videos[\${i}].thumbnailPreview=this.value;renderVideos()">
+            <small>Or upload above</small>
           </div>
+          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.videos.splice(\${i},1);renderVideos()">Remove Video</button>
         </div>
-        <button type="button" class="btn btn-sm" style="background:var(--error);color:white;align-self:start" onclick="S.videos.splice(\${i},1);renderVideos()">Remove Video</button>
       </div>
     </div>\`
   ).join('');
@@ -335,26 +339,13 @@ function renderVideos(){
 
 function addAddonType(type){
   const labels={
-    heading:'Section Heading',
-    text:'Text Input',
-    textarea:'Long Text Area',
-    email:'Email Address',
-    file:'File Upload',
-    radio:'Radio Buttons',
-    select:'Dropdown List',
-    checkbox_group:'Checkbox Group'
+    heading:'Section Heading',text:'Text Input',textarea:'Long Text Area',email:'Email Address',
+    file:'File Upload',radio:'Radio Buttons',select:'Dropdown List',checkbox_group:'Checkbox Group'
   };
   S.addons.push({
-    id:Date.now(),
-    type:type,
-    label:labels[type]||'',
-    required:false,
-    price:0,
-    placeholder:'',
-    text:'',
+    id:Date.now(),type:type,label:labels[type]||'',required:false,price:0,placeholder:'',text:'',
     options:['radio','select','checkbox_group'].includes(type)?[{
-      label:'',price:0,default:true,
-      file:false,fileQuantity:1,
+      label:'',price:0,default:true,file:false,fileQuantity:1,
       textField:false,textLabel:'',textPlaceholder:'',
       delivery:false,instantDelivery:false,deliveryDays:1
     }]:[]
@@ -366,26 +357,20 @@ function renderAddons(){
   const c=document.getElementById('addons-list');
   c.innerHTML=S.addons.map((addon,i)=>{
     let config='';
-    
     if(addon.type==='heading'){
-      config=\`<div class="addon-config">
-        <div class="form-group"><label>Heading Text</label>
-          <input type="text" value="\${addon.text||addon.label||''}" onchange="S.addons[\${i}].text=this.value"></div>
-      </div>\`;
+      config=\`<div class="addon-config"><div class="form-group"><label>Heading Text</label>
+        <input type="text" value="\${addon.text||addon.label||''}" onchange="S.addons[\${i}].text=this.value"></div></div>\`;
     }
     else if(['text','textarea','email'].includes(addon.type)){
       config=\`<div class="addon-config" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-        <div class="form-group"><label>Placeholder</label>
-          <input type="text" value="\${addon.placeholder||''}" onchange="S.addons[\${i}].placeholder=this.value"></div>
-        <div class="form-group"><label>Extra Price</label>
-          <input type="number" value="\${addon.price||0}" step="0.01" onchange="S.addons[\${i}].price=parseFloat(this.value)||0"></div>
+        <div class="form-group"><label>Placeholder</label><input type="text" value="\${addon.placeholder||''}" onchange="S.addons[\${i}].placeholder=this.value"></div>
+        <div class="form-group"><label>Extra Price</label><input type="number" value="\${addon.price||0}" step="0.01" onchange="S.addons[\${i}].price=parseFloat(this.value)||0"></div>
         <div class="form-group"><label><input type="checkbox" \${addon.required?'checked':''} onchange="S.addons[\${i}].required=this.checked"> Required</label></div>
       </div>\`;
     }
     else if(addon.type==='file'){
       config=\`<div class="addon-config" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-        <div class="form-group"><label>Extra Price</label>
-          <input type="number" value="\${addon.price||0}" step="0.01" onchange="S.addons[\${i}].price=parseFloat(this.value)||0"></div>
+        <div class="form-group"><label>Extra Price</label><input type="number" value="\${addon.price||0}" step="0.01" onchange="S.addons[\${i}].price=parseFloat(this.value)||0"></div>
         <div class="form-group"><label><input type="checkbox" \${addon.required?'checked':''} onchange="S.addons[\${i}].required=this.checked"> Required</label></div>
       </div>\`;
     }
@@ -417,14 +402,13 @@ function renderAddons(){
                 <div class="form-group"><label><input type="checkbox" \${opt.instantDelivery?'checked':''} onchange="S.addons[\${i}].options[\${oi}].instantDelivery=this.checked"> ⚡ Instant Delivery</label></div>
                 <div class="form-group"><label>🗓️ Delivery Days</label>
                   <input type="number" min="1" max="365" value="\${opt.deliveryDays||1}" onchange="S.addons[\${i}].options[\${oi}].deliveryDays=parseInt(this.value)||1">
-                  <small>Days for delivery</small></div>
+                  <small>Days</small></div>
               </div>\`:''}
             </div>\`:''}
           </div>\`
         ).join('')}</div>
       </div>\`;
     }
-    
     return \`<div class="addon-field">
       <div class="addon-header">
         <strong>\${addon.type?addon.type.toUpperCase():''} - \${addon.label||'Field '+(i+1)}</strong>
@@ -441,8 +425,7 @@ function renderAddons(){
 function addOption(i){
   if(!S.addons[i].options)S.addons[i].options=[];
   S.addons[i].options.push({
-    label:'',price:0,default:false,
-    file:false,fileQuantity:1,
+    label:'',price:0,default:false,file:false,fileQuantity:1,
     textField:false,textLabel:'',textPlaceholder:'',
     delivery:false,instantDelivery:false,deliveryDays:1
   });
