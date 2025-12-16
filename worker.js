@@ -575,109 +575,93 @@ export default {
         });
       }
 
-      // Clear pending checkouts - FINAL (deletes Checkout Links from Whop)
+      // Clear pending checkouts - COMPREHENSIVE DEBUG
       if ((method === 'POST' || method === 'GET') && path === '/api/admin/clear-pending-checkouts') {
         try {
           if (!env.WHOP_API_KEY) {
-            return json({ 
-              success: false, 
-              error: 'WHOP_API_KEY not configured'
-            }, 500);
+            return json({ error: 'WHOP_API_KEY not configured' }, 500);
           }
 
-          console.log('🔍 Fetching checkout links from Whop...');
+          console.log('🔍 Step 1: Getting company info...');
           
-          let allLinks = [];
-          let page = 1;
-          const perPage = 100;
+          // Get company ID from settings or use default
+          let companyId = env.WHOP_COMPANY_ID || null;
           
-          // Fetch all checkout links with pagination
-          while (page <= 10) {
+          // If not in env, try to get from database settings
+          if (!companyId) {
             try {
-              const listResp = await fetch(
-                `https://api.whop.com/api/v5/checkout_links?page=${page}&per=${perPage}`,
-                {
-                  method: 'GET',
-                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
-                }
-              );
-              
-              if (!listResp.ok) {
-                console.error('Failed to fetch links:', listResp.status);
-                break;
+              await initDB(env);
+              const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
+              if (row?.value) {
+                const settings = JSON.parse(row.value);
+                companyId = settings.company_id || settings.default_company_id;
               }
-              
-              const data = await listResp.json();
-              const links = data.data || [];
-              
-              if (links.length > 0) {
-                allLinks.push(...links);
-                console.log(`📄 Page ${page}: ${links.length} links`);
-                
-                // Check if more pages exist
-                if (data.pagination && data.pagination.current_page < data.pagination.total_page) {
-                  page++;
-                } else {
-                  break;
-                }
-              } else {
-                break;
-              }
-            } catch (err) {
-              console.error('Page fetch error:', err);
-              break;
+            } catch (e) {
+              console.log('Could not get company from DB:', e.message);
             }
           }
           
-          console.log(`✅ Total checkout links found: ${allLinks.length}`);
+          console.log('Company ID:', companyId || 'Not found');
           
-          let deleted = 0;
-          let failed = 0;
-          const errors = [];
+          console.log('\n🔍 Step 2: Testing API endpoints...');
           
-          // Delete each checkout link
-          for (const link of allLinks) {
+          // Test different endpoint variations
+          const endpoints = [
+            `https://api.whop.com/api/v5/checkout_links`,
+            `https://api.whop.com/api/v2/checkout_links`,
+            `https://api.whop.com/api/v5/checkout-links`,
+            companyId ? `https://api.whop.com/api/v5/companies/${companyId}/checkout_links` : null,
+            companyId ? `https://api.whop.com/api/v2/companies/${companyId}/checkout_links` : null,
+          ].filter(e => e !== null);
+          
+          const testResults = {};
+          
+          for (const endpoint of endpoints) {
             try {
-              const linkId = link.id;
+              console.log(`Testing: ${endpoint}`);
               
-              const deleteResp = await fetch(
-                `https://api.whop.com/api/v5/checkout_links/${linkId}`,
-                {
-                  method: 'DELETE',
-                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
-                }
-              );
+              const testResp = await fetch(endpoint, {
+                method: 'GET',
+                headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
+              });
               
-              if (deleteResp.ok || deleteResp.status === 404) {
-                deleted++;
-                console.log('✅ Deleted link:', linkId);
-              } else {
-                failed++;
-                errors.push(`${linkId}: HTTP ${deleteResp.status}`);
-                console.error('❌ Failed:', linkId, deleteResp.status);
+              const status = testResp.status;
+              const clonedResp = testResp.clone();
+              let data;
+              
+              try {
+                data = await testResp.json();
+              } catch {
+                data = await clonedResp.text();
               }
-            } catch (e) {
-              failed++;
-              errors.push(`${link.id}: ${e.message}`);
-              console.error('❌ Error:', link.id, e.message);
+              
+              testResults[endpoint] = {
+                status: status,
+                ok: testResp.ok,
+                data: JSON.stringify(data).substring(0, 300)
+              };
+              
+              console.log(`  Status: ${status}`);
+              console.log(`  Response: ${JSON.stringify(data).substring(0, 200)}`);
+              
+            } catch (err) {
+              testResults[endpoint] = { error: err.message };
+              console.error(`  Error: ${err.message}`);
             }
           }
           
           return json({
             success: true,
-            total: allLinks.length,
-            deleted: deleted,
-            failed: failed,
-            message: `Successfully deleted ${deleted} checkout link(s)${failed > 0 ? `, ${failed} failed` : ''}`,
-            errors: errors.length > 0 ? errors.slice(0, 10) : undefined
+            debug: true,
+            companyId: companyId,
+            message: 'Endpoint test complete',
+            endpointTests: testResults,
+            note: 'Check which endpoint returned status 200 with data'
           });
           
         } catch (err) {
-          console.error('Clear checkout links error:', err);
-          return json({ 
-            success: false, 
-            error: err.message
-          }, 500);
+          console.error('Debug error:', err);
+          return json({ success: false, error: err.message }, 500);
         }
       }
 
