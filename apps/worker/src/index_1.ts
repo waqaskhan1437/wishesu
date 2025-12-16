@@ -1,4 +1,11 @@
-<!DOCTYPE html>
+import { AutoMigration } from "./core/auto-migration";
+import { Container } from "./core/container";
+import { Router } from "./core/router";
+import { loadModules } from "./modules/loader";
+
+let initialized = false;
+
+const ADMIN_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -179,7 +186,7 @@ const tabs=['📝 Basic','💰 Pricing','🖼️ Media','➕ Addons','🔍 SEO']
 
 function init(){
   document.getElementById('tabs').innerHTML=tabs.map((t,i)=>
-    `<button type="button" class="tab ${i===0?'active':''}" onclick="switchTab(${i})">${t}</button>`).join('');
+    \`<button type="button" class="tab \${i===0?'active':''}" onclick="switchTab(\${i})">\${t}</button>\`).join('');
   document.getElementById('prev').onclick=()=>switchTab(S.tab-1);
   document.getElementById('next').onclick=()=>{
     if(S.uploadingCount>0){alert('⏳ Uploading files...');return;}
@@ -224,12 +231,12 @@ function hideUploadStatus(){
 
 function updateUploadProgress(filename,percent){
   const c=document.getElementById('upload-items');
-  let item=c.querySelector(`[data-file="${CSS.escape(filename)}"]`);
+  let item=c.querySelector(\`[data-file="\${CSS.escape(filename)}"]\`);
   if(!item){
     item=document.createElement('div');
     item.className='upload-item';
     item.dataset.file=filename;
-    item.innerHTML=`<div class="upload-item-name">${filename}</div><div class="upload-item-progress"><div class="upload-item-bar"></div></div>`;
+    item.innerHTML=\`<div class="upload-item-name">\${filename}</div><div class="upload-item-progress"><div class="upload-item-bar"></div></div>\`;
     c.appendChild(item);
   }
   const bar=item.querySelector('.upload-item-bar');
@@ -331,29 +338,29 @@ function renderGalleries(){
     return;
   }
   c.innerHTML=S.galleries.map((gallery,gi)=>
-    `<div class="gallery-group">
+    \`<div class="gallery-group">
       <div class="gallery-header">
-        <input type="text" value="${gallery.name||''}" placeholder="Gallery name" onchange="S.galleries[${gi}].name=this.value">
+        <input type="text" value="\${gallery.name||''}" placeholder="Gallery name" onchange="S.galleries[\${gi}].name=this.value">
         <div style="display:flex;gap:0.5rem">
-          <button type="button" class="btn btn-sm btn-primary" onclick="addGalleryImage(${gi})">+ Upload</button>
-          <button type="button" class="btn btn-sm" onclick="addGalleryImageUrl(${gi})">+ URL</button>
-          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.galleries.splice(${gi},1);renderGalleries()">Remove</button>
+          <button type="button" class="btn btn-sm btn-primary" onclick="addGalleryImage(\${gi})">+ Upload</button>
+          <button type="button" class="btn btn-sm" onclick="addGalleryImageUrl(\${gi})">+ URL</button>
+          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.galleries.splice(\${gi},1);renderGalleries()">Remove</button>
         </div>
       </div>
       <div class="media-grid">
-        ${gallery.images.map((img,ii)=>
-          `<div class="media-item ${img.uploading?'uploading':''}" draggable="${!img.uploading}" data-gallery="${gi}" data-index="${ii}">
-            <div class="order">${ii+1}</div>
-            ${img.preview?`<img src="${img.preview}">`:'<div style="height:150px;display:flex;align-items:center;justify-content:center;background:#eee">⏳</div>'}
-            ${!img.uploading?`<button type="button" class="remove" onclick="S.galleries[${gi}].images.splice(${ii},1);renderGalleries()">×</button>`:''}
+        \${gallery.images.map((img,ii)=>
+          \`<div class="media-item \${img.uploading?'uploading':''}" draggable="\${!img.uploading}" data-gallery="\${gi}" data-index="\${ii}">
+            <div class="order">\${ii+1}</div>
+            \${img.preview?\`<img src="\${img.preview}">\`:'<div style="height:150px;display:flex;align-items:center;justify-content:center;background:#eee">⏳</div>'}
+            \${!img.uploading?\`<button type="button" class="remove" onclick="S.galleries[\${gi}].images.splice(\${ii},1);renderGalleries()">×</button>\`:''}
             <div class="media-info">
-              <input type="url" placeholder="Image URL *" value="${img.url||''}" onchange="S.galleries[${gi}].images[${ii}].url=this.value" ${img.uploading?'disabled':'required'}>
+              <input type="url" placeholder="Image URL *" value="\${img.url||''}" onchange="S.galleries[\${gi}].images[\${ii}].url=this.value" \${img.uploading?'disabled':'required'}>
             </div>
-          </div>`
+          </div>\`
         ).join('')}
       </div>
-      ${gallery.images.length===0?'<p style="text-align:center;color:var(--text-light);padding:1rem">No images</p>':''}
-    </div>`
+      \${gallery.images.length===0?'<p style="text-align:center;color:var(--text-light);padding:1rem">No images</p>':''}
+    </div>\`
   ).join('');
   setupGalleryDrag();
 }
@@ -433,34 +440,34 @@ function renderVideos(){
     return;
   }
   c.innerHTML=S.videos.map((vid,i)=>
-    `<div class="video-card">
+    \`<div class="video-card">
       <div class="video-layout">
         <div class="thumbnail-area">
           <div class="thumbnail-preview">
-            ${vid.thumbnailPreview?`<img src="${vid.thumbnailPreview}">`:'🎥'}
+            \${vid.thumbnailPreview?\`<img src="\${vid.thumbnailPreview}">\`:'🎥'}
           </div>
-          <button type="button" class="btn btn-sm btn-primary" onclick="uploadThumbnail(${i})" ${vid.uploading?'disabled':''}>📤 Thumbnail</button>
+          <button type="button" class="btn btn-sm btn-primary" onclick="uploadThumbnail(\${i})" \${vid.uploading?'disabled':''}>📤 Thumbnail</button>
         </div>
         <div class="video-fields">
           <div class="form-group">
             <label>Video File</label>
-            <button type="button" class="btn btn-sm ${vid.uploading?'':'btn-primary'}" onclick="uploadVideo(${i})" ${vid.uploading?'disabled':''}>
-              ${vid.uploading?'⏳ Uploading...':'📹 Upload Video'}
+            <button type="button" class="btn btn-sm \${vid.uploading?'':'btn-primary'}" onclick="uploadVideo(\${i})" \${vid.uploading?'disabled':''}>
+              \${vid.uploading?'⏳ Uploading...':'📹 Upload Video'}
             </button>
-            ${vid.url?'<small style="color:var(--success)">✅ Uploaded</small>':''}
+            \${vid.url?'<small style="color:var(--success)">✅ Uploaded</small>':''}
           </div>
           <div class="form-group">
             <label>Video URL *</label>
-            <input type="url" placeholder="Auto-filled after upload" value="${vid.url||''}" onchange="S.videos[${i}].url=this.value" ${vid.uploading?'disabled':'required'}>
+            <input type="url" placeholder="Auto-filled after upload" value="\${vid.url||''}" onchange="S.videos[\${i}].url=this.value" \${vid.uploading?'disabled':'required'}>
           </div>
           <div class="form-group">
             <label>Thumbnail URL</label>
-            <input type="url" placeholder="Auto-filled after upload" value="${vid.thumbnail||''}" onchange="S.videos[${i}].thumbnail=this.value;S.videos[${i}].thumbnailPreview=this.value;renderVideos()">
+            <input type="url" placeholder="Auto-filled after upload" value="\${vid.thumbnail||''}" onchange="S.videos[\${i}].thumbnail=this.value;S.videos[\${i}].thumbnailPreview=this.value;renderVideos()">
           </div>
-          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.videos.splice(${i},1);renderVideos()" ${vid.uploading?'disabled':''}>Remove</button>
+          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.videos.splice(\${i},1);renderVideos()" \${vid.uploading?'disabled':''}>Remove</button>
         </div>
       </div>
-    </div>`
+    </div>\`
   ).join('');
 }
 
@@ -489,66 +496,66 @@ function renderAddons(){
   c.innerHTML=S.addons.map((addon,i)=>{
     let config='';
     if(addon.type==='heading'){
-      config=`<div class="addon-config"><div class="form-group"><label>Text</label>
-        <input type="text" value="${addon.text||addon.label||''}" onchange="S.addons[${i}].text=this.value"></div></div>`;
+      config=\`<div class="addon-config"><div class="form-group"><label>Text</label>
+        <input type="text" value="\${addon.text||addon.label||''}" onchange="S.addons[\${i}].text=this.value"></div></div>\`;
     }
     else if(['text','textarea','email'].includes(addon.type)){
-      config=`<div class="addon-config" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-        <div class="form-group"><label>Placeholder</label><input type="text" value="${addon.placeholder||''}" onchange="S.addons[${i}].placeholder=this.value"></div>
-        <div class="form-group"><label>Price</label><input type="number" value="${addon.price||0}" step="0.01" onchange="S.addons[${i}].price=parseFloat(this.value)||0"></div>
-        <div class="form-group"><label><input type="checkbox" ${addon.required?'checked':''} onchange="S.addons[${i}].required=this.checked"> Required</label></div>
-      </div>`;
+      config=\`<div class="addon-config" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div class="form-group"><label>Placeholder</label><input type="text" value="\${addon.placeholder||''}" onchange="S.addons[\${i}].placeholder=this.value"></div>
+        <div class="form-group"><label>Price</label><input type="number" value="\${addon.price||0}" step="0.01" onchange="S.addons[\${i}].price=parseFloat(this.value)||0"></div>
+        <div class="form-group"><label><input type="checkbox" \${addon.required?'checked':''} onchange="S.addons[\${i}].required=this.checked"> Required</label></div>
+      </div>\`;
     }
     else if(addon.type==='file'){
-      config=`<div class="addon-config" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-        <div class="form-group"><label>Price</label><input type="number" value="${addon.price||0}" step="0.01" onchange="S.addons[${i}].price=parseFloat(this.value)||0"></div>
-        <div class="form-group"><label><input type="checkbox" ${addon.required?'checked':''} onchange="S.addons[${i}].required=this.checked"> Required</label></div>
-      </div>`;
+      config=\`<div class="addon-config" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div class="form-group"><label>Price</label><input type="number" value="\${addon.price||0}" step="0.01" onchange="S.addons[\${i}].price=parseFloat(this.value)||0"></div>
+        <div class="form-group"><label><input type="checkbox" \${addon.required?'checked':''} onchange="S.addons[\${i}].required=this.checked"> Required</label></div>
+      </div>\`;
     }
     else if(['radio','select','checkbox_group'].includes(addon.type)){
-      config=`<div class="addon-config">
-        <button type="button" class="btn btn-sm btn-primary" onclick="addOption(${i})">+ Add Option</button>
-        <div style="margin-top:1rem">${(addon.options||[]).map((opt,oi)=>
-          `<div class="addon-option">
+      config=\`<div class="addon-config">
+        <button type="button" class="btn btn-sm btn-primary" onclick="addOption(\${i})">+ Add Option</button>
+        <div style="margin-top:1rem">\${(addon.options||[]).map((opt,oi)=>
+          \`<div class="addon-option">
             <div class="addon-option-main">
-              <input type="text" placeholder="Label *" value="${opt.label||''}" onchange="S.addons[${i}].options[${oi}].label=this.value">
-              <input type="number" placeholder="Price" value="${opt.price||0}" step="0.01" onchange="S.addons[${i}].options[${oi}].price=parseFloat(this.value)||0">
+              <input type="text" placeholder="Label *" value="\${opt.label||''}" onchange="S.addons[\${i}].options[\${oi}].label=this.value">
+              <input type="number" placeholder="Price" value="\${opt.price||0}" step="0.01" onchange="S.addons[\${i}].options[\${oi}].price=parseFloat(this.value)||0">
             </div>
             <div class="addon-option-flags">
-              <label><input type="checkbox" ${opt.file?'checked':''} onchange="S.addons[${i}].options[${oi}].file=this.checked;renderAddons()"> 📎 File</label>
-              <label><input type="checkbox" ${opt.textField?'checked':''} onchange="S.addons[${i}].options[${oi}].textField=this.checked;renderAddons()"> ✏️ Text</label>
-              <label><input type="checkbox" ${opt.delivery?'checked':''} onchange="S.addons[${i}].options[${oi}].delivery=this.checked;renderAddons()"> 🚚 Delivery</label>
-              ${addon.type!=='checkbox_group'?`<label><input type="radio" name="default-${i}" ${opt.default?'checked':''} onchange="S.addons[${i}].options.forEach((o,idx)=>o.default=idx===${oi});renderAddons()"> ⭐ Default</label>`:''}
-              <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons[${i}].options.splice(${oi},1);renderAddons()">×</button>
+              <label><input type="checkbox" \${opt.file?'checked':''} onchange="S.addons[\${i}].options[\${oi}].file=this.checked;renderAddons()"> 📎 File</label>
+              <label><input type="checkbox" \${opt.textField?'checked':''} onchange="S.addons[\${i}].options[\${oi}].textField=this.checked;renderAddons()"> ✏️ Text</label>
+              <label><input type="checkbox" \${opt.delivery?'checked':''} onchange="S.addons[\${i}].options[\${oi}].delivery=this.checked;renderAddons()"> 🚚 Delivery</label>
+              \${addon.type!=='checkbox_group'?\`<label><input type="radio" name="default-\${i}" \${opt.default?'checked':''} onchange="S.addons[\${i}].options.forEach((o,idx)=>o.default=idx===\${oi});renderAddons()"> ⭐ Default</label>\`:''}
+              <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons[\${i}].options.splice(\${oi},1);renderAddons()">×</button>
             </div>
-            ${opt.file||opt.textField||opt.delivery?`<div class="addon-option-extra">
-              ${opt.file?`<div class="form-group"><label>📎 Quantity</label>
-                <input type="number" min="1" value="${opt.fileQuantity||1}" onchange="S.addons[${i}].options[${oi}].fileQuantity=parseInt(this.value)||1">
-                <small>Files</small></div>`:''}
-              ${opt.textField?`<div class="form-group"><label>✏️ Label</label>
-                <input type="text" placeholder="e.g., Link" value="${opt.textLabel||''}" onchange="S.addons[${i}].options[${oi}].textLabel=this.value"></div>
+            \${opt.file||opt.textField||opt.delivery?\`<div class="addon-option-extra">
+              \${opt.file?\`<div class="form-group"><label>📎 Quantity</label>
+                <input type="number" min="1" value="\${opt.fileQuantity||1}" onchange="S.addons[\${i}].options[\${oi}].fileQuantity=parseInt(this.value)||1">
+                <small>Files</small></div>\`:''}
+              \${opt.textField?\`<div class="form-group"><label>✏️ Label</label>
+                <input type="text" placeholder="e.g., Link" value="\${opt.textLabel||''}" onchange="S.addons[\${i}].options[\${oi}].textLabel=this.value"></div>
                 <div class="form-group"><label>Placeholder</label>
-                <input type="text" value="${opt.textPlaceholder||''}" onchange="S.addons[${i}].options[${oi}].textPlaceholder=this.value"></div>`:''}
-              ${opt.delivery?`<div class="delivery-config">
-                <div class="form-group"><label><input type="checkbox" ${opt.instantDelivery?'checked':''} onchange="S.addons[${i}].options[${oi}].instantDelivery=this.checked"> ⚡ Instant</label></div>
+                <input type="text" value="\${opt.textPlaceholder||''}" onchange="S.addons[\${i}].options[\${oi}].textPlaceholder=this.value"></div>\`:''}
+              \${opt.delivery?\`<div class="delivery-config">
+                <div class="form-group"><label><input type="checkbox" \${opt.instantDelivery?'checked':''} onchange="S.addons[\${i}].options[\${oi}].instantDelivery=this.checked"> ⚡ Instant</label></div>
                 <div class="form-group"><label>🗓️ Days</label>
-                  <input type="number" min="1" value="${opt.deliveryDays||1}" onchange="S.addons[${i}].options[${oi}].deliveryDays=parseInt(this.value)||1"></div>
-              </div>`:''}
-            </div>`:''}
-          </div>`
+                  <input type="number" min="1" value="\${opt.deliveryDays||1}" onchange="S.addons[\${i}].options[\${oi}].deliveryDays=parseInt(this.value)||1"></div>
+              </div>\`:''}
+            </div>\`:''}
+          </div>\`
         ).join('')}</div>
-      </div>`;
+      </div>\`;
     }
-    return `<div class="addon-field">
+    return \`<div class="addon-field">
       <div class="addon-header">
-        <strong>${addon.type?addon.type.toUpperCase():''} - ${addon.label||'Field '+(i+1)}</strong>
-        <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons.splice(${i},1);renderAddons()">Remove</button>
+        <strong>\${addon.type?addon.type.toUpperCase():''} - \${addon.label||'Field '+(i+1)}</strong>
+        <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons.splice(\${i},1);renderAddons()">Remove</button>
       </div>
       <div class="form-group"><label>Label *</label>
-        <input type="text" value="${addon.label||''}" onchange="S.addons[${i}].label=this.value">
+        <input type="text" value="\${addon.label||''}" onchange="S.addons[\${i}].label=this.value">
       </div>
-      ${config}
-    </div>`;
+      \${config}
+    </div>\`;
   }).join('');
 }
 
@@ -637,4 +644,44 @@ async function save(){
 init();
 </script>
 </body>
-</html>
+</html>`;
+
+export default {
+  async fetch(request: Request, env: any, ctx: any): Promise<Response> {
+    const url = new URL(request.url);
+    
+    if (url.pathname === '/admin' || url.pathname === '/admin/') {
+      return new Response(ADMIN_HTML, {
+        headers: { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' }
+      });
+    }
+    
+    if (!initialized) {
+      const migration = new AutoMigration(env);
+      await migration.autoSetup();
+      initialized = true;
+    }
+
+    const container = new Container();
+    container.bind("db", () => env.DB);
+    container.bind("storage", () => env.MEDIA);
+    container.bind("secret", () => env.TOKEN_SECRET || "default-secret");
+
+    const router = new Router();
+    const modules = loadModules(container);
+    
+    modules.forEach(module => {
+      module.routes.forEach(route => {
+        router.add(route.method, route.path, route.handler);
+      });
+    });
+
+    try {
+      return await router.handle(request);
+    } catch (error: any) {
+      return new Response(JSON.stringify({ error: error.message }), { 
+        status: 500, headers: { "Content-Type": "application/json" }
+      });
+    }
+  },
+};
