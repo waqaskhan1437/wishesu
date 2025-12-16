@@ -1572,7 +1572,9 @@ export default {
                 amount = d.amount;
                 addons = d.addons || [];
               }
-            } catch(e) {}
+            } catch(e) {
+              console.error('Failed to parse order encrypted_data for order:', row.order_id, e.message);
+            }
             return { ...row, email, amount, addons };
           });
           return json({ orders });
@@ -1613,7 +1615,9 @@ export default {
                email = d.email || '';
                amount = d.amount;
              }
-           } catch(e) {}
+           } catch(e) {
+             console.error('Failed to parse order encrypted_data for buyer order:', orderId, e.message);
+           }
 
            // Convert SQLite datetime to ISO 8601 format with Z suffix for UTC
            const orderData = { ...row, addons, email, amount };
