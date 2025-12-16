@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎥 Universal Video Player Demo</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #1f2937;
+      margin-bottom: 30px;
+      font-size: 2.5em;
+    }
+    .demo-section {
+      margin-bottom: 40px;
+      padding: 25px;
+      background: #f8fafc;
+      border-radius: 12px;
+      border-left: 4px solid #3b82f6;
+    }
+    .demo-section h2 {
+      color: #374151;
+      margin-top: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .video-container {
+      width: 100%;
+      height: 400px;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 20px 0;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+    .btn {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-success { background: #10b981; color: white; }
+    .btn-warning { background: #f59e0b; color: white; }
+    .btn-info { background: #06b6d4; color: white; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .url-input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      margin: 10px 0;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin: 30px 0;
+    }
+    .feature {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      text-align: center;
+    }
+    .feature-icon {
+      font-size: 3em;
+      margin-bottom: 15px;
+    }
+    .status {
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin: 10px 0;
+      display: inline-block;
+    }
+    .status-success { background: #d1fae5; color: #065f46; }
+    .status-info { background: #dbeafe; color: #1e40af; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎥 Universal Video Player Demo</h1>
+    
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">📺</div>
+        <h3>YouTube Support</h3>
+        <div class="status status-success">✅ Active</div>
+        <p>Automatic YouTube embed detection and player integration</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🎬</div>
+        <h3>Vimeo Support</h3>
+        <div class="status status-success">✅ Active</div>
+        <p>Professional Vimeo video embedding with custom controls</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🐰</div>
+        <h3>Bunny CDN</h3>
+        <div class="status status-success">✅ Active</div>
+        <p>High-performance Bunny CDN video streaming</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">☁️</div>
+        <h3>Cloudinary</h3>
+        <div class="status status-success">✅ Active</div>
+        <p>Cloudinary video optimization and delivery</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📚</div>
+        <h3>Archive.org</h3>
+        <div class="status status-success">✅ Active</div>
+        <p>Internet Archive video hosting and playback</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🎥</div>
+        <h3>Direct URLs</h3>
+        <div class="status status-success">✅ Active</div>
+        <p>MP4, WebM, MOV, AVI, MKV and more formats</p>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h2>🎮 Interactive Demo</h2>
+      <p>Test the universal video player with different video sources:</p>
+      
+      <div class="video-container" id="demo-player"></div>
+      
+      <div class="controls">
+        <button class="btn btn-primary" onclick="loadVideo('https://www.youtube.com/watch?v=dQw4w9WgXcQ')">📺 YouTube</button>
+        <button class="btn btn-success" onclick="loadVideo('https://vimeo.com/148751763')">🎬 Vimeo</button>
+        <button class="btn btn-warning" onclick="loadVideo('https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4')">📚 Archive.org</button>
+        <button class="btn btn-info" onclick="loadVideo('https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4')">🎥 Direct MP4</button>
+      </div>
+      
+      <input type="text" class="url-input" id="custom-url" placeholder="Or paste any video URL here...">
+      <button class="btn btn-primary" onclick="loadCustomVideo()">🚀 Load Custom Video</button>
+    </div>
+
+    <div class="demo-section">
+      <h2>🎯 Order Detail Integration</h2>
+      <p>This is how the video player appears in the actual order detail page:</p>
+      
+      <div style="background: white; padding: 20px; border-radius: 12px; border: 2px dashed #e5e7eb;">
+        <h3 style="margin-bottom: 16px;">🎥 Delivered Video</h3>
+        <div class="video-container" id="order-demo-player"></div>
+        
+        <div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap;">
+          <a href="#" class="btn btn-primary">⬇️ Download Video</a>
+          <button class="btn btn-warning">🔄 Request Revision</button>
+          <button class="btn btn-success">✅ Approve & Review</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h2>👥 Admin Dashboard Features</h2>
+      <p>Admin can now easily switch between admin and buyer views:</p>
+      
+      <div style="background: white; padding: 20px; border-radius: 12px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background: #f8fafc;">
+              <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb;">Order ID</th>
+              <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb;">Email</th>
+              <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb;">Status</th>
+              <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e5e7eb;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;"><strong>#12345</strong></td>
+              <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">customer@example.com</td>
+              <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;"><span class="status status-success">delivered</span></td>
+              <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button class="btn btn-primary" style="font-size: 12px; padding: 4px 8px;">👁️ Admin View</button>
+                  <button class="btn btn-info" style="font-size: 12px; padding: 4px 8px;">👤 Buyer View</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/universal-player.js"></script>
+  <script>
+    // Initialize demo
+    let currentPlayer = null;
+    
+    function loadVideo(url) {
+      console.log('Loading video:', url);
+      
+      if (window.UniversalPlayer) {
+        const container = document.getElementById('demo-player');
+        container.innerHTML = '';
+        
+        const videoInfo = window.UniversalPlayer.detect(url);
+        console.log('Video info:', videoInfo);
+        
+        // Render using the updated render method
+        window.UniversalPlayer.render('demo-player', url);
+        
+        // Also load in order demo
+        window.UniversalPlayer.render('order-demo-player', url);
+        
+        console.log('Video loaded:', videoInfo.type, videoInfo);
+      } else {
+        console.error('UniversalPlayer not loaded');
+      }
+    }
+    
+    function loadCustomVideo() {
+      const url = document.getElementById('custom-url').value.trim();
+      if (url) {
+        loadVideo(url);
+      } else {
+        alert('Please enter a video URL');
+      }
+    }
+    
+    // Load default video on page load
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        loadVideo('https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4');
+      }, 1000);
+    });
+  </script>
+</body>
+</html>
