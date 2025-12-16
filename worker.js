@@ -575,84 +575,120 @@ export default {
         });
       }
 
-      // Clear pending checkouts - FIXED VERSION (actually deletes from Whop)
+      // Clear pending checkouts - IMPROVED (fetches ALL from Whop API)
       if ((method === 'POST' || method === 'GET') && path === '/api/admin/clear-pending-checkouts') {
         try {
           if (!env.WHOP_API_KEY) {
             return json({ 
               success: false, 
-              error: 'WHOP_API_KEY not configured in Cloudflare Worker environment variables',
+              error: 'WHOP_API_KEY not configured',
               count: 0 
             }, 500);
           }
 
-          await initDB(env);
+          let allCheckouts = [];
+          let page = 1;
+          const perPage = 100;
+          let hasMore = true;
           
-          // Get all pending checkouts from database
-          const checkouts = await env.DB.prepare(`
-            SELECT checkout_id, plan_id FROM checkout_sessions 
-            WHERE status = 'pending'
-            ORDER BY created_at DESC
-          `).all();
+          console.log('🔍 Fetching all checkouts from Whop API...');
+          
+          // Fetch ALL checkouts from Whop (pagination)
+          while (hasMore) {
+            try {
+              const listResponse = await fetch(
+                `https://api.whop.com/api/v2/checkout_sessions?page=${page}&per=${perPage}`,
+                {
+                  method: 'GET',
+                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
+                }
+              );
+              
+              if (!listResponse.ok) {
+                console.error('Failed to fetch checkouts:', listResponse.status);
+                break;
+              }
+              
+              const data = await listResponse.json();
+              const checkouts = data.data || [];
+              
+              if (checkouts.length > 0) {
+                allCheckouts.push(...checkouts);
+                console.log(`📄 Page ${page}: Found ${checkouts.length} checkouts`);
+                page++;
+                
+                // Check if there are more pages
+                hasMore = checkouts.length === perPage;
+              } else {
+                hasMore = false;
+              }
+              
+              // Safety limit to prevent infinite loops
+              if (page > 10) {
+                console.log('⚠️ Reached page limit (10 pages)');
+                break;
+              }
+            } catch (err) {
+              console.error('Error fetching page:', err);
+              break;
+            }
+          }
+          
+          console.log(`✅ Total checkouts found: ${allCheckouts.length}`);
           
           let deleted = 0;
           let failed = 0;
           const errors = [];
           
-          console.log(`Found ${checkouts.results?.length || 0} pending checkouts to delete`);
-          
           // Delete each checkout from Whop
-          for (const checkout of (checkouts.results || [])) {
+          for (const checkout of allCheckouts) {
             try {
-              // Delete checkout session from Whop
-              const deleteResp = await fetch(`https://api.whop.com/api/v2/checkout_sessions/${checkout.checkout_id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
-              });
+              const checkoutId = checkout.id;
+              
+              // Delete checkout session
+              const deleteResp = await fetch(
+                `https://api.whop.com/api/v2/checkout_sessions/${checkoutId}`,
+                {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
+                }
+              );
               
               if (deleteResp.ok || deleteResp.status === 404) {
-                // Also delete associated plan if exists
-                if (checkout.plan_id) {
-                  try {
-                    await fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
-                      method: 'DELETE',
-                      headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
-                    });
-                    console.log('✅ Deleted plan:', checkout.plan_id);
-                  } catch (e) {
-                    console.error('Plan delete error:', e);
-                  }
-                }
-                
-                // Mark as deleted in database
-                await env.DB.prepare(`
-                  UPDATE checkout_sessions 
-                  SET status = 'expired', completed_at = datetime('now')
-                  WHERE checkout_id = ?
-                `).bind(checkout.checkout_id).run();
-                
                 deleted++;
-                console.log('✅ Deleted checkout:', checkout.checkout_id);
+                console.log('✅ Deleted:', checkoutId);
+                
+                // Also try to delete from database if exists
+                try {
+                  await initDB(env);
+                  await env.DB.prepare(`
+                    UPDATE checkout_sessions 
+                    SET status = 'expired', completed_at = datetime('now')
+                    WHERE checkout_id = ?
+                  `).bind(checkoutId).run();
+                } catch (dbErr) {
+                  // Ignore database errors - not all checkouts are in DB
+                }
               } else {
-                const errorText = await deleteResp.text();
                 failed++;
-                errors.push(`${checkout.checkout_id}: HTTP ${deleteResp.status} - ${errorText}`);
-                console.error('❌ Failed to delete:', checkout.checkout_id, deleteResp.status);
+                const errorText = await deleteResp.text().catch(() => 'Unknown error');
+                errors.push(`${checkoutId}: HTTP ${deleteResp.status}`);
+                console.error('❌ Failed:', checkoutId, deleteResp.status);
               }
             } catch (e) {
               failed++;
-              errors.push(`${checkout.checkout_id}: ${e.message}`);
-              console.error('❌ Error deleting checkout:', checkout.checkout_id, e.message);
+              errors.push(`${checkout.id}: ${e.message}`);
+              console.error('❌ Error:', checkout.id, e.message);
             }
           }
           
           return json({
             success: true,
-            count: deleted,
+            total: allCheckouts.length,
+            deleted: deleted,
             failed: failed,
-            total: checkouts.results?.length || 0,
             message: `Successfully deleted ${deleted} checkout(s) from Whop${failed > 0 ? `, ${failed} failed` : ''}`,
-            errors: errors.length > 0 ? errors.slice(0, 5) : undefined // Show first 5 errors only
+            errors: errors.length > 0 ? errors.slice(0, 10) : undefined
           });
           
         } catch (err) {
