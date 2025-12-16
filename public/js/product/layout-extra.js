@@ -158,12 +158,13 @@
               const portfolioRow = document.createElement('div');
               portfolioRow.style.cssText = 'display:flex; align-items:center; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid #f3f4f6;';
 
-              // Create thumbnail container with overlays
+              // Create thumbnail container with overlays (bigger size)
               const thumbContainer = document.createElement('div');
-              thumbContainer.style.cssText = 'position:relative; width:200px; height:112px; flex-shrink:0; cursor:pointer; border-radius:10px; overflow:hidden; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition:transform 0.2s, box-shadow 0.2s;';
+              thumbContainer.style.cssText = 'position:relative; width:260px; height:146px; flex-shrink:0; cursor:pointer; border-radius:10px; overflow:hidden; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition:transform 0.2s, box-shadow 0.2s;';
 
               const thumb = document.createElement('img');
-              thumb.src = portfolioThumbUrl || product.thumbnail_url || 'https://via.placeholder.com/200x112?text=Review+Video';
+              // Use the actual delivered thumbnail from the review
+              thumb.src = portfolioThumbUrl || 'https://via.placeholder.com/260x146?text=Review+Video';
               thumb.alt = 'Review video thumbnail';
               thumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
               
@@ -222,6 +223,65 @@
             }
 
             grid.appendChild(card);
+
+            // Add delivery video to thumbnail gallery
+            if (canWatch && window.productThumbnailsSlider) {
+              const galleryThumb = document.createElement('div');
+              galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s;';
+
+              const galleryImg = document.createElement('img');
+              galleryImg.src = portfolioThumbUrl || 'https://via.placeholder.com/140x100?text=Review';
+              galleryImg.alt = 'Delivery video thumbnail';
+              galleryImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+
+              // Add review badge to gallery thumbnail
+              const badge = document.createElement('div');
+              badge.textContent = 'Review';
+              badge.style.cssText = 'position: absolute; bottom: 4px; right: 4px; background: rgba(16,185,129,0.95); color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;';
+
+              const playIcon = document.createElement('div');
+              playIcon.innerHTML = '▶';
+              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px;';
+
+              galleryThumb.appendChild(galleryImg);
+              galleryThumb.appendChild(badge);
+              galleryThumb.appendChild(playIcon);
+
+              // Click handler
+              galleryThumb.onclick = () => {
+                // Remove active from all thumbs
+                document.querySelectorAll('#thumbnails-slider .thumb, #thumbnails-slider > div').forEach(t => {
+                  if (t.style) t.style.border = '3px solid transparent';
+                });
+                galleryThumb.style.border = '3px solid #667eea';
+
+                showHighlight(review);
+                scrollToPlayer();
+                setPlayerSource(portfolioVideoUrl, portfolioThumbUrl);
+              };
+
+              // Hover effect
+              galleryThumb.onmouseenter = () => {
+                galleryThumb.style.transform = 'scale(1.05)';
+              };
+              galleryThumb.onmouseleave = () => {
+                galleryThumb.style.transform = 'scale(1)';
+              };
+
+              window.productThumbnailsSlider.appendChild(galleryThumb);
+
+              // Update slider arrows visibility
+              setTimeout(() => {
+                const slider = window.productThumbnailsSlider;
+                const container = slider.parentElement;
+                if (slider && container && slider.scrollWidth > slider.clientWidth) {
+                  const leftArrow = container.querySelector('button:first-of-type');
+                  const rightArrow = container.querySelector('button:last-of-type');
+                  if (leftArrow) leftArrow.style.display = 'block';
+                  if (rightArrow) rightArrow.style.display = 'block';
+                }
+              }, 50);
+            }
           });
 
           container.innerHTML = '';

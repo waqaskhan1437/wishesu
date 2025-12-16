@@ -68,18 +68,58 @@
     
     leftCol.appendChild(videoWrapper);
 
-    // Thumbnails
+    // Thumbnails with slider
+    const thumbsContainer = document.createElement('div');
+    thumbsContainer.style.cssText = 'position: relative; margin-top: 15px;';
+
+    const thumbsDiv = document.createElement('div');
+    thumbsDiv.className = 'thumbnails';
+    thumbsDiv.id = 'thumbnails-slider';
+    thumbsDiv.style.cssText = 'display: flex; gap: 12px; overflow-x: auto; scroll-behavior: smooth; padding: 8px 0; scrollbar-width: thin;';
+
+    // Add main product thumbnail
     if (product.thumbnail_url) {
-      const thumbsDiv = document.createElement('div');
-      thumbsDiv.className = 'thumbnails';
       const img = document.createElement('img');
       img.src = product.thumbnail_url;
       img.className = 'thumb active';
-      // Fix Accessibility: Add Alt text
+      img.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid #667eea; transition: all 0.3s;';
       img.alt = (product.title || 'Product') + ' - Thumbnail';
+      img.dataset.type = 'main';
       thumbsDiv.appendChild(img);
-      leftCol.appendChild(thumbsDiv);
     }
+
+    thumbsContainer.appendChild(thumbsDiv);
+
+    // Add slider arrows
+    const leftArrow = document.createElement('button');
+    leftArrow.innerHTML = '‹';
+    leftArrow.style.cssText = 'position: absolute; left: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: none;';
+    leftArrow.onclick = () => {
+      thumbsDiv.scrollBy({ left: -160, behavior: 'smooth' });
+    };
+
+    const rightArrow = document.createElement('button');
+    rightArrow.innerHTML = '›';
+    rightArrow.style.cssText = 'position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: none;';
+    rightArrow.onclick = () => {
+      thumbsDiv.scrollBy({ left: 160, behavior: 'smooth' });
+    };
+
+    thumbsContainer.appendChild(leftArrow);
+    thumbsContainer.appendChild(rightArrow);
+
+    // Check if arrows are needed
+    setTimeout(() => {
+      if (thumbsDiv.scrollWidth > thumbsDiv.clientWidth) {
+        leftArrow.style.display = 'block';
+        rightArrow.style.display = 'block';
+      }
+    }, 100);
+
+    leftCol.appendChild(thumbsContainer);
+
+    // Store reference for adding delivery videos later
+    window.productThumbnailsSlider = thumbsDiv;
     mainRow.appendChild(leftCol);
 
     // --- Right Column: Info & Form ---
