@@ -81,6 +81,7 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .addon-option-flags { display: flex; gap: 1rem; margin-bottom: 0.75rem; align-items: center; flex-wrap: wrap; }
 .addon-option-flags label { font-size: 0.875rem; display: flex; align-items: center; margin-bottom: 0; }
 .addon-option-extra { margin-top: 0.75rem; padding: 0.75rem; background: #f0f0f0; border-radius: 6px; }
+.delivery-config { margin-top: 0.5rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; }
 .btn-sm { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
 .section-divider { margin: 2rem 0; border-top: 2px solid var(--border); }
 </style>
@@ -221,7 +222,7 @@ function addImageUrl(){
 
 function addVideoUrl(){
   const url=prompt('Video URL:');
-  const thumb=prompt('Thumbnail URL (optional):');
+  const thumb=prompt('Thumbnail URL:');
   if(url){S.videos.push({id:Date.now(),preview:thumb||'',url:url,thumbnail:thumb||'',type:'url'});renderVideos();}
 }
 
@@ -230,7 +231,7 @@ function renderImages(){
   c.innerHTML=S.images.map((img,i)=>
     \`<div class="media-item" draggable="true" data-index="\${i}">
       <div class="order">\${i+1}</div>
-      <img src="\${img.preview}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23eee%22 width=%22150%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22%3E🖼️%3C/text%3E%3C/svg%3E'">
+      <img src="\${img.preview}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23eee%22 width=%22150%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E🖼️%3C/text%3E%3C/svg%3E'">
       <button type="button" class="remove" onclick="S.images.splice(\${i},1);renderImages()">×</button>
       <div class="media-info">
         <input type="url" placeholder="Image URL *" value="\${img.url||''}" onchange="S.images[\${i}].url=this.value" required>
@@ -291,7 +292,12 @@ function addAddonType(type){
     price:0,
     placeholder:'',
     text:'',
-    options:['radio','select','checkbox_group'].includes(type)?[{label:'',price:0,default:true,file:false,fileQuantity:1,textField:false,textLabel:'',textPlaceholder:''}]:[]
+    options:['radio','select','checkbox_group'].includes(type)?[{
+      label:'',price:0,default:true,
+      file:false,fileQuantity:1,
+      textField:false,textLabel:'',textPlaceholder:'',
+      delivery:false,instantDelivery:false,deliveryDays:1
+    }]:[]
   });
   renderAddons();
 }
@@ -333,19 +339,26 @@ function renderAddons(){
               <input type="number" placeholder="Price" value="\${opt.price||0}" step="0.01" onchange="S.addons[\${i}].options[\${oi}].price=parseFloat(this.value)||0">
             </div>
             <div class="addon-option-flags">
-              <label><input type="checkbox" \${opt.file?'checked':''} onchange="S.addons[\${i}].options[\${oi}].file=this.checked;renderAddons()"> 📎 File Upload</label>
-              <label><input type="checkbox" \${opt.textField?'checked':''} onchange="S.addons[\${i}].options[\${oi}].textField=this.checked;renderAddons()"> ✏️ Text Field</label>
+              <label><input type="checkbox" \${opt.file?'checked':''} onchange="S.addons[\${i}].options[\${oi}].file=this.checked;renderAddons()"> 📎 File</label>
+              <label><input type="checkbox" \${opt.textField?'checked':''} onchange="S.addons[\${i}].options[\${oi}].textField=this.checked;renderAddons()"> ✏️ Text</label>
+              <label><input type="checkbox" \${opt.delivery?'checked':''} onchange="S.addons[\${i}].options[\${oi}].delivery=this.checked;renderAddons()"> 🚚 Delivery</label>
               \${addon.type!=='checkbox_group'?\`<label><input type="radio" name="default-\${i}" \${opt.default?'checked':''} onchange="S.addons[\${i}].options.forEach((o,idx)=>o.default=idx===\${oi});renderAddons()"> ⭐ Default</label>\`:''}
-              <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons[\${i}].options.splice(\${oi},1);renderAddons()">Remove</button>
+              <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons[\${i}].options.splice(\${oi},1);renderAddons()">×</button>
             </div>
-            \${opt.file||opt.textField?\`<div class="addon-option-extra">
-              \${opt.file?\`<div class="form-group"><label>File Quantity</label>
+            \${opt.file||opt.textField||opt.delivery?\`<div class="addon-option-extra">
+              \${opt.file?\`<div class="form-group"><label>📎 File Quantity</label>
                 <input type="number" min="1" value="\${opt.fileQuantity||1}" onchange="S.addons[\${i}].options[\${oi}].fileQuantity=parseInt(this.value)||1">
-                <small>Number of files customer uploads</small></div>\`:''}
-              \${opt.textField?\`<div class="form-group"><label>Text Field Label</label>
+                <small>How many files</small></div>\`:''}
+              \${opt.textField?\`<div class="form-group"><label>✏️ Text Field Label</label>
                 <input type="text" placeholder="e.g., Song link" value="\${opt.textLabel||''}" onchange="S.addons[\${i}].options[\${oi}].textLabel=this.value"></div>
                 <div class="form-group"><label>Text Placeholder</label>
-                <input type="text" placeholder="e.g., Paste YouTube link" value="\${opt.textPlaceholder||''}" onchange="S.addons[\${i}].options[\${oi}].textPlaceholder=this.value"></div>\`:''}
+                <input type="text" placeholder="e.g., Paste link" value="\${opt.textPlaceholder||''}" onchange="S.addons[\${i}].options[\${oi}].textPlaceholder=this.value"></div>\`:''}
+              \${opt.delivery?\`<div class="delivery-config">
+                <div class="form-group"><label><input type="checkbox" \${opt.instantDelivery?'checked':''} onchange="S.addons[\${i}].options[\${oi}].instantDelivery=this.checked"> ⚡ Instant Delivery</label></div>
+                <div class="form-group"><label>🗓️ Delivery Days</label>
+                  <input type="number" min="1" max="365" value="\${opt.deliveryDays||1}" onchange="S.addons[\${i}].options[\${oi}].deliveryDays=parseInt(this.value)||1">
+                  <small>Number of days for delivery</small></div>
+              </div>\`:''}
             </div>\`:''}
           </div>\`
         ).join('')}</div>
@@ -354,8 +367,8 @@ function renderAddons(){
     
     return \`<div class="addon-field">
       <div class="addon-header">
-        <strong>\${addon.type?addon.type.toUpperCase():''} - Field \${i+1}</strong>
-        <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons.splice(\${i},1);renderAddons()">Remove Field</button>
+        <strong>\${addon.type?addon.type.toUpperCase():''} - \${addon.label||'Field '+(i+1)}</strong>
+        <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons.splice(\${i},1);renderAddons()">Remove</button>
       </div>
       <div class="form-group"><label>Field Label *</label>
         <input type="text" value="\${addon.label||''}" placeholder="e.g., Choose size" onchange="S.addons[\${i}].label=this.value" required>
@@ -367,7 +380,12 @@ function renderAddons(){
 
 function addOption(i){
   if(!S.addons[i].options)S.addons[i].options=[];
-  S.addons[i].options.push({label:'',price:0,default:false,file:false,fileQuantity:1,textField:false,textLabel:'',textPlaceholder:''});
+  S.addons[i].options.push({
+    label:'',price:0,default:false,
+    file:false,fileQuantity:1,
+    textField:false,textLabel:'',textPlaceholder:'',
+    delivery:false,instantDelivery:false,deliveryDays:1
+  });
   renderAddons();
 }
 
