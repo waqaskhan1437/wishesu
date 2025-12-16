@@ -1,4 +1,4 @@
-name = "product-worker"
+name = "wishesu1"
 main = "apps/worker/src/index.ts"
 compatibility_date = "2025-12-14"
 
