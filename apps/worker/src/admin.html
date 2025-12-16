@@ -39,7 +39,10 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tab-nav { display: flex; justify-content: space-between; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border); }
 .media-section { margin-bottom: 2rem; padding: 1.5rem; background: #fafafa; border-radius: 8px; border: 1px solid var(--border); }
-.media-section h3 { font-size: 1rem; margin-bottom: 1rem; }
+.media-section h3 { font-size: 1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.gallery-group { border: 2px solid var(--primary); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: #fff; }
+.gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.gallery-header input { flex: 1; margin-right: 0.5rem; font-weight: 600; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-top: 1rem; }
 .media-item { position: relative; border: 2px solid var(--border); border-radius: 8px; background: #fff; cursor: move; }
 .media-item.dragging { opacity: 0.5; }
@@ -104,14 +107,11 @@ small { color: var(--text-light); font-size: 0.75rem; }
       </div>
       <div class="tab-content" data-tab="2">
         <div class="media-section">
-          <h3>🖼️ Images</h3>
+          <h3>🖼️ Image Galleries</h3>
           <div class="form-group">
-            <div style="display:flex;gap:0.5rem">
-              <input type="file" id="img-file" accept="image/*" multiple style="flex:1">
-              <button type="button" class="btn" onclick="addImageUrl()">+ URL</button>
-            </div>
+            <button type="button" class="btn btn-primary" onclick="addGallery()">+ Add Gallery</button>
           </div>
-          <div id="images-grid" class="media-grid"></div>
+          <div id="galleries-container"></div>
         </div>
         <div class="section-divider"></div>
         <div class="media-section">
@@ -155,7 +155,7 @@ small { color: var(--text-light); font-size: 0.75rem; }
   </div>
 </div>
 <script>
-const S={tab:0,completed:new Set(),images:[],videos:[],addons:[],dragSrc:null,dragType:''};
+const S={tab:0,completed:new Set(),galleries:[],videos:[],addons:[],dragSrc:null,dragType:'',dragGallery:null};
 const tabs=['📝 Basic','💰 Pricing','🖼️ Media','➕ Addons','🔍 SEO'];
 
 function init(){
@@ -192,13 +192,6 @@ function switchTab(i){
 }
 
 function setupMedia(){
-  document.getElementById('img-file').onchange=e=>{
-    for(const f of e.target.files){
-      const r=new FileReader();
-      r.onload=ev=>{S.images.push({id:Date.now()+Math.random(),preview:ev.target.result,url:'',type:'upload'});renderImages();};
-      r.readAsDataURL(f);
-    }
-  };
   document.getElementById('vid-file').onchange=e=>{
     for(const f of e.target.files){
       const r=new FileReader();
@@ -208,30 +201,92 @@ function setupMedia(){
   };
 }
 
-function addImageUrl(){
+function addGallery(){
+  S.galleries.push({id:Date.now(),name:'Gallery '+(S.galleries.length+1),images:[]});
+  renderGalleries();
+}
+
+function addGalleryImage(galleryIndex){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.multiple=true;
+  input.onchange=e=>{
+    for(const f of e.target.files){
+      const r=new FileReader();
+      r.onload=ev=>{
+        S.galleries[galleryIndex].images.push({id:Date.now()+Math.random(),preview:ev.target.result,url:'',type:'upload'});
+        renderGalleries();
+      };
+      r.readAsDataURL(f);
+    }
+  };
+  input.click();
+}
+
+function addGalleryImageUrl(galleryIndex){
   const url=prompt('Image URL:');
-  if(url){S.images.push({id:Date.now(),preview:url,url:url,type:'url'});renderImages();}
+  if(url){
+    S.galleries[galleryIndex].images.push({id:Date.now(),preview:url,url:url,type:'url'});
+    renderGalleries();
+  }
+}
+
+function renderGalleries(){
+  const c=document.getElementById('galleries-container');
+  c.innerHTML=S.galleries.map((gallery,gi)=>
+    `<div class="gallery-group">
+      <div class="gallery-header">
+        <input type="text" value="${gallery.name||''}" placeholder="Gallery name" onchange="S.galleries[${gi}].name=this.value">
+        <div style="display:flex;gap:0.5rem">
+          <button type="button" class="btn btn-sm btn-primary" onclick="addGalleryImage(${gi})">+ Upload</button>
+          <button type="button" class="btn btn-sm" onclick="addGalleryImageUrl(${gi})">+ URL</button>
+          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.galleries.splice(${gi},1);renderGalleries()">Remove Gallery</button>
+        </div>
+      </div>
+      <div class="media-grid">
+        ${gallery.images.map((img,ii)=>
+          `<div class="media-item" draggable="true" data-gallery="${gi}" data-index="${ii}">
+            <div class="order">${ii+1}</div>
+            <img src="${img.preview}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23eee%22 width=%22150%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E🖼️%3C/text%3E%3C/svg%3E'">
+            <button type="button" class="remove" onclick="S.galleries[${gi}].images.splice(${ii},1);renderGalleries()">×</button>
+            <div class="media-info">
+              <input type="url" placeholder="Image URL *" value="${img.url||''}" onchange="S.galleries[${gi}].images[${ii}].url=this.value" required>
+            </div>
+          </div>`
+        ).join('')}
+      </div>
+      ${gallery.images.length===0?'<p style="text-align:center;color:var(--text-light);padding:2rem">No images yet. Click + Upload or + URL</p>':''}
+    </div>`
+  ).join('');
+  setupGalleryDrag();
+}
+
+function setupGalleryDrag(){
+  document.querySelectorAll('.gallery-group .media-item').forEach(el=>{
+    el.ondragstart=e=>{
+      S.dragSrc=parseInt(e.target.dataset.index);
+      S.dragGallery=parseInt(e.target.dataset.gallery);
+    };
+    el.ondragover=e=>e.preventDefault();
+    el.ondrop=e=>{
+      e.preventDefault();
+      const dst=parseInt(e.currentTarget.dataset.index);
+      const dstGallery=parseInt(e.currentTarget.dataset.gallery);
+      
+      if(S.dragGallery===dstGallery && S.dragSrc!==dst){
+        const item=S.galleries[S.dragGallery].images.splice(S.dragSrc,1)[0];
+        S.galleries[S.dragGallery].images.splice(dst,0,item);
+        renderGalleries();
+      }
+    };
+  });
 }
 
 function addVideoUrl(){
   const url=prompt('Video URL:');
   const thumb=prompt('Thumbnail URL:');
   if(url){S.videos.push({id:Date.now(),preview:thumb||'',url:url,thumbnail:thumb||'',type:'url'});renderVideos();}
-}
-
-function renderImages(){
-  const c=document.getElementById('images-grid');
-  c.innerHTML=S.images.map((img,i)=>
-    `<div class="media-item" draggable="true" data-index="${i}">
-      <div class="order">${i+1}</div>
-      <img src="${img.preview}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23eee%22 width=%22150%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E🖼️%3C/text%3E%3C/svg%3E'">
-      <button type="button" class="remove" onclick="S.images.splice(${i},1);renderImages()">×</button>
-      <div class="media-info">
-        <input type="url" placeholder="Image URL *" value="${img.url||''}" onchange="S.images[${i}].url=this.value" required>
-      </div>
-    </div>`
-  ).join('');
-  setupDrag('images-grid','images');
 }
 
 function renderVideos(){
@@ -247,20 +302,20 @@ function renderVideos(){
       </div>
     </div>`
   ).join('');
-  setupDrag('videos-grid','videos');
+  setupVideoDrag();
 }
 
-function setupDrag(gridId,arrayName){
-  document.querySelectorAll(`#${gridId} .media-item`).forEach(el=>{
-    el.ondragstart=e=>{S.dragSrc=parseInt(e.target.dataset.index);S.dragType=arrayName;};
+function setupVideoDrag(){
+  document.querySelectorAll('#videos-grid .media-item').forEach(el=>{
+    el.ondragstart=e=>{S.dragSrc=parseInt(e.target.dataset.index);S.dragType='video';};
     el.ondragover=e=>e.preventDefault();
     el.ondrop=e=>{
       e.preventDefault();
       const dst=parseInt(e.currentTarget.dataset.index);
-      if(S.dragSrc!==dst && S.dragType===arrayName){
-        const item=S[arrayName].splice(S.dragSrc,1)[0];
-        S[arrayName].splice(dst,0,item);
-        arrayName==='images'?renderImages():renderVideos();
+      if(S.dragSrc!==dst){
+        const item=S.videos.splice(S.dragSrc,1)[0];
+        S.videos.splice(dst,0,item);
+        renderVideos();
       }
     };
   });
@@ -341,7 +396,7 @@ function renderAddons(){
             ${opt.file||opt.textField||opt.delivery?`<div class="addon-option-extra">
               ${opt.file?`<div class="form-group"><label>📎 File Quantity</label>
                 <input type="number" min="1" value="${opt.fileQuantity||1}" onchange="S.addons[${i}].options[${oi}].fileQuantity=parseInt(this.value)||1">
-                <small>How many files</small></div>`:''}
+                <small>Number of files</small></div>`:''}
               ${opt.textField?`<div class="form-group"><label>✏️ Text Field Label</label>
                 <input type="text" placeholder="e.g., Song link" value="${opt.textLabel||''}" onchange="S.addons[${i}].options[${oi}].textLabel=this.value"></div>
                 <div class="form-group"><label>Text Placeholder</label>
@@ -350,7 +405,7 @@ function renderAddons(){
                 <div class="form-group"><label><input type="checkbox" ${opt.instantDelivery?'checked':''} onchange="S.addons[${i}].options[${oi}].instantDelivery=this.checked"> ⚡ Instant Delivery</label></div>
                 <div class="form-group"><label>🗓️ Delivery Days</label>
                   <input type="number" min="1" max="365" value="${opt.deliveryDays||1}" onchange="S.addons[${i}].options[${oi}].deliveryDays=parseInt(this.value)||1">
-                  <small>Number of days for delivery</small></div>
+                  <small>Days for delivery</small></div>
               </div>`:''}
             </div>`:''}
           </div>`
@@ -396,7 +451,7 @@ async function load(){
     document.getElementById('currency').value=p.currency||'USD';
     document.getElementById('stock').value=p.stock||0;
     document.getElementById('sku').value=p.sku||'';
-    if(p.images){S.images=p.images;renderImages();}
+    if(p.galleries){S.galleries=p.galleries;renderGalleries();}
     if(p.videos){S.videos=p.videos;renderVideos();}
     if(p.addons){S.addons=p.addons;renderAddons();}
     if(p.seo){
@@ -421,7 +476,7 @@ async function save(){
       currency:document.getElementById('currency').value,
       stock:parseInt(document.getElementById('stock').value)||0,
       sku:document.getElementById('sku').value,
-      images:S.images,
+      galleries:S.galleries,
       videos:S.videos,
       addons:S.addons,
       seo:{
