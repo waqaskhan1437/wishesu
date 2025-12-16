@@ -575,7 +575,7 @@ export default {
         });
       }
 
-      // Clear pending checkouts - BATCH DELETE (40 plans at a time)
+      // Clear pending checkouts - 10 plans at a time (safe batch size)
       if ((method === 'POST' || method === 'GET') && path === '/api/admin/clear-pending-checkouts') {
         try {
           if (!env.WHOP_API_KEY) {
@@ -587,9 +587,9 @@ export default {
 
           console.log('🔍 Fetching plans from Whop API...');
           
-          // Fetch first page only (to stay under Cloudflare limit)
+          // Fetch only 10 plans per batch (safe and fast)
           const listResp = await fetch(
-            'https://api.whop.com/api/v2/plans?page=1&per=40',
+            'https://api.whop.com/api/v2/plans?page=1&per=10',
             {
               method: 'GET',
               headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
@@ -597,23 +597,24 @@ export default {
           );
           
           if (!listResp.ok) {
+            const errorText = await listResp.text();
             return json({ 
               success: false, 
-              error: `Failed to fetch plans: ${listResp.status}`
-            }, 500);
+              error: `Failed to fetch plans: ${listResp.status} - ${errorText}`
+            }, listResp.status);
           }
           
           const data = await listResp.json();
           const plans = data.data || [];
           const totalCount = data.pagination?.total_count || 0;
           
-          console.log(`✅ Found ${plans.length} plans (Total: ${totalCount})`);
+          console.log(`✅ Found ${plans.length} plans in this batch (Total: ${totalCount})`);
           
           let deleted = 0;
           let failed = 0;
           const errors = [];
           
-          // Delete each plan (max 40 to stay under 50 subrequest limit)
+          // Delete each plan with proper response handling
           for (const plan of plans) {
             try {
               const planId = plan.id;
@@ -626,13 +627,16 @@ export default {
                 }
               );
               
+              // IMPORTANT: Read response body to avoid deadlock
+              const responseBody = await deleteResp.text().catch(() => '');
+              
               if (deleteResp.ok || deleteResp.status === 404) {
                 deleted++;
                 console.log('✅ Deleted:', planId);
               } else {
                 failed++;
-                errors.push(`${planId}: HTTP ${deleteResp.status}`);
-                console.error('❌ Failed:', planId, deleteResp.status);
+                errors.push(`${planId}: ${deleteResp.status}`);
+                console.error('❌ Failed:', planId, deleteResp.status, responseBody.substring(0, 100));
               }
             } catch (e) {
               failed++;
@@ -646,10 +650,13 @@ export default {
           return json({
             success: true,
             total: totalCount,
+            batchSize: plans.length,
             deleted: deleted,
             failed: failed,
             remaining: remaining,
-            message: `Successfully deleted ${deleted} plan(s)${remaining > 0 ? `. ${remaining} plans remaining - click again to delete more` : ' - All done!'}`,
+            message: deleted > 0 
+              ? `✅ Deleted ${deleted} plan(s)${remaining > 0 ? `. ${remaining} remaining - click again` : ' - All done!'}` 
+              : `⚠️ Could not delete any plans. ${failed} failed. Check API key permissions.`,
             errors: errors.length > 0 ? errors.slice(0, 5) : undefined
           });
           
