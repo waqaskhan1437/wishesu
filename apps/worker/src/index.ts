@@ -17,7 +17,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
   --primary: #4f46e5; --primary-dark: #4338ca; --bg: #f9fafb; --card: #fff; --border: #e5e7eb;
   --text: #1f2937; --text-light: #6b7280; --success: #10b981; --error: #ef4444;
 }
-body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
 .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
 h1 { margin-bottom: 2rem; font-size: 2rem; }
 .card { background: var(--card); border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -37,6 +37,7 @@ label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; font-weight:
 input, textarea, select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); 
                            border-radius: 8px; font-size: 0.875rem; font-family: inherit; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); }
+input[type="checkbox"] { width: auto; margin-right: 0.5rem; }
 small { color: var(--text-light); font-size: 0.75rem; }
 .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 500; 
        cursor: pointer; transition: all 0.2s; background: var(--border); }
@@ -51,19 +52,22 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .media-item.dragging { opacity: 0.5; }
 .media-item img, .media-item video { width: 100%; height: 150px; object-fit: cover; border-radius: 6px 6px 0 0; }
 .media-info { padding: 0.5rem; }
-.media-info input { padding: 0.5rem; font-size: 0.75rem; }
+.media-info input { padding: 0.5rem; font-size: 0.75rem; margin-bottom: 0.5rem; }
 .media-item .remove { position: absolute; top: 0.5rem; right: 0.5rem; background: var(--error); 
                       color: white; border: none; border-radius: 50%; width: 24px; height: 24px; 
                       cursor: pointer; font-size: 16px; z-index: 10; }
 .media-item .order { position: absolute; top: 0.5rem; left: 0.5rem; background: var(--primary); 
                      color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; 
                      align-items: center; justify-content: center; font-weight: 600; font-size: 0.75rem; }
-.addon-field { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: #fff; }
+.addon-field { border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; background: #fff; }
 .addon-header { display: flex; justify-content: space-between; margin-bottom: 1rem; align-items: center; }
-.addon-row { display: grid; grid-template-columns: 2fr 3fr; gap: 1rem; margin-bottom: 1rem; }
+.addon-row { display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 1rem; }
 .addon-config { margin-top: 1rem; padding: 1rem; background: #f9fafb; border-radius: 6px; }
-.addon-option { border: 1px dashed var(--border); padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 6px; background: #fff; }
-.addon-option-row { display: grid; grid-template-columns: 2fr 1fr auto auto; gap: 0.5rem; align-items: center; }
+.addon-option { border: 1px solid var(--border); padding: 1rem; margin-bottom: 0.75rem; border-radius: 6px; background: #fff; }
+.addon-option-main { display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; margin-bottom: 0.75rem; }
+.addon-option-flags { display: flex; gap: 1rem; margin-bottom: 0.75rem; align-items: center; flex-wrap: wrap; }
+.addon-option-flags label { font-size: 0.875rem; display: flex; align-items: center; margin-bottom: 0; }
+.addon-option-extra { margin-top: 0.75rem; padding: 0.75rem; background: #f0f0f0; border-radius: 6px; }
 .btn-sm { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
 .section-divider { margin: 2rem 0; border-top: 2px solid var(--border); }
 </style>
@@ -95,7 +99,6 @@ small { color: var(--text-light); font-size: 0.75rem; }
         <div class="media-section">
           <h3>🖼️ Images</h3>
           <div class="form-group">
-            <label>Upload Images or Add URL</label>
             <div style="display:flex;gap:0.5rem">
               <input type="file" id="img-file" accept="image/*" multiple style="flex:1">
               <button type="button" class="btn" onclick="addImageUrl()">+ Add URL</button>
@@ -103,13 +106,10 @@ small { color: var(--text-light); font-size: 0.75rem; }
           </div>
           <div id="images-grid" class="media-grid"></div>
         </div>
-        
         <div class="section-divider"></div>
-        
         <div class="media-section">
           <h3>🎥 Videos</h3>
           <div class="form-group">
-            <label>Upload Video or Add URL</label>
             <div style="display:flex;gap:0.5rem">
               <input type="file" id="vid-file" accept="video/*" style="flex:1">
               <button type="button" class="btn" onclick="addVideoUrl()">+ Add URL</button>
@@ -195,7 +195,6 @@ function setupMedia(){
       r.readAsDataURL(f);
     }
   };
-  
   document.getElementById('vid-file').onchange=e=>{
     for(const f of e.target.files){
       const r=new FileReader();
@@ -212,8 +211,8 @@ function addImageUrl(){
 
 function addVideoUrl(){
   const url=prompt('Video URL:');
-  const thumb=prompt('Video Thumbnail URL (optional):');
-  if(url){S.videos.push({id:Date.now(),preview:thumb||url,url:url,thumbnail:thumb||'',type:'url'});renderVideos();}
+  const thumb=prompt('Thumbnail URL (optional):');
+  if(url){S.videos.push({id:Date.now(),preview:thumb||'',url:url,thumbnail:thumb||'',type:'url'});renderVideos();}
 }
 
 function renderImages(){
@@ -221,12 +220,10 @@ function renderImages(){
   c.innerHTML=S.images.map((img,i)=>
     \`<div class="media-item" draggable="true" data-index="\${i}">
       <div class="order">\${i+1}</div>
-      <img src="\${img.preview}" alt="Image \${i+1}">
+      <img src="\${img.preview}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23eee%22 width=%22150%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22%3EImage%3C/text%3E%3C/svg%3E'">
       <button type="button" class="remove" onclick="S.images.splice(\${i},1);renderImages()">×</button>
       <div class="media-info">
-        <input type="url" placeholder="Image URL *" value="\${img.url||''}" 
-               onchange="S.images[\${i}].url=this.value" required>
-        <small style="display:block;margin-top:0.25rem">\${img.type==='upload'?'Uploaded':'URL'}</small>
+        <input type="url" placeholder="Image URL *" value="\${img.url||''}" onchange="S.images[\${i}].url=this.value" required>
       </div>
     </div>\`
   ).join('');
@@ -238,14 +235,11 @@ function renderVideos(){
   c.innerHTML=S.videos.map((vid,i)=>
     \`<div class="media-item" draggable="true" data-index="\${i}">
       <div class="order">\${i+1}</div>
-      \${vid.preview?\`<img src="\${vid.preview}" alt="Video \${i+1}">\`:'<div style="height:150px;display:flex;align-items:center;justify-content:center;background:#eee">🎥</div>'}
+      \${vid.preview?\`<img src="\${vid.preview}">\`:'<div style="height:150px;display:flex;align-items:center;justify-content:center;background:#eee">🎥 Video</div>'}
       <button type="button" class="remove" onclick="S.videos.splice(\${i},1);renderVideos()">×</button>
       <div class="media-info">
-        <input type="url" placeholder="Video URL *" value="\${vid.url||''}" 
-               onchange="S.videos[\${i}].url=this.value" required style="margin-bottom:0.5rem">
-        <input type="url" placeholder="Thumbnail URL" value="\${vid.thumbnail||''}" 
-               onchange="S.videos[\${i}].thumbnail=this.value">
-        <small style="display:block;margin-top:0.25rem">\${vid.type==='upload'?'Uploaded':'URL'}</small>
+        <input type="url" placeholder="Video URL *" value="\${vid.url||''}" onchange="S.videos[\${i}].url=this.value" required>
+        <input type="url" placeholder="Thumbnail URL" value="\${vid.thumbnail||''}" onchange="S.videos[\${i}].thumbnail=this.value">
       </div>
     </div>\`
   ).join('');
@@ -270,7 +264,7 @@ function setupDrag(gridId,arrayName){
 
 function setupAddons(){
   document.getElementById('add-addon').onclick=()=>{
-    S.addons.push({id:Date.now(),type:'',label:'',required:false,price:0,placeholder:'',options:[]});
+    S.addons.push({id:Date.now(),type:'',label:'',required:false,price:0,placeholder:'',text:'',options:[]});
     renderAddons();
   };
 }
@@ -293,14 +287,14 @@ function renderAddons(){
           <input type="text" value="\${addon.placeholder||''}" onchange="S.addons[\${i}].placeholder=this.value"></div>
         <div class="form-group"><label>Extra Price</label>
           <input type="number" value="\${addon.price||0}" step="0.01" onchange="S.addons[\${i}].price=parseFloat(this.value)||0"></div>
-        <div class="form-group"><label><input type="checkbox" \${addon.required?'checked':''} onchange="S.addons[\${i}].required=this.checked"> Required Field</label></div>
+        <div class="form-group"><label><input type="checkbox" \${addon.required?'checked':''} onchange="S.addons[\${i}].required=this.checked"> Required</label></div>
       </div>\`;
     }
     else if(addon.type==='file'){
       config=\`<div class="addon-config" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
         <div class="form-group"><label>Extra Price</label>
           <input type="number" value="\${addon.price||0}" step="0.01" onchange="S.addons[\${i}].price=parseFloat(this.value)||0"></div>
-        <div class="form-group"><label><input type="checkbox" \${addon.required?'checked':''} onchange="S.addons[\${i}].required=this.checked"> Required File</label></div>
+        <div class="form-group"><label><input type="checkbox" \${addon.required?'checked':''} onchange="S.addons[\${i}].required=this.checked"> Required</label></div>
       </div>\`;
     }
     else if(['radio','select','checkbox_group'].includes(addon.type)){
@@ -308,18 +302,25 @@ function renderAddons(){
         <button type="button" class="btn btn-sm btn-primary" onclick="addOption(\${i})">+ Add Option</button>
         <div style="margin-top:1rem">\${(addon.options||[]).map((opt,oi)=>
           \`<div class="addon-option">
-            <div class="addon-option-row">
-              <input type="text" placeholder="Option label *" value="\${opt.label||''}" 
-                     onchange="S.addons[\${i}].options[\${oi}].label=this.value" required>
-              <input type="number" placeholder="Price" value="\${opt.price||0}" step="0.01" 
-                     onchange="S.addons[\${i}].options[\${oi}].price=parseFloat(this.value)||0">
-              \${addon.type!=='checkbox_group'?\`<label style="font-size:0.75rem;white-space:nowrap">
-                <input type="radio" name="default-\${i}" \${opt.default?'checked':''} 
-                       onchange="S.addons[\${i}].options.forEach((o,idx)=>o.default=idx===\${oi});renderAddons()"> Default
-              </label>\`:''}
-              <button type="button" class="btn btn-sm" style="background:var(--error);color:white" 
-                      onclick="S.addons[\${i}].options.splice(\${oi},1);renderAddons()">×</button>
+            <div class="addon-option-main">
+              <input type="text" placeholder="Option label *" value="\${opt.label||''}" onchange="S.addons[\${i}].options[\${oi}].label=this.value" required>
+              <input type="number" placeholder="Price" value="\${opt.price||0}" step="0.01" onchange="S.addons[\${i}].options[\${oi}].price=parseFloat(this.value)||0">
             </div>
+            <div class="addon-option-flags">
+              <label><input type="checkbox" \${opt.file?'checked':''} onchange="S.addons[\${i}].options[\${oi}].file=this.checked;renderAddons()"> 📎 File Upload</label>
+              <label><input type="checkbox" \${opt.textField?'checked':''} onchange="S.addons[\${i}].options[\${oi}].textField=this.checked;renderAddons()"> ✏️ Text Field</label>
+              \${addon.type!=='checkbox_group'?\`<label><input type="radio" name="default-\${i}" \${opt.default?'checked':''} onchange="S.addons[\${i}].options.forEach((o,idx)=>o.default=idx===\${oi});renderAddons()"> ⭐ Default</label>\`:''}
+              <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons[\${i}].options.splice(\${oi},1);renderAddons()">Remove</button>
+            </div>
+            \${opt.file||opt.textField?\`<div class="addon-option-extra">
+              \${opt.file?\`<div class="form-group"><label>File Quantity</label>
+                <input type="number" min="1" value="\${opt.fileQuantity||1}" onchange="S.addons[\${i}].options[\${oi}].fileQuantity=parseInt(this.value)||1">
+                <small>How many files customer uploads</small></div>\`:''}
+              \${opt.textField?\`<div class="form-group"><label>Text Field Label</label>
+                <input type="text" placeholder="e.g., Song link or details" value="\${opt.textLabel||''}" onchange="S.addons[\${i}].options[\${oi}].textLabel=this.value"></div>
+                <div class="form-group"><label>Text Placeholder</label>
+                <input type="text" placeholder="e.g., Paste YouTube link" value="\${opt.textPlaceholder||''}" onchange="S.addons[\${i}].options[\${oi}].textPlaceholder=this.value"></div>\`:''}
+            </div>\`:''}
           </div>\`
         ).join('')}</div>
       </div>\`;
@@ -328,16 +329,14 @@ function renderAddons(){
     return \`<div class="addon-field">
       <div class="addon-header">
         <strong>Field \${i+1}</strong>
-        <button type="button" class="btn btn-sm" style="background:var(--error);color:white" 
-                onclick="S.addons.splice(\${i},1);renderAddons()">Remove</button>
+        <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons.splice(\${i},1);renderAddons()">Remove Field</button>
       </div>
       <div class="addon-row">
         <div class="form-group"><label>Field Type</label>
           <select onchange="S.addons[\${i}].type=this.value;renderAddons()">\${typeOpts}</select>
         </div>
         <div class="form-group"><label>Field Label *</label>
-          <input type="text" value="\${addon.label||''}" placeholder="e.g., Choose size" 
-                 onchange="S.addons[\${i}].label=this.value" required>
+          <input type="text" value="\${addon.label||''}" placeholder="e.g., Choose size" onchange="S.addons[\${i}].label=this.value" required>
         </div>
       </div>
       \${config}
@@ -347,7 +346,7 @@ function renderAddons(){
 
 function addOption(i){
   if(!S.addons[i].options)S.addons[i].options=[];
-  S.addons[i].options.push({label:'',price:0,default:false});
+  S.addons[i].options.push({label:'',price:0,default:false,file:false,fileQuantity:1,textField:false,textLabel:'',textPlaceholder:''});
   renderAddons();
 }
 
@@ -408,7 +407,7 @@ async function save(){
     });
     if(!r.ok)throw new Error('Save failed');
     const res=await r.json();
-    alert('✅ Saved!');
+    alert('✅ Product saved successfully!');
     if(!id&&res.id)location.href='?id='+res.id;
   }catch(e){alert('❌ '+e.message);}
   finally{btn.disabled=false;btn.textContent='Save Product';}
