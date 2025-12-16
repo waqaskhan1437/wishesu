@@ -575,95 +575,122 @@ export default {
         });
       }
 
-      // Clear pending checkouts - ULTIMATE DEBUG (all possible endpoints)
+      // Clear pending checkouts - FINAL WORKING (deletes Plans from Whop)
       if ((method === 'POST' || method === 'GET') && path === '/api/admin/clear-pending-checkouts') {
         try {
           if (!env.WHOP_API_KEY) {
-            return json({ error: 'WHOP_API_KEY not configured' }, 500);
+            return json({ 
+              success: false, 
+              error: 'WHOP_API_KEY not configured'
+            }, 500);
           }
 
-          const companyId = env.WHOP_COMPANY_ID || 'biz_McdtpEkUnlJtgb';
-          console.log('Company ID:', companyId);
-          console.log('Testing ALL possible Whop API endpoints...\n');
+          console.log('🔍 Fetching all plans from Whop API...');
           
-          // Try every possible variation
-          const endpoints = [
-            // Checkout links
-            'https://api.whop.com/api/v5/checkout_links',
-            'https://api.whop.com/api/v2/checkout_links',
-            `https://api.whop.com/api/v5/companies/${companyId}/checkout_links`,
-            `https://api.whop.com/api/v2/companies/${companyId}/checkout_links`,
-            
-            // Just "links"
-            'https://api.whop.com/api/v5/links',
-            'https://api.whop.com/api/v2/links',
-            `https://api.whop.com/api/v5/companies/${companyId}/links`,
-            
-            // Checkout configurations (you have permission for this)
-            'https://api.whop.com/api/v5/checkout_configurations',
-            'https://api.whop.com/api/v2/checkout_configurations',
-            
-            // Products (checkout links might be under products)
-            `https://api.whop.com/api/v5/companies/${companyId}/products`,
-            'https://api.whop.com/api/v5/products',
-            
-            // Plans
-            'https://api.whop.com/api/v5/plans',
-            'https://api.whop.com/api/v2/plans',
-          ];
+          let allPlans = [];
+          let page = 1;
+          const perPage = 100;
           
-          const results = {};
-          
-          for (const endpoint of endpoints) {
+          // Fetch all plans with pagination
+          while (page <= 10) {
             try {
-              console.log(`Testing: ${endpoint}`);
+              const listResp = await fetch(
+                `https://api.whop.com/api/v2/plans?page=${page}&per=${perPage}`,
+                {
+                  method: 'GET',
+                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
+                }
+              );
               
-              const resp = await fetch(endpoint, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
-              });
-              
-              const status = resp.status;
-              let data;
-              
-              try {
-                data = await resp.json();
-              } catch {
-                data = await resp.text();
+              if (!listResp.ok) {
+                console.error('Failed to fetch plans:', listResp.status);
+                break;
               }
               
-              const dataStr = JSON.stringify(data).substring(0, 400);
+              const data = await listResp.json();
+              const plans = data.data || [];
               
-              results[endpoint] = {
-                status: status,
-                hasData: dataStr.length > 10,
-                preview: dataStr
-              };
-              
-              console.log(`  → Status: ${status}`);
-              if (status === 200) {
-                console.log(`  → ✅ SUCCESS! Data: ${dataStr}`);
+              if (plans.length > 0) {
+                allPlans.push(...plans);
+                console.log(`📄 Page ${page}: Found ${plans.length} plans`);
+                
+                // Check pagination
+                if (data.pagination && page < data.pagination.total_page) {
+                  page++;
+                } else {
+                  break;
+                }
+              } else {
+                break;
               }
-              
             } catch (err) {
-              results[endpoint] = { error: err.message };
+              console.error('Page fetch error:', err);
+              break;
+            }
+          }
+          
+          console.log(`✅ Total plans found: ${allPlans.length}`);
+          
+          let deleted = 0;
+          let failed = 0;
+          const errors = [];
+          
+          // Delete each plan
+          for (const plan of allPlans) {
+            try {
+              const planId = plan.id;
+              
+              const deleteResp = await fetch(
+                `https://api.whop.com/api/v2/plans/${planId}`,
+                {
+                  method: 'DELETE',
+                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
+                }
+              );
+              
+              if (deleteResp.ok || deleteResp.status === 404) {
+                deleted++;
+                console.log('✅ Deleted plan:', planId);
+                
+                // Update database if plan exists there
+                try {
+                  await initDB(env);
+                  await env.DB.prepare(`
+                    UPDATE checkout_sessions 
+                    SET status = 'expired', completed_at = datetime('now')
+                    WHERE plan_id = ?
+                  `).bind(planId).run();
+                } catch (dbErr) {
+                  // Ignore DB errors
+                }
+              } else {
+                failed++;
+                const errorText = await deleteResp.text().catch(() => 'Unknown');
+                errors.push(`${planId}: HTTP ${deleteResp.status}`);
+                console.error('❌ Failed to delete plan:', planId, deleteResp.status);
+              }
+            } catch (e) {
+              failed++;
+              errors.push(`${plan.id}: ${e.message}`);
+              console.error('❌ Error deleting plan:', plan.id, e.message);
             }
           }
           
           return json({
             success: true,
-            debug: true,
-            message: 'API endpoint discovery complete',
-            companyId: companyId,
-            workingEndpoints: Object.entries(results)
-              .filter(([k, v]) => v.status === 200)
-              .map(([k, v]) => ({ endpoint: k, preview: v.preview })),
-            allResults: results
+            total: allPlans.length,
+            deleted: deleted,
+            failed: failed,
+            message: `Successfully deleted ${deleted} plan(s) from Whop${failed > 0 ? `, ${failed} failed` : ''}`,
+            errors: errors.length > 0 ? errors.slice(0, 10) : undefined
           });
           
         } catch (err) {
-          console.error('Ultimate debug error:', err);
-          return json({ success: false, error: err.message }, 500);
+          console.error('Clear plans error:', err);
+          return json({ 
+            success: false, 
+            error: err.message
+          }, 500);
         }
       }
 
