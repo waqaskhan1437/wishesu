@@ -62,6 +62,10 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .media-item .order { position: absolute; top: 0.5rem; left: 0.5rem; background: var(--primary); 
                      color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; 
                      align-items: center; justify-content: center; font-weight: 600; font-size: 0.75rem; }
+.video-item { border: 2px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: #fff; }
+.video-header { display: flex; gap: 1rem; margin-bottom: 1rem; }
+.video-thumbnail-preview { width: 200px; height: 150px; object-fit: cover; border-radius: 8px; background: #eee; 
+                            display: flex; align-items: center; justify-content: center; font-size: 3rem; }
 .addons-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
 .btn-add-type { padding: 12px 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; 
                 cursor: pointer; transition: all 0.3s; display: flex; align-items: center; 
@@ -87,6 +91,7 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .delivery-config { margin-top: 0.5rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; }
 .btn-sm { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
 .section-divider { margin: 2rem 0; border-top: 2px solid var(--border); }
+.price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 </style>
 </head>
 <body>
@@ -105,7 +110,10 @@ small { color: var(--text-light); font-size: 0.75rem; }
         </div>
       </div>
       <div class="tab-content" data-tab="1">
-        <div class="form-group"><label>Price *</label><input type="number" id="price" min="0" step="0.01" required></div>
+        <div class="price-grid">
+          <div class="form-group"><label>Regular Price *</label><input type="number" id="price" min="0" step="0.01" required></div>
+          <div class="form-group"><label>Sale Price</label><input type="number" id="sale-price" min="0" step="0.01"><small>Leave empty if no sale</small></div>
+        </div>
         <div class="form-group"><label>Currency</label>
           <select id="currency"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="PKR">PKR</option></select>
         </div>
@@ -124,12 +132,9 @@ small { color: var(--text-light); font-size: 0.75rem; }
         <div class="media-section">
           <h3>🎥 Videos</h3>
           <div class="form-group">
-            <div style="display:flex;gap:0.5rem">
-              <input type="file" id="vid-file" accept="video/*" style="flex:1">
-              <button type="button" class="btn" onclick="addVideoUrl()">+ URL</button>
-            </div>
+            <button type="button" class="btn btn-primary" onclick="addVideo()">+ Add Video</button>
           </div>
-          <div id="videos-grid" class="media-grid"></div>
+          <div id="videos-container"></div>
         </div>
       </div>
       <div class="tab-content" data-tab="3">
@@ -178,7 +183,6 @@ function init(){
         .toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
     }
   };
-  setupMedia();
   document.getElementById('meta-title').oninput=e=>document.getElementById('tc').textContent=e.target.value.length;
   document.getElementById('meta-desc').oninput=e=>document.getElementById('dc').textContent=e.target.value.length;
   load();
@@ -196,16 +200,6 @@ function switchTab(i){
   document.getElementById('prev').disabled=i===0;
   document.getElementById('next').textContent=i===4?'Save Product':'Next →';
   document.getElementById('progress').style.width=((i+1)/5*100)+'%';
-}
-
-function setupMedia(){
-  document.getElementById('vid-file').onchange=e=>{
-    for(const f of e.target.files){
-      const r=new FileReader();
-      r.onload=ev=>{S.videos.push({id:Date.now()+Math.random(),preview:ev.target.result,url:'',thumbnail:'',type:'upload'});renderVideos();};
-      r.readAsDataURL(f);
-    }
-  };
 }
 
 function addGallery(){
@@ -263,7 +257,7 @@ function renderGalleries(){
           </div>\`
         ).join('')}
       </div>
-      \${gallery.images.length===0?'<p style="text-align:center;color:var(--text-light);padding:2rem">No images yet. Click + Upload or + URL</p>':''}
+      \${gallery.images.length===0?'<p style="text-align:center;color:var(--text-light);padding:2rem">No images. Click + Upload or + URL</p>':''}
     </div>\`
   ).join('');
   setupGalleryDrag();
@@ -290,42 +284,53 @@ function setupGalleryDrag(){
   });
 }
 
-function addVideoUrl(){
-  const url=prompt('Video URL:');
-  const thumb=prompt('Thumbnail URL:');
-  if(url){S.videos.push({id:Date.now(),preview:thumb||'',url:url,thumbnail:thumb||'',type:'url'});renderVideos();}
+function addVideo(){
+  S.videos.push({id:Date.now(),url:'',thumbnail:'',thumbnailPreview:'',type:'url'});
+  renderVideos();
+}
+
+function uploadVideoThumbnail(videoIndex){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.onchange=e=>{
+    const f=e.target.files[0];
+    if(f){
+      const r=new FileReader();
+      r.onload=ev=>{
+        S.videos[videoIndex].thumbnailPreview=ev.target.result;
+        renderVideos();
+      };
+      r.readAsDataURL(f);
+    }
+  };
+  input.click();
 }
 
 function renderVideos(){
-  const c=document.getElementById('videos-grid');
+  const c=document.getElementById('videos-container');
   c.innerHTML=S.videos.map((vid,i)=>
-    \`<div class="media-item" draggable="true" data-index="\${i}">
-      <div class="order">\${i+1}</div>
-      \${vid.preview?\`<img src="\${vid.preview}">\`:'<div style="height:150px;display:flex;align-items:center;justify-content:center;background:#eee;font-size:3rem">🎥</div>'}
-      <button type="button" class="remove" onclick="S.videos.splice(\${i},1);renderVideos()">×</button>
-      <div class="media-info">
-        <input type="url" placeholder="Video URL *" value="\${vid.url||''}" onchange="S.videos[\${i}].url=this.value" required>
-        <input type="url" placeholder="Thumbnail URL" value="\${vid.thumbnail||''}" onchange="S.videos[\${i}].thumbnail=this.value">
+    \`<div class="video-item">
+      <div class="video-header">
+        <div class="video-thumbnail-preview">
+          \${vid.thumbnailPreview?\`<img src="\${vid.thumbnailPreview}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">\`:\`🎥\`}
+        </div>
+        <div style="flex:1">
+          <div class="form-group"><label>Video URL *</label>
+            <input type="url" placeholder="https://youtube.com/..." value="\${vid.url||''}" onchange="S.videos[\${i}].url=this.value" required>
+          </div>
+          <div class="form-group">
+            <label>Thumbnail</label>
+            <div style="display:flex;gap:0.5rem">
+              <button type="button" class="btn btn-sm" onclick="uploadVideoThumbnail(\${i})">📤 Upload</button>
+              <input type="url" placeholder="Thumbnail URL" value="\${vid.thumbnail||''}" onchange="S.videos[\${i}].thumbnail=this.value;S.videos[\${i}].thumbnailPreview=this.value;renderVideos()" style="flex:1">
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-sm" style="background:var(--error);color:white;align-self:start" onclick="S.videos.splice(\${i},1);renderVideos()">Remove Video</button>
       </div>
     </div>\`
   ).join('');
-  setupVideoDrag();
-}
-
-function setupVideoDrag(){
-  document.querySelectorAll('#videos-grid .media-item').forEach(el=>{
-    el.ondragstart=e=>{S.dragSrc=parseInt(e.target.dataset.index);S.dragType='video';};
-    el.ondragover=e=>e.preventDefault();
-    el.ondrop=e=>{
-      e.preventDefault();
-      const dst=parseInt(e.currentTarget.dataset.index);
-      if(S.dragSrc!==dst){
-        const item=S.videos.splice(S.dragSrc,1)[0];
-        S.videos.splice(dst,0,item);
-        renderVideos();
-      }
-    };
-  });
 }
 
 function addAddonType(type){
@@ -455,6 +460,7 @@ async function load(){
     document.getElementById('description').value=p.description||'';
     document.getElementById('status').value=p.status||'draft';
     document.getElementById('price').value=p.price||0;
+    document.getElementById('sale-price').value=p.sale_price||'';
     document.getElementById('currency').value=p.currency||'USD';
     document.getElementById('stock').value=p.stock||0;
     document.getElementById('sku').value=p.sku||'';
@@ -480,6 +486,7 @@ async function save(){
       description:document.getElementById('description').value,
       status:document.getElementById('status').value,
       price:parseFloat(document.getElementById('price').value)||0,
+      sale_price:parseFloat(document.getElementById('sale-price').value)||null,
       currency:document.getElementById('currency').value,
       stock:parseInt(document.getElementById('stock').value)||0,
       sku:document.getElementById('sku').value,
