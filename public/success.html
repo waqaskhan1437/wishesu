@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Successful!</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      background: white;
+      padding: 60px 40px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+      animation: slideUp 0.5s ease-out;
+    }
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .success-icon {
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 30px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: scaleIn 0.5s ease-out 0.2s both;
+    }
+    @keyframes scaleIn {
+      from {
+        transform: scale(0);
+      }
+      to {
+        transform: scale(1);
+      }
+    }
+    .success-icon svg {
+      width: 50px;
+      height: 50px;
+      stroke: white;
+      stroke-width: 3;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    h1 {
+      font-size: 2.5rem;
+      color: #1f2937;
+      margin-bottom: 20px;
+    }
+    .message {
+      font-size: 1.1rem;
+      color: #6b7280;
+      line-height: 1.6;
+      margin-bottom: 40px;
+    }
+    .info-box {
+      background: #f0fdf4;
+      border: 2px solid #10b981;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      text-align: left;
+    }
+    .info-box h3 {
+      color: #059669;
+      margin-bottom: 15px;
+      font-size: 1.1rem;
+    }
+    .info-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 10px;
+      color: #166534;
+    }
+    .info-item strong {
+      min-width: 120px;
+      color: #047857;
+    }
+    .btn {
+      display: inline-block;
+      padding: 16px 40px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin: 5px;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+    }
+    .btn-secondary {
+      background: #6b7280;
+    }
+    .btn-secondary:hover {
+      box-shadow: 0 8px 16px rgba(107, 114, 128, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="success-icon">
+      <svg viewBox="0 0 24 24">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </div>
+    
+    <h1>Payment Successful! 🎉</h1>
+    
+    <p class="message">
+      Thank you for your purchase! Your order has been confirmed and we're preparing everything for you.
+    </p>
+    
+    <div class="info-box">
+      <h3>What happens next?</h3>
+      <div class="info-item">
+        <strong>Email:</strong>
+        <span>You'll receive a confirmation email with your order details within 5 minutes.</span>
+      </div>
+      <div class="info-item">
+        <strong>Access:</strong>
+        <span>Your purchase has been activated and you can access your content immediately.</span>
+      </div>
+      <div class="info-item">
+        <strong>Support:</strong>
+        <span>Need help? Our support team is available 24/7 to assist you.</span>
+      </div>
+    </div>
+    
+    <div style="margin-top: 30px;">
+      <a href="/" class="btn">Go to Homepage</a>
+      <a href="https://whop.com/@me/memberships" class="btn btn-secondary" target="_blank">View on Whop</a>
+    </div>
+    
+    <p style="margin-top: 30px; color: #9ca3af; font-size: 0.9rem;">
+      Order ID: <span id="orderId"></span>
+    </p>
+  </div>
+
+  <script>
+    // Get product ID from URL if available
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('product');
+    
+    // Generate order ID for display
+    const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    document.getElementById('orderId').textContent = orderId;
+    
+    // Log for analytics
+    console.log('Payment success:', {
+      product: productId,
+      orderId: orderId,
+      timestamp: new Date().toISOString()
+    });
+  </script>
+</body>
+</html>
