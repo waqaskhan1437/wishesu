@@ -156,28 +156,67 @@
 
             if (canWatch) {
               const portfolioRow = document.createElement('div');
-              portfolioRow.style.cssText = 'display:flex; align-items:center; gap:12px; margin-top:12px; padding-top:12px; border-top:1px solid #f3f4f6;';
+              portfolioRow.style.cssText = 'display:flex; align-items:center; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid #f3f4f6;';
+
+              // Create thumbnail container with overlays
+              const thumbContainer = document.createElement('div');
+              thumbContainer.style.cssText = 'position:relative; width:200px; height:112px; flex-shrink:0; cursor:pointer; border-radius:10px; overflow:hidden; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition:transform 0.2s, box-shadow 0.2s;';
 
               const thumb = document.createElement('img');
-              thumb.src = portfolioThumbUrl || product.thumbnail_url || 'https://via.placeholder.com/160x90?text=Video';
+              thumb.src = portfolioThumbUrl || product.thumbnail_url || 'https://via.placeholder.com/200x112?text=Review+Video';
               thumb.alt = 'Review video thumbnail';
-              thumb.style.cssText = 'width:140px; height:80px; object-fit:cover; border-radius:8px; cursor:pointer; border:1px solid #e5e7eb; flex-shrink:0;';
+              thumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+              
+              // Add "Review" badge overlay
+              const reviewBadge = document.createElement('div');
+              reviewBadge.textContent = 'Review';
+              reviewBadge.style.cssText = 'position:absolute; top:8px; right:8px; background:rgba(16,185,129,0.95); color:white; padding:5px 12px; border-radius:6px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; box-shadow:0 2px 6px rgba(0,0,0,0.3);';
+              
+              // Add play icon overlay
+              const playIcon = document.createElement('div');
+              playIcon.innerHTML = '▶';
+              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.75); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; padding-left:3px; transition:background 0.2s;';
+              
+              thumbContainer.appendChild(thumb);
+              thumbContainer.appendChild(reviewBadge);
+              thumbContainer.appendChild(playIcon);
 
               const btn = document.createElement('button');
               btn.type = 'button';
               btn.textContent = '▶ Watch Review';
-              btn.style.cssText = 'background:#111827; color:white; border:0; padding:10px 12px; border-radius:8px; cursor:pointer; font-weight:600;';
+              btn.style.cssText = 'background:#111827; color:white; border:0; padding:12px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:15px; transition:background 0.2s;';
 
               const onWatch = () => {
                 showHighlight(review);
                 scrollToPlayer();
                 setPlayerSource(portfolioVideoUrl, portfolioThumbUrl);
               };
+              
+              // Hover effects
+              thumbContainer.addEventListener('mouseenter', () => {
+                thumbContainer.style.transform = 'scale(1.03)';
+                thumbContainer.style.boxShadow = '0 6px 12px rgba(0,0,0,0.15)';
+                playIcon.style.background = 'rgba(0,0,0,0.85)';
+              });
+              
+              thumbContainer.addEventListener('mouseleave', () => {
+                thumbContainer.style.transform = 'scale(1)';
+                thumbContainer.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                playIcon.style.background = 'rgba(0,0,0,0.75)';
+              });
+              
+              btn.addEventListener('mouseenter', () => {
+                btn.style.background = '#1f2937';
+              });
+              
+              btn.addEventListener('mouseleave', () => {
+                btn.style.background = '#111827';
+              });
 
-              thumb.addEventListener('click', onWatch);
+              thumbContainer.addEventListener('click', onWatch);
               btn.addEventListener('click', onWatch);
 
-              portfolioRow.appendChild(thumb);
+              portfolioRow.appendChild(thumbContainer);
               portfolioRow.appendChild(btn);
               card.appendChild(portfolioRow);
             }
