@@ -575,100 +575,120 @@ export default {
         });
       }
 
-      // Clear pending checkouts - TEST DELETE ENDPOINTS
+      // Clear ALL checkouts - Deletes ALL plans from Whop (10 at a time)
       if ((method === 'POST' || method === 'GET') && path === '/api/admin/clear-pending-checkouts') {
         try {
           if (!env.WHOP_API_KEY) {
             return json({ error: 'WHOP_API_KEY not configured' }, 500);
           }
 
-          console.log('🔍 Step 1: Fetching one plan to test delete...');
+          console.log('🗑️ Fetching ALL plans from Whop (no filters)...');
           
-          // Get just 1 plan to test
+          // Fetch first 10 plans (NO STATUS FILTER - gets ALL plans)
           const listResp = await fetch(
-            'https://api.whop.com/api/v2/plans?page=1&per=1',
+            'https://api.whop.com/api/v2/plans?page=1&per=10',
             { method: 'GET', headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` } }
           );
           
-          const data = await listResp.json();
-          const testPlan = data.data && data.data[0];
-          
-          if (!testPlan) {
-            return json({ error: 'No plans found to test' }, 404);
+          if (!listResp.ok) {
+            const errorText = await listResp.text();
+            console.error('Fetch failed:', listResp.status, errorText);
+            return json({ 
+              success: false, 
+              error: `Fetch failed: ${listResp.status}`
+            }, listResp.status);
           }
           
-          const planId = testPlan.id;
-          console.log('Test plan ID:', planId);
+          const data = await listResp.json();
+          const plans = data.data || [];
+          const totalCount = data.pagination?.total_count || 0;
           
-          console.log('\n🧪 Step 2: Testing DELETE endpoints...');
+          console.log(`✅ Found ${plans.length} plans to delete (Total in Whop: ${totalCount})`);
           
-          // Try every possible DELETE variation
-          const deleteEndpoints = [
-            { url: `https://api.whop.com/api/v2/plans/${planId}`, method: 'DELETE', body: null },
-            { url: `https://api.whop.com/api/v5/plans/${planId}`, method: 'DELETE', body: null },
-            { url: `https://api.whop.com/api/v2/plans/${planId}/delete`, method: 'POST', body: null },
-            { url: `https://api.whop.com/api/v2/plans/${planId}/archive`, method: 'POST', body: null },
-            { url: `https://api.whop.com/api/v2/plans/${planId}`, method: 'POST', body: JSON.stringify({ action: 'delete' }) },
-            { url: `https://api.whop.com/api/v2/plans/delete`, method: 'POST', body: JSON.stringify({ plan_id: planId }) },
-            { url: `https://api.whop.com/api/v2/plans/bulk-delete`, method: 'POST', body: JSON.stringify({ plan_ids: [planId] }) },
-          ];
+          if (plans.length === 0) {
+            return json({
+              success: true,
+              total: 0,
+              deleted: 0,
+              message: '🎉 No plans found - all already deleted!'
+            });
+          }
           
-          const results = [];
+          let deleted = 0;
+          let failed = 0;
+          const errors = [];
           
-          for (const endpoint of deleteEndpoints) {
+          // Try to delete each plan
+          for (const plan of plans) {
             try {
-              console.log(`Testing: ${endpoint.method} ${endpoint.url}`);
+              const planId = plan.id;
+              console.log(`Attempting to delete: ${planId}`);
               
-              const headers = { 'Authorization': `Bearer ${env.WHOP_API_KEY}` };
-              if (endpoint.body) {
-                headers['Content-Type'] = 'application/json';
-              }
+              // Try DELETE method first
+              const deleteResp = await fetch(
+                `https://api.whop.com/api/v2/plans/${planId}`,
+                { method: 'DELETE', headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` } }
+              );
               
-              const testResp = await fetch(endpoint.url, {
-                method: endpoint.method,
-                headers: headers,
-                body: endpoint.body
-              });
+              const responseText = await deleteResp.text();
               
-              const status = testResp.status;
-              const responseText = await testResp.text();
-              
-              results.push({
-                endpoint: `${endpoint.method} ${endpoint.url}`,
-                status: status,
-                success: testResp.ok,
-                response: responseText.substring(0, 200)
-              });
-              
-              if (testResp.ok) {
-                console.log(`  ✅ SUCCESS! Status: ${status}`);
-                console.log(`  Response: ${responseText.substring(0, 100)}`);
+              if (deleteResp.ok) {
+                deleted++;
+                console.log('✅ Deleted successfully:', planId);
+              } else if (deleteResp.status === 404) {
+                deleted++;
+                console.log('✅ Already deleted:', planId);
               } else {
-                console.log(`  ❌ Status: ${status}`);
-                console.log(`  Response: ${responseText.substring(0, 100)}`);
+                // Try archive as fallback
+                console.log(`Trying archive for: ${planId}`);
+                const archiveResp = await fetch(
+                  `https://api.whop.com/api/v2/plans/${planId}`,
+                  { 
+                    method: 'PATCH',
+                    headers: { 
+                      'Authorization': `Bearer ${env.WHOP_API_KEY}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ visibility: 'archived' })
+                  }
+                );
+                
+                const archiveText = await archiveResp.text();
+                
+                if (archiveResp.ok) {
+                  deleted++;
+                  console.log('✅ Archived:', planId);
+                } else {
+                  failed++;
+                  errors.push(`${planId}: DELETE=${deleteResp.status}, ARCHIVE=${archiveResp.status}`);
+                  console.error('❌ Both failed:', planId, 'DELETE:', deleteResp.status, 'ARCHIVE:', archiveResp.status);
+                }
               }
-              
-            } catch (err) {
-              results.push({
-                endpoint: `${endpoint.method} ${endpoint.url}`,
-                error: err.message
-              });
-              console.error(`  ❌ Error: ${err.message}`);
+            } catch (e) {
+              failed++;
+              errors.push(`${plan.id}: ${e.message}`);
+              console.error('❌ Error:', plan.id, e.message);
             }
           }
           
+          const remaining = totalCount - deleted;
+          
           return json({
             success: true,
-            debug: true,
-            message: 'Delete endpoint test complete',
-            testPlanId: planId,
-            results: results,
-            workingEndpoints: results.filter(r => r.success),
-            note: 'Check workingEndpoints array - that is the CORRECT delete method!'
+            total: totalCount,
+            batchSize: plans.length,
+            deleted: deleted,
+            failed: failed,
+            remaining: remaining,
+            message: deleted > 0 
+              ? `✅ Deleted/Archived ${deleted} plan(s)${remaining > 0 ? `. ${remaining} remaining - click again` : ' - All done!'}` 
+              : `⚠️ Could not delete any plans. ${failed} failed.`,
+            errors: errors.length > 0 ? errors.slice(0, 5) : undefined,
+            note: 'Deletes ALL plans from Whop (no filters)'
           });
           
         } catch (err) {
-          console.error('Delete endpoint test error:', err);
+          console.error('Delete all plans error:', err);
           return json({ success: false, error: err.message }, 500);
         }
       }
