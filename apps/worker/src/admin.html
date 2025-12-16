@@ -30,7 +30,7 @@ label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; font-weight:
 input, textarea, select { width: 100%; padding: 0.75rem; border: 1px solid var(--border); 
                            border-radius: 8px; font-size: 0.875rem; font-family: inherit; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); }
-input[type="checkbox"] { width: auto; margin-right: 0.5rem; }
+input[type="checkbox"], input[type="radio"] { width: auto; margin-right: 0.5rem; }
 small { color: var(--text-light); font-size: 0.75rem; }
 .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 500; 
        cursor: pointer; transition: all 0.2s; background: var(--border); }
@@ -52,6 +52,19 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .media-item .order { position: absolute; top: 0.5rem; left: 0.5rem; background: var(--primary); 
                      color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; 
                      align-items: center; justify-content: center; font-weight: 600; font-size: 0.75rem; }
+.addons-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.btn-add-type { padding: 12px 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; 
+                cursor: pointer; transition: all 0.3s; display: flex; align-items: center; 
+                justify-content: center; gap: 6px; color: white; }
+.btn-add-type:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.btn-add-type[data-type="heading"] { background: linear-gradient(135deg, #667eea, #764ba2); }
+.btn-add-type[data-type="text"] { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+.btn-add-type[data-type="textarea"] { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+.btn-add-type[data-type="email"] { background: linear-gradient(135deg, #fa709a, #fee140); }
+.btn-add-type[data-type="file"] { background: linear-gradient(135deg, #fbc2eb, #a6c1ee); }
+.btn-add-type[data-type="radio"] { background: linear-gradient(135deg, #30cfd0, #330867); }
+.btn-add-type[data-type="select"] { background: linear-gradient(135deg, #a8edea, #fed6e3); }
+.btn-add-type[data-type="checkbox_group"] { background: linear-gradient(135deg, #ff9a9e, #fecfef); }
 .addon-field { border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; background: #fff; }
 .addon-header { display: flex; justify-content: space-between; margin-bottom: 1rem; align-items: center; }
 .addon-row { display: grid; grid-template-columns: 1fr 2fr; gap: 1rem; margin-bottom: 1rem; }
@@ -94,7 +107,7 @@ small { color: var(--text-light); font-size: 0.75rem; }
           <div class="form-group">
             <div style="display:flex;gap:0.5rem">
               <input type="file" id="img-file" accept="image/*" multiple style="flex:1">
-              <button type="button" class="btn" onclick="addImageUrl()">+ Add URL</button>
+              <button type="button" class="btn" onclick="addImageUrl()">+ URL</button>
             </div>
           </div>
           <div id="images-grid" class="media-grid"></div>
@@ -105,7 +118,7 @@ small { color: var(--text-light); font-size: 0.75rem; }
           <div class="form-group">
             <div style="display:flex;gap:0.5rem">
               <input type="file" id="vid-file" accept="video/*" style="flex:1">
-              <button type="button" class="btn" onclick="addVideoUrl()">+ Add URL</button>
+              <button type="button" class="btn" onclick="addVideoUrl()">+ URL</button>
             </div>
           </div>
           <div id="videos-grid" class="media-grid"></div>
@@ -113,8 +126,17 @@ small { color: var(--text-light); font-size: 0.75rem; }
       </div>
       <div class="tab-content" data-tab="3">
         <div class="form-group">
-          <label>Product Addons / Custom Fields</label>
-          <button type="button" class="btn btn-primary" id="add-addon">+ Add Field</button>
+          <label>Add Field Type:</label>
+          <div class="addons-toolbar">
+            <button type="button" class="btn-add-type" data-type="heading" onclick="addAddonType('heading')">📋 Heading</button>
+            <button type="button" class="btn-add-type" data-type="text" onclick="addAddonType('text')">✏️ Text</button>
+            <button type="button" class="btn-add-type" data-type="textarea" onclick="addAddonType('textarea')">📝 Long Text</button>
+            <button type="button" class="btn-add-type" data-type="email" onclick="addAddonType('email')">📧 Email</button>
+            <button type="button" class="btn-add-type" data-type="file" onclick="addAddonType('file')">📎 File</button>
+            <button type="button" class="btn-add-type" data-type="radio" onclick="addAddonType('radio')">⭕ Radio</button>
+            <button type="button" class="btn-add-type" data-type="select" onclick="addAddonType('select')">📋 Dropdown</button>
+            <button type="button" class="btn-add-type" data-type="checkbox_group" onclick="addAddonType('checkbox_group')">☑️ Checkboxes</button>
+          </div>
         </div>
         <div id="addons-list"></div>
       </div>
@@ -134,17 +156,6 @@ small { color: var(--text-light); font-size: 0.75rem; }
 <script>
 const S={tab:0,completed:new Set(),images:[],videos:[],addons:[],dragSrc:null,dragType:''};
 const tabs=['📝 Basic','💰 Pricing','🖼️ Media','➕ Addons','🔍 SEO'];
-const addonTypes=[
-  {v:'',t:'Select type'},
-  {v:'heading',t:'📋 Heading'},
-  {v:'text',t:'✏️ Text'},
-  {v:'textarea',t:'📝 Long Text'},
-  {v:'email',t:'📧 Email'},
-  {v:'file',t:'📎 File'},
-  {v:'radio',t:'⭕ Radio'},
-  {v:'select',t:'📋 Dropdown'},
-  {v:'checkbox_group',t:'☑️ Checkboxes'}
-];
 
 function init(){
   document.getElementById('tabs').innerHTML=tabs.map((t,i)=>
@@ -160,7 +171,6 @@ function init(){
     }
   };
   setupMedia();
-  setupAddons();
   document.getElementById('meta-title').oninput=e=>document.getElementById('tc').textContent=e.target.value.length;
   document.getElementById('meta-desc').oninput=e=>document.getElementById('dc').textContent=e.target.value.length;
   load();
@@ -213,7 +223,7 @@ function renderImages(){
   c.innerHTML=S.images.map((img,i)=>
     `<div class="media-item" draggable="true" data-index="${i}">
       <div class="order">${i+1}</div>
-      <img src="${img.preview}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23eee%22 width=%22150%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22%3EImage%3C/text%3E%3C/svg%3E'">
+      <img src="${img.preview}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23eee%22 width=%22150%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22%3E🖼️%3C/text%3E%3C/svg%3E'">
       <button type="button" class="remove" onclick="S.images.splice(${i},1);renderImages()">×</button>
       <div class="media-info">
         <input type="url" placeholder="Image URL *" value="${img.url||''}" onchange="S.images[${i}].url=this.value" required>
@@ -228,7 +238,7 @@ function renderVideos(){
   c.innerHTML=S.videos.map((vid,i)=>
     `<div class="media-item" draggable="true" data-index="${i}">
       <div class="order">${i+1}</div>
-      ${vid.preview?`<img src="${vid.preview}">`:'<div style="height:150px;display:flex;align-items:center;justify-content:center;background:#eee">🎥 Video</div>'}
+      ${vid.preview?`<img src="${vid.preview}">`:'<div style="height:150px;display:flex;align-items:center;justify-content:center;background:#eee;font-size:3rem">🎥</div>'}
       <button type="button" class="remove" onclick="S.videos.splice(${i},1);renderVideos()">×</button>
       <div class="media-info">
         <input type="url" placeholder="Video URL *" value="${vid.url||''}" onchange="S.videos[${i}].url=this.value" required>
@@ -255,17 +265,33 @@ function setupDrag(gridId,arrayName){
   });
 }
 
-function setupAddons(){
-  document.getElementById('add-addon').onclick=()=>{
-    S.addons.push({id:Date.now(),type:'',label:'',required:false,price:0,placeholder:'',text:'',options:[]});
-    renderAddons();
+function addAddonType(type){
+  const labels={
+    heading:'Section Heading',
+    text:'Text Input',
+    textarea:'Long Text Area',
+    email:'Email Address',
+    file:'File Upload',
+    radio:'Radio Buttons',
+    select:'Dropdown List',
+    checkbox_group:'Checkbox Group'
   };
+  S.addons.push({
+    id:Date.now(),
+    type:type,
+    label:labels[type]||'',
+    required:false,
+    price:0,
+    placeholder:'',
+    text:'',
+    options:['radio','select','checkbox_group'].includes(type)?[{label:'',price:0,default:true,file:false,fileQuantity:1,textField:false,textLabel:'',textPlaceholder:''}]:[]
+  });
+  renderAddons();
 }
 
 function renderAddons(){
   const c=document.getElementById('addons-list');
   c.innerHTML=S.addons.map((addon,i)=>{
-    const typeOpts=addonTypes.map(t=>`<option value="${t.v}" ${addon.type===t.v?'selected':''}>${t.t}</option>`).join('');
     let config='';
     
     if(addon.type==='heading'){
@@ -308,9 +334,9 @@ function renderAddons(){
             ${opt.file||opt.textField?`<div class="addon-option-extra">
               ${opt.file?`<div class="form-group"><label>File Quantity</label>
                 <input type="number" min="1" value="${opt.fileQuantity||1}" onchange="S.addons[${i}].options[${oi}].fileQuantity=parseInt(this.value)||1">
-                <small>How many files customer uploads</small></div>`:''}
+                <small>Number of files customer uploads</small></div>`:''}
               ${opt.textField?`<div class="form-group"><label>Text Field Label</label>
-                <input type="text" placeholder="e.g., Song link or details" value="${opt.textLabel||''}" onchange="S.addons[${i}].options[${oi}].textLabel=this.value"></div>
+                <input type="text" placeholder="e.g., Song link" value="${opt.textLabel||''}" onchange="S.addons[${i}].options[${oi}].textLabel=this.value"></div>
                 <div class="form-group"><label>Text Placeholder</label>
                 <input type="text" placeholder="e.g., Paste YouTube link" value="${opt.textPlaceholder||''}" onchange="S.addons[${i}].options[${oi}].textPlaceholder=this.value"></div>`:''}
             </div>`:''}
@@ -321,16 +347,11 @@ function renderAddons(){
     
     return `<div class="addon-field">
       <div class="addon-header">
-        <strong>Field ${i+1}</strong>
+        <strong>${addon.type?addon.type.toUpperCase():''} - Field ${i+1}</strong>
         <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons.splice(${i},1);renderAddons()">Remove Field</button>
       </div>
-      <div class="addon-row">
-        <div class="form-group"><label>Field Type</label>
-          <select onchange="S.addons[${i}].type=this.value;renderAddons()">${typeOpts}</select>
-        </div>
-        <div class="form-group"><label>Field Label *</label>
-          <input type="text" value="${addon.label||''}" placeholder="e.g., Choose size" onchange="S.addons[${i}].label=this.value" required>
-        </div>
+      <div class="form-group"><label>Field Label *</label>
+        <input type="text" value="${addon.label||''}" placeholder="e.g., Choose size" onchange="S.addons[${i}].label=this.value" required>
       </div>
       ${config}
     </div>`;
@@ -400,7 +421,7 @@ async function save(){
     });
     if(!r.ok)throw new Error('Save failed');
     const res=await r.json();
-    alert('✅ Product saved successfully!');
+    alert('✅ Product saved!');
     if(!id&&res.id)location.href='?id='+res.id;
   }catch(e){alert('❌ '+e.message);}
   finally{btn.disabled=false;btn.textContent='Save Product';}
