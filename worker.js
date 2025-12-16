@@ -575,7 +575,7 @@ export default {
         });
       }
 
-      // Clear pending checkouts - FINAL WORKING (deletes Plans from Whop)
+      // Clear pending checkouts - BATCH DELETE (40 plans at a time)
       if ((method === 'POST' || method === 'GET') && path === '/api/admin/clear-pending-checkouts') {
         try {
           if (!env.WHOP_API_KEY) {
@@ -585,58 +585,36 @@ export default {
             }, 500);
           }
 
-          console.log('🔍 Fetching all plans from Whop API...');
+          console.log('🔍 Fetching plans from Whop API...');
           
-          let allPlans = [];
-          let page = 1;
-          const perPage = 100;
-          
-          // Fetch all plans with pagination
-          while (page <= 10) {
-            try {
-              const listResp = await fetch(
-                `https://api.whop.com/api/v2/plans?page=${page}&per=${perPage}`,
-                {
-                  method: 'GET',
-                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
-                }
-              );
-              
-              if (!listResp.ok) {
-                console.error('Failed to fetch plans:', listResp.status);
-                break;
-              }
-              
-              const data = await listResp.json();
-              const plans = data.data || [];
-              
-              if (plans.length > 0) {
-                allPlans.push(...plans);
-                console.log(`📄 Page ${page}: Found ${plans.length} plans`);
-                
-                // Check pagination
-                if (data.pagination && page < data.pagination.total_page) {
-                  page++;
-                } else {
-                  break;
-                }
-              } else {
-                break;
-              }
-            } catch (err) {
-              console.error('Page fetch error:', err);
-              break;
+          // Fetch first page only (to stay under Cloudflare limit)
+          const listResp = await fetch(
+            'https://api.whop.com/api/v2/plans?page=1&per=40',
+            {
+              method: 'GET',
+              headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
             }
+          );
+          
+          if (!listResp.ok) {
+            return json({ 
+              success: false, 
+              error: `Failed to fetch plans: ${listResp.status}`
+            }, 500);
           }
           
-          console.log(`✅ Total plans found: ${allPlans.length}`);
+          const data = await listResp.json();
+          const plans = data.data || [];
+          const totalCount = data.pagination?.total_count || 0;
+          
+          console.log(`✅ Found ${plans.length} plans (Total: ${totalCount})`);
           
           let deleted = 0;
           let failed = 0;
           const errors = [];
           
-          // Delete each plan
-          for (const plan of allPlans) {
+          // Delete each plan (max 40 to stay under 50 subrequest limit)
+          for (const plan of plans) {
             try {
               const planId = plan.id;
               
@@ -650,39 +628,29 @@ export default {
               
               if (deleteResp.ok || deleteResp.status === 404) {
                 deleted++;
-                console.log('✅ Deleted plan:', planId);
-                
-                // Update database if plan exists there
-                try {
-                  await initDB(env);
-                  await env.DB.prepare(`
-                    UPDATE checkout_sessions 
-                    SET status = 'expired', completed_at = datetime('now')
-                    WHERE plan_id = ?
-                  `).bind(planId).run();
-                } catch (dbErr) {
-                  // Ignore DB errors
-                }
+                console.log('✅ Deleted:', planId);
               } else {
                 failed++;
-                const errorText = await deleteResp.text().catch(() => 'Unknown');
                 errors.push(`${planId}: HTTP ${deleteResp.status}`);
-                console.error('❌ Failed to delete plan:', planId, deleteResp.status);
+                console.error('❌ Failed:', planId, deleteResp.status);
               }
             } catch (e) {
               failed++;
               errors.push(`${plan.id}: ${e.message}`);
-              console.error('❌ Error deleting plan:', plan.id, e.message);
+              console.error('❌ Error:', plan.id, e.message);
             }
           }
           
+          const remaining = totalCount - deleted;
+          
           return json({
             success: true,
-            total: allPlans.length,
+            total: totalCount,
             deleted: deleted,
             failed: failed,
-            message: `Successfully deleted ${deleted} plan(s) from Whop${failed > 0 ? `, ${failed} failed` : ''}`,
-            errors: errors.length > 0 ? errors.slice(0, 10) : undefined
+            remaining: remaining,
+            message: `Successfully deleted ${deleted} plan(s)${remaining > 0 ? `. ${remaining} plans remaining - click again to delete more` : ' - All done!'}`,
+            errors: errors.length > 0 ? errors.slice(0, 5) : undefined
           });
           
         } catch (err) {
