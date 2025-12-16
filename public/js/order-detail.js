@@ -140,7 +140,7 @@
     countdownTimer.start();
   }
 
-  function showDelivery(order) {
+  async function showDelivery(order) {
     document.getElementById('countdown-section').style.display = 'none';
     document.getElementById('video-player-section').style.display = 'block';
 
@@ -183,7 +183,7 @@
     const downloadBtn = document.getElementById('download-btn');
     const revisionBtn = document.getElementById('revision-btn');
     const approveBtn = document.getElementById('approve-btn');
-    
+
     if (downloadBtn) {
       downloadBtn.style.display = 'inline-flex';
 
@@ -206,10 +206,30 @@
         downloadBtn.href = order.delivered_video_url;
       }
     }
-    
+
+    // Check if review already exists for this order
+    let hasReview = false;
     if (!isAdmin) {
-      if (revisionBtn) revisionBtn.style.display = 'inline-flex';
-      if (approveBtn) approveBtn.style.display = 'inline-flex';
+      try {
+        const reviewRes = await fetch('/api/reviews');
+        const reviewData = await reviewRes.json();
+        if (reviewData.reviews && Array.isArray(reviewData.reviews)) {
+          hasReview = reviewData.reviews.some(r => r.order_id === order.order_id);
+        }
+      } catch (e) {
+        console.warn('Could not check review status:', e);
+      }
+
+      if (hasReview) {
+        // Hide approve button and review section if review already submitted
+        if (approveBtn) approveBtn.style.display = 'none';
+        if (revisionBtn) revisionBtn.style.display = 'none';
+        document.getElementById('review-section').style.display = 'none';
+      } else {
+        // Show buttons if no review yet
+        if (revisionBtn) revisionBtn.style.display = 'inline-flex';
+        if (approveBtn) approveBtn.style.display = 'inline-flex';
+      }
     } else {
       if (revisionBtn) revisionBtn.style.display = 'none';
       if (approveBtn) approveBtn.style.display = 'none';
@@ -413,6 +433,11 @@
       if (res.ok && data.success) {
         alert('✅ Review submitted!');
         document.getElementById('review-section').style.display = 'none';
+        // Hide approve and revision buttons after review submission
+        const approveBtn = document.getElementById('approve-btn');
+        const revisionBtn = document.getElementById('revision-btn');
+        if (approveBtn) approveBtn.style.display = 'none';
+        if (revisionBtn) revisionBtn.style.display = 'none';
         if (portfolioEnabled) {
           await fetch('/api/order/portfolio', {
             method: 'POST',
