@@ -45,7 +45,7 @@ small { color: var(--text-light); font-size: 0.75rem; display: block; margin-top
 .gallery-header input { flex: 1; margin-right: 0.5rem; font-weight: 600; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; margin-top: 1rem; }
 .media-item { position: relative; border: 2px solid var(--border); border-radius: 8px; background: #fff; cursor: move; }
-.media-item.dragging { opacity: 0.5; }
+.media-item.uploading { opacity: 0.6; pointer-events: none; }
 .media-item img { width: 100%; height: 150px; object-fit: cover; border-radius: 6px 6px 0 0; }
 .media-info { padding: 0.5rem; }
 .media-info input { padding: 0.5rem; font-size: 0.75rem; margin-bottom: 0.5rem; }
@@ -55,8 +55,10 @@ small { color: var(--text-light); font-size: 0.75rem; display: block; margin-top
 .media-item .order { position: absolute; top: 0.5rem; left: 0.5rem; background: var(--primary); 
                      color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; 
                      align-items: center; justify-content: center; font-weight: 600; font-size: 0.75rem; }
+.upload-progress { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; background: var(--border); border-radius: 0 0 6px 6px; overflow: hidden; }
+.upload-progress-bar { height: 100%; background: var(--success); transition: width 0.3s; }
 .video-card { border: 2px solid #9333ea; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; background: #fff; }
-.video-layout { display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem; align-items: start; }
+.video-layout { display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem; }
 .thumbnail-area { display: flex; flex-direction: column; gap: 0.75rem; }
 .thumbnail-preview { width: 220px; height: 165px; background: #f3f4f6; border: 2px dashed var(--border); 
                      border-radius: 8px; display: flex; align-items: center; justify-content: center; 
@@ -87,6 +89,15 @@ small { color: var(--text-light); font-size: 0.75rem; display: block; margin-top
 .delivery-config { margin-top: 0.5rem; padding: 0.75rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px; }
 .btn-sm { padding: 0.5rem 0.75rem; font-size: 0.75rem; }
 .section-divider { margin: 2rem 0; border-top: 2px solid var(--border); }
+.upload-status { position: fixed; bottom: 2rem; right: 2rem; background: white; padding: 1.5rem; 
+                 border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 300px; 
+                 display: none; z-index: 1000; }
+.upload-status.active { display: block; animation: slideUp 0.3s; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.upload-item { margin-bottom: 1rem; }
+.upload-item-name { font-size: 0.875rem; margin-bottom: 0.5rem; }
+.upload-item-progress { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.upload-item-bar { height: 100%; background: var(--success); transition: width 0.3s; }
 </style>
 </head>
 <body>
@@ -157,8 +168,12 @@ small { color: var(--text-light); font-size: 0.75rem; display: block; margin-top
     </div>
   </div>
 </div>
+<div class="upload-status" id="upload-status">
+  <h3 style="margin-bottom:1rem;font-size:1rem">📤 Uploading Files...</h3>
+  <div id="upload-items"></div>
+</div>
 <script>
-const S={tab:0,completed:new Set(),galleries:[],videos:[],addons:[]};
+const S={tab:0,completed:new Set(),galleries:[],videos:[],addons:[],uploading:false,uploadQueue:[]};
 const tabs=['📝 Basic','💰 Pricing','🖼️ Media','➕ Addons','🔍 SEO'];
 
 function init(){
@@ -166,6 +181,7 @@ function init(){
     `<button type="button" class="tab ${i===0?'active':''}" onclick="switchTab(${i})">${t}</button>`).join('');
   document.getElementById('prev').onclick=()=>switchTab(S.tab-1);
   document.getElementById('next').onclick=()=>{
+    if(S.uploading){alert('⏳ Please wait for uploads to complete');return;}
     if(S.tab===4)save();else{S.completed.add(S.tab);switchTab(S.tab+1);}
   };
   document.getElementById('title').oninput=()=>{
@@ -176,10 +192,8 @@ function init(){
   };
   document.getElementById('meta-title').oninput=e=>document.getElementById('tc').textContent=e.target.value.length;
   document.getElementById('meta-desc').oninput=e=>document.getElementById('dc').textContent=e.target.value.length;
-  
   renderGalleries();
   renderVideos();
-  
   load();
 }
 
@@ -192,7 +206,8 @@ function switchTab(i){
   document.querySelectorAll('.tab-content').forEach((c,idx)=>{
     c.className='tab-content'+(idx===i?' active':'');
   });
-  document.getElementById('prev').disabled=i===0;
+  document.getElementById('prev').disabled=i===0 || S.uploading;
+  document.getElementById('next').disabled=S.uploading;
   document.getElementById('next').textContent=i===4?'Save Product':'Next →';
   document.getElementById('progress').style.width=((i+1)/5*100)+'%';
 }
@@ -208,16 +223,39 @@ function addGalleryImage(gi){
   input.accept='image/*';
   input.multiple=true;
   input.onchange=e=>{
-    for(const f of e.target.files){
-      const r=new FileReader();
-      r.onload=ev=>{
-        S.galleries[gi].images.push({id:Date.now()+Math.random(),preview:ev.target.result,url:'',type:'upload'});
-        renderGalleries();
-      };
-      r.readAsDataURL(f);
-    }
+    handleImageUploads(e.target.files,gi);
   };
   input.click();
+}
+
+function handleImageUploads(files,gi){
+  Array.from(files).forEach(f=>{
+    const r=new FileReader();
+    r.onloadstart=()=>{
+      S.uploading=true;
+      const tempId=Date.now()+Math.random();
+      S.galleries[gi].images.push({id:tempId,preview:'',url:'',type:'upload',uploading:true,progress:0});
+      renderGalleries();
+      showUploadStatus();
+    };
+    r.onprogress=e=>{
+      if(e.lengthComputable){
+        const percent=(e.loaded/e.total)*100;
+        updateUploadProgress(f.name,percent);
+      }
+    };
+    r.onload=ev=>{
+      const img=S.galleries[gi].images.find(im=>im.uploading);
+      if(img){
+        img.preview=ev.target.result;
+        img.uploading=false;
+        img.progress=100;
+      }
+      renderGalleries();
+      checkUploadsComplete();
+    };
+    r.readAsDataURL(f);
+  });
 }
 
 function addGalleryImageUrl(gi){
@@ -231,7 +269,7 @@ function addGalleryImageUrl(gi){
 function renderGalleries(){
   const c=document.getElementById('galleries-container');
   if(S.galleries.length===0){
-    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No galleries. Click + Add Gallery</p>';
+    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No galleries</p>';
     return;
   }
   c.innerHTML=S.galleries.map((gallery,gi)=>
@@ -246,13 +284,14 @@ function renderGalleries(){
       </div>
       <div class="media-grid">
         ${gallery.images.map((img,ii)=>
-          `<div class="media-item" draggable="true" data-gallery="${gi}" data-index="${ii}">
+          `<div class="media-item ${img.uploading?'uploading':''}" draggable="${!img.uploading}" data-gallery="${gi}" data-index="${ii}">
             <div class="order">${ii+1}</div>
-            <img src="${img.preview}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23eee%22 width=%22150%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E🖼️%3C/text%3E%3C/svg%3E'">
+            ${img.preview?`<img src="${img.preview}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23eee%22 width=%22150%22 height=%22150%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E🖼️%3C/text%3E%3C/svg%3E'">`:'<div style="height:150px;display:flex;align-items:center;justify-content:center;background:#eee">⏳</div>'}
             <button type="button" class="remove" onclick="S.galleries[${gi}].images.splice(${ii},1);renderGalleries()">×</button>
             <div class="media-info">
               <input type="url" placeholder="Image URL *" value="${img.url||''}" onchange="S.galleries[${gi}].images[${ii}].url=this.value" required>
             </div>
+            ${img.uploading?`<div class="upload-progress"><div class="upload-progress-bar" style="width:${img.progress||0}%"></div></div>`:''}
           </div>`
         ).join('')}
       </div>
@@ -282,8 +321,26 @@ function setupGalleryDrag(){
 }
 
 function addVideo(){
-  S.videos.push({id:Date.now(),url:'',thumbnail:'',thumbnailPreview:'',type:'url'});
+  S.videos.push({id:Date.now(),url:'',videoFile:null,thumbnail:'',thumbnailPreview:'',type:'url'});
   renderVideos();
+}
+
+function uploadVideo(vi){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='video/*';
+  input.onchange=e=>{
+    const f=e.target.files[0];
+    if(f){
+      const r=new FileReader();
+      r.onload=ev=>{
+        S.videos[vi].videoFile=ev.target.result;
+        alert('Video loaded! Enter URL where this will be hosted');
+      };
+      r.readAsDataURL(f);
+    }
+  };
+  input.click();
 }
 
 function uploadThumbnail(vi){
@@ -307,7 +364,7 @@ function uploadThumbnail(vi){
 function renderVideos(){
   const c=document.getElementById('videos-container');
   if(S.videos.length===0){
-    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No videos. Click + Add Video</p>';
+    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No videos</p>';
     return;
   }
   c.innerHTML=S.videos.map((vid,i)=>
@@ -315,26 +372,59 @@ function renderVideos(){
       <div class="video-layout">
         <div class="thumbnail-area">
           <div class="thumbnail-preview">
-            ${vid.thumbnailPreview?`<img src="${vid.thumbnailPreview}" alt="Thumbnail">`:'🎥'}
+            ${vid.thumbnailPreview?`<img src="${vid.thumbnailPreview}">`:'🎥'}
           </div>
-          <button type="button" class="btn btn-sm btn-primary" onclick="uploadThumbnail(${i})">📤 Upload Thumbnail</button>
-          <small style="text-align:center">Or enter URL below</small>
+          <button type="button" class="btn btn-sm btn-primary" onclick="uploadThumbnail(${i})">📤 Thumbnail</button>
         </div>
         <div class="video-fields">
           <div class="form-group">
+            <label>Video File</label>
+            <button type="button" class="btn btn-sm" onclick="uploadVideo(${i})">📹 Upload Video</button>
+            ${vid.videoFile?'<small style="color:var(--success)">✅ Video loaded</small>':''}
+          </div>
+          <div class="form-group">
             <label>Video URL *</label>
-            <input type="url" placeholder="https://youtube.com/watch?v=..." value="${vid.url||''}" onchange="S.videos[${i}].url=this.value" required>
+            <input type="url" placeholder="https://youtube.com/... or CDN URL" value="${vid.url||''}" onchange="S.videos[${i}].url=this.value" required>
+            <small>Enter URL where video is/will be hosted</small>
           </div>
           <div class="form-group">
             <label>Thumbnail URL</label>
-            <input type="url" placeholder="https://img.youtube.com/vi/.../maxresdefault.jpg" value="${vid.thumbnail||''}" onchange="S.videos[${i}].thumbnail=this.value;S.videos[${i}].thumbnailPreview=this.value;renderVideos()">
-            <small>Paste thumbnail image URL</small>
+            <input type="url" placeholder="https://..." value="${vid.thumbnail||''}" onchange="S.videos[${i}].thumbnail=this.value;S.videos[${i}].thumbnailPreview=this.value;renderVideos()">
           </div>
-          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.videos.splice(${i},1);renderVideos()">Remove Video</button>
+          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.videos.splice(${i},1);renderVideos()">Remove</button>
         </div>
       </div>
     </div>`
   ).join('');
+}
+
+function showUploadStatus(){
+  document.getElementById('upload-status').classList.add('active');
+}
+
+function updateUploadProgress(filename,percent){
+  const c=document.getElementById('upload-items');
+  let item=c.querySelector(`[data-file="${filename}"]`);
+  if(!item){
+    item=document.createElement('div');
+    item.className='upload-item';
+    item.dataset.file=filename;
+    item.innerHTML=`<div class="upload-item-name">${filename}</div><div class="upload-item-progress"><div class="upload-item-bar" style="width:0%"></div></div>`;
+    c.appendChild(item);
+  }
+  item.querySelector('.upload-item-bar').style.width=percent+'%';
+}
+
+function checkUploadsComplete(){
+  const hasUploading=S.galleries.some(g=>g.images.some(i=>i.uploading));
+  if(!hasUploading){
+    S.uploading=false;
+    setTimeout(()=>{
+      document.getElementById('upload-status').classList.remove('active');
+      document.getElementById('upload-items').innerHTML='';
+    },2000);
+    switchTab(S.tab);
+  }
 }
 
 function addAddonType(type){
@@ -356,7 +446,7 @@ function addAddonType(type){
 function renderAddons(){
   const c=document.getElementById('addons-list');
   if(S.addons.length===0){
-    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No fields. Click a button above to add</p>';
+    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No fields. Click a button above</p>';
     return;
   }
   c.innerHTML=S.addons.map((addon,i)=>{
@@ -384,7 +474,7 @@ function renderAddons(){
         <div style="margin-top:1rem">${(addon.options||[]).map((opt,oi)=>
           `<div class="addon-option">
             <div class="addon-option-main">
-              <input type="text" placeholder="Option label *" value="${opt.label||''}" onchange="S.addons[${i}].options[${oi}].label=this.value" required>
+              <input type="text" placeholder="Option label *" value="${opt.label||''}" onchange="S.addons[${i}].options[${oi}].label=this.value">
               <input type="number" placeholder="Price" value="${opt.price||0}" step="0.01" onchange="S.addons[${i}].options[${oi}].price=parseFloat(this.value)||0">
             </div>
             <div class="addon-option-flags">
@@ -398,15 +488,14 @@ function renderAddons(){
               ${opt.file?`<div class="form-group"><label>📎 File Quantity</label>
                 <input type="number" min="1" value="${opt.fileQuantity||1}" onchange="S.addons[${i}].options[${oi}].fileQuantity=parseInt(this.value)||1">
                 <small>Number of files</small></div>`:''}
-              ${opt.textField?`<div class="form-group"><label>✏️ Text Field Label</label>
+              ${opt.textField?`<div class="form-group"><label>✏️ Text Label</label>
                 <input type="text" placeholder="e.g., Song link" value="${opt.textLabel||''}" onchange="S.addons[${i}].options[${oi}].textLabel=this.value"></div>
                 <div class="form-group"><label>Text Placeholder</label>
                 <input type="text" placeholder="e.g., Paste link" value="${opt.textPlaceholder||''}" onchange="S.addons[${i}].options[${oi}].textPlaceholder=this.value"></div>`:''}
               ${opt.delivery?`<div class="delivery-config">
-                <div class="form-group"><label><input type="checkbox" ${opt.instantDelivery?'checked':''} onchange="S.addons[${i}].options[${oi}].instantDelivery=this.checked"> ⚡ Instant Delivery</label></div>
-                <div class="form-group"><label>🗓️ Delivery Days</label>
-                  <input type="number" min="1" max="365" value="${opt.deliveryDays||1}" onchange="S.addons[${i}].options[${oi}].deliveryDays=parseInt(this.value)||1">
-                  <small>Days</small></div>
+                <div class="form-group"><label><input type="checkbox" ${opt.instantDelivery?'checked':''} onchange="S.addons[${i}].options[${oi}].instantDelivery=this.checked"> ⚡ Instant</label></div>
+                <div class="form-group"><label>🗓️ Days</label>
+                  <input type="number" min="1" max="365" value="${opt.deliveryDays||1}" onchange="S.addons[${i}].options[${oi}].deliveryDays=parseInt(this.value)||1"></div>
               </div>`:''}
             </div>`:''}
           </div>`
@@ -418,8 +507,8 @@ function renderAddons(){
         <strong>${addon.type?addon.type.toUpperCase():''} - ${addon.label||'Field '+(i+1)}</strong>
         <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.addons.splice(${i},1);renderAddons()">Remove</button>
       </div>
-      <div class="form-group"><label>Field Label *</label>
-        <input type="text" value="${addon.label||''}" placeholder="e.g., Choose size" onchange="S.addons[${i}].label=this.value" required>
+      <div class="form-group"><label>Label *</label>
+        <input type="text" value="${addon.label||''}" placeholder="e.g., Choose size" onchange="S.addons[${i}].label=this.value">
       </div>
       ${config}
     </div>`;
@@ -441,6 +530,7 @@ async function load(){
   if(!id)return;
   try{
     const r=await fetch('/products/'+id);
+    if(!r.ok)throw new Error('Load failed');
     const p=await r.json();
     document.getElementById('title').value=p.title||'';
     document.getElementById('slug').value=p.slug||'';
@@ -462,10 +552,11 @@ async function load(){
       document.getElementById('meta-title').dispatchEvent(new Event('input'));
       document.getElementById('meta-desc').dispatchEvent(new Event('input'));
     }
-  }catch(e){console.error(e);alert('Failed to load product');}
+  }catch(e){console.error(e);alert('Failed to load: '+e.message);}
 }
 
 async function save(){
+  if(S.uploading){alert('⏳ Please wait for uploads');return;}
   const btn=document.getElementById('next');
   btn.disabled=true;btn.textContent='Saving...';
   try{
@@ -495,12 +586,17 @@ async function save(){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify(data)
     });
-    if(!r.ok)throw new Error('Save failed');
+    if(!r.ok){
+      const err=await r.text();
+      throw new Error(err||'Save failed');
+    }
     const res=await r.json();
-    alert('✅ Product saved successfully!');
+    alert('✅ Product saved!');
     if(!id&&res.id)location.href='?id='+res.id;
-  }catch(e){alert('❌ '+e.message);}
-  finally{btn.disabled=false;btn.textContent='Save Product';}
+  }catch(e){
+    console.error(e);
+    alert('❌ '+e.message);
+  }finally{btn.disabled=false;btn.textContent='Save Product';}
 }
 
 init();

@@ -39,26 +39,25 @@ export class AutoMigration {
         title TEXT NOT NULL,
         slug TEXT UNIQUE NOT NULL,
         description TEXT,
-        price INTEGER,
+        price REAL NOT NULL,
+        sale_price REAL,
         currency TEXT DEFAULT 'USD',
+        stock INTEGER DEFAULT 0,
+        sku TEXT,
         status TEXT DEFAULT 'draft',
-        created_by TEXT NOT NULL,
+        galleries TEXT,
+        videos TEXT,
+        addons TEXT,
+        seo TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
-      )`,
-      `CREATE TABLE IF NOT EXISTS product_media (
-        id TEXT PRIMARY KEY,
-        product_id TEXT NOT NULL,
-        r2_key TEXT NOT NULL,
-        kind TEXT NOT NULL,
-        alt TEXT,
-        sort_order INTEGER DEFAULT 0,
-        created_at INTEGER NOT NULL
       )`
     ];
 
     for (const sql of tables) {
       await this.env.DB.prepare(sql).run();
     }
+    
+    console.log("✅ Tables created");
   }
 }
