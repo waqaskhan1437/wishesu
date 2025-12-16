@@ -365,38 +365,50 @@
             break;
           }
 
-          safeSetHTML(
-            buildMessageCard({
-              title: 'Loading video…',
-              message: 'Checking availability on Archive.org…'
-            })
+          // Try to use direct video URL if available
+          const isDirectUrl = video.url && (
+            video.url.includes('/download/') ||
+            video.url.includes('s3.us.archive.org') ||
+            video.url.match(/\.(mp4|webm|ogg|mov)(\?|$)/i)
           );
 
-          checkArchiveItemExists(itemId).then((exists) => {
-            if (!exists) {
+          if (isDirectUrl) {
+            // Use HTML5 video player for direct URLs
+            const videoEl = document.createElement('video');
+            videoEl.controls = true;
+            videoEl.preload = 'metadata';
+            videoEl.style.cssText = 'width: 100%; height: 100%; background: #000;';
+
+            const source = document.createElement('source');
+            source.src = video.url;
+            source.type = guessMimeTypeFromUrl(video.url) || 'video/mp4';
+
+            videoEl.appendChild(source);
+
+            videoEl.onerror = () => {
               const detailsUrl = `https://archive.org/details/${encodeURIComponent(itemId)}`;
               safeSetHTML(
                 buildMessageCard({
-                  title: 'Video unavailable',
-                  message:
-                    'The item you have requested had an error:\n' +
-                    'Item cannot be found.\n' +
-                    'which prevents us from displaying this page.\n\n' +
-                    'Items may be taken down for various reasons, including by decision of the uploader or due to a violation of our Terms of Use.',
+                  title: 'Video processing',
+                  message: 'This video is still being processed by Archive.org. Please try again in a few minutes.',
                   href: detailsUrl,
-                  linkText: 'Open on Archive.org'
+                  linkText: 'View on Archive.org'
                 })
               );
-              return;
-            }
+            };
 
-            const detailsUrl = `https://archive.org/details/${encodeURIComponent(itemId)}`;
-            const embedUrl = `https://archive.org/embed/${encodeURIComponent(itemId)}`;
-            safeSetHTML(
-              `<iframe
-                src="${embedUrl}?autostart=false"
-                width="100%"
-                height="100%"
+            safeSetElement(videoEl);
+            break;
+          }
+
+          // Use embed for non-direct URLs
+          const detailsUrl = `https://archive.org/details/${encodeURIComponent(itemId)}`;
+          const embedUrl = `https://archive.org/embed/${encodeURIComponent(itemId)}`;
+          safeSetHTML(
+            `<iframe
+              src="${embedUrl}?autostart=false"
+              width="100%"
+              height="100%"
                 frameborder="0"
                 allow="fullscreen"
                 style="border-radius: 12px;"

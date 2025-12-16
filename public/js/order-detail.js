@@ -207,29 +207,30 @@
       }
     }
 
-    // Check if review already exists for this order
-    let hasReview = false;
+    // Show buttons for buyers by default
     if (!isAdmin) {
-      try {
-        const reviewRes = await fetch('/api/reviews');
-        const reviewData = await reviewRes.json();
-        if (reviewData.reviews && Array.isArray(reviewData.reviews)) {
-          hasReview = reviewData.reviews.some(r => r.order_id === order.order_id);
-        }
-      } catch (e) {
-        console.warn('Could not check review status:', e);
-      }
+      if (revisionBtn) revisionBtn.style.display = 'inline-flex';
+      if (approveBtn) approveBtn.style.display = 'inline-flex';
 
-      if (hasReview) {
-        // Hide approve button and review section if review already submitted
-        if (approveBtn) approveBtn.style.display = 'none';
-        if (revisionBtn) revisionBtn.style.display = 'none';
-        document.getElementById('review-section').style.display = 'none';
-      } else {
-        // Show buttons if no review yet
-        if (revisionBtn) revisionBtn.style.display = 'inline-flex';
-        if (approveBtn) approveBtn.style.display = 'inline-flex';
-      }
+      // Check if review already exists for this order (async, don't block)
+      setTimeout(async () => {
+        try {
+          const reviewRes = await fetch('/api/reviews');
+          const reviewData = await reviewRes.json();
+          if (reviewData.reviews && Array.isArray(reviewData.reviews)) {
+            const hasReview = reviewData.reviews.some(r => r.order_id === order.order_id);
+            if (hasReview) {
+              // Hide approve button and review section if review already submitted
+              if (approveBtn) approveBtn.style.display = 'none';
+              if (revisionBtn) revisionBtn.style.display = 'none';
+              document.getElementById('review-section').style.display = 'none';
+            }
+          }
+        } catch (e) {
+          console.warn('Could not check review status:', e);
+          // On error, keep buttons visible (fail safe)
+        }
+      }, 100);
     } else {
       if (revisionBtn) revisionBtn.style.display = 'none';
       if (approveBtn) approveBtn.style.display = 'none';
