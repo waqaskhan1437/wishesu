@@ -183,6 +183,83 @@ small { color: var(--text-light); font-size: 0.75rem; display: block; margin-top
 const S={tab:0,completed:new Set(),galleries:[],videos:[],addons:[],uploading:false,uploadQueue:[]};
 const tabs=['📝 Basic','💰 Pricing','🖼️ Media','➕ Addons','🔍 SEO'];
 
+
+async function uploadFileToR2(file,type){
+  const formData=new FormData();
+  formData.append('file',file);
+  const r=await fetch('/media/upload',{method:'POST',body:formData});
+  if(!r.ok)throw new Error('Upload failed');
+  const result=await r.json();
+  return result.url;
+}
+
+async function uploadVideo(vi){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='video/*';
+  input.onchange=async e=>{
+    const f=e.target.files[0];
+    if(f){
+      try{
+        S.videos[vi].uploading=true;
+        renderVideos();
+        const url=await uploadFileToR2(f,'video');
+        S.videos[vi].url=url;
+        S.videos[vi].uploading=false;
+        alert('✅ Video uploaded! URL: '+url);
+        renderVideos();
+      }catch(err){
+        S.videos[vi].uploading=false;
+        alert('❌ Upload failed: '+err.message);
+        renderVideos();
+      }
+    }
+  };
+  input.click();
+}
+
+async function uploadThumbnail(vi){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='image/*';
+  input.onchange=async e=>{
+    const f=e.target.files[0];
+    if(f){
+      try{
+        const url=await uploadFileToR2(f,'image');
+        S.videos[vi].thumbnail=url;
+        S.videos[vi].thumbnailPreview=url;
+        alert('✅ Thumbnail uploaded!');
+        renderVideos();
+      }catch(err){
+        alert('❌ Upload failed: '+err.message);
+      }
+    }
+  };
+  input.click();
+}
+
+async function handleImageUploads(files,gi){
+  for(const f of files){
+    try{
+      const tempId=Date.now()+Math.random();
+      S.galleries[gi].images.push({id:tempId,preview:'',url:'',uploading:true});
+      renderGalleries();
+      
+      const url=await uploadFileToR2(f,'image');
+      const img=S.galleries[gi].images.find(im=>im.id===tempId);
+      if(img){
+        img.url=url;
+        img.preview=url;
+        img.uploading=false;
+      }
+      renderGalleries();
+    }catch(err){
+      alert('❌ '+err.message);
+    }
+  }
+}
+
 function init(){
   document.getElementById('tabs').innerHTML=tabs.map((t,i)=>
     \`<button type="button" class="tab \${i===0?'active':''}" onclick="switchTab(\${i})">\${t}</button>\`).join('');
@@ -381,57 +458,29 @@ function renderVideos(){
           <div class="thumbnail-preview">
             \${vid.thumbnailPreview?\`<img src="\${vid.thumbnailPreview}">\`:'🎥'}
           </div>
-          <button type="button" class="btn btn-sm btn-primary" onclick="uploadThumbnail(\${i})">📤 Thumbnail</button>
+          <button type="button" class="btn btn-sm btn-primary" onclick="uploadThumbnail(\${i})" \${vid.uploading?'disabled':''}>📤 Thumbnail</button>
         </div>
         <div class="video-fields">
           <div class="form-group">
             <label>Video File</label>
-            <button type="button" class="btn btn-sm" onclick="uploadVideo(\${i})">📹 Upload Video</button>
-            \${vid.videoFile?'<small style="color:var(--success)">✅ Video loaded</small>':''}
+            <button type="button" class="btn btn-sm \${vid.uploading?'':'btn-primary'}" onclick="uploadVideo(\${i})" \${vid.uploading?'disabled':''}>
+              \${vid.uploading?'⏳ Uploading...':'📹 Upload Video'}
+            </button>
+            \${vid.url&&!vid.uploading?'<small style="color:var(--success)">✅ Uploaded</small>':''}
           </div>
           <div class="form-group">
-            <label>Video URL *</label>
-            <input type="url" placeholder="https://youtube.com/... or CDN URL" value="\${vid.url||''}" onchange="S.videos[\${i}].url=this.value" required>
-            <small>Enter URL where video is/will be hosted</small>
+            <label>Video URL \${vid.uploading?'(Uploading...)':'*'}</label>
+            <input type="url" placeholder="Auto-filled after upload" value="\${vid.url||''}" onchange="S.videos[\${i}].url=this.value" \${vid.uploading?'disabled':'required'}>
           </div>
           <div class="form-group">
             <label>Thumbnail URL</label>
-            <input type="url" placeholder="https://..." value="\${vid.thumbnail||''}" onchange="S.videos[\${i}].thumbnail=this.value;S.videos[\${i}].thumbnailPreview=this.value;renderVideos()">
+            <input type="url" placeholder="Auto-filled after upload" value="\${vid.thumbnail||''}" onchange="S.videos[\${i}].thumbnail=this.value;S.videos[\${i}].thumbnailPreview=this.value;renderVideos()">
           </div>
-          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.videos.splice(\${i},1);renderVideos()">Remove</button>
+          <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.videos.splice(\${i},1);renderVideos()" \${vid.uploading?'disabled':''}>Remove</button>
         </div>
       </div>
     </div>\`
   ).join('');
-}
-
-function showUploadStatus(){
-  document.getElementById('upload-status').classList.add('active');
-}
-
-function updateUploadProgress(filename,percent){
-  const c=document.getElementById('upload-items');
-  let item=c.querySelector(\`[data-file="\${filename}"]\`);
-  if(!item){
-    item=document.createElement('div');
-    item.className='upload-item';
-    item.dataset.file=filename;
-    item.innerHTML=\`<div class="upload-item-name">\${filename}</div><div class="upload-item-progress"><div class="upload-item-bar" style="width:0%"></div></div>\`;
-    c.appendChild(item);
-  }
-  item.querySelector('.upload-item-bar').style.width=percent+'%';
-}
-
-function checkUploadsComplete(){
-  const hasUploading=S.galleries.some(g=>g.images.some(i=>i.uploading));
-  if(!hasUploading){
-    S.uploading=false;
-    setTimeout(()=>{
-      document.getElementById('upload-status').classList.remove('active');
-      document.getElementById('upload-items').innerHTML='';
-    },2000);
-    switchTab(S.tab);
-  }
 }
 
 function addAddonType(type){
