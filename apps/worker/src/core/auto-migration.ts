@@ -3,15 +3,22 @@ export class AutoMigration {
 
   async autoSetup() {
     try {
+      console.log("🚀 Starting auto-migration...");
+      
       const tablesExist = await this.checkTables();
+      
       if (!tablesExist) {
+        console.log("📦 Creating fresh tables...");
         await this.createTables();
       } else {
+        console.log("✅ Tables exist - checking columns...");
         await this.addMissingColumns();
       }
+      
+      console.log("✅ Auto-migration complete!");
       return { success: true };
     } catch (error: any) {
-      console.error("Migration error:", error);
+      console.error("❌ Migration error:", error);
       return { success: false, error: error.message };
     }
   }
@@ -28,7 +35,6 @@ export class AutoMigration {
   }
 
   private async createTables() {
-    console.log("🔧 Creating tables...");
     const tables = [
       `CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -42,7 +48,7 @@ export class AutoMigration {
         title TEXT NOT NULL,
         slug TEXT UNIQUE NOT NULL,
         description TEXT,
-        price REAL NOT NULL,
+        price REAL NOT NULL DEFAULT 0,
         sale_price REAL,
         currency TEXT DEFAULT 'USD',
         stock INTEGER DEFAULT 0,
@@ -61,45 +67,63 @@ export class AutoMigration {
       await this.env.DB.prepare(sql).run();
     }
     
-    console.log("✅ Tables created");
+    console.log("✅ All tables created with complete schema");
   }
 
   private async addMissingColumns() {
-    console.log("🔍 Checking for missing columns...");
+    console.log("🔍 Checking products table columns...");
     
     try {
       const tableInfo = await this.env.DB
         .prepare("PRAGMA table_info(products)")
         .all();
       
-      const columns = tableInfo.results.map((col: any) => col.name);
-      console.log("Existing columns:", columns);
+      const existingColumns = tableInfo.results.map((col: any) => col.name);
+      console.log("📋 Existing columns:", existingColumns.join(', '));
       
-      const requiredColumns = {
+      const requiredColumns: Record<string, string> = {
+        description: "TEXT",
+        price: "REAL NOT NULL DEFAULT 0",
         sale_price: "REAL",
+        currency: "TEXT DEFAULT 'USD'",
+        stock: "INTEGER DEFAULT 0",
+        sku: "TEXT",
+        status: "TEXT DEFAULT 'draft'",
         galleries: "TEXT",
         videos: "TEXT",
         addons: "TEXT",
-        seo: "TEXT"
+        seo: "TEXT",
+        created_at: "INTEGER",
+        updated_at: "INTEGER"
       };
       
-      for (const [col, type] of Object.entries(requiredColumns)) {
-        if (!columns.includes(col)) {
-          console.log(`➕ Adding column: ${col}`);
+      let addedCount = 0;
+      
+      for (const [columnName, columnType] of Object.entries(requiredColumns)) {
+        if (!existingColumns.includes(columnName)) {
+          console.log(`➕ Adding missing column: ${columnName} (${columnType})`);
+          
           try {
             await this.env.DB
-              .prepare(`ALTER TABLE products ADD COLUMN ${col} ${type}`)
+              .prepare(`ALTER TABLE products ADD COLUMN ${columnName} ${columnType}`)
               .run();
-            console.log(`✅ Added ${col}`);
+            
+            console.log(`✅ Successfully added: ${columnName}`);
+            addedCount++;
           } catch (err: any) {
-            console.warn(`⚠️ Could not add ${col}:`, err.message);
+            console.warn(`⚠️ Could not add ${columnName}: ${err.message}`);
           }
         }
       }
       
-      console.log("✅ Column check complete");
+      if (addedCount > 0) {
+        console.log(`✅ Added ${addedCount} missing columns`);
+      } else {
+        console.log("✅ All columns present - no changes needed");
+      }
+      
     } catch (error: any) {
-      console.warn("Column check failed:", error.message);
+      console.error("❌ Column check failed:", error.message);
     }
   }
 }
