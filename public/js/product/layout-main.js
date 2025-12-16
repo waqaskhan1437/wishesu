@@ -42,23 +42,30 @@
     };
 
     if (product.video_url) {
-      const ytMatch = product.video_url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-      if (ytMatch) {
-        videoWrapper.innerHTML = '<div id="player" data-plyr-provider="youtube" data-plyr-embed-id="' + ytMatch[1] + '"></div>';
+      // Use UniversalVideoPlayer for all video types (YouTube, Vimeo, Archive.org, Bunny, Cloudinary, R2, etc.)
+      const playerContainer = document.createElement('div');
+      playerContainer.id = 'universal-player-container';
+      playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: 400px; border-radius: 12px; overflow: hidden; background: #000;';
+      videoWrapper.appendChild(playerContainer);
+
+      // Render video using UniversalVideoPlayer with thumbnail as poster
+      if (typeof window.UniversalVideoPlayer !== 'undefined') {
+        window.UniversalVideoPlayer.render('universal-player-container', product.video_url, {
+          poster: product.thumbnail_url || '',
+          thumbnailUrl: product.thumbnail_url || ''
+        });
         hasVideo = true;
       } else {
+        // Fallback to basic HTML5 video if UniversalVideoPlayer not loaded
         const video = document.createElement('video');
         video.id = 'player';
+        video.controls = true;
         video.playsInline = true;
         video.src = product.video_url;
+        video.style.cssText = 'width: 100%; height: 100%; border-radius: 12px;';
         if (product.thumbnail_url) video.poster = product.thumbnail_url;
-        // Fallback if video fails
-        video.onerror = function() {
-          videoWrapper.innerHTML = '';
-          const fallback = createMainImage(product.thumbnail_url || 'https://via.placeholder.com/600');
-          videoWrapper.appendChild(fallback);
-        };
-        videoWrapper.appendChild(video);
+        playerContainer.innerHTML = '';
+        playerContainer.appendChild(video);
         hasVideo = true;
       }
     } else {
