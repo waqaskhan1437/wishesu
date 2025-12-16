@@ -6,6 +6,8 @@ export class AutoMigration {
       const tablesExist = await this.checkTables();
       if (!tablesExist) {
         await this.createTables();
+      } else {
+        await this.addMissingColumns();
       }
       return { success: true };
     } catch (error: any) {
@@ -17,7 +19,7 @@ export class AutoMigration {
   private async checkTables(): Promise<boolean> {
     try {
       const result = await this.env.DB
-        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='products'")
         .first();
       return !!result;
     } catch {
@@ -26,6 +28,7 @@ export class AutoMigration {
   }
 
   private async createTables() {
+    console.log("🔧 Creating tables...");
     const tables = [
       `CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -59,5 +62,44 @@ export class AutoMigration {
     }
     
     console.log("✅ Tables created");
+  }
+
+  private async addMissingColumns() {
+    console.log("🔍 Checking for missing columns...");
+    
+    try {
+      const tableInfo = await this.env.DB
+        .prepare("PRAGMA table_info(products)")
+        .all();
+      
+      const columns = tableInfo.results.map((col: any) => col.name);
+      console.log("Existing columns:", columns);
+      
+      const requiredColumns = {
+        sale_price: "REAL",
+        galleries: "TEXT",
+        videos: "TEXT",
+        addons: "TEXT",
+        seo: "TEXT"
+      };
+      
+      for (const [col, type] of Object.entries(requiredColumns)) {
+        if (!columns.includes(col)) {
+          console.log(`➕ Adding column: ${col}`);
+          try {
+            await this.env.DB
+              .prepare(`ALTER TABLE products ADD COLUMN ${col} ${type}`)
+              .run();
+            console.log(`✅ Added ${col}`);
+          } catch (err: any) {
+            console.warn(`⚠️ Could not add ${col}:`, err.message);
+          }
+        }
+      }
+      
+      console.log("✅ Column check complete");
+    } catch (error: any) {
+      console.warn("Column check failed:", error.message);
+    }
   }
 }
