@@ -31,7 +31,7 @@ input, textarea, select { width: 100%; padding: 0.75rem; border: 1px solid var(-
                            border-radius: 8px; font-size: 0.875rem; font-family: inherit; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--primary); }
 input[type="checkbox"], input[type="radio"] { width: auto; margin-right: 0.5rem; }
-small { color: var(--text-light); font-size: 0.75rem; }
+small { color: var(--text-light); font-size: 0.75rem; display: block; margin-top: 0.25rem; }
 .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 500; 
        cursor: pointer; transition: all 0.2s; background: var(--border); }
 .btn-primary { background: var(--primary); color: white; }
@@ -55,12 +55,14 @@ small { color: var(--text-light); font-size: 0.75rem; }
 .media-item .order { position: absolute; top: 0.5rem; left: 0.5rem; background: var(--primary); 
                      color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; 
                      align-items: center; justify-content: center; font-weight: 600; font-size: 0.75rem; }
-.video-card { border: 2px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; background: #fff; }
-.video-layout { display: grid; grid-template-columns: 200px 1fr; gap: 1.5rem; }
-.thumbnail-area { display: flex; flex-direction: column; gap: 0.5rem; }
-.thumbnail-preview { width: 200px; height: 150px; background: #eee; border-radius: 8px; display: flex; 
-                     align-items: center; justify-content: center; font-size: 3rem; overflow: hidden; }
-.thumbnail-preview img { width: 100%; height: 100%; object-fit: cover; }
+.video-card { border: 2px solid #9333ea; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; background: #fff; }
+.video-layout { display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem; align-items: start; }
+.thumbnail-area { display: flex; flex-direction: column; gap: 0.75rem; }
+.thumbnail-preview { width: 220px; height: 165px; background: #f3f4f6; border: 2px dashed var(--border); 
+                     border-radius: 8px; display: flex; align-items: center; justify-content: center; 
+                     font-size: 4rem; overflow: hidden; }
+.thumbnail-preview img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+.video-fields { display: flex; flex-direction: column; gap: 1rem; }
 .addons-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
 .btn-add-type { padding: 12px 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; 
                 cursor: pointer; transition: all 0.3s; display: flex; align-items: center; 
@@ -116,18 +118,14 @@ small { color: var(--text-light); font-size: 0.75rem; }
       <div class="tab-content" data-tab="2">
         <div class="media-section">
           <h3>🖼️ Image Galleries</h3>
-          <div class="form-group">
-            <button type="button" class="btn btn-primary" onclick="addGallery()">+ Add Gallery</button>
-          </div>
-          <div id="galleries-container"></div>
+          <button type="button" class="btn btn-primary" onclick="addGallery()">+ Add Gallery</button>
+          <div id="galleries-container" style="margin-top:1rem"></div>
         </div>
         <div class="section-divider"></div>
         <div class="media-section">
           <h3>🎥 Videos</h3>
-          <div class="form-group">
-            <button type="button" class="btn btn-primary" onclick="addVideo()">+ Add Video</button>
-          </div>
-          <div id="videos-container"></div>
+          <button type="button" class="btn btn-primary" onclick="addVideo()">+ Add Video</button>
+          <div id="videos-container" style="margin-top:1rem"></div>
         </div>
       </div>
       <div class="tab-content" data-tab="3">
@@ -178,6 +176,10 @@ function init(){
   };
   document.getElementById('meta-title').oninput=e=>document.getElementById('tc').textContent=e.target.value.length;
   document.getElementById('meta-desc').oninput=e=>document.getElementById('dc').textContent=e.target.value.length;
+  
+  renderGalleries();
+  renderVideos();
+  
   load();
 }
 
@@ -228,6 +230,10 @@ function addGalleryImageUrl(gi){
 
 function renderGalleries(){
   const c=document.getElementById('galleries-container');
+  if(S.galleries.length===0){
+    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No galleries. Click + Add Gallery</p>';
+    return;
+  }
   c.innerHTML=S.galleries.map((gallery,gi)=>
     `<div class="gallery-group">
       <div class="gallery-header">
@@ -250,7 +256,7 @@ function renderGalleries(){
           </div>`
         ).join('')}
       </div>
-      ${gallery.images.length===0?'<p style="text-align:center;color:var(--text-light);padding:2rem">No images</p>':''}
+      ${gallery.images.length===0?'<p style="text-align:center;color:var(--text-light);padding:1rem">No images</p>':''}
     </div>`
   ).join('');
   setupGalleryDrag();
@@ -301,7 +307,7 @@ function uploadThumbnail(vi){
 function renderVideos(){
   const c=document.getElementById('videos-container');
   if(S.videos.length===0){
-    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No videos added yet</p>';
+    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No videos. Click + Add Video</p>';
     return;
   }
   c.innerHTML=S.videos.map((vid,i)=>
@@ -309,19 +315,20 @@ function renderVideos(){
       <div class="video-layout">
         <div class="thumbnail-area">
           <div class="thumbnail-preview">
-            ${vid.thumbnailPreview?`<img src="${vid.thumbnailPreview}">`:'🎥'}
+            ${vid.thumbnailPreview?`<img src="${vid.thumbnailPreview}" alt="Thumbnail">`:'🎥'}
           </div>
-          <button type="button" class="btn btn-sm" onclick="uploadThumbnail(${i})">📤 Upload Thumbnail</button>
+          <button type="button" class="btn btn-sm btn-primary" onclick="uploadThumbnail(${i})">📤 Upload Thumbnail</button>
+          <small style="text-align:center">Or enter URL below</small>
         </div>
-        <div>
+        <div class="video-fields">
           <div class="form-group">
             <label>Video URL *</label>
             <input type="url" placeholder="https://youtube.com/watch?v=..." value="${vid.url||''}" onchange="S.videos[${i}].url=this.value" required>
           </div>
           <div class="form-group">
-            <label>Thumbnail URL (optional)</label>
-            <input type="url" placeholder="https://img.youtube.com/vi/..." value="${vid.thumbnail||''}" onchange="S.videos[${i}].thumbnail=this.value;S.videos[${i}].thumbnailPreview=this.value;renderVideos()">
-            <small>Or upload above</small>
+            <label>Thumbnail URL</label>
+            <input type="url" placeholder="https://img.youtube.com/vi/.../maxresdefault.jpg" value="${vid.thumbnail||''}" onchange="S.videos[${i}].thumbnail=this.value;S.videos[${i}].thumbnailPreview=this.value;renderVideos()">
+            <small>Paste thumbnail image URL</small>
           </div>
           <button type="button" class="btn btn-sm" style="background:var(--error);color:white" onclick="S.videos.splice(${i},1);renderVideos()">Remove Video</button>
         </div>
@@ -348,6 +355,10 @@ function addAddonType(type){
 
 function renderAddons(){
   const c=document.getElementById('addons-list');
+  if(S.addons.length===0){
+    c.innerHTML='<p style="text-align:center;color:var(--text-light);padding:2rem">No fields. Click a button above to add</p>';
+    return;
+  }
   c.innerHTML=S.addons.map((addon,i)=>{
     let config='';
     if(addon.type==='heading'){
@@ -448,8 +459,10 @@ async function load(){
       document.getElementById('meta-desc').value=p.seo.meta_description||'';
       document.getElementById('keywords').value=p.seo.keywords||'';
       document.getElementById('canonical').value=p.seo.canonical_url||'';
+      document.getElementById('meta-title').dispatchEvent(new Event('input'));
+      document.getElementById('meta-desc').dispatchEvent(new Event('input'));
     }
-  }catch(e){console.error(e);}
+  }catch(e){console.error(e);alert('Failed to load product');}
 }
 
 async function save(){
@@ -484,7 +497,7 @@ async function save(){
     });
     if(!r.ok)throw new Error('Save failed');
     const res=await r.json();
-    alert('✅ Product saved!');
+    alert('✅ Product saved successfully!');
     if(!id&&res.id)location.href='?id='+res.id;
   }catch(e){alert('❌ '+e.message);}
   finally{btn.disabled=false;btn.textContent='Save Product';}
