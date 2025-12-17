@@ -2014,6 +2014,103 @@ export default {
           }
         }
 
+        // ----- PRODUCT MEDIA UPLOAD -----
+        // This endpoint handles permanent storage of product thumbnails and videos
+        // Unlike temp files, these are stored in PRODUCT_MEDIA bucket for permanent access
+        if (method === 'POST' && path === '/api/upload/product-media') {
+          try {
+            if (!env.PRODUCT_MEDIA) {
+              console.error('PRODUCT_MEDIA bucket not configured');
+              return json({ error: 'Product media storage not configured' }, 500);
+            }
+
+            const productId = url.searchParams.get('productId') || 'temp';
+            const filename = url.searchParams.get('filename');
+            const fileType = url.searchParams.get('type') || 'media'; // 'thumbnail', 'video', or 'media'
+
+            if (!filename) {
+              console.error('Missing filename');
+              return json({ error: 'filename required' }, 400);
+            }
+
+            console.log('Uploading product media:', filename, 'for product:', productId, 'type:', fileType);
+
+            const buf = await req.arrayBuffer();
+
+            // Validate file size (max 500MB for videos, 10MB for images)
+            const isVideo = filename.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|m4v|flv|wmv)$/);
+            const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
+            const maxSizeLabel = isVideo ? '500MB' : '10MB';
+            
+            if (buf.byteLength > maxSize) {
+              console.error('File too large:', buf.byteLength, 'bytes (max', maxSizeLabel, ')');
+              return json({
+                error: `File too large. Maximum size is ${maxSizeLabel} for ${isVideo ? 'videos' : 'images'}.`,
+                fileSize: buf.byteLength,
+                maxSize: maxSize
+              }, 400);
+            }
+
+            if (!buf || buf.byteLength === 0) {
+              console.error('Empty file buffer');
+              return json({ error: 'Empty file - please select a valid file' }, 400);
+            }
+
+            console.log('File size:', (buf.byteLength / 1024 / 1024).toFixed(2), 'MB');
+
+            // Store in products/[productId]/[type]/[filename] structure
+            // This makes it easy to organize and find files later
+            const timestamp = Date.now();
+            const key = `products/${productId}/${fileType}/${timestamp}_${filename}`;
+
+            const contentType = resolveContentType(req, filename);
+            
+            await env.PRODUCT_MEDIA.put(key, buf, {
+              httpMetadata: { contentType }
+            });
+
+            console.log('Product media uploaded successfully:', key);
+
+            // Return a public URL that can be used to access this file
+            // The URL format makes it clear this is from PRODUCT_MEDIA bucket
+            const publicUrl = `/api/product-media/${key}`;
+
+            return json({ 
+              success: true, 
+              url: publicUrl,
+              key: key,
+              contentType: contentType,
+              size: buf.byteLength
+            });
+          } catch (err) {
+            console.error('Product media upload error:', err);
+            return json({
+              error: 'Upload failed: ' + err.message,
+              details: err.stack
+            }, 500);
+          }
+        }
+
+        // ----- PRODUCT MEDIA RETRIEVAL -----
+        // Serves files from the PRODUCT_MEDIA bucket
+        if (method === 'GET' && path.startsWith('/api/product-media/')) {
+          if (!env.PRODUCT_MEDIA) return json({ error: 'Product media not configured' }, 500);
+          
+          const key = path.replace('/api/product-media/', '');
+          if (!key) return json({ error: 'Invalid media key' }, 400);
+          
+          const obj = await env.PRODUCT_MEDIA.get(key);
+          if (!obj) return json({ error: 'Media file not found' }, 404);
+          
+          return new Response(obj.body, {
+            headers: {
+              'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream',
+              'Cache-Control': 'public, max-age=31536000', // Cache for 1 year since these are permanent
+              'Access-Control-Allow-Origin': '*'
+            }
+          });
+        }
+
         if (method === 'GET' && path === '/api/r2/file') {
           if (!env.R2_BUCKET) return json({ error: 'R2 not configured' }, 500);
           

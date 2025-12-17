@@ -179,10 +179,10 @@
               reviewBadge.textContent = 'Review';
               reviewBadge.style.cssText = 'position:absolute; top:8px; right:8px; background:rgba(16,185,129,0.95); color:white; padding:5px 12px; border-radius:6px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; box-shadow:0 2px 6px rgba(0,0,0,0.3);';
               
-              // Add play icon overlay
+              // Add play icon overlay - prominently displayed so it's clearly visible
               const playIcon = document.createElement('div');
               playIcon.innerHTML = '▶';
-              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.75); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; padding-left:3px; transition:background 0.2s;';
+              playIcon.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; padding-left: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 2; transition: all 0.25s ease;';
               
               thumbContainer.appendChild(thumb);
               thumbContainer.appendChild(reviewBadge);
@@ -230,8 +230,9 @@
 
             grid.appendChild(card);
 
-            // Add delivery video to thumbnail gallery
-            if (canWatch && window.productThumbnailsSlider) {
+              // Add delivery video to thumbnail gallery
+              // Each thumbnail needs to capture its own unique video URL
+              // We use an IIFE (Immediately Invoked Function Expression) to create a proper closure
               const galleryThumb = document.createElement('div');
               galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s;';
 
@@ -240,38 +241,50 @@
               galleryImg.alt = 'Delivery video thumbnail';
               galleryImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
 
-              // Add review badge to gallery thumbnail
+              // Add review badge to gallery thumbnail - positioned at top right
               const badge = document.createElement('div');
               badge.textContent = 'Review';
-              badge.style.cssText = 'position: absolute; bottom: 4px; right: 4px; background: rgba(16,185,129,0.95); color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;';
+              badge.style.cssText = 'position: absolute; top: 6px; right: 6px; background: rgba(16,185,129,0.95); color: white; padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); z-index: 3;';
 
+              // Create a prominent play button that's clearly visible
               const playIcon = document.createElement('div');
               playIcon.innerHTML = '▶';
-              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px;';
+              playIcon.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.75); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; padding-left: 3px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); z-index: 2; transition: all 0.2s;';
 
               galleryThumb.appendChild(galleryImg);
               galleryThumb.appendChild(badge);
               galleryThumb.appendChild(playIcon);
 
-              // Click handler
-              galleryThumb.onclick = () => {
-                // Remove active from all thumbs
-                document.querySelectorAll('#thumbnails-slider .thumb, #thumbnails-slider > div').forEach(t => {
-                  if (t.style) t.style.border = '3px solid transparent';
-                });
-                galleryThumb.style.border = '3px solid #667eea';
+              // Click handler with proper closure to capture this specific review's URLs
+              // Using an arrow function here creates a closure that captures the current values
+              // of portfolioVideoUrl and portfolioThumbUrl for THIS specific review
+              galleryThumb.onclick = ((videoUrl, thumbUrl, reviewObj) => {
+                return () => {
+                  // Remove active border from all thumbnails
+                  document.querySelectorAll('#thumbnails-slider .thumb, #thumbnails-slider > div').forEach(t => {
+                    if (t.style) t.style.border = '3px solid transparent';
+                  });
+                  galleryThumb.style.border = '3px solid #667eea';
 
-                showHighlight(review);
-                scrollToPlayer();
-                setPlayerSource(portfolioVideoUrl, portfolioThumbUrl);
-              };
+                  // These functions use the captured videoUrl and thumbUrl from the closure
+                  showHighlight(reviewObj);
+                  scrollToPlayer();
+                  setPlayerSource(videoUrl, thumbUrl);
+                };
+              })(portfolioVideoUrl, portfolioThumbUrl, review);
 
-              // Hover effect
+              // Hover effects to make the thumbnail more interactive
               galleryThumb.onmouseenter = () => {
                 galleryThumb.style.transform = 'scale(1.05)';
+                playIcon.style.background = 'rgba(0,0,0,0.9)';
+                playIcon.style.width = '40px';
+                playIcon.style.height = '40px';
               };
               galleryThumb.onmouseleave = () => {
                 galleryThumb.style.transform = 'scale(1)';
+                playIcon.style.background = 'rgba(0,0,0,0.75)';
+                playIcon.style.width = '36px';
+                playIcon.style.height = '36px';
               };
 
               window.productThumbnailsSlider.appendChild(galleryThumb);
