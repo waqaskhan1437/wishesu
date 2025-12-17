@@ -74,7 +74,9 @@
         progressContainer = document.createElement('div');
         progressContainer.id = 'upload-progress-container';
         progressContainer.style.cssText = 'margin: 15px 0; padding: 10px; background: #f3f4f6; border-radius: 8px;';
-        form.insertBefore(progressContainer, form.querySelector('button[type="submit"]'));
+        
+        // Append to form instead of insertBefore
+        form.appendChild(progressContainer);
       }
 
       // Create progress element

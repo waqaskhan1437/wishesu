@@ -2021,8 +2021,8 @@ export default {
               return json({ error: 'Archive.org credentials not configured' }, 500);
             }
 
-            const itemId = url.searchParams.get('itemId');
-            const filename = url.searchParams.get('filename');
+            const itemId = (url.searchParams.get('itemId') || '').replace(/[^a-zA-Z0-9_.-]/g, '-');
+            const filename = (url.searchParams.get('filename') || '').replace(/[^a-zA-Z0-9_.-]/g, '-');
             const originalFilename = url.searchParams.get('originalFilename');
 
             if (!itemId || !filename) {

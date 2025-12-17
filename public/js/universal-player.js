@@ -176,19 +176,15 @@
         return { type: 'vimeo', id: videoId, url: raw };
       }
 
-      // Direct video URLs - CHECK FIRST! (Archive.org .mp4 URLs need direct playback)
-      if (lowered.match(/\.(mp4|webm|ogg|ogv|mov|avi|mkv|m3u8|mpd)(\?|$)/i)) {
-        if (lowered.includes('archive.org') || lowered.includes('s3.us.archive.org')) {
-          const itemId = this.extractArchiveId(raw);
-          return { type: 'direct', url: raw, itemId, embedUrl: itemId ? `https://archive.org/embed/${itemId}` : null };
-        }
-        return { type: 'direct', url: raw };
-      }
-
       // Archive.org (embed/details pages only)
       if (lowered.includes('archive.org') || lowered.includes('s3.us.archive.org')) {
         const itemId = this.extractArchiveId(raw);
         return { type: 'archive', url: raw, itemId, embedUrl: itemId ? `https://archive.org/embed/${itemId}` : null };
+      }
+
+      // Direct video URLs
+      if (lowered.match(/\.(mp4|webm|ogg|ogv|mov|avi|mkv|m3u8|mpd)(\?|$)/i)) {
+        return { type: 'direct', url: raw };
       }
 
       // Cloudinary (may be mp4/webm/m3u8)
