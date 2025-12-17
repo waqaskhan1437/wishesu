@@ -391,6 +391,28 @@ async function initDB(env) {
         delivered_video_url TEXT, delivered_thumbnail_url TEXT
       )
     `).run();
+    
+    // Migration: Add new columns to existing reviews table if they don't exist
+    try {
+      // Check if columns exist by querying table info
+      const tableInfo = await env.DB.prepare(`PRAGMA table_info(reviews)`).all();
+      const columns = tableInfo.results.map(col => col.name);
+      
+      // Add delivered_video_url if it doesn't exist
+      if (!columns.includes('delivered_video_url')) {
+        await env.DB.prepare(`ALTER TABLE reviews ADD COLUMN delivered_video_url TEXT`).run();
+        console.log('✓ Added delivered_video_url column to reviews table');
+      }
+      
+      // Add delivered_thumbnail_url if it doesn't exist
+      if (!columns.includes('delivered_thumbnail_url')) {
+        await env.DB.prepare(`ALTER TABLE reviews ADD COLUMN delivered_thumbnail_url TEXT`).run();
+        console.log('✓ Added delivered_thumbnail_url column to reviews table');
+      }
+    } catch (migrationError) {
+      console.error('Migration error (non-fatal):', migrationError);
+      // Continue - columns might already exist or table might be new
+    }
 
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`).run();
     
