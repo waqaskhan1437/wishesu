@@ -170,7 +170,14 @@
 
               const thumb = document.createElement('img');
               // Use the actual delivered thumbnail from the review
-              thumb.src = portfolioThumbUrl || 'https://via.placeholder.com/260x146?text=Review+Video';
+              // Use video poster/thumbnail - browsers can generate from video
+              thumb.src = portfolioThumbUrl || portfolioVideoUrl || 'https://via.placeholder.com/260x146?text=Review+Video';
+              // For better thumbnails, we can use Archive.org's thumbnail service
+              if (portfolioVideoUrl && portfolioVideoUrl.includes('archive.org')) {
+                // Archive.org provides thumbnails by appending .thumbs/ to the path
+                const videoId = portfolioVideoUrl.split('/').pop().split('.')[0];
+                thumb.src = `https://archive.org/download/${portfolioVideoUrl.split('/download/')[1].split('/')[0]}/${videoId}.thumbs/${videoId}_000001.jpg`;
+              }
               thumb.alt = 'Review video thumbnail';
               thumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
               
@@ -236,7 +243,12 @@
               galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s;';
 
               const galleryImg = document.createElement('img');
-              galleryImg.src = portfolioThumbUrl || 'https://via.placeholder.com/140x100?text=Review';
+              // Use video poster/thumbnail
+              galleryImg.src = portfolioThumbUrl || portfolioVideoUrl || 'https://via.placeholder.com/140x100?text=Review';
+              if (portfolioVideoUrl && portfolioVideoUrl.includes('archive.org')) {
+                const videoId = portfolioVideoUrl.split('/').pop().split('.')[0];
+                galleryImg.src = `https://archive.org/download/${portfolioVideoUrl.split('/download/')[1].split('/')[0]}/${videoId}.thumbs/${videoId}_000001.jpg`;
+              }
               galleryImg.alt = 'Delivery video thumbnail';
               galleryImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
 

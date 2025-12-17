@@ -387,7 +387,8 @@ async function initDB(env) {
         product_id INTEGER, author_name TEXT, rating INTEGER, comment TEXT,
         status TEXT DEFAULT 'approved',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        order_id TEXT, show_on_product INTEGER DEFAULT 1
+        order_id TEXT, show_on_product INTEGER DEFAULT 1,
+        delivered_video_url TEXT, delivered_thumbnail_url TEXT
       )
     `).run();
 
@@ -1847,8 +1848,8 @@ export default {
           if (!body.productId || !body.rating) return json({ error: 'productId and rating required' }, 400);
           
           await env.DB.prepare(
-            'INSERT INTO reviews (product_id, author_name, rating, comment, status, order_id, show_on_product) VALUES (?, ?, ?, ?, ?, ?, ?)'
-          ).bind(Number(body.productId), body.author || 'Customer', Number(body.rating), body.comment || '', 'approved', body.orderId || null, body.showOnProduct !== undefined ? (body.showOnProduct ? 1 : 0) : 1).run();
+            'INSERT INTO reviews (product_id, author_name, rating, comment, status, order_id, show_on_product, delivered_video_url, delivered_thumbnail_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          ).bind(Number(body.productId), body.author || 'Customer', Number(body.rating), body.comment || '', 'approved', body.orderId || null, body.showOnProduct !== undefined ? (body.showOnProduct ? 1 : 0) : 1, body.deliveredVideoUrl || null, body.deliveredThumbnailUrl || null).run();
           
           return json({ success: true });
         }
