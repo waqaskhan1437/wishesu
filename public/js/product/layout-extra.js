@@ -150,7 +150,42 @@
             }
           };
 
-          product.reviews.slice(0, 50).forEach(review => {
+          // Pagination state
+          let currentPage = 1;
+          const reviewsPerPage = 10;
+          const totalReviews = product.reviews.length;
+          const totalPages = Math.ceil(totalReviews / reviewsPerPage);
+          
+          // Function to truncate text to 5 lines
+          const truncateToLines = (text, lines = 5) => {
+            if (!text) return '';
+            const words = text.split(' ');
+            // Approximate: 10-12 words per line for typical review text
+            const wordsPerLine = 12;
+            const maxWords = lines * wordsPerLine;
+            
+            if (words.length <= maxWords) {
+              return { text, isTruncated: false };
+            }
+            
+            return {
+              text: words.slice(0, maxWords).join(' ') + '...',
+              fullText: text,
+              isTruncated: true
+            };
+          };
+          
+          // Function to render reviews for current page
+          const renderReviewsPage = (page) => {
+            currentPage = page;
+            const startIdx = (page - 1) * reviewsPerPage;
+            const endIdx = startIdx + reviewsPerPage;
+            const pageReviews = product.reviews.slice(startIdx, endIdx);
+            
+            // Clear grid
+            grid.innerHTML = '';
+            
+            pageReviews.forEach(review => {
             const temp = document.createElement('div');
             temp.innerHTML = window.ReviewsWidget.renderReview(review, true);
             const card = temp.firstElementChild;
@@ -160,6 +195,33 @@
             const portfolioThumbUrl = (review.delivered_thumbnail_url || '').toString().trim();
             const canWatch = !!portfolioVideoUrl && Number(review.show_on_product) === 1;
 
+            // Add review text with Read More functionality
+            const reviewTextDiv = document.createElement('div');
+            reviewTextDiv.className = 'review-text';
+            reviewTextDiv.style.cssText = 'color: #4b5563; line-height: 1.6; margin-top: 12px;';
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = truncated.text;
+            reviewTextDiv.appendChild(textSpan);
+            
+            if (truncated.isTruncated) {
+              const readMoreBtn = document.createElement('button');
+              readMoreBtn.textContent = 'Read More';
+              readMoreBtn.style.cssText = 'color: #667eea; background: none; border: none; cursor: pointer; font-weight: 600; padding: 4px 0; margin-left: 6px; text-decoration: underline;';
+              
+              let expanded = false;
+              readMoreBtn.onclick = (e) => {
+                e.stopPropagation();
+                expanded = !expanded;
+                textSpan.textContent = expanded ? truncated.fullText : truncated.text;
+                readMoreBtn.textContent = expanded ? 'Read Less' : 'Read More';
+              };
+              
+              reviewTextDiv.appendChild(readMoreBtn);
+            }
+            
+            card.appendChild(reviewTextDiv);
+            
             if (canWatch) {
               const portfolioRow = document.createElement('div');
               portfolioRow.style.cssText = 'display:flex; align-items:center; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid #f3f4f6;';
@@ -302,8 +364,80 @@
             }
           });
 
-          container.innerHTML = '';
-          container.appendChild(grid);
+          };
+            
+            // Initial render
+            renderReviewsPage(1);
+            
+            // Create pagination controls
+            const paginationDiv = document.createElement('div');
+            paginationDiv.style.cssText = 'display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 30px; padding: 20px 0;';
+            
+            const updatePagination = () => {
+              paginationDiv.innerHTML = '';
+              
+              // Previous button
+              const prevBtn = document.createElement('button');
+              prevBtn.textContent = '← Previous';
+              prevBtn.disabled = currentPage === 1;
+              prevBtn.style.cssText = `
+                padding: 10px 20px;
+                background: ${currentPage === 1 ? '#9ca3af' : '#667eea'};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: ${currentPage === 1 ? 'not-allowed' : 'pointer'};
+                font-weight: 600;
+                transition: background 0.2s;
+              `;
+              if (currentPage > 1) {
+                prevBtn.onmouseenter = () => { prevBtn.style.background = '#5568d3'; };
+                prevBtn.onmouseleave = () => { prevBtn.style.background = '#667eea'; };
+                prevBtn.onclick = () => {
+                  renderReviewsPage(currentPage - 1);
+                  updatePagination();
+                  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                };
+              }
+              paginationDiv.appendChild(prevBtn);
+              
+              // Page info
+              const pageInfo = document.createElement('span');
+              pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+              pageInfo.style.cssText = 'color: #4b5563; font-weight: 600; min-width: 120px; text-align: center;';
+              paginationDiv.appendChild(pageInfo);
+              
+              // Next button
+              const nextBtn = document.createElement('button');
+              nextBtn.textContent = 'Next →';
+              nextBtn.disabled = currentPage === totalPages;
+              nextBtn.style.cssText = `
+                padding: 10px 20px;
+                background: ${currentPage === totalPages ? '#9ca3af' : '#667eea'};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: ${currentPage === totalPages ? 'not-allowed' : 'pointer'};
+                font-weight: 600;
+                transition: background 0.2s;
+              `;
+              if (currentPage < totalPages) {
+                nextBtn.onmouseenter = () => { nextBtn.style.background = '#5568d3'; };
+                nextBtn.onmouseleave = () => { nextBtn.style.background = '#667eea'; };
+                nextBtn.onclick = () => {
+                  renderReviewsPage(currentPage + 1);
+                  updatePagination();
+                  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                };
+              }
+              paginationDiv.appendChild(nextBtn);
+            };
+            
+            updatePagination();
+            
+            container.innerHTML = '';
+            container.appendChild(grid);
+            container.appendChild(paginationDiv);
 
           // Add styles if needed
           window.ReviewsWidget.addStyles();

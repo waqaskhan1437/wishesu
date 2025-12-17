@@ -105,7 +105,7 @@ main {
   background-repeat: no-repeat;
 }
 
-.plyr__video-wrapper video { object-fit: cover !important; }
+.plyr__video-wrapper video { object-fit: contain !important; }
 .video-wrapper { --plyr-color-main: var(--primary); }
 
 /* Thumbnails */
@@ -350,4 +350,42 @@ main {
   }
   .product-info-panel { padding: 0; border: none; box-shadow: none; }
   .product-title { font-size: 1.75rem; }
+}
+
+
+/* Mobile Video Player Fixes */
+@media screen and (max-width: 768px) {
+  .video-wrapper {
+    aspect-ratio: 16 / 9;
+    max-height: 50vh; /* Prevent too tall on mobile */
+  }
+  
+  .video-wrapper video {
+    object-fit: contain !important;
+    max-height: 50vh;
+  }
+  
+  .plyr__video-wrapper {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  
+  .plyr__video-wrapper video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+  }
+}
+
+/* Ensure proper video display on all devices */
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+.video-wrapper video,
+.plyr video,
+.plyr__video-wrapper video {
+  object-fit: contain !important;
+  object-position: center !important;
 }
