@@ -241,7 +241,19 @@ function setupGalleryField(form){
     if(!first) return;
     const clone = first.cloneNode(true);
     clone.querySelectorAll('input').forEach(inp => inp.value = '');
-    wrapper.insertBefore(clone, addBtn);
+    // Insert before the button if it's a child of wrapper, otherwise append
+    if (addBtn.parentNode === wrapper) {
+      wrapper.insertBefore(clone, addBtn);
+    } else {
+      // Find the last gallery-row and insert after it
+      const rows = wrapper.querySelectorAll('.gallery-row');
+      const lastRow = rows[rows.length - 1];
+      if (lastRow && lastRow.nextSibling) {
+        wrapper.insertBefore(clone, lastRow.nextSibling);
+      } else {
+        wrapper.appendChild(clone);
+      }
+    }
   });
 }
 function collectBase(form){

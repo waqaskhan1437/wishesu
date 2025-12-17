@@ -412,7 +412,6 @@
                 <a href="${detailsUrl}" target="_blank" rel="noopener">View on Archive.org</a></p>
               </iframe>`
             );
-          });
 
           break;
         }

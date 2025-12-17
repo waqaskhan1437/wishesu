@@ -2141,10 +2141,10 @@ export default {
               Authorization: `LOW ${env.ARCHIVE_ACCESS_KEY}:${env.ARCHIVE_SECRET_KEY}`,
               'Content-Type': contentType,
               'x-archive-auto-make-bucket': '1',
-              'x-archive-meta01-mediatype': isVideoUpload ? 'movies' : 'data',
-              'x-archive-meta02-collection': isVideoUpload ? 'opensource_movies' : 'opensource',
-              'x-archive-meta03-subject': 'video; delivery',
-              'x-archive-meta04-language': 'eng'
+              'x-archive-meta-mediatype': isVideoUpload ? 'movies' : 'data',
+              'x-archive-meta-collection': isVideoUpload ? 'opensource_movies' : 'opensource',
+              'x-archive-meta-subject': 'video; delivery',
+              'x-archive-meta-language': 'eng'
             };
 
             console.log('Archive.org Upload Metadata:', {
