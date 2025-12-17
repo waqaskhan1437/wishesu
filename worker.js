@@ -1425,13 +1425,10 @@ export default {
             'SELECT COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id = ? AND status = ?'
           ).bind(row.id, 'approved').first();
           
-          // Fetch reviews for rich results schema (include portfolio video data when allowed)
+          // Fetch reviews for rich results schema (directly use review's own video URLs)
           const reviewsResult = await env.DB.prepare(`
-            SELECT r.*,
-              CASE WHEN r.show_on_product = 1 AND o.portfolio_enabled = 1 THEN o.delivered_video_url ELSE NULL END AS delivered_video_url,
-              CASE WHEN r.show_on_product = 1 AND o.portfolio_enabled = 1 THEN o.delivered_thumbnail_url ELSE NULL END AS delivered_thumbnail_url
+            SELECT r.*
             FROM reviews r
-            LEFT JOIN orders o ON r.order_id = o.order_id
             WHERE r.product_id = ? AND r.status = ?
             ORDER BY r.created_at DESC
           `).bind(row.id, 'approved').all();
@@ -1887,6 +1884,39 @@ export default {
           const body = await req.json();
           await env.DB.prepare('UPDATE reviews SET status=? WHERE id=?').bind(body.status, Number(body.id)).run();
           return json({ success: true });
+        }
+
+        // NEW: Migrate old reviews to include video URLs from their linked orders
+        if (method === 'POST' && path === '/api/reviews/migrate') {
+          try {
+            // Update all reviews that have order_id but missing video URLs
+            const result = await env.DB.prepare(`
+              UPDATE reviews 
+              SET delivered_video_url = (
+                SELECT o.delivered_video_url 
+                FROM orders o 
+                WHERE o.order_id = reviews.order_id 
+                AND o.portfolio_enabled = 1
+              ),
+              delivered_thumbnail_url = (
+                SELECT o.delivered_thumbnail_url 
+                FROM orders o 
+                WHERE o.order_id = reviews.order_id 
+                AND o.portfolio_enabled = 1
+              )
+              WHERE reviews.order_id IS NOT NULL 
+              AND reviews.show_on_product = 1
+              AND (reviews.delivered_video_url IS NULL OR reviews.delivered_video_url = '')
+            `).run();
+            
+            return json({ 
+              success: true, 
+              message: 'Old reviews migrated successfully',
+              rowsUpdated: result.changes || 0
+            });
+          } catch (error) {
+            return json({ error: error.message }, 500);
+          }
         }
 
         if (method === 'DELETE' && path === '/api/reviews/delete') {

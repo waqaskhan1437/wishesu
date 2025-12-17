@@ -204,43 +204,38 @@
               }
             }
 
+            // Only show portfolio video if buyer explicitly allowed it
             const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
-            const portfolioThumbUrl = (review.delivered_thumbnail_url || '').toString().trim();
             const canWatch = !!portfolioVideoUrl && Number(review.show_on_product) === 1;
 
             if (canWatch) {
               const portfolioRow = document.createElement('div');
               portfolioRow.style.cssText = 'display:flex; align-items:center; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid #f3f4f6;';
 
-              // Create thumbnail container with overlays (bigger size)
+              // Create video thumbnail container - use video itself as thumbnail source
               const thumbContainer = document.createElement('div');
-              thumbContainer.style.cssText = 'position:relative; width:260px; height:146px; flex-shrink:0; cursor:pointer; border-radius:10px; overflow:hidden; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition:transform 0.2s, box-shadow 0.2s;';
+              thumbContainer.style.cssText = 'position:relative; width:260px; height:146px; flex-shrink:0; cursor:pointer; border-radius:10px; overflow:hidden; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition:transform 0.2s, box-shadow 0.2s; background:#000;';
 
-              const thumb = document.createElement('img');
-              // Use the actual delivered thumbnail from the review
-              // Use video poster/thumbnail - browsers can generate from video
-              thumb.src = portfolioThumbUrl || portfolioVideoUrl || 'https://via.placeholder.com/260x146?text=Review+Video';
-              // For better thumbnails, we can use Archive.org's thumbnail service
-              if (portfolioVideoUrl && portfolioVideoUrl.includes('archive.org')) {
-                // Archive.org provides thumbnails by appending .thumbs/ to the path
-                const videoId = portfolioVideoUrl.split('/').pop().split('.')[0];
-                thumb.src = `https://archive.org/download/${portfolioVideoUrl.split('/download/')[1].split('/')[0]}/${videoId}.thumbs/${videoId}_000001.jpg`;
-              }
-              thumb.alt = 'Review video thumbnail';
-              thumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+              // Use HTML5 video element to show actual video frame as thumbnail
+              // Browser will automatically show a frame from the video
+              const videoThumb = document.createElement('video');
+              videoThumb.src = portfolioVideoUrl;
+              videoThumb.preload = 'metadata'; // Load just enough to show first frame
+              videoThumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+              videoThumb.muted = true; // Muted so it doesn't autoplay with sound
+              
+              thumbContainer.appendChild(videoThumb);
               
               // Add "Review" badge overlay
               const reviewBadge = document.createElement('div');
               reviewBadge.textContent = 'Review';
               reviewBadge.style.cssText = 'position:absolute; top:8px; right:8px; background:rgba(16,185,129,0.95); color:white; padding:5px 12px; border-radius:6px; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; box-shadow:0 2px 6px rgba(0,0,0,0.3);';
+              thumbContainer.appendChild(reviewBadge);
               
               // Add play icon overlay
               const playIcon = document.createElement('div');
               playIcon.innerHTML = '▶';
               playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.75); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; padding-left:3px; transition:background 0.2s;';
-              
-              thumbContainer.appendChild(thumb);
-              thumbContainer.appendChild(reviewBadge);
               thumbContainer.appendChild(playIcon);
 
               const btn = document.createElement('button');
@@ -251,7 +246,7 @@
               const onWatch = () => {
                 showHighlight(review);
                 scrollToPlayer();
-                setPlayerSource(portfolioVideoUrl, portfolioThumbUrl);
+                setPlayerSource(portfolioVideoUrl, null); // Use video itself for preview
               };
               
               // Hover effects
@@ -312,26 +307,23 @@
             container.appendChild(pag);
           }; // End renderPage
           
-          // Gallery thumbnails (all reviews, not paginated)
+          // Gallery thumbnails (all reviews with allowed portfolio videos, not paginated)
           product.reviews.slice(0, 50).forEach(review => {
             const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
-            const portfolioThumbUrl = (review.delivered_thumbnail_url || '').toString().trim();
             const canWatch = !!portfolioVideoUrl && Number(review.show_on_product) === 1;
 
-            // Add delivery video to thumbnail gallery
+            // Only add to gallery if buyer explicitly allowed portfolio display
             if (canWatch && window.productThumbnailsSlider) {
               const galleryThumb = document.createElement('div');
-              galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s;';
+              galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s; background:#000;';
 
-              const galleryImg = document.createElement('img');
-              // Use video poster/thumbnail
-              galleryImg.src = portfolioThumbUrl || portfolioVideoUrl || 'https://via.placeholder.com/140x100?text=Review';
-              if (portfolioVideoUrl && portfolioVideoUrl.includes('archive.org')) {
-                const videoId = portfolioVideoUrl.split('/').pop().split('.')[0];
-                galleryImg.src = `https://archive.org/download/${portfolioVideoUrl.split('/download/')[1].split('/')[0]}/${videoId}.thumbs/${videoId}_000001.jpg`;
-              }
-              galleryImg.alt = 'Delivery video thumbnail';
-              galleryImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+              // Use actual video as thumbnail source - browser shows video frame automatically
+              const videoThumb = document.createElement('video');
+              videoThumb.src = portfolioVideoUrl;
+              videoThumb.preload = 'metadata'; // Load just first frame
+              videoThumb.muted = true;
+              videoThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+              galleryThumb.appendChild(videoThumb);
 
               // Add review badge to gallery thumbnail
               const badge = document.createElement('div');
@@ -356,7 +348,7 @@
 
                 showHighlight(review);
                 scrollToPlayer();
-                setPlayerSource(portfolioVideoUrl, portfolioThumbUrl);
+                setPlayerSource(portfolioVideoUrl, null); // Use video itself for preview
               };
 
               // Hover effect

@@ -137,10 +137,22 @@
     const portfolio = document.getElementById('portfolio-checkbox').checked;
     if (!name || !comment) { alert('Fill all fields'); return; }
     try {
+      // Include delivered video URL from order data
+      // Video itself will be used as thumbnail (no separate thumbnail URL needed)
+      const reviewData = { 
+        productId: orderData.product_id, 
+        author: name, 
+        rating: selectedRating, 
+        comment, 
+        orderId: orderData.order_id, 
+        showOnProduct: portfolio ? 1 : 0,
+        deliveredVideoUrl: orderData.delivered_video_url || null
+      };
+      
       const res = await fetch('/api/reviews/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: orderData.product_id, author: name, rating: selectedRating, comment, orderId: orderData.order_id, showOnProduct: portfolio ? 1 : 0 })
+        body: JSON.stringify(reviewData)
       });
       const data = await res.json();
       if (res.ok && data.success) {

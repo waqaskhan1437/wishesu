@@ -86,12 +86,24 @@
 
     // Add main product thumbnail
     if (product.thumbnail_url) {
+      // Create wrapper for thumbnail with play button overlay
+      const thumbWrapper = document.createElement('div');
+      thumbWrapper.style.cssText = 'position: relative; display: inline-block;';
+      
       const img = document.createElement('img');
       img.src = product.thumbnail_url;
       img.className = 'thumb active';
       img.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid #667eea; transition: all 0.3s;';
       img.alt = (product.title || 'Product') + ' - Thumbnail';
       img.dataset.type = 'main';
+      
+      // Add play button overlay ONLY if video exists
+      if (product.video_url) {
+        const playOverlay = document.createElement('div');
+        playOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; padding-left: 2px; pointer-events: none;';
+        playOverlay.innerHTML = '▶';
+        thumbWrapper.appendChild(playOverlay);
+      }
       
       // Click handler to show main image/video
       img.onclick = () => {
@@ -118,7 +130,8 @@
         }
       };
       
-      thumbsDiv.appendChild(img);
+      thumbWrapper.appendChild(img);
+      thumbsDiv.appendChild(thumbWrapper);
     }
 
     // Add gallery images thumbnails
