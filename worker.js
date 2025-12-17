@@ -343,8 +343,12 @@ async function initDB(env) {
     try {
       await env.DB.prepare('SELECT gallery_images FROM products LIMIT 1').run();
     } catch (e) {
-      console.log('Adding gallery_images column to products table...');
-      await env.DB.prepare('ALTER TABLE products ADD COLUMN gallery_images TEXT').run();
+      try {
+        console.log('Adding gallery_images column to products table...');
+        await env.DB.prepare('ALTER TABLE products ADD COLUMN gallery_images TEXT').run();
+      } catch (alterError) {
+        console.log('Column might already exist:', alterError.message);
+      }
     }
 
     await env.DB.prepare(`
@@ -369,8 +373,12 @@ async function initDB(env) {
     try {
       await env.DB.prepare('SELECT delivered_video_metadata FROM orders LIMIT 1').run();
     } catch (e) {
-      console.log('Adding delivered_video_metadata column to orders table...');
-      await env.DB.prepare('ALTER TABLE orders ADD COLUMN delivered_video_metadata TEXT').run();
+      try {
+        console.log('Adding delivered_video_metadata column to orders table...');
+        await env.DB.prepare('ALTER TABLE orders ADD COLUMN delivered_video_metadata TEXT').run();
+      } catch (alterError) {
+        console.log('Column might already exist:', alterError.message);
+      }
     }
 
     await env.DB.prepare(`
