@@ -132,39 +132,23 @@
 
   async function submitReview(e) {
     e.preventDefault();
+    
     const name = document.getElementById('reviewer-name').value.trim();
     const comment = document.getElementById('review-comment').value.trim();
-    const portfolio = document.getElementById('portfolio-checkbox').checked;
-    if (!name || !comment) { alert('Fill all fields'); return; }
+    const portfolioEnabled = document.getElementById('portfolio-checkbox').checked;
+    
     try {
-      // Include delivered video URL from order data
-      // Video itself will be used as thumbnail (no separate thumbnail URL needed)
-      const reviewData = { 
-        productId: orderData.product_id, 
-        author: name, 
-        rating: selectedRating, 
-        comment, 
-        orderId: orderData.order_id, 
-        showOnProduct: portfolio ? 1 : 0,
-        deliveredVideoUrl: orderData.delivered_video_url || null
-      };
-      
-      const res = await fetch('/api/reviews/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reviewData)
+      // Use shared utility function
+      await submitReviewToAPI(orderData, {
+        name,
+        comment,
+        rating: selectedRating,
+        portfolioEnabled
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        alert('✅ Review submitted!');
-        document.getElementById('review-section').style.display = 'none';
-        // Hide approve and revision buttons after review submission
-        const approveBtn = document.getElementById('approve-btn');
-        const revisionBtn = document.getElementById('revision-btn');
-        if (approveBtn) approveBtn.style.display = 'none';
-        if (revisionBtn) revisionBtn.style.display = 'none';
-        if (portfolio) await fetch('/api/order/portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: orderData.order_id, portfolioEnabled: 1 }) });
-      } else throw new Error(data.error || 'Failed');
+      
+      alert('✅ Review submitted!');
+      hideReviewUIElements();
+      
     } catch (err) {
       alert('Error: ' + err.message);
     }

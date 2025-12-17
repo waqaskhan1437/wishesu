@@ -1857,8 +1857,8 @@ export default {
           if (!body.productId || !body.rating) return json({ error: 'productId and rating required' }, 400);
           
           await env.DB.prepare(
-            'INSERT INTO reviews (product_id, author_name, rating, comment, status, order_id, show_on_product, delivered_video_url, delivered_thumbnail_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-          ).bind(Number(body.productId), body.author || 'Customer', Number(body.rating), body.comment || '', 'approved', body.orderId || null, body.showOnProduct !== undefined ? (body.showOnProduct ? 1 : 0) : 1, body.deliveredVideoUrl || null, body.deliveredThumbnailUrl || null).run();
+            'INSERT INTO reviews (product_id, author_name, rating, comment, status, order_id, show_on_product) VALUES (?, ?, ?, ?, ?, ?, ?)'
+          ).bind(Number(body.productId), body.author || 'Customer', Number(body.rating), body.comment || '', 'approved', body.orderId || null, body.showOnProduct !== undefined ? (body.showOnProduct ? 1 : 0) : 1).run();
           
           return json({ success: true });
         }
@@ -1866,7 +1866,11 @@ export default {
         if (method === 'GET' && path.startsWith('/api/reviews/')) {
            const productId = path.split('/').pop();
            const r = await env.DB.prepare(
-             'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC'
+             `SELECT reviews.*, orders.delivered_video_url, orders.delivered_thumbnail_url 
+              FROM reviews 
+              LEFT JOIN orders ON reviews.order_id = orders.order_id 
+              WHERE reviews.product_id = ? AND reviews.status = ? 
+              ORDER BY reviews.created_at DESC`
            ).bind(Number(productId), 'approved').all();
 
            // Convert created_at to ISO 8601 format with Z suffix for UTC
@@ -1886,38 +1890,10 @@ export default {
           return json({ success: true });
         }
 
-        // NEW: Migrate old reviews to include video URLs from their linked orders
-        if (method === 'POST' && path === '/api/reviews/migrate') {
-          try {
-            // Update all reviews that have order_id but missing video URLs
-            const result = await env.DB.prepare(`
-              UPDATE reviews 
-              SET delivered_video_url = (
-                SELECT o.delivered_video_url 
-                FROM orders o 
-                WHERE o.order_id = reviews.order_id 
-                AND o.portfolio_enabled = 1
-              ),
-              delivered_thumbnail_url = (
-                SELECT o.delivered_thumbnail_url 
-                FROM orders o 
-                WHERE o.order_id = reviews.order_id 
-                AND o.portfolio_enabled = 1
-              )
-              WHERE reviews.order_id IS NOT NULL 
-              AND reviews.show_on_product = 1
-              AND (reviews.delivered_video_url IS NULL OR reviews.delivered_video_url = '')
-            `).run();
-            
-            return json({ 
-              success: true, 
-              message: 'Old reviews migrated successfully',
-              rowsUpdated: result.changes || 0
-            });
-          } catch (error) {
-            return json({ error: error.message }, 500);
-          }
-        }
+
+        // REMOVED: Review migration endpoint no longer needed with JOIN-based fetching
+        // Migration endpoint removed as reviews now fetch delivery URLs dynamically from orders table
+
 
         if (method === 'DELETE' && path === '/api/reviews/delete') {
           const id = url.searchParams.get('id');
@@ -2213,6 +2189,8 @@ export default {
               'x-archive-auto-make-bucket': '1',
               'x-archive-meta-mediatype': isVideoUpload ? 'movies' : 'data',
               'x-archive-meta-collection': isVideoUpload ? 'opensource_movies' : 'opensource',
+              'x-archive-meta-title': normalizeArchiveMetaValue(archiveDescription),
+              'x-archive-meta-description': normalizeArchiveMetaValue(archiveDescription),
               'x-archive-meta-subject': 'video; delivery',
               'x-archive-meta-language': 'eng'
             };
