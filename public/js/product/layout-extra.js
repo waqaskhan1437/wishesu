@@ -150,22 +150,15 @@
             }
           };
 
-          // Pagination state
-          let currentPage = 1;
-          const reviewsPerPage = 10;
-          const totalReviews = product.reviews.length;
-          const totalPages = Math.ceil(totalReviews / reviewsPerPage);
-          
-          // Function to truncate text to 5 lines
+          // Helper function to truncate text to N lines
           const truncateToLines = (text, lines = 5) => {
-            if (!text) return '';
+            if (!text) return { text: '', fullText: '', isTruncated: false };
             const words = text.split(' ');
-            // Approximate: 10-12 words per line for typical review text
             const wordsPerLine = 12;
             const maxWords = lines * wordsPerLine;
             
             if (words.length <= maxWords) {
-              return { text, isTruncated: false };
+              return { text: text, fullText: text, isTruncated: false };
             }
             
             return {
@@ -174,6 +167,12 @@
               isTruncated: true
             };
           };
+          
+          // Pagination state
+          let currentPage = 1;
+          const reviewsPerPage = 10;
+          const totalReviews = product.reviews.length;
+          const totalPages = Math.ceil(totalReviews / reviewsPerPage);
           
           // Function to render reviews for current page
           const renderReviewsPage = (page) => {
@@ -186,42 +185,46 @@
             grid.innerHTML = '';
             
             pageReviews.forEach(review => {
-            const temp = document.createElement('div');
-            temp.innerHTML = window.ReviewsWidget.renderReview(review, true);
-            const card = temp.firstElementChild;
-            if (!card) return;
+              const temp = document.createElement('div');
+              temp.innerHTML = window.ReviewsWidget.renderReview(review, true);
+              const card = temp.firstElementChild;
+              if (!card) return;
 
-            const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
-            const portfolioThumbUrl = (review.delivered_thumbnail_url || '').toString().trim();
-            const canWatch = !!portfolioVideoUrl && Number(review.show_on_product) === 1;
+              // Get review text and truncate
+              const reviewText = review.review_text || review.comment || 'No review text';
+              const truncated = truncateToLines(reviewText, 5);
+              
+              // Add review text with Read More functionality
+              const reviewTextDiv = document.createElement('div');
+              reviewTextDiv.className = 'review-text';
+              reviewTextDiv.style.cssText = 'color: #4b5563; line-height: 1.6; margin-top: 12px;';
+              
+              const textSpan = document.createElement('span');
+              textSpan.textContent = truncated.text;
+              reviewTextDiv.appendChild(textSpan);
+              
+              if (truncated.isTruncated) {
+                const readMoreBtn = document.createElement('button');
+                readMoreBtn.textContent = 'Read More';
+                readMoreBtn.style.cssText = 'color: #667eea; background: none; border: none; cursor: pointer; font-weight: 600; padding: 4px 0; margin-left: 6px; text-decoration: underline;';
+                
+                let expanded = false;
+                readMoreBtn.onclick = (e) => {
+                  e.stopPropagation();
+                  expanded = !expanded;
+                  textSpan.textContent = expanded ? truncated.fullText : truncated.text;
+                  readMoreBtn.textContent = expanded ? 'Read Less' : 'Read More';
+                };
+                
+                reviewTextDiv.appendChild(readMoreBtn);
+              }
+              
+              card.appendChild(reviewTextDiv);
 
-            // Add review text with Read More functionality
-            const reviewTextDiv = document.createElement('div');
-            reviewTextDiv.className = 'review-text';
-            reviewTextDiv.style.cssText = 'color: #4b5563; line-height: 1.6; margin-top: 12px;';
-            
-            const textSpan = document.createElement('span');
-            textSpan.textContent = truncated.text;
-            reviewTextDiv.appendChild(textSpan);
-            
-            if (truncated.isTruncated) {
-              const readMoreBtn = document.createElement('button');
-              readMoreBtn.textContent = 'Read More';
-              readMoreBtn.style.cssText = 'color: #667eea; background: none; border: none; cursor: pointer; font-weight: 600; padding: 4px 0; margin-left: 6px; text-decoration: underline;';
-              
-              let expanded = false;
-              readMoreBtn.onclick = (e) => {
-                e.stopPropagation();
-                expanded = !expanded;
-                textSpan.textContent = expanded ? truncated.fullText : truncated.text;
-                readMoreBtn.textContent = expanded ? 'Read Less' : 'Read More';
-              };
-              
-              reviewTextDiv.appendChild(readMoreBtn);
-            }
-            
-            card.appendChild(reviewTextDiv);
-            
+              const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
+              const portfolioThumbUrl = (review.delivered_thumbnail_url || '').toString().trim();
+              const canWatch = !!portfolioVideoUrl && Number(review.show_on_product) === 1;
+
             if (canWatch) {
               const portfolioRow = document.createElement('div');
               portfolioRow.style.cssText = 'display:flex; align-items:center; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid #f3f4f6;';
@@ -232,14 +235,7 @@
 
               const thumb = document.createElement('img');
               // Use the actual delivered thumbnail from the review
-              // Use video poster/thumbnail - browsers can generate from video
-              thumb.src = portfolioThumbUrl || portfolioVideoUrl || 'https://via.placeholder.com/260x146?text=Review+Video';
-              // For better thumbnails, we can use Archive.org's thumbnail service
-              if (portfolioVideoUrl && portfolioVideoUrl.includes('archive.org')) {
-                // Archive.org provides thumbnails by appending .thumbs/ to the path
-                const videoId = portfolioVideoUrl.split('/').pop().split('.')[0];
-                thumb.src = `https://archive.org/download/${portfolioVideoUrl.split('/download/')[1].split('/')[0]}/${videoId}.thumbs/${videoId}_000001.jpg`;
-              }
+              thumb.src = portfolioThumbUrl || 'https://via.placeholder.com/260x146?text=Review+Video';
               thumb.alt = 'Review video thumbnail';
               thumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
               
@@ -305,12 +301,7 @@
               galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s;';
 
               const galleryImg = document.createElement('img');
-              // Use video poster/thumbnail
-              galleryImg.src = portfolioThumbUrl || portfolioVideoUrl || 'https://via.placeholder.com/140x100?text=Review';
-              if (portfolioVideoUrl && portfolioVideoUrl.includes('archive.org')) {
-                const videoId = portfolioVideoUrl.split('/').pop().split('.')[0];
-                galleryImg.src = `https://archive.org/download/${portfolioVideoUrl.split('/download/')[1].split('/')[0]}/${videoId}.thumbs/${videoId}_000001.jpg`;
-              }
+              galleryImg.src = portfolioThumbUrl || 'https://via.placeholder.com/140x100?text=Review';
               galleryImg.alt = 'Delivery video thumbnail';
               galleryImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
 
@@ -364,80 +355,82 @@
             }
           });
 
-          };
+          }); // End forEach
             
-            // Initial render
-            renderReviewsPage(1);
-            
-            // Create pagination controls
-            const paginationDiv = document.createElement('div');
-            paginationDiv.style.cssText = 'display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 30px; padding: 20px 0;';
-            
-            const updatePagination = () => {
-              paginationDiv.innerHTML = '';
-              
-              // Previous button
-              const prevBtn = document.createElement('button');
-              prevBtn.textContent = '← Previous';
-              prevBtn.disabled = currentPage === 1;
-              prevBtn.style.cssText = `
-                padding: 10px 20px;
-                background: ${currentPage === 1 ? '#9ca3af' : '#667eea'};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                cursor: ${currentPage === 1 ? 'not-allowed' : 'pointer'};
-                font-weight: 600;
-                transition: background 0.2s;
-              `;
-              if (currentPage > 1) {
-                prevBtn.onmouseenter = () => { prevBtn.style.background = '#5568d3'; };
-                prevBtn.onmouseleave = () => { prevBtn.style.background = '#667eea'; };
-                prevBtn.onclick = () => {
-                  renderReviewsPage(currentPage - 1);
-                  updatePagination();
-                  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                };
-              }
-              paginationDiv.appendChild(prevBtn);
-              
-              // Page info
-              const pageInfo = document.createElement('span');
-              pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
-              pageInfo.style.cssText = 'color: #4b5563; font-weight: 600; min-width: 120px; text-align: center;';
-              paginationDiv.appendChild(pageInfo);
-              
-              // Next button
-              const nextBtn = document.createElement('button');
-              nextBtn.textContent = 'Next →';
-              nextBtn.disabled = currentPage === totalPages;
-              nextBtn.style.cssText = `
-                padding: 10px 20px;
-                background: ${currentPage === totalPages ? '#9ca3af' : '#667eea'};
-                color: white;
-                border: none;
-                border-radius: 8px;
-                cursor: ${currentPage === totalPages ? 'not-allowed' : 'pointer'};
-                font-weight: 600;
-                transition: background 0.2s;
-              `;
-              if (currentPage < totalPages) {
-                nextBtn.onmouseenter = () => { nextBtn.style.background = '#5568d3'; };
-                nextBtn.onmouseleave = () => { nextBtn.style.background = '#667eea'; };
-                nextBtn.onclick = () => {
-                  renderReviewsPage(currentPage + 1);
-                  updatePagination();
-                  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                };
-              }
-              paginationDiv.appendChild(nextBtn);
-            };
-            
+            // Update pagination controls
             updatePagination();
+          }; // End renderReviewsPage
+          
+          // Create pagination controls
+          const paginationDiv = document.createElement('div');
+          paginationDiv.style.cssText = 'display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 30px; padding: 20px 0;';
+          
+          const updatePagination = () => {
+            paginationDiv.innerHTML = '';
             
-            container.innerHTML = '';
-            container.appendChild(grid);
-            container.appendChild(paginationDiv);
+            if (totalPages <= 1) return; // No pagination needed for single page
+            
+            // Previous button
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = '← Previous';
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.style.cssText = `
+              padding: 10px 20px;
+              background: ${currentPage === 1 ? '#9ca3af' : '#667eea'};
+              color: white;
+              border: none;
+              border-radius: 8px;
+              cursor: ${currentPage === 1 ? 'not-allowed' : 'pointer'};
+              font-weight: 600;
+              transition: background 0.2s;
+            `;
+            if (currentPage > 1) {
+              prevBtn.onmouseenter = () => { prevBtn.style.background = '#5568d3'; };
+              prevBtn.onmouseleave = () => { prevBtn.style.background = '#667eea'; };
+              prevBtn.onclick = () => {
+                renderReviewsPage(currentPage - 1);
+                container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              };
+            }
+            paginationDiv.appendChild(prevBtn);
+            
+            // Page info
+            const pageInfo = document.createElement('span');
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+            pageInfo.style.cssText = 'color: #4b5563; font-weight: 600; min-width: 120px; text-align: center;';
+            paginationDiv.appendChild(pageInfo);
+            
+            // Next button
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = 'Next →';
+            nextBtn.disabled = currentPage === totalPages;
+            nextBtn.style.cssText = `
+              padding: 10px 20px;
+              background: ${currentPage === totalPages ? '#9ca3af' : '#667eea'};
+              color: white;
+              border: none;
+              border-radius: 8px;
+              cursor: ${currentPage === totalPages ? 'not-allowed' : 'pointer'};
+              font-weight: 600;
+              transition: background 0.2s;
+            `;
+            if (currentPage < totalPages) {
+              nextBtn.onmouseenter = () => { nextBtn.style.background = '#5568d3'; };
+              nextBtn.onmouseleave = () => { nextBtn.style.background = '#667eea'; };
+              nextBtn.onclick = () => {
+                renderReviewsPage(currentPage + 1);
+                container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              };
+            }
+            paginationDiv.appendChild(nextBtn);
+          };
+          
+          // Initial render
+          renderReviewsPage(1);
+          
+          container.innerHTML = '';
+          container.appendChild(grid);
+          container.appendChild(paginationDiv);
 
           // Add styles if needed
           window.ReviewsWidget.addStyles();
