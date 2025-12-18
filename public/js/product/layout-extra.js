@@ -93,61 +93,16 @@
 
           const setPlayerSource = (videoUrl, posterUrl) => {
             if (!videoUrl) return;
-
-            // Use UniversalVideoPlayer for all video types
-            const playerContainer = document.getElementById('universal-player-container');
-            if (playerContainer && typeof window.UniversalVideoPlayer !== 'undefined') {
-              // Re-render the player with the new video URL
-              window.UniversalVideoPlayer.render('universal-player-container', videoUrl, {
-                poster: posterUrl || '',
-                thumbnailUrl: posterUrl || ''
-              });
-            } else {
-              // Fallback: try old player element if UniversalVideoPlayer not available
-              const currentPlayerEl = document.getElementById('player');
-              if (!currentPlayerEl) return;
-
-              try {
-                if (window.productPlayer && window.productPlayer.source) {
-                  window.productPlayer.source = {
-                    type: 'video',
-                    sources: [{ src: videoUrl }]
-                  };
-                  if (posterUrl && currentPlayerEl.tagName && currentPlayerEl.tagName.toLowerCase() === 'video') {
-                    currentPlayerEl.poster = posterUrl;
-                  }
-                  if (typeof window.productPlayer.play === 'function') {
-                    window.productPlayer.play();
-                  }
-                  return;
-                }
-              } catch (e) {
-                console.warn('Failed to update player source. Rebuilding player...', e);
+            // Always use UniversalVideoPlayer to render/re-render the video.
+            if (typeof window.UniversalVideoPlayer !== 'undefined') {
+              const playerContainer = document.getElementById('universal-player-container');
+              if (playerContainer) {
+                // It handles destroying the old instance and creating a new one.
+                window.UniversalVideoPlayer.render('universal-player-container', videoUrl, {
+                  poster: posterUrl || '',
+                  thumbnailUrl: posterUrl || ''
+                });
               }
-
-              // Last resort: rebuild as HTML5 video
-              const playerEl = document.getElementById('player');
-              if (!playerEl) return;
-
-              let videoEl = playerEl;
-              if (!videoEl.tagName || videoEl.tagName.toLowerCase() !== 'video') {
-                try {
-                  if (window.productPlayer && typeof window.productPlayer.destroy === 'function') {
-                    window.productPlayer.destroy();
-                  }
-                } catch (_) {}
-
-                videoEl = document.createElement('video');
-                videoEl.id = 'player';
-                videoEl.playsInline = true;
-                videoEl.controls = true;
-                videoEl.style.cssText = 'width: 100%; height: 100%; border-radius: 12px;';
-                if (posterUrl) videoEl.poster = posterUrl;
-                playerEl.replaceWith(videoEl);
-              }
-
-              videoEl.src = videoUrl;
-              videoEl.play().catch(() => {});
             }
           };
 
@@ -349,16 +304,8 @@
 
                 showHighlight(review);
                 scrollToPlayer();
-                // Use UniversalPlayer to render the portfolio video
-                const playerContainer = document.getElementById('universal-player-container');
-                if (playerContainer && typeof window.UniversalVideoPlayer !== 'undefined') {
-                  window.UniversalVideoPlayer.render('universal-player-container', portfolioVideoUrl, {
-                    poster: review.thumbnail_url || '',
-                    thumbnailUrl: review.thumbnail_url || ''
-                  });
-                } else {
-                  setPlayerSource(portfolioVideoUrl, review.thumbnail_url);
-                }
+                // Always use the unified setPlayerSource function
+                setPlayerSource(portfolioVideoUrl, review.thumbnail_url || null);
               };
 
               // Hover effect
