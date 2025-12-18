@@ -2189,7 +2189,7 @@ export default {
               'x-archive-auto-make-bucket': '1',
               'x-archive-meta-mediatype': isVideoUpload ? 'movies' : 'data',
               'x-archive-meta-collection': isVideoUpload ? 'opensource_movies' : 'opensource',
-              'x-archive-meta-title': normalizeArchiveMetaValue(archiveDescription),
+              'x-archive-meta-title': normalizeArchiveMetaValue(originalFilename || filename),
               'x-archive-meta-description': normalizeArchiveMetaValue(archiveDescription),
               'x-archive-meta-subject': 'video; delivery',
               'x-archive-meta-language': 'eng'
