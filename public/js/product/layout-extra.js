@@ -309,7 +309,7 @@
           }; // End renderPage
           
           // Gallery thumbnails (all reviews with allowed portfolio videos, not paginated)
-          product.reviews.slice(0, 50).forEach(review => {
+          product.reviews.forEach(review => {
             const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
             const canWatch = !!portfolioVideoUrl && Number(review.show_on_product) === 1;
 
@@ -349,7 +349,16 @@
 
                 showHighlight(review);
                 scrollToPlayer();
-                setPlayerSource(portfolioVideoUrl, null); // Use video itself for preview
+                // Use UniversalPlayer to render the portfolio video
+                const playerContainer = document.getElementById('universal-player-container');
+                if (playerContainer && typeof window.UniversalVideoPlayer !== 'undefined') {
+                  window.UniversalVideoPlayer.render('universal-player-container', portfolioVideoUrl, {
+                    poster: review.thumbnail_url || '',
+                    thumbnailUrl: review.thumbnail_url || ''
+                  });
+                } else {
+                  setPlayerSource(portfolioVideoUrl, review.thumbnail_url);
+                }
               };
 
               // Hover effect
