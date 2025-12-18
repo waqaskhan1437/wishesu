@@ -55,9 +55,10 @@
       const container = document.getElementById('reviews-container');
       if (!container) return;
       
-      if (product.reviews && product.reviews.length > 0) {
-        // Use reviews from product data (more efficient)
-        if (typeof window.ReviewsWidget !== 'undefined') {
+      // Always try to render reviews, either from embedded data or by fetching.
+      if (typeof window.ReviewsWidget !== 'undefined') {
+        if (product.reviews && product.reviews.length > 0) {
+          // Use reviews from product data (more efficient)
           const grid = document.createElement('div');
           grid.className = 'reviews-grid';
           grid.style.cssText = 'display: grid; grid-template-columns: 1fr; gap: 25px; max-width: 1200px; margin: 0 auto;';
@@ -334,7 +335,7 @@
               playIcon.innerHTML = '▶';
               playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px;';
 
-              galleryThumb.appendChild(galleryImg);
+              galleryThumb.appendChild(videoThumb);
               galleryThumb.appendChild(badge);
               galleryThumb.appendChild(playIcon);
 
