@@ -358,3 +358,10 @@ main {
   .video-wrapper { max-height: 50vh; }
   .video-wrapper video { object-fit: contain !important; max-height: 50vh; }
 }
+
+/* Fix for disappearing play button on hover */
+.plyr--video:hover .plyr__control--overlaid {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
