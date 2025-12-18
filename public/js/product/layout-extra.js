@@ -305,8 +305,9 @@
 
                 showHighlight(review);
                 scrollToPlayer();
-                // Always use the unified setPlayerSource function
-                setPlayerSource(portfolioVideoUrl, review.thumbnail_url || null);
+	              // Always use the unified setPlayerSource function
+	              // Fallback to product thumbnail if review poster is missing to avoid black screen.
+	              setPlayerSource(portfolioVideoUrl, review.thumbnail_url || product.thumbnail_url);
               };
 
               // Hover effect

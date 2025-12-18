@@ -129,6 +129,65 @@
     };
   }
 
+  // Creates a thumbnail overlay with play button for iframe-based videos
+  function createThumbnailOverlay(container, posterUrl, onPlay) {
+    if (!posterUrl) return null;
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'video-thumbnail-overlay';
+    overlay.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000 url('${posterUrl}') center/cover no-repeat;
+      cursor: pointer;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+    `;
+    
+    const playBtn = document.createElement('div');
+    playBtn.className = 'video-play-btn';
+    playBtn.style.cssText = `
+      width: 80px;
+      height: 80px;
+      background: rgba(0, 0, 0, 0.7);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, background 0.2s;
+    `;
+    playBtn.innerHTML = `
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+        <path d="M8 5v14l11-7z"/>
+      </svg>
+    `;
+    
+    overlay.appendChild(playBtn);
+    
+    overlay.addEventListener('mouseenter', () => {
+      playBtn.style.transform = 'scale(1.1)';
+      playBtn.style.background = 'rgba(102, 126, 234, 0.9)';
+    });
+    
+    overlay.addEventListener('mouseleave', () => {
+      playBtn.style.transform = 'scale(1)';
+      playBtn.style.background = 'rgba(0, 0, 0, 0.7)';
+    });
+    
+    overlay.addEventListener('click', () => {
+      overlay.style.display = 'none';
+      if (typeof onPlay === 'function') onPlay();
+    });
+    
+    return overlay;
+  }
+
   window.UniversalVideoPlayer = {
     detect: function (url) {
       const raw = (url || '').toString().trim();
@@ -260,6 +319,9 @@
 
       const token = Math.random().toString(36).slice(2);
       container.dataset.universalPlayerToken = token;
+      
+      // Ensure container has relative positioning for overlay
+      container.style.position = 'relative';
 
       const safeSetHTML = (html) => {
         if (container.dataset.universalPlayerToken !== token) return;
@@ -270,6 +332,29 @@
         if (container.dataset.universalPlayerToken !== token) return;
         container.innerHTML = '';
         container.appendChild(el);
+      };
+      
+      // Helper to add thumbnail overlay for iframe-based videos
+      const addThumbnailOverlay = (iframeHtml, autoplayIframeHtml) => {
+        const posterUrl = video.poster || video.thumbnailUrl || video.thumbnail_url;
+        if (posterUrl) {
+          // Initially show just the overlay (no iframe yet for faster load)
+          const overlay = createThumbnailOverlay(container, posterUrl, () => {
+            // On play click, replace with autoplay iframe
+            if (autoplayIframeHtml) {
+              safeSetHTML(autoplayIframeHtml);
+            } else {
+              safeSetHTML(iframeHtml);
+            }
+          });
+          if (overlay) {
+            container.innerHTML = '';
+            container.appendChild(overlay);
+            return;
+          }
+        }
+        // Fallback: no poster, just show the iframe
+        safeSetHTML(iframeHtml);
       };
 
       switch (video.type) {
@@ -290,9 +375,14 @@
             rel: '0',
             modestbranding: '1'
           });
+          
+          const autoplayParams = new URLSearchParams({
+            rel: '0',
+            modestbranding: '1',
+            autoplay: '1'
+          });
 
-          safeSetHTML(
-            `<iframe
+          const iframeHtml = `<iframe
               width="100%"
               height="100%"
               src="https://www.youtube.com/embed/${encodeURIComponent(video.id)}?${params.toString()}"
@@ -300,8 +390,19 @@
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowfullscreen
               referrerpolicy="strict-origin-when-cross-origin"
-            ></iframe>`
-          );
+            ></iframe>`;
+          
+          const autoplayIframeHtml = `<iframe
+              width="100%"
+              height="100%"
+              src="https://www.youtube.com/embed/${encodeURIComponent(video.id)}?${autoplayParams.toString()}"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen
+              referrerpolicy="strict-origin-when-cross-origin"
+            ></iframe>`;
+
+          addThumbnailOverlay(iframeHtml, autoplayIframeHtml);
           break;
         }
 
@@ -318,31 +419,50 @@
             break;
           }
 
-          safeSetHTML(
-            `<iframe
+          const vimeoIframeHtml = `<iframe
               src="https://player.vimeo.com/video/${encodeURIComponent(video.id)}"
               width="100%"
               height="100%"
               frameborder="0"
               allow="autoplay; fullscreen; picture-in-picture"
               allowfullscreen
-            ></iframe>`
-          );
+            ></iframe>`;
+          
+          const vimeoAutoplayIframeHtml = `<iframe
+              src="https://player.vimeo.com/video/${encodeURIComponent(video.id)}?autoplay=1"
+              width="100%"
+              height="100%"
+              frameborder="0"
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowfullscreen
+            ></iframe>`;
+
+          addThumbnailOverlay(vimeoIframeHtml, vimeoAutoplayIframeHtml);
           break;
         }
 
         case 'bunny-embed': {
           const embedUrl = (video.embedUrl || '').trim() || video.url;
-          safeSetHTML(
-            `<iframe
+          
+          const bunnyIframeHtml = `<iframe
               src="${embedUrl}"
               width="100%"
               height="100%"
               frameborder="0"
               allow="autoplay; fullscreen; picture-in-picture"
               allowfullscreen
-            ></iframe>`
-          );
+            ></iframe>`;
+          
+          const bunnyAutoplayIframeHtml = `<iframe
+              src="${embedUrl}?autoplay=true"
+              width="100%"
+              height="100%"
+              frameborder="0"
+              allow="autoplay; fullscreen; picture-in-picture"
+              allowfullscreen
+            ></iframe>`;
+
+          addThumbnailOverlay(bunnyIframeHtml, bunnyAutoplayIframeHtml);
           break;
         }
 
@@ -371,8 +491,14 @@
             // Use HTML5 video player for direct URLs
             const videoEl = document.createElement('video');
             videoEl.controls = true;
-            videoEl.preload = 'metadata';
-            videoEl.style.cssText = 'width: 100%; height: 100%; background: #000;';
+            videoEl.preload = 'none';
+            videoEl.style.cssText = 'width: 100%; height: 100%; background: #000; border-radius: 12px;';
+            
+            // Add poster for direct Archive.org videos
+            const posterUrl = video.poster || video.thumbnailUrl || video.thumbnail_url;
+            if (posterUrl) {
+              videoEl.poster = posterUrl;
+            }
 
             const source = document.createElement('source');
             source.src = video.url;
@@ -396,23 +522,35 @@
             break;
           }
 
-          // Use embed for non-direct URLs
+          // Use embed for non-direct URLs with thumbnail overlay
           const detailsUrl = `https://archive.org/details/${encodeURIComponent(itemId)}`;
           const embedUrl = `https://archive.org/embed/${encodeURIComponent(itemId)}`;
-          safeSetHTML(
-            `<iframe
+          
+          const archiveIframeHtml = `<iframe
               src="${embedUrl}?autostart=false"
               width="100%"
               height="100%"
-                frameborder="0"
-                allow="fullscreen"
-                style="border-radius: 12px;"
-              >
-                <p>Your browser does not support iframes.
-                <a href="${detailsUrl}" target="_blank" rel="noopener">View on Archive.org</a></p>
-              </iframe>`
-            );
+              frameborder="0"
+              allow="fullscreen"
+              style="border-radius: 12px;"
+            >
+              <p>Your browser does not support iframes.
+              <a href="${detailsUrl}" target="_blank" rel="noopener">View on Archive.org</a></p>
+            </iframe>`;
+          
+          const archiveAutoplayIframeHtml = `<iframe
+              src="${embedUrl}?autostart=true"
+              width="100%"
+              height="100%"
+              frameborder="0"
+              allow="fullscreen"
+              style="border-radius: 12px;"
+            >
+              <p>Your browser does not support iframes.
+              <a href="${detailsUrl}" target="_blank" rel="noopener">View on Archive.org</a></p>
+            </iframe>`;
 
+          addThumbnailOverlay(archiveIframeHtml, archiveAutoplayIframeHtml);
           break;
         }
 
@@ -448,72 +586,96 @@
             break;
           }
 
-          const videoEl = document.createElement('video');
-          videoEl.controls = true;
-          videoEl.preload = 'metadata';
-          videoEl.playsInline = true;
-          videoEl.style.width = '100%';
-          videoEl.style.height = '100%';
-          videoEl.style.borderRadius = '12px';
-
           const poster = video.poster || video.thumbnailUrl || video.thumbnail_url;
-          if (poster) {
-            videoEl.poster = poster;
-          }
+          
+          // Function to create and show the video element
+          const showVideoPlayer = (autoplay) => {
+            const videoEl = document.createElement('video');
+            videoEl.controls = true;
+            videoEl.preload = 'auto';
+            videoEl.playsInline = true;
+            videoEl.style.width = '100%';
+            videoEl.style.height = '100%';
+            videoEl.style.borderRadius = '12px';
+            videoEl.style.background = '#000';
 
-          for (const s of sources) {
-            const source = document.createElement('source');
-            source.src = s.src;
-            if (s.type) source.type = s.type;
-            videoEl.appendChild(source);
-          }
-
-          const tracks = [];
-
-          if (video.subtitlesUrl || video.subtitles_url) {
-            tracks.push(
-              normalizeTrack({
-                src: video.subtitlesUrl || video.subtitles_url,
-                kind: 'subtitles',
-                srclang: 'en',
-                label: 'Subtitles',
-                default: true
-              })
-            );
-          }
-
-          if (Array.isArray(video.tracks)) {
-            for (const t of video.tracks) {
-              tracks.push(normalizeTrack(t));
+            if (poster) {
+              videoEl.poster = poster;
             }
+
+            for (const s of sources) {
+              const source = document.createElement('source');
+              source.src = s.src;
+              if (s.type) source.type = s.type;
+              videoEl.appendChild(source);
+            }
+
+            const tracks = [];
+
+            if (video.subtitlesUrl || video.subtitles_url) {
+              tracks.push(
+                normalizeTrack({
+                  src: video.subtitlesUrl || video.subtitles_url,
+                  kind: 'subtitles',
+                  srclang: 'en',
+                  label: 'Subtitles',
+                  default: true
+                })
+              );
+            }
+
+            if (Array.isArray(video.tracks)) {
+              for (const t of video.tracks) {
+                tracks.push(normalizeTrack(t));
+              }
+            }
+
+            for (const t of tracks.filter(Boolean)) {
+              const trackEl = document.createElement('track');
+              trackEl.kind = t.kind;
+              trackEl.src = t.src;
+              trackEl.srclang = t.srclang;
+              trackEl.label = t.label;
+              if (t.default) trackEl.default = true;
+              videoEl.appendChild(trackEl);
+            }
+
+            videoEl.addEventListener('error', () => {
+              safeSetHTML(
+                buildMessageCard({
+                  title: 'Video unavailable',
+                  message:
+                    'This video could not be loaded.\n\n' +
+                    (getFileExtension(video.url) === 'm3u8'
+                      ? 'Note: .m3u8 (HLS) playback depends on your browser.'
+                      : ''),
+                  href: video.url,
+                  linkText: 'Open video link'
+                })
+              );
+            });
+
+            safeSetElement(videoEl);
+            
+            if (autoplay) {
+              videoEl.play().catch(() => {});
+            }
+          };
+
+          // Show thumbnail overlay if poster exists, otherwise show video directly
+          if (poster) {
+            const overlay = createThumbnailOverlay(container, poster, () => {
+              showVideoPlayer(true);
+            });
+            if (overlay) {
+              container.innerHTML = '';
+              container.appendChild(overlay);
+            } else {
+              showVideoPlayer(false);
+            }
+          } else {
+            showVideoPlayer(false);
           }
-
-          for (const t of tracks.filter(Boolean)) {
-            const trackEl = document.createElement('track');
-            trackEl.kind = t.kind;
-            trackEl.src = t.src;
-            trackEl.srclang = t.srclang;
-            trackEl.label = t.label;
-            if (t.default) trackEl.default = true;
-            videoEl.appendChild(trackEl);
-          }
-
-          videoEl.addEventListener('error', () => {
-            safeSetHTML(
-              buildMessageCard({
-                title: 'Video unavailable',
-                message:
-                  'This video could not be loaded.\n\n' +
-                  (getFileExtension(video.url) === 'm3u8'
-                    ? 'Note: .m3u8 (HLS) playback depends on your browser.'
-                    : ''),
-                href: video.url,
-                linkText: 'Open video link'
-              })
-            );
-          });
-
-          safeSetElement(videoEl);
           break;
         }
 

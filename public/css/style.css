@@ -394,6 +394,15 @@ div:hover .thumb-play-btn,
   z-index: 100 !important;
 }
 
+/* Force play button visibility on thumbnail hover (main slider) */
+.thumb-wrapper:hover .thumb-play-btn {
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 200 !important;
+  display: flex !important;
+  pointer-events: none;
+}
+
 /* Ensure img transform doesn't hide play button */
 .thumb-wrapper .thumb {
   position: relative;
