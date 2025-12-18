@@ -360,9 +360,23 @@ main {
 }
 
 /* Fix for disappearing play button on hover */
-.video-wrapper:hover .plyr__control--overlaid,
 .plyr--video:hover .plyr__control--overlaid {
   opacity: 1 !important;
   visibility: visible !important;
 }
+
+/* Keep play button visible on thumbnail hover - always visible */
+.thumb-play-btn {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transition: background 0.2s ease;
+}
+
+.thumb-play-btn:hover,
+div:hover > .thumb-play-btn {
+  opacity: 1 !important;
+  visibility: visible !important;
+  background: rgba(0,0,0,0.85) !important;
+}
+
 

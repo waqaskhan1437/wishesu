@@ -93,14 +93,15 @@
       const img = document.createElement('img');
       img.src = product.thumbnail_url;
       img.className = 'thumb active';
-      img.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; transition: all 0.3s;';
+      img.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid #667eea; transition: all 0.3s;';
       img.alt = (product.title || 'Product') + ' - Thumbnail';
       img.dataset.type = 'main';
       
       // Add play button overlay ONLY if video exists
       if (product.video_url) {
         const playOverlay = document.createElement('div');
-        playOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; padding-left: 2px; pointer-events: none;';
+        playOverlay.className = 'thumb-play-btn';
+        playOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; padding-left: 2px; pointer-events: none; opacity: 1 !important;';
         playOverlay.innerHTML = '▶';
         thumbWrapper.appendChild(playOverlay);
       }
@@ -108,8 +109,8 @@
       // Click handler to show main image/video
       img.onclick = () => {
         // Remove active from all thumbs
-        thumbsDiv.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
-        img.classList.add('active');
+        thumbsDiv.querySelectorAll('.thumb').forEach(t => t.style.border = '3px solid transparent');
+        img.style.border = '3px solid #667eea';
         
         // Switch back to main video or thumbnail
         const videoWrapper = document.querySelector('.video-wrapper');
@@ -157,15 +158,15 @@
           const galleryThumb = document.createElement('img');
           galleryThumb.src = imageUrl;
           galleryThumb.className = 'thumb';
-          galleryThumb.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; transition: all 0.3s;';
+          galleryThumb.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid transparent; transition: all 0.3s;';
           galleryThumb.alt = (product.title || 'Product') + ' - Gallery Image ' + (index + 1);
           galleryThumb.dataset.type = 'gallery';
           
           // Click handler to show gallery image in main view
           galleryThumb.onclick = () => {
             // Remove active from all thumbs
-            thumbsDiv.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
-            galleryThumb.classList.add('active');
+            thumbsDiv.querySelectorAll('.thumb').forEach(t => t.style.border = '3px solid transparent');
+            galleryThumb.style.border = '3px solid #667eea';
             
             // Show this gallery image in main video wrapper
             const videoWrapper = document.querySelector('.video-wrapper');
@@ -178,7 +179,7 @@
           
           // Hover effect
           galleryThumb.onmouseenter = () => {
-            if (!galleryThumb.classList.contains('active')) {
+            if (galleryThumb.style.border !== '3px solid #667eea') {
               galleryThumb.style.transform = 'scale(1.05)';
             }
           };

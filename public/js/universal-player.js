@@ -129,7 +129,7 @@
     };
   }
 
-  window.UniversalPlayer = {
+  window.UniversalVideoPlayer = {
     detect: function (url) {
       const raw = (url || '').toString().trim();
       if (!raw) return { type: 'none' };
