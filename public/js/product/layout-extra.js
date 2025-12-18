@@ -289,7 +289,7 @@
               const playIcon = document.createElement('div');
               playIcon.className = 'thumb-play-btn';
               playIcon.innerHTML = '▶';
-              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px; opacity:1 !important;';
+              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px; opacity:1 !important; z-index:100;';
 
               galleryThumb.appendChild(videoThumb);
               galleryThumb.appendChild(badge);

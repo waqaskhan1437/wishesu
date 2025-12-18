@@ -88,6 +88,7 @@
     if (product.thumbnail_url) {
       // Create wrapper for thumbnail with play button overlay
       const thumbWrapper = document.createElement('div');
+      thumbWrapper.className = 'thumb-wrapper';
       thumbWrapper.style.cssText = 'position: relative; display: inline-block;';
       
       const img = document.createElement('img');
@@ -101,7 +102,7 @@
       if (product.video_url) {
         const playOverlay = document.createElement('div');
         playOverlay.className = 'thumb-play-btn';
-        playOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; padding-left: 2px; pointer-events: none; opacity: 1 !important;';
+        playOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; padding-left: 2px; pointer-events: none; opacity: 1 !important; visibility: visible !important; z-index: 100;';
         playOverlay.innerHTML = '▶';
         thumbWrapper.appendChild(playOverlay);
       }

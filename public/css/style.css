@@ -365,18 +365,42 @@ main {
   visibility: visible !important;
 }
 
+/* Thumb wrapper - ensure stacking context */
+.thumb-wrapper {
+  position: relative;
+  display: inline-block;
+  overflow: visible;
+  z-index: 1;
+}
+
 /* Keep play button visible on thumbnail hover - always visible */
 .thumb-play-btn {
   opacity: 1 !important;
   visibility: visible !important;
   transition: background 0.2s ease;
+  z-index: 100 !important;
+  pointer-events: none;
 }
 
-.thumb-play-btn:hover,
-div:hover > .thumb-play-btn {
+.thumb-wrapper:hover .thumb-play-btn,
+.thumb-wrapper .thumb:hover ~ .thumb-play-btn,
+div:hover > .thumb-play-btn,
+div:hover .thumb-play-btn,
+*:hover > .thumb-play-btn,
+*:hover .thumb-play-btn {
   opacity: 1 !important;
   visibility: visible !important;
   background: rgba(0,0,0,0.85) !important;
+  z-index: 100 !important;
 }
 
+/* Ensure img transform doesn't hide play button */
+.thumb-wrapper .thumb {
+  position: relative;
+  z-index: 1;
+}
+
+.thumb-wrapper .thumb:hover {
+  z-index: 1;
+}
 
