@@ -1426,12 +1426,13 @@ export default {
           ).bind(row.id, 'approved').first();
           
           // Fetch reviews for rich results schema (directly use review's own video URLs)
-          const reviewsResult = await env.DB.prepare(`
-            SELECT r.*
-            FROM reviews r
-            WHERE r.product_id = ? AND r.status = ?
-            ORDER BY r.created_at DESC
-          `).bind(row.id, 'approved').all();
+          const reviewsResult = await env.DB.prepare(
+            `SELECT reviews.*, orders.delivered_video_url, orders.delivered_thumbnail_url 
+             FROM reviews 
+             LEFT JOIN orders ON reviews.order_id = orders.order_id 
+             WHERE reviews.product_id = ? AND reviews.status = ? 
+             ORDER BY reviews.created_at DESC`
+          ).bind(row.id, 'approved').all();
 
           // Convert created_at to ISO 8601 format with Z suffix for UTC
           const reviews = (reviewsResult.results || []).map(review => {
