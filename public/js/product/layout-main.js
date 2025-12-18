@@ -93,7 +93,7 @@
       const img = document.createElement('img');
       img.src = product.thumbnail_url;
       img.className = 'thumb active';
-      img.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid #667eea; transition: all 0.3s;';
+      img.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; transition: all 0.3s;';
       img.alt = (product.title || 'Product') + ' - Thumbnail';
       img.dataset.type = 'main';
       
@@ -108,8 +108,8 @@
       // Click handler to show main image/video
       img.onclick = () => {
         // Remove active from all thumbs
-        thumbsDiv.querySelectorAll('.thumb').forEach(t => t.style.border = '3px solid transparent');
-        img.style.border = '3px solid #667eea';
+        thumbsDiv.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+        img.classList.add('active');
         
         // Switch back to main video or thumbnail
         const videoWrapper = document.querySelector('.video-wrapper');
@@ -157,15 +157,15 @@
           const galleryThumb = document.createElement('img');
           galleryThumb.src = imageUrl;
           galleryThumb.className = 'thumb';
-          galleryThumb.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid transparent; transition: all 0.3s;';
+          galleryThumb.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; transition: all 0.3s;';
           galleryThumb.alt = (product.title || 'Product') + ' - Gallery Image ' + (index + 1);
           galleryThumb.dataset.type = 'gallery';
           
           // Click handler to show gallery image in main view
           galleryThumb.onclick = () => {
             // Remove active from all thumbs
-            thumbsDiv.querySelectorAll('.thumb').forEach(t => t.style.border = '3px solid transparent');
-            galleryThumb.style.border = '3px solid #667eea';
+            thumbsDiv.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+            galleryThumb.classList.add('active');
             
             // Show this gallery image in main video wrapper
             const videoWrapper = document.querySelector('.video-wrapper');
@@ -178,7 +178,7 @@
           
           // Hover effect
           galleryThumb.onmouseenter = () => {
-            if (galleryThumb.style.border !== '3px solid #667eea') {
+            if (!galleryThumb.classList.contains('active')) {
               galleryThumb.style.transform = 'scale(1.05)';
             }
           };

@@ -360,6 +360,7 @@ main {
 }
 
 /* Fix for disappearing play button on hover */
+.video-wrapper:hover .plyr__control--overlaid,
 .plyr--video:hover .plyr__control--overlaid {
   opacity: 1 !important;
   visibility: visible !important;
