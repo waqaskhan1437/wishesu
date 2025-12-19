@@ -9,11 +9,13 @@
 
   const MAX_LEN = 500;
   const POLL_MS = 5000;
+  const COOLDOWN_MS = 10000;
 
   const LS_SESSION_ID = 'chat_session_id';
   const LS_NAME = 'chat_name';
   const LS_EMAIL = 'chat_email';
   const LS_OPEN = 'chat_is_open';
+  const LS_COOLDOWN_UNTIL = 'chat_cooldown_until';
 
   let sessionId = localStorage.getItem(LS_SESSION_ID) || '';
   let name = localStorage.getItem(LS_NAME) || '';
@@ -24,6 +26,7 @@
   let pollTimer = null;
 
   let isSending = false;
+  let cooldownTimer = null;
 
   function el(tag, attrs = {}, children = []) {
     const node = document.createElement(tag);
@@ -38,7 +41,6 @@
   }
 
   function escapeText(str) {
-    // Client-side safe rendering
     return String(str ?? '')
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
@@ -53,6 +55,19 @@
     return d.toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: '2-digit' });
   }
 
+  function nowMs() {
+    return Date.now();
+  }
+
+  function getCooldownUntil() {
+    const v = Number(localStorage.getItem(LS_COOLDOWN_UNTIL) || '0') || 0;
+    return v;
+  }
+
+  function setCooldownUntil(ts) {
+    localStorage.setItem(LS_COOLDOWN_UNTIL, String(ts));
+  }
+
   // ---- UI ----
   const style = el('style', {}, [`
     .wc-chat-btn {
@@ -65,8 +80,8 @@
     }
     .wc-chat-panel {
       position: fixed; right: 18px; bottom: 86px; z-index: 999999;
-      width: 340px; max-width: calc(100vw - 24px);
-      height: 460px; max-height: calc(100vh - 120px);
+      width: 360px; max-width: calc(100vw - 24px);
+      height: 500px; max-height: calc(100vh - 120px);
       border-radius: 14px; background: #fff;
       box-shadow: 0 18px 50px rgba(0,0,0,.2);
       border: 1px solid #eaeaea;
@@ -77,12 +92,16 @@
       height: 48px; display: flex; align-items: center; justify-content: space-between;
       padding: 0 12px; border-bottom: 1px solid #eee; background: #fafafa;
       cursor: move; user-select: none;
-      font-weight: 700;
+      font-weight: 800;
+    }
+    .wc-chat-header .wc-right { display:flex; align-items:center; gap:10px; }
+    .wc-link {
+      border:0; background:transparent; cursor:pointer;
+      font-size:12px; color:#444; text-decoration: underline;
+      padding: 6px 0;
     }
     .wc-chat-body { height: calc(100% - 48px); display: flex; flex-direction: column; }
-    .wc-chat-messages {
-      flex: 1; overflow: auto; padding: 12px; background: #f8f8f8;
-    }
+    .wc-chat-messages { flex: 1; overflow: auto; padding: 12px; background: #f8f8f8; }
     .wc-msg { margin: 8px 0; display: flex; flex-direction: column; gap: 2px; }
     .wc-bubble {
       max-width: 85%;
@@ -114,7 +133,7 @@
     }
     .wc-inputbar button {
       height: 40px; border-radius: 10px; border: 0;
-      background: #111; color: #fff; font-weight: 700;
+      background: #111; color: #fff; font-weight: 800;
       padding: 0 14px; cursor: pointer;
     }
     .wc-inputbar button:disabled { opacity: .6; cursor: not-allowed; }
@@ -128,39 +147,39 @@
     .wc-modal label { display:block; font-size: 12px; color:#555; margin: 8px 0 4px; }
     .wc-modal input { width: 100%; height: 38px; border: 1px solid #ddd; border-radius: 10px; padding: 0 10px; }
     .wc-modal .row { display:flex; gap: 10px; margin-top: 10px; }
-    .wc-modal .row button { flex:1; height: 40px; border-radius: 10px; border:0; font-weight:700; cursor:pointer; }
+    .wc-modal .row button { flex:1; height: 40px; border-radius: 10px; border:0; font-weight:800; cursor:pointer; }
     .wc-primary { background:#111; color:#fff; }
     .wc-secondary { background:#f1f1f1; color:#111; }
+    .wc-hint { font-size: 12px; color:#666; margin-top:8px; }
   `]);
 
   const btn = el('button', { class: 'wc-chat-btn', title: 'Chat' }, ['💬']);
   const panel = el('div', { class: 'wc-chat-panel', role: 'dialog', 'aria-label': 'Chat' });
 
+  const logoutBtn = el('button', { class: 'wc-link', type: 'button' }, ['Change email']);
+  const closeBtn = el('button', {
+    style: 'border:0;background:transparent;font-size:18px;cursor:pointer;padding:6px;',
+    type: 'button',
+    'aria-label': 'Close'
+  }, ['✕']);
+
   const header = el('div', { class: 'wc-chat-header' }, [
     el('div', {}, ['Support']),
-    el('button', {
-      style: 'border:0;background:transparent;font-size:18px;cursor:pointer;padding:6px;',
-      onclick: () => setOpen(false),
-      'aria-label': 'Close'
-    }, ['✕'])
+    el('div', { class: 'wc-right' }, [logoutBtn, closeBtn])
   ]);
 
   const messagesEl = el('div', { class: 'wc-chat-messages' });
   const quickRow = el('div', { class: 'wc-quick' }, []);
 
-  const input = el('input', {
-    type: 'text',
-    placeholder: 'Type a message…',
-    maxlength: String(MAX_LEN)
-  });
-
+  const input = el('input', { type: 'text', placeholder: 'Type a message…', maxlength: String(MAX_LEN) });
   const sendBtn = el('button', { type: 'button' }, ['Send']);
   const counter = el('div', { class: 'wc-counter' }, [`0/${MAX_LEN}`]);
+  const hint = el('div', { class: 'wc-hint' }, ['']);
 
   const inputWrap = el('div', {}, [input, counter]);
   const inputBar = el('div', { class: 'wc-inputbar' }, [inputWrap, sendBtn]);
 
-  const body = el('div', { class: 'wc-chat-body' }, [messagesEl, quickRow, inputBar]);
+  const body = el('div', { class: 'wc-chat-body' }, [messagesEl, quickRow, inputBar, hint]);
   panel.appendChild(header);
   panel.appendChild(body);
 
@@ -175,6 +194,9 @@
     let startLeft = 0, startTop = 0;
 
     header.addEventListener('mousedown', (e) => {
+      // ignore dragging when clicking buttons
+      if (e.target === logoutBtn || e.target === closeBtn) return;
+
       dragging = true;
       startX = e.clientX;
       startY = e.clientY;
@@ -208,6 +230,7 @@
       ensureSession().then(() => {
         startPolling();
         syncNow();
+        applyCooldownUI();
       }).catch(() => {});
     } else {
       stopPolling();
@@ -215,19 +238,38 @@
   }
 
   btn.addEventListener('click', () => setOpen(!isOpen));
+  closeBtn.addEventListener('click', () => setOpen(false));
+
+  // ---- Logout / Change Email ----
+  function clearSessionLocal() {
+    localStorage.removeItem(LS_SESSION_ID);
+    localStorage.removeItem(LS_NAME);
+    localStorage.removeItem(LS_EMAIL);
+    localStorage.removeItem(LS_COOLDOWN_UNTIL);
+    sessionId = '';
+    name = '';
+    email = '';
+    lastId = 0;
+    messagesEl.innerHTML = '';
+  }
+
+  logoutBtn.addEventListener('click', async () => {
+    clearSessionLocal();
+    // Keep panel open; show modal again
+    await ensureSession();
+  });
 
   // ---- Quick actions ----
   function addQuickAction(label, payload) {
     const b = el('button', { type: 'button' }, [label]);
-    b.addEventListener('click', () => {
-      sendMessage(payload);
-    });
+    b.addEventListener('click', () => sendMessage(payload));
     quickRow.appendChild(b);
   }
 
   addQuickAction('📦 My Order Status', 'My Order Status');
   addQuickAction('🚚 Shipping Info', 'Shipping Info');
   addQuickAction('💬 Talk to Human', 'Talk to Human');
+  addQuickAction('🚚 Check Delivery Status', 'Check Delivery Status');
 
   // ---- Message rendering ----
   function appendMessage(role, content, created_at) {
@@ -252,7 +294,7 @@
     sendBtn.disabled = true;
 
     const modal = el('div', { class: 'wc-modal', id: 'wc-modal' }, [
-      el('div', { style: 'font-weight:700; margin-bottom:8px;' }, ['Start chat']),
+      el('div', { style: 'font-weight:800; margin-bottom:8px;' }, ['Start chat']),
       el('label', {}, ['Name']),
       el('input', { id: 'wc-name', value: name || '' }),
       el('label', {}, ['Email']),
@@ -266,16 +308,19 @@
           name = n; email = e;
           localStorage.setItem(LS_NAME, name);
           localStorage.setItem(LS_EMAIL, email);
+
           await startSession();
           modal.remove();
           input.disabled = false;
           sendBtn.disabled = false;
           input.focus();
           syncNow();
+          applyCooldownUI();
         } }, ['Start'])
       ])
     ]);
 
+    // Place modal above input bar
     body.insertBefore(modal, messagesEl.nextSibling);
   }
 
@@ -296,12 +341,71 @@
 
   async function ensureSession() {
     if (sessionId) return;
+
     const old = panel.querySelector('#wc-modal');
     if (old) old.remove();
+
     showSessionModal();
   }
 
-  // ---- Sending (fix duplicates) ----
+  // ---- Frontend cooldown (10 seconds) ----
+  function startCooldown() {
+    const until = nowMs() + COOLDOWN_MS;
+    setCooldownUntil(until);
+    applyCooldownUI();
+  }
+
+  function applyCooldownUI() {
+    const until = getCooldownUntil();
+    const remaining = Math.max(0, until - nowMs());
+
+    // If currently sending, sending lock rules
+    if (isSending) {
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending…';
+      hint.textContent = '';
+      return;
+    }
+
+    if (!sessionId) {
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Send';
+      hint.textContent = '';
+      return;
+    }
+
+    if (remaining <= 0) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send';
+      hint.textContent = '';
+      if (cooldownTimer) {
+        clearInterval(cooldownTimer);
+        cooldownTimer = null;
+      }
+      return;
+    }
+
+    sendBtn.disabled = true;
+    const secs = Math.ceil(remaining / 1000);
+    sendBtn.textContent = `Wait ${secs}s`;
+    hint.textContent = 'Please wait before sending another message.';
+
+    if (!cooldownTimer) {
+      cooldownTimer = setInterval(() => {
+        const rem = Math.max(0, getCooldownUntil() - nowMs());
+        if (rem <= 0) {
+          clearInterval(cooldownTimer);
+          cooldownTimer = null;
+          applyCooldownUI();
+        } else {
+          const s = Math.ceil(rem / 1000);
+          sendBtn.textContent = `Wait ${s}s`;
+        }
+      }, 250);
+    }
+  }
+
+  // ---- Sending (debounce + cooldown) ----
   function updateCounter() {
     const val = String(input.value || '');
     counter.textContent = `${val.length}/${MAX_LEN}`;
@@ -310,9 +414,14 @@
 
   async function sendMessage(text) {
     if (!isOpen) setOpen(true);
-
     if (isSending) return;
     if (!sessionId) return;
+
+    // cooldown gate
+    if (getCooldownUntil() > nowMs()) {
+      applyCooldownUI();
+      return;
+    }
 
     const msg = String(text ?? input.value ?? '').trim();
     if (!msg) return;
@@ -323,7 +432,7 @@
     }
 
     isSending = true;
-    sendBtn.disabled = true;
+    applyCooldownUI();
 
     try {
       const res = await fetch(API_SEND, {
@@ -343,15 +452,16 @@
       input.value = '';
       updateCounter();
 
+      startCooldown(); // 10-second delay after sending
       await syncNow();
     } finally {
       isSending = false;
-      sendBtn.disabled = false;
+      applyCooldownUI();
     }
   }
 
+  // Ensure handlers attach only once
   sendBtn.addEventListener('click', () => sendMessage());
-
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -387,5 +497,7 @@
     pollTimer = null;
   }
 
+  // Restore open state
   if (isOpen) setOpen(true);
+  // Also restore cooldown UI if panel opened later
 })();

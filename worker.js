@@ -687,7 +687,7 @@ export default {
 
 
 
-      // ------------------------------
+            // ------------------------------
       // Chat APIs (Customer + Admin)
       // ------------------------------
       if (path === '/api/chat/start' && method === 'POST') {
@@ -697,18 +697,62 @@ export default {
         let body;
         try { body = await req.json(); } catch { body = {}; }
 
-        const name = String(body.name || '').trim();
-        const email = String(body.email || '').trim();
+        const nameIn = String(body.name || '').trim();
+        const emailIn = String(body.email || '').trim();
 
-        if (!name || !email) return json({ error: 'Name and email are required' }, 400);
+        if (!nameIn || !emailIn) return json({ error: 'Name and email are required' }, 400);
 
+        // Basic normalization
+        const email = emailIn.toLowerCase();
+        const name = nameIn;
+
+        // One email = one session (reuse + cleanup)
+        const canonical = await env.DB.prepare(
+          `SELECT id, name, created_at
+           FROM chat_sessions
+           WHERE lower(email) = lower(?)
+           ORDER BY datetime(created_at) ASC
+           LIMIT 1`
+        ).bind(email).first();
+
+        if (canonical?.id) {
+          const canonicalId = String(canonical.id);
+
+          // Update name if it changed (optional but keeps admin tidy)
+          if (name && canonical.name !== name) {
+            await env.DB.prepare(
+              `UPDATE chat_sessions SET name = ? WHERE id = ?`
+            ).bind(name, canonicalId).run();
+          }
+
+          // Migrate any stray sessions/messages for this email into the canonical session
+          const others = await env.DB.prepare(
+            `SELECT id FROM chat_sessions
+             WHERE lower(email) = lower(?) AND id != ?`
+          ).bind(email, canonicalId).all();
+
+          const otherIds = (others?.results || []).map(r => String(r.id));
+          for (const sid of otherIds) {
+            await env.DB.prepare(
+              `UPDATE chat_messages SET session_id = ? WHERE session_id = ?`
+            ).bind(canonicalId, sid).run();
+
+            await env.DB.prepare(
+              `DELETE FROM chat_sessions WHERE id = ?`
+            ).bind(sid).run();
+          }
+
+          return json({ sessionId: canonicalId, reused: true });
+        }
+
+        // Create new session
         const sessionId = crypto.randomUUID();
 
         await env.DB.prepare(
           `INSERT INTO chat_sessions (id, name, email) VALUES (?, ?, ?)`
-        ).bind(sessionId, name, email).run();
+        ).bind(sessionId, escapeHtml(name), escapeHtml(email)).run();
 
-        return json({ sessionId });
+        return json({ sessionId, reused: false });
       }
 
       if (path === '/api/chat/sync' && method === 'GET') {
@@ -744,6 +788,8 @@ export default {
 
         const sessionId = String(body.sessionId || '').trim();
         const roleRaw = String(body.role || 'user').trim().toLowerCase();
+
+        // accept content or message
         const rawContent = String(body.content ?? body.message ?? '');
 
         const role = ['user', 'admin', 'system'].includes(roleRaw) ? roleRaw : 'user';
@@ -756,7 +802,7 @@ export default {
         // 500 char limit (backend)
         if (trimmed.length > 500) return json({ error: 'Message too long (max 500 characters)' }, 400);
 
-        // Rate limit customers only
+        // Rate limit customers only (1 msg/sec)
         try {
           if (role === 'user') await enforceUserRateLimit(env, sessionId);
         } catch (e) {
@@ -782,7 +828,7 @@ export default {
           `INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)`
         ).bind(sessionId, role, safeContent).run();
 
-        // Email alert webhook on first customer message
+        // Trigger email alert webhook on first customer message
         if (isFirstUserMessage) {
           try {
             const setting = await env.DB.prepare(
@@ -814,25 +860,44 @@ export default {
           }
         }
 
-        // Smart Quick Action Auto-Reply: My Order Status
+        // ------------------------------
+        // Smart Quick Action Auto-Replies
+        // ------------------------------
         if (role === 'user') {
           const normalized = normalizeQuickAction(trimmed);
-          if (normalized === 'my order status') {
-            const session = await env.DB.prepare(
-              `SELECT email FROM chat_sessions WHERE id = ?`
-            ).bind(sessionId).first();
+          const session = await env.DB.prepare(
+            `SELECT email FROM chat_sessions WHERE id = ?`
+          ).bind(sessionId).first();
 
-            const email = String(session?.email || '').trim();
+          const email = String(session?.email || '').trim();
+          const origin = new URL(req.url).origin;
+
+          // "My Order Status"
+          if (normalized === 'my order status') {
             let replyText = "We couldn't find any recent orders for this email.";
 
             if (email) {
               const lastOrder = await getLatestOrderForEmail(env, email);
               if (lastOrder) {
-                const safeOrderId = escapeHtml(lastOrder.order_id);
-                const safeStatus = escapeHtml(lastOrder.status || 'unknown');
-                const safeLink = escapeHtml(lastOrder.trackLink);
+                const link = `${origin}/buyer-order.html?id=${encodeURIComponent(lastOrder.order_id)}`;
+                replyText = `Your last order #${lastOrder.order_id} is currently ${lastOrder.status || 'unknown'}. Track it here: ${link}`;
+              }
+            }
 
-                replyText = `Your last order #${safeOrderId} is currently ${safeStatus}. Track it here: ${safeLink}`;
+            await env.DB.prepare(
+              `INSERT INTO chat_messages (session_id, role, content) VALUES (?, 'system', ?)`
+            ).bind(sessionId, escapeHtml(replyText)).run();
+          }
+
+          // "Check Delivery Status"
+          if (normalized === 'check delivery status') {
+            let replyText = "No recent orders found for this email.";
+
+            if (email) {
+              const lastOrder = await getLatestOrderForEmail(env, email);
+              if (lastOrder) {
+                const link = `${origin}/buyer-order.html?id=${encodeURIComponent(lastOrder.order_id)}`;
+                replyText = `Your last order is ${lastOrder.status || 'unknown'}. View details here: ${link}`;
               }
             }
 
@@ -845,10 +910,12 @@ export default {
         return json({ success: true, messageId: insertRes?.meta?.last_row_id || null });
       }
 
+      // ----- ADMIN CHAT API -----
       if (path === '/api/admin/chats/sessions' && method === 'GET') {
         if (!env.DB) return json({ error: 'Database not configured' }, 500);
         await initDB(env);
 
+        // One row per email (canonical session = oldest created_at for that email)
         const rows = await env.DB.prepare(
           `SELECT
              s.id,
@@ -858,6 +925,12 @@ export default {
              (SELECT MAX(created_at) FROM chat_messages m WHERE m.session_id = s.id) AS last_message_at,
              (SELECT content FROM chat_messages m2 WHERE m2.session_id = s.id ORDER BY id DESC LIMIT 1) AS last_message
            FROM chat_sessions s
+           JOIN (
+             SELECT lower(email) AS em, MIN(datetime(created_at)) AS min_created
+             FROM chat_sessions
+             GROUP BY lower(email)
+           ) x
+             ON lower(s.email) = x.em AND datetime(s.created_at) = x.min_created
            ORDER BY COALESCE(last_message_at, s.created_at) DESC
            LIMIT 200`
         ).all();
@@ -865,482 +938,7 @@ export default {
         return json({ sessions: rows?.results || [] });
       }
 
-      // Test endpoint for admin debugging
-      if (path === '/api/admin/test') {
-        return json({ success: true, message: 'Admin API is working!', timestamp: Date.now() });
-      }
-
-      // ----- ADMIN MAINTENANCE ENDPOINTS (Top Level) -----
-      // Clear temporary files (accept both GET and POST for compatibility)
-      if ((method === 'POST' || method === 'GET') && path === '/api/admin/clear-temp-files') {
-        return json({
-          success: true,
-          count: 0,
-          message: 'No temp files to clear (feature placeholder)'
-        });
-      }
-
-      // Clear pending checkouts (accept both GET and POST for compatibility)
-      if ((method === 'POST' || method === 'GET') && path === '/api/admin/clear-pending-checkouts') {
-        // Note: Checkout sessions are managed by Whop, not stored in D1
-        // This is a placeholder feature - Whop handles cleanup automatically
-        return json({
-          success: true,
-          count: 0,
-          message: 'Checkout sessions are managed by Whop (auto-cleanup enabled)'
-        });
-      }
-
-      // Export data for Google Sheets
-      if (method === 'GET' && path === '/api/admin/export-data') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-
-        try {
-          // Fetch orders (email/amount are in encrypted_data, not separate columns)
-          const orders = await env.DB.prepare(`
-            SELECT order_id, product_id, status, encrypted_data,
-                   delivery_time_minutes, created_at, archive_url, delivered_video_url
-            FROM orders ORDER BY created_at DESC
-          `).all();
-
-          const products = await env.DB.prepare(`
-            SELECT id, title, slug, normal_price, sale_price, status
-            FROM products
-          `).all();
-
-          // Extract emails from encrypted_data and convert created_at to ISO 8601
-          const emailMap = new Map();
-
-          for (const order of (orders.results || [])) {
-            try {
-              if (order.encrypted_data) {
-                const data = JSON.parse(order.encrypted_data);
-                const email = data.email;
-                if (email) {
-                  if (!emailMap.has(email)) {
-                    emailMap.set(email, { first_order: order.created_at, count: 0 });
-                  }
-                  emailMap.get(email).count += 1;
-                }
-              }
-            } catch (e) {
-              // Skip orders with invalid data
-            }
-            // Convert SQLite datetime to ISO 8601 format with Z suffix for UTC
-            if (order.created_at && typeof order.created_at === 'string') {
-              // SQLite format: YYYY-MM-DD HH:MM:SS -> ISO 8601: YYYY-MM-DDTHH:MM:SSZ
-              order.created_at = order.created_at.replace(' ', 'T') + 'Z';
-            }
-          }
-
-          const emails = Array.from(emailMap).map(([email, info]) => ({
-            email: email,
-            first_order: typeof info.first_order === 'string' ? info.first_order.replace(' ', 'T') + 'Z' : info.first_order,
-            total_orders: info.count
-          }));
-
-          return json({
-            success: true,
-            timestamp: Date.now(),
-            data: {
-              orders: orders.results || [],
-              products: products.results || [],
-              emails: emails
-            }
-          });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-
-      // ----- EXPORT ENDPOINTS -----
-      
-      // Export Full Website
-      if (method === 'GET' && path === '/api/admin/export/full') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-        
-        try {
-          const products = await env.DB.prepare('SELECT * FROM products').all();
-          const pages = await env.DB.prepare('SELECT * FROM pages').all();
-          const reviews = await env.DB.prepare('SELECT * FROM reviews').all();
-          const orders = await env.DB.prepare('SELECT * FROM orders ORDER BY created_at DESC').all();
-          const settings = await env.DB.prepare('SELECT * FROM settings').all();
-          
-          return json({
-            success: true,
-            data: {
-              exportDate: new Date().toISOString(),
-              version: '1.0',
-              products: products.results || [],
-              pages: pages.results || [],
-              reviews: reviews.results || [],
-              orders: orders.results || [],
-              settings: settings.results || []
-            }
-          });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-      
-      // Export Products
-      if (method === 'GET' && path === '/api/admin/export/products') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-        
-        try {
-          const products = await env.DB.prepare('SELECT * FROM products').all();
-          return json({
-            success: true,
-            data: {
-              exportDate: new Date().toISOString(),
-              products: products.results || []
-            }
-          });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-      
-      // Export Pages
-      if (method === 'GET' && path === '/api/admin/export/pages') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-        
-        try {
-          const pages = await env.DB.prepare('SELECT * FROM pages').all();
-          return json({
-            success: true,
-            data: {
-              exportDate: new Date().toISOString(),
-              pages: pages.results || []
-            }
-          });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-      
-      // Export Reviews
-      if (method === 'GET' && path === '/api/admin/export/reviews') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-        
-        try {
-          const reviews = await env.DB.prepare('SELECT * FROM reviews').all();
-          return json({
-            success: true,
-            data: {
-              exportDate: new Date().toISOString(),
-              reviews: reviews.results || []
-            }
-          });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-      
-      // Export Orders
-      if (method === 'GET' && path === '/api/admin/export/orders') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-        
-        try {
-          const orders = await env.DB.prepare('SELECT * FROM orders ORDER BY created_at DESC').all();
-          return json({
-            success: true,
-            data: {
-              exportDate: new Date().toISOString(),
-              orders: orders.results || []
-            }
-          });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-      
-      // ----- IMPORT ENDPOINTS -----
-      
-      // Import Products
-      if (method === 'POST' && path === '/api/admin/import/products') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-        
-        try {
-          const body = await req.json();
-          const products = body.products || [];
-          let count = 0;
-          
-          for (const p of products) {
-            // Skip if product with same slug exists
-            const existing = await env.DB.prepare('SELECT id FROM products WHERE slug = ?').bind(p.slug).first();
-            if (existing) continue;
-            
-            await env.DB.prepare(`
-              INSERT INTO products (title, slug, description, normal_price, sale_price, normal_delivery_text, express_delivery_text, thumbnail_url, video_url, status, addons)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).bind(
-              p.title || 'Imported Product',
-              p.slug || 'imported-' + Date.now(),
-              p.description || '',
-              p.normal_price || 0,
-              p.sale_price || null,
-              p.normal_delivery_text || '60 min',
-              p.express_delivery_text || '',
-              p.thumbnail_url || '',
-              p.video_url || '',
-              p.status || 'active',
-              p.addons || '[]'
-            ).run();
-            count++;
-          }
-          
-          return json({ success: true, count });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-      
-      // Import Pages
-      if (method === 'POST' && path === '/api/admin/import/pages') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-        
-        try {
-          const body = await req.json();
-          const pages = body.pages || [];
-          let count = 0;
-          
-          for (const p of pages) {
-            // Skip if page with same slug exists
-            const existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(p.slug).first();
-            if (existing) continue;
-            
-            await env.DB.prepare(`
-              INSERT INTO pages (title, slug, content, seo_title, seo_description, seo_keywords, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-            `).bind(
-              p.title || 'Imported Page',
-              p.slug || 'imported-' + Date.now(),
-              p.content || '[]',
-              p.seo_title || '',
-              p.seo_description || '',
-              p.seo_keywords || ''
-            ).run();
-            count++;
-          }
-          
-          return json({ success: true, count });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-      
-      // Import Reviews
-      if (method === 'POST' && path === '/api/admin/import/reviews') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-        
-        try {
-          const body = await req.json();
-          const reviews = body.reviews || [];
-          let count = 0;
-          
-          for (const r of reviews) {
-            await env.DB.prepare(`
-              INSERT INTO reviews (product_id, author_name, rating, comment, status, show_on_product, delivered_video_url, delivered_thumbnail_url)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `).bind(
-              r.product_id || 1,
-              r.author_name || 'Anonymous',
-              r.rating || 5,
-              r.comment || '',
-              r.status || 'approved',
-              r.show_on_product !== undefined ? r.show_on_product : 1,
-              r.delivered_video_url || null,
-              r.delivered_thumbnail_url || null
-            ).run();
-            count++;
-          }
-          
-          return json({ success: true, count });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-      
-      // Import Full Backup
-      if (method === 'POST' && path === '/api/admin/import/full') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-        
-        try {
-          const body = await req.json();
-          let productsCount = 0, pagesCount = 0, reviewsCount = 0;
-          
-          // Import products
-          if (body.products && Array.isArray(body.products)) {
-            for (const p of body.products) {
-              const existing = await env.DB.prepare('SELECT id FROM products WHERE slug = ?').bind(p.slug).first();
-              if (existing) continue;
-              
-              await env.DB.prepare(`
-                INSERT INTO products (title, slug, description, normal_price, sale_price, normal_delivery_text, express_delivery_text, thumbnail_url, video_url, status, addons)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              `).bind(
-                p.title || 'Imported Product',
-                p.slug || 'imported-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
-                p.description || '',
-                p.normal_price || 0,
-                p.sale_price || null,
-                p.normal_delivery_text || '60 min',
-                p.express_delivery_text || '',
-                p.thumbnail_url || '',
-                p.video_url || '',
-                p.status || 'active',
-                p.addons || '[]'
-              ).run();
-              productsCount++;
-            }
-          }
-          
-          // Import pages
-          if (body.pages && Array.isArray(body.pages)) {
-            for (const p of body.pages) {
-              const existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(p.slug).first();
-              if (existing) continue;
-              
-              await env.DB.prepare(`
-                INSERT INTO pages (title, slug, content, seo_title, seo_description, seo_keywords, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-              `).bind(
-                p.title || 'Imported Page',
-                p.slug || 'imported-' + Date.now(),
-                p.content || '[]',
-                p.seo_title || '',
-                p.seo_description || '',
-                p.seo_keywords || ''
-              ).run();
-              pagesCount++;
-            }
-          }
-          
-          // Import reviews
-          if (body.reviews && Array.isArray(body.reviews)) {
-            for (const r of body.reviews) {
-              await env.DB.prepare(`
-                INSERT INTO reviews (product_id, author_name, rating, comment, status, show_on_product, delivered_video_url, delivered_thumbnail_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-              `).bind(
-                r.product_id || 1,
-                r.author_name || 'Anonymous',
-                r.rating || 5,
-                r.comment || '',
-                r.status || 'approved',
-                r.show_on_product !== undefined ? r.show_on_product : 1,
-                r.delivered_video_url || null,
-                r.delivered_thumbnail_url || null
-              ).run();
-              reviewsCount++;
-            }
-          }
-          
-          return json({ success: true, products: productsCount, pages: pagesCount, reviews: reviewsCount });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-
-      // Test Google Sheets sync
-      if (method === 'POST' && path === '/api/admin/test-google-sync') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-
-        try {
-          const body = await req.json();
-          const { googleUrl } = body;
-
-          if (!googleUrl) {
-            return json({ error: 'Google Web App URL required' }, 400);
-          }
-
-          const orders = await env.DB.prepare(`
-            SELECT * FROM orders ORDER BY created_at DESC LIMIT 10
-          `).all();
-
-          // Convert created_at to ISO 8601 format with Z suffix for UTC
-          const sampleOrders = (orders.results || []).map(order => {
-            if (order.created_at && typeof order.created_at === 'string') {
-              order.created_at = order.created_at.replace(' ', 'T') + 'Z';
-            }
-            return order;
-          });
-
-          const response = await fetch(googleUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              test: true,
-              timestamp: Date.now(),
-              sample_orders: sampleOrders
-            })
-          });
-
-          if (!response.ok) {
-            throw new Error(`Google Web App returned ${response.status}`);
-          }
-
-          const result = await response.text();
-
-          return json({
-            success: true,
-            message: 'Test data sent to Google Sheets',
-            google_response: result
-          });
-        } catch (error) {
-          return json({ error: error.message }, 500);
-        }
-      }
-
-      // Rewrite certain admin routes without ".html" to their corresponding HTML files.
-      // If a request is made to /admin/pages or /admin/dashboard (without .html),
-      // check if there is a static HTML file with that name and serve it.  This
-      // helps ensure the new admin UI is served even when the user omits the
-      // file extension.  All admin navigation now routes through the dashboard.
-      // ----- Admin static routes -----
-      // Serve admin HTML files without requiring ".html" in the URL.  For example,
-      // /admin/dashboard will load /admin/dashboard.html and /admin or /admin/
-      // will load /admin/index.html.  Without this logic a user navigating to
-      // these routes would receive a 404 or be redirected back to the homepage,
-      // which could cause a redirect loop.  See 【979016842149196†L0-L1】 for evidence of the redirect error.
-      if (env.ASSETS && (path === '/admin' || path.startsWith('/admin/')) && !path.includes('.')) {
-        let htmlPath = path;
-        // Normalize root admin paths to index.html
-        if (htmlPath === '/admin' || htmlPath === '/admin/' || htmlPath === '/admin/index') {
-          htmlPath = '/admin/index.html';
-        } else {
-          // Strip any trailing slash and append .html
-          htmlPath = htmlPath.replace(/\/$/, '') + '.html';
-        }
-        // Create a new URL with the HTML path
-        const rewrittenUrl = new URL(htmlPath, url.origin);
-        // Create a new request for the HTML file
-        const htmlReq = new Request(rewrittenUrl.toString(), {
-          method: 'GET',
-          redirect: 'manual'
-        });
-        // Fetch the HTML file from static assets
-        const assetResp = await env.ASSETS.fetch(htmlReq);
-        // If we got the file successfully, return it with proper headers
-        if (assetResp && assetResp.status === 200) {
-          const headers = new Headers(assetResp.headers);
-          headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-          headers.set('Pragma', 'no-cache');
-          headers.set('X-Worker-Version', VERSION);
-          headers.set('Content-Type', 'text/html; charset=utf-8');
-          return new Response(assetResp.body, { status: 200, headers });
+return new Response(assetResp.body, { status: 200, headers });
         }
       }
       if (path === '/api/debug') {
