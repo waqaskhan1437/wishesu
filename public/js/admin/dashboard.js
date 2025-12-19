@@ -49,12 +49,18 @@
   }
 
   async function loadView(view) {
+    // Cleanup chat polling if user navigates away
+    if (window.__chatPollTimer) {
+      clearInterval(window.__chatPollTimer);
+      window.__chatPollTimer = null;
+    }
     document.getElementById('page-title').textContent = view.charAt(0).toUpperCase() + view.slice(1);
     const panel = document.getElementById('main-panel');
     
     switch(view) {
       case 'dashboard': await loadDashboard(panel); break;
       case 'orders': await loadOrders(panel); break;
+      case 'chats': await loadChats(panel); break;
       case 'products': await loadProducts(panel); break;
       case 'reviews': await loadReviews(panel); break;
       case 'settings': loadSettings(panel); break;
@@ -2208,4 +2214,189 @@
     renderProductLists();
     renderReviewLists();
   }
+
+  // ------------------------------
+  // Chats (Admin support inbox)
+  // ------------------------------
+  async function loadChats(panel) {
+    panel.innerHTML = `
+      <div style="display:flex; gap:12px; height:calc(100vh - 170px); min-height:520px;">
+        <div id="chats-sessions" style="width:320px; border:1px solid #e6e6e6; border-radius:12px; overflow:auto; background:#fff;">
+          <div style="padding:10px 12px; border-bottom:1px solid #eee; font-weight:700;">Chats</div>
+          <div id="chats-sessions-list"></div>
+        </div>
+
+        <div style="flex:1; border:1px solid #e6e6e6; border-radius:12px; overflow:hidden; background:#fff; display:flex; flex-direction:column;">
+          <div id="chats-header" style="padding:10px 12px; border-bottom:1px solid #eee; font-weight:700;">Select a chat</div>
+          <div id="chats-messages" style="flex:1; overflow:auto; padding:12px; background:#fafafa;"></div>
+          <div style="display:flex; gap:10px; padding:10px 12px; border-top:1px solid #eee;">
+            <input id="chats-input" placeholder="Type your reply…" style="flex:1; border:1px solid #ddd; border-radius:10px; padding:10px; font:14px system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;" />
+            <button id="chats-send" style="background:#111; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:700;">Send</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const sessionsListEl = panel.querySelector('#chats-sessions-list');
+    const headerEl = panel.querySelector('#chats-header');
+    const messagesEl = panel.querySelector('#chats-messages');
+    const inputEl = panel.querySelector('#chats-input');
+    const sendBtn = panel.querySelector('#chats-send');
+
+    let activeSessionId = null;
+    let lastId = 0;
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function renderBubble(msg) {
+      const mine = msg.role === 'admin';
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex';
+      wrap.style.margin = '8px 0';
+      wrap.style.justifyContent = mine ? 'flex-end' : 'flex-start';
+
+      const bubble = document.createElement('div');
+      bubble.style.maxWidth = '78%';
+      bubble.style.padding = '10px 12px';
+      bubble.style.borderRadius = '12px';
+      bubble.style.whiteSpace = 'pre-wrap';
+      bubble.style.wordBreak = 'break-word';
+
+      if (mine) {
+        bubble.style.background = '#111';
+        bubble.style.color = '#fff';
+        bubble.style.borderBottomRightRadius = '4px';
+      } else {
+        bubble.style.background = '#fff';
+        bubble.style.border = '1px solid #e6e6e6';
+        bubble.style.borderBottomLeftRadius = '4px';
+      }
+
+      const meta = document.createElement('div');
+      meta.style.fontSize = '11px';
+      meta.style.opacity = '0.7';
+      meta.style.marginTop = '6px';
+      meta.textContent = new Date(msg.created_at || Date.now()).toLocaleString();
+
+      bubble.innerHTML = `${escapeHtml(msg.content || '')}`;
+      bubble.appendChild(meta);
+
+      wrap.appendChild(bubble);
+      return wrap;
+    }
+
+    async function refreshSessions() {
+      const data = await apiFetch('/api/admin/chats/sessions');
+      const sessions = data.sessions || [];
+
+      sessionsListEl.innerHTML = '';
+      if (!sessions.length) {
+        sessionsListEl.innerHTML = '<div style="padding:12px; opacity:.7;">No chats yet.</div>';
+        return;
+      }
+
+      for (const s of sessions) {
+        const item = document.createElement('div');
+        item.style.padding = '10px 12px';
+        item.style.borderBottom = '1px solid #f0f0f0';
+        item.style.cursor = 'pointer';
+        item.dataset.sessionId = s.id;
+
+        if (s.id === activeSessionId) {
+          item.style.background = '#f7f7f7';
+        }
+
+        const title = document.createElement('div');
+        title.style.fontWeight = '700';
+        title.textContent = s.name ? `${s.name}` : s.email || s.id;
+
+        const sub = document.createElement('div');
+        sub.style.fontSize = '12px';
+        sub.style.opacity = '0.75';
+        sub.textContent = s.email || '';
+
+        const preview = document.createElement('div');
+        preview.style.fontSize = '12px';
+        preview.style.opacity = '0.7';
+        preview.style.marginTop = '6px';
+        preview.textContent = (s.last_message || '').slice(0, 60);
+
+        item.appendChild(title);
+        item.appendChild(sub);
+        if (s.last_message) item.appendChild(preview);
+
+        item.addEventListener('click', async () => {
+          activeSessionId = s.id;
+          lastId = 0;
+          headerEl.textContent = `${s.name || 'Customer'} • ${s.email || ''}`.trim();
+          messagesEl.innerHTML = '';
+          await syncMessages(true);
+          await refreshSessions();
+        });
+
+        sessionsListEl.appendChild(item);
+      }
+    }
+
+    async function syncMessages(forceScroll) {
+      if (!activeSessionId) return;
+      const data = await apiFetch(`/api/chat/sync?sessionId=${encodeURIComponent(activeSessionId)}&sinceId=${encodeURIComponent(String(lastId || 0))}`);
+      const msgs = data.messages || [];
+      for (const m of msgs) {
+        messagesEl.appendChild(renderBubble(m));
+      }
+      if (msgs.length) {
+        lastId = Number(data.lastId || msgs[msgs.length - 1].id) || lastId;
+        if (forceScroll) messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    }
+
+    async function sendReply() {
+      const text = (inputEl.value || '').trim();
+      if (!text) return;
+      if (!activeSessionId) return alert('Select a chat first.');
+
+      sendBtn.disabled = true;
+      try {
+        await apiFetch('/api/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: activeSessionId, role: 'admin', content: text })
+        });
+        inputEl.value = '';
+        await syncMessages(true);
+        await refreshSessions();
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', sendReply);
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendReply();
+      }
+    });
+
+    await refreshSessions();
+
+    // Poll sessions and active thread
+    window.__chatPollTimer = setInterval(async () => {
+      try {
+        await refreshSessions();
+        await syncMessages(false);
+      } catch (e) {
+        // ignore polling errors
+      }
+    }, 5000);
+  }
+
 })();

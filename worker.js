@@ -405,27 +405,33 @@ async function initDB(env) {
     } catch (e) { /* ignore */ }
 
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`).run();
-
-    // Chat automation tables (Customer Data Collection & Notification Workflow)
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS chat_sessions (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      email TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`).run();
-
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS chat_messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id TEXT NOT NULL,
-      role TEXT NOT NULL,
-      content TEXT,
-      payload_json TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`).run();
-
-    await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_id ON chat_messages(session_id, id)`).run();
     
-    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pages (
+    
+    // Chat sessions/messages for customer support widget
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        email TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT,
+        role TEXT,
+        content TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+
+    await env.DB.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_id
+      ON chat_messages(session_id, id)
+    `).run();
+await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       slug TEXT UNIQUE, title TEXT, content TEXT,
       meta_description TEXT, status TEXT DEFAULT 'published',
@@ -609,111 +615,138 @@ export default {
         return json({ serverTime: Date.now() });
       }
 
-
-      // ----- CHAT WORKFLOW ENDPOINTS -----
-      // Start a chat session (collect name/email)
-      if (method === 'POST' && path === '/api/chat/start') {
+      // ----- CUSTOMER CHAT API -----
+      if (path === '/api/chat/start' && method === 'POST') {
+        if (!env.DB) return json({ error: 'Database not configured' }, 500);
         await initDB(env);
-        const body = await req.json().catch(() => ({}));
-        const name = (body.name || '').toString().trim();
-        const email = (body.email || '').toString().trim().toLowerCase();
-        if (!name || !email) {
-          return json({ success: false, error: 'Name and email are required.' }, 400);
-        }
 
-        const sessionId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        let body;
+        try { body = await req.json(); } catch { body = {}; }
+        const name = (body.name || '').toString().trim();
+        const email = (body.email || '').toString().trim();
+
+        if (!name || !email) return json({ error: 'Name and email are required' }, 400);
+
+        const sessionId = crypto.randomUUID();
 
         await env.DB.prepare(
           `INSERT INTO chat_sessions (id, name, email) VALUES (?, ?, ?)`
         ).bind(sessionId, name, email).run();
 
-        return json({ success: true, sessionId });
+        return json({ sessionId });
       }
 
-      // Sync chat messages efficiently (polling)
-      if (method === 'GET' && path === '/api/chat/sync') {
+      if (path === '/api/chat/sync' && method === 'GET') {
+        if (!env.DB) return json({ error: 'Database not configured' }, 500);
         await initDB(env);
-        const sessionId = (url.searchParams.get('sessionId') || '').trim();
-        const sinceIdRaw = url.searchParams.get('sinceId');
-        const sinceId = sinceIdRaw ? Number(sinceIdRaw) : 0;
 
-        if (!sessionId) {
-          return json({ success: false, error: 'sessionId is required.' }, 400);
-        }
+        const sessionId = url.searchParams.get('sessionId');
+        const sinceIdRaw = url.searchParams.get('sinceId') || '0';
+        const sinceId = Number(sinceIdRaw) || 0;
+
+        if (!sessionId) return json({ error: 'sessionId is required' }, 400);
 
         const rows = await env.DB.prepare(
-          `SELECT id, role, content, created_at FROM chat_messages
+          `SELECT id, role, content, created_at
+           FROM chat_messages
            WHERE session_id = ? AND id > ?
            ORDER BY id ASC
            LIMIT 100`
         ).bind(sessionId, sinceId).all();
 
-        return json({ success: true, messages: rows.results || [] });
+        const messages = rows?.results || [];
+        const lastId = messages.length ? messages[messages.length - 1].id : sinceId;
+
+        return json({ messages, lastId });
       }
 
-      // Save a new message and trigger webhook on the first user message
-      if (method === 'POST' && path === '/api/chat/send') {
+      if (path === '/api/chat/send' && method === 'POST') {
+        if (!env.DB) return json({ error: 'Database not configured' }, 500);
         await initDB(env);
-        const body = await req.json().catch(() => ({}));
+
+        let body;
+        try { body = await req.json(); } catch { body = {}; }
+
         const sessionId = (body.sessionId || '').toString().trim();
-        const role = (body.role || 'user').toString().trim() || 'user';
-        const content = (body.message ?? body.content ?? '').toString();
+        const roleRaw = (body.role || 'user').toString().trim().toLowerCase();
+        const content = (body.content ?? body.message ?? '').toString();
 
-        if (!sessionId || !content) {
-          return json({ success: false, error: 'sessionId and message are required.' }, 400);
-        }
+        const role = ['user', 'admin', 'system'].includes(roleRaw) ? roleRaw : 'user';
 
-        // Determine whether this is the first user message BEFORE inserting this one
+        if (!sessionId) return json({ error: 'sessionId is required' }, 400);
+        if (!content || !content.trim()) return json({ error: 'content is required' }, 400);
+
+        // Determine if this is the user's first message BEFORE inserting the new one
         let isFirstUserMessage = false;
         if (role === 'user') {
-          const cRow = await env.DB.prepare(
-            `SELECT COUNT(*) AS c FROM chat_messages WHERE session_id = ? AND role = 'user'`
+          const countRow = await env.DB.prepare(
+            `SELECT COUNT(*) as c
+             FROM chat_messages
+             WHERE session_id = ? AND role = 'user'`
           ).bind(sessionId).first();
-          const existingCount = Number(cRow?.c || 0);
-          isFirstUserMessage = existingCount === 0;
+          isFirstUserMessage = Number(countRow?.c || 0) === 0;
         }
 
-        const payloadJson = JSON.stringify(body);
-        const ins = await env.DB.prepare(
-          `INSERT INTO chat_messages (session_id, role, content, payload_json) VALUES (?, ?, ?, ?)`
-        ).bind(sessionId, role, content, payloadJson).run();
+        const insertRes = await env.DB.prepare(
+          `INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)`
+        ).bind(sessionId, role, content).run();
 
-        // CRITICAL AUTOMATION STEP: on first user message, ping Google Script for email alert
+        // CRITICAL AUTOMATION STEP: trigger email alert webhook on first customer message
         if (isFirstUserMessage) {
           try {
-            const session = await env.DB.prepare(
-              `SELECT name, email FROM chat_sessions WHERE id = ?`
-            ).bind(sessionId).first();
-
-            const urlRow = await env.DB.prepare(
+            const setting = await env.DB.prepare(
               `SELECT value FROM settings WHERE key = ?`
             ).bind('GOOGLE_SCRIPT_URL').first();
 
-            const googleScriptUrl = (urlRow?.value || '').toString().trim();
-            if (googleScriptUrl) {
-              await fetch(googleScriptUrl, {
+            const scriptUrl = (setting?.value || '').toString().trim();
+
+            if (scriptUrl) {
+              const session = await env.DB.prepare(
+                `SELECT id, name, email, created_at FROM chat_sessions WHERE id = ?`
+              ).bind(sessionId).first();
+
+              await fetch(scriptUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  event: 'first_user_message',
+                  event: 'first_customer_message',
                   sessionId,
-                  name: session?.name || '',
-                  email: session?.email || '',
-                  message: content,
-                  messageId: ins?.meta?.last_row_id || null,
-                  createdAt: new Date().toISOString()
+                  name: session?.name || null,
+                  email: session?.email || null,
+                  created_at: session?.created_at || null,
+                  message: content
                 })
               });
-            } else {
-              console.warn('GOOGLE_SCRIPT_URL is not set in DB settings.');
             }
           } catch (e) {
-            console.error('Error triggering GOOGLE_SCRIPT_URL webhook:', e);
+            console.error('Chat webhook trigger failed:', e);
           }
         }
 
-        return json({ success: true });
+        return json({ success: true, messageId: insertRes?.meta?.last_row_id || null });
       }
+
+      // ----- ADMIN CHAT API -----
+      if (path === '/api/admin/chats/sessions' && method === 'GET') {
+        if (!env.DB) return json({ error: 'Database not configured' }, 500);
+        await initDB(env);
+
+        const rows = await env.DB.prepare(
+          `SELECT
+             s.id,
+             s.name,
+             s.email,
+             s.created_at,
+             (SELECT MAX(created_at) FROM chat_messages m WHERE m.session_id = s.id) AS last_message_at,
+             (SELECT content FROM chat_messages m2 WHERE m2.session_id = s.id ORDER BY id DESC LIMIT 1) AS last_message
+           FROM chat_sessions s
+           ORDER BY COALESCE(last_message_at, s.created_at) DESC
+           LIMIT 200`
+        ).all();
+
+        return json({ sessions: rows?.results || [] });
+      }
+
 
       // Test endpoint for admin debugging
       if (path === '/api/admin/test') {
