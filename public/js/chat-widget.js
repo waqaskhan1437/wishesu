@@ -1,502 +1,404 @@
 (function () {
-  const cfg = window.ChatWidgetConfig || {};
-  const WORKER_BASE = (cfg.workerBaseUrl || "").replace(/\/$/, "");
-  const TITLE = cfg.title || "Support Chat";
+  const API_BASE = '';
+  const POLL_MS = 5000;
 
-  if (!WORKER_BASE) {
-    console.warn("ChatWidgetConfig.workerBaseUrl is required");
-    return;
+  const storage = {
+    get(key) { try { return localStorage.getItem(key); } catch { return null; } },
+    set(key, val) { try { localStorage.setItem(key, val); } catch {} },
+    del(key) { try { localStorage.removeItem(key); } catch {} }
+  };
+
+  function el(tag, attrs = {}, children = []) {
+    const node = document.createElement(tag);
+    Object.entries(attrs).forEach(([k, v]) => {
+      if (k === 'style') Object.assign(node.style, v);
+      else if (k === 'class') node.className = v;
+      else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v);
+    });
+    (Array.isArray(children) ? children : [children]).forEach((c) => {
+      if (c == null) return;
+      if (typeof c === 'string') node.appendChild(document.createTextNode(c));
+      else node.appendChild(c);
+    });
+    return node;
   }
 
-  const LS_SESSION_KEY = "chat_widget_session_id";
-  const LS_PROFILE_KEY = "chat_widget_profile";
-
-  let sessionId = localStorage.getItem(LS_SESSION_KEY) || "";
-  let profile = safeJsonParse(localStorage.getItem(LS_PROFILE_KEY)) || null;
-
-  let isOpen = false;
-  let lastSeenTimestamp = 0; // we’ll use message.created_at as sync cursor
-  let pollTimer = null;
-
-  // ---- UI Inject ----
-  const styles = document.createElement("style");
-  styles.textContent = `
-    .cw-btn {
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      width: 56px;
-      height: 56px;
-      border-radius: 999px;
-      background: #111;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: grab;
-      user-select: none;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
-      z-index: 2147483647;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      font-size: 20px;
-    }
-    .cw-btn:active { cursor: grabbing; transform: scale(0.98); }
-
-    .cw-panel {
-      position: fixed;
-      right: 18px;
-      bottom: 84px;
-      width: 340px;
-      max-width: calc(100vw - 24px);
-      height: 460px;
-      max-height: calc(100vh - 110px);
-      background: #fff;
-      border-radius: 14px;
-      box-shadow: 0 16px 45px rgba(0,0,0,0.25);
-      overflow: hidden;
-      z-index: 2147483647;
-      display: none;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    }
-
-    .cw-header {
-      height: 48px;
-      background: #111;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 12px;
-      font-size: 14px;
-    }
-
-    .cw-close {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      user-select: none;
-      background: rgba(255,255,255,0.12);
-    }
-
-    .cw-body {
-      height: calc(100% - 48px);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .cw-messages {
-      flex: 1;
-      padding: 12px;
-      overflow: auto;
-      background: #fafafa;
-    }
-
-    .cw-msg {
-      margin: 8px 0;
-      display: flex;
-    }
-
-    .cw-msg.user { justify-content: flex-end; }
-    .cw-msg.assistant { justify-content: flex-start; }
-
-    .cw-bubble {
-      max-width: 78%;
-      padding: 10px 12px;
-      border-radius: 12px;
-      font-size: 13px;
-      line-height: 1.35;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      box-shadow: 0 6px 14px rgba(0,0,0,0.08);
-    }
-
-    .cw-msg.user .cw-bubble { background: #111; color: #fff; border-bottom-right-radius: 4px; }
-    .cw-msg.assistant .cw-bubble { background: #fff; color: #111; border: 1px solid #eee; border-bottom-left-radius: 4px; }
-
-    .cw-footer {
-      border-top: 1px solid #eee;
-      padding: 10px;
-      background: #fff;
-    }
-
-    .cw-row { display: flex; gap: 8px; }
-    .cw-input {
-      flex: 1;
-      padding: 10px 10px;
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      font-size: 13px;
-      outline: none;
-    }
-    .cw-send {
-      padding: 10px 12px;
-      border: 0;
-      border-radius: 10px;
-      background: #111;
-      color: #fff;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .cw-send:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    .cw-form {
-      padding: 12px;
-    }
-    .cw-label { font-size: 12px; color: #444; margin: 10px 0 6px; }
-    .cw-field {
-      width: 100%;
-      padding: 10px 10px;
-      border: 1px solid #ddd;
-      border-radius: 10px;
-      font-size: 13px;
-      outline: none;
-    }
-    .cw-primary {
-      margin-top: 12px;
-      width: 100%;
-      padding: 10px 12px;
-      border: 0;
-      border-radius: 10px;
-      background: #111;
-      color: #fff;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .cw-note { font-size: 12px; color: #666; margin-top: 10px; line-height: 1.35; }
-  `;
-  document.head.appendChild(styles);
-
-  const btn = document.createElement("div");
-  btn.className = "cw-btn";
-  btn.title = "Open chat";
-  btn.textContent = "💬";
-
-  const panel = document.createElement("div");
-  panel.className = "cw-panel";
-
-  panel.innerHTML = `
-    <div class="cw-header">
-      <div>${escapeHtml(TITLE)}</div>
-      <div class="cw-close" aria-label="Close">✕</div>
-    </div>
-    <div class="cw-body"></div>
-  `;
-
-  document.body.appendChild(btn);
-  document.body.appendChild(panel);
-
-  const bodyEl = panel.querySelector(".cw-body");
-  const closeEl = panel.querySelector(".cw-close");
-
-  closeEl.addEventListener("click", () => setOpen(false));
-
-  btn.addEventListener("click", () => {
-    // Clicking should not toggle if user is dragging; we’ll handle that with a small move threshold
-    if (!btn._dragMoved) setOpen(!isOpen);
-  });
-
-  // ---- Draggable floating button ----
-  makeDraggable(btn, {
-    onDragStart: () => (btn._dragMoved = false),
-    onDragMove: () => (btn._dragMoved = true),
-  });
-
-  // ---- Initial render ----
-  render();
-
-  // ---- Polling ----
-  function startPolling() {
-    stopPolling();
-    pollTimer = setInterval(async () => {
-      if (!isOpen || !sessionId) return;
-      await syncMessages();
-    }, 5000);
-  }
-
-  function stopPolling() {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = null;
-  }
-
-  function setOpen(open) {
-    isOpen = open;
-    panel.style.display = isOpen ? "block" : "none";
-    if (isOpen) {
-      render();
-      startPolling();
-      if (sessionId) syncMessages();
-    } else {
-      stopPolling();
-    }
-  }
-
-  function render() {
-    if (!sessionId || !profile) {
-      renderProfileForm();
-      return;
-    }
-    renderChatUI();
-  }
-
-  function renderProfileForm() {
-    bodyEl.innerHTML = `
-      <div class="cw-form">
-        <div class="cw-note">Enter your details to start. We'll send a notification when you send your first message.</div>
-
-        <div class="cw-label">Name</div>
-        <input class="cw-field" type="text" id="cw_name" placeholder="Your name" />
-
-        <div class="cw-label">Email</div>
-        <input class="cw-field" type="email" id="cw_email" placeholder="you@example.com" />
-
-        <button class="cw-primary" id="cw_start">Start chat</button>
-
-        <div class="cw-note" id="cw_err" style="display:none;color:#b00020;"></div>
-      </div>
+  function injectStyles() {
+    if (document.getElementById('cw-styles')) return;
+    const css = `
+      #cw-btn {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        width: 56px;
+        height: 56px;
+        border-radius: 999px;
+        border: 0;
+        cursor: grab;
+        z-index: 2147483000;
+        box-shadow: 0 10px 30px rgba(0,0,0,.18);
+        background: #111827;
+        color: #fff;
+        font: 600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+      #cw-btn:active { cursor: grabbing; }
+      #cw-panel {
+        position: fixed;
+        right: 18px;
+        bottom: 86px;
+        width: 340px;
+        max-width: calc(100vw - 24px);
+        height: 420px;
+        max-height: calc(100vh - 120px);
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 20px 60px rgba(0,0,0,.22);
+        z-index: 2147483000;
+        display: none;
+        overflow: hidden;
+        border: 1px solid rgba(0,0,0,.06);
+      }
+      #cw-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        background: #111827;
+        color: #fff;
+        cursor: grab;
+        user-select: none;
+      }
+      #cw-header:active { cursor: grabbing; }
+      #cw-title { font: 600 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+      #cw-close {
+        border: 0;
+        background: transparent;
+        color: #fff;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 0 6px;
+      }
+      #cw-body { height: calc(100% - 44px); display: flex; flex-direction: column; }
+      #cw-messages {
+        flex: 1;
+        padding: 12px;
+        overflow: auto;
+        background: #f8fafc;
+      }
+      .cw-msg {
+        display: inline-block;
+        max-width: 85%;
+        margin: 6px 0;
+        padding: 10px 10px;
+        border-radius: 12px;
+        font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      .cw-user { background: #111827; color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
+      .cw-assistant { background: #fff; color: #0f172a; border: 1px solid rgba(0,0,0,.08); border-bottom-left-radius: 4px; }
+      #cw-inputbar {
+        display: flex;
+        gap: 8px;
+        padding: 10px;
+        border-top: 1px solid rgba(0,0,0,.08);
+        background: #fff;
+      }
+      #cw-text {
+        flex: 1;
+        resize: none;
+        border-radius: 10px;
+        border: 1px solid rgba(0,0,0,.12);
+        padding: 10px;
+        outline: none;
+        font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        min-height: 38px;
+        max-height: 90px;
+      }
+      #cw-send {
+        width: 78px;
+        border-radius: 10px;
+        border: 0;
+        cursor: pointer;
+        background: #111827;
+        color: #fff;
+        font: 600 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+      #cw-start {
+        padding: 12px;
+      }
+      #cw-start h4 { margin: 0 0 10px; font: 700 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #0f172a; }
+      .cw-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+      .cw-field label { font: 600 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #334155; }
+      .cw-field input {
+        border-radius: 10px;
+        border: 1px solid rgba(0,0,0,.12);
+        padding: 10px;
+        outline: none;
+        font: 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+      #cw-start-btn {
+        width: 100%;
+        border-radius: 10px;
+        border: 0;
+        cursor: pointer;
+        background: #111827;
+        color: #fff;
+        padding: 10px;
+        font: 700 13px/1 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      }
+      #cw-hint { margin-top: 8px; color: #64748b; font: 12px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
     `;
+    const style = el('style', { id: 'cw-styles' }, css);
+    document.head.appendChild(style);
+  }
 
-    const nameEl = bodyEl.querySelector("#cw_name");
-    const emailEl = bodyEl.querySelector("#cw_email");
-    const startEl = bodyEl.querySelector("#cw_start");
-    const errEl = bodyEl.querySelector("#cw_err");
+  function makeDraggable(target, handle, boundsPadding = 8) {
+    let startX = 0, startY = 0, startLeft = 0, startTop = 0, dragging = false;
 
-    startEl.addEventListener("click", async () => {
-      errEl.style.display = "none";
-      startEl.disabled = true;
+    function pointerDown(e) {
+      dragging = true;
+      (handle || target).setPointerCapture?.(e.pointerId);
+      const rect = target.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      startLeft = rect.left;
+      startTop = rect.top;
+      e.preventDefault();
+    }
 
-      const name = (nameEl.value || "").trim();
-      const email = (emailEl.value || "").trim();
+    function pointerMove(e) {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      let left = startLeft + dx;
+      let top = startTop + dy;
 
-      if (!email) {
-        showError("Email is required");
-        startEl.disabled = false;
+      const maxLeft = window.innerWidth - rectWidth(target) - boundsPadding;
+      const maxTop = window.innerHeight - rectHeight(target) - boundsPadding;
+      left = Math.max(boundsPadding, Math.min(maxLeft, left));
+      top = Math.max(boundsPadding, Math.min(maxTop, top));
+
+      target.style.left = `${left}px`;
+      target.style.top = `${top}px`;
+      target.style.right = 'auto';
+      target.style.bottom = 'auto';
+    }
+
+    function pointerUp() { dragging = false; }
+
+    (handle || target).addEventListener('pointerdown', pointerDown);
+    window.addEventListener('pointermove', pointerMove);
+    window.addEventListener('pointerup', pointerUp);
+  }
+
+  function rectWidth(node) { return node.getBoundingClientRect().width; }
+  function rectHeight(node) { return node.getBoundingClientRect().height; }
+
+  async function api(path, opts = {}) {
+    const res = await fetch(API_BASE + path, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) {
+      const msg = data.error || `Request failed (${res.status})`;
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  function scrollToBottom(msgWrap) {
+    msgWrap.scrollTop = msgWrap.scrollHeight + 99999;
+  }
+
+  function renderMessage(msgWrap, m) {
+    const cls = m.role === 'user' ? 'cw-msg cw-user' : 'cw-msg cw-assistant';
+    const node = el('div', { class: cls, 'data-id': String(m.id || '') }, m.content || '');
+    msgWrap.appendChild(node);
+    scrollToBottom(msgWrap);
+  }
+
+  function mount() {
+    injectStyles();
+
+    const btn = el('button', { id: 'cw-btn', type: 'button', title: 'Chat' }, 'Chat');
+    const panel = el('div', { id: 'cw-panel' });
+
+    const header = el('div', { id: 'cw-header' }, [
+      el('div', { id: 'cw-title' }, 'Chat'),
+      el('button', { id: 'cw-close', type: 'button', title: 'Close' }, '×')
+    ]);
+
+    const body = el('div', { id: 'cw-body' });
+    const messages = el('div', { id: 'cw-messages' });
+
+    const inputBar = el('div', { id: 'cw-inputbar' }, [
+      el('textarea', { id: 'cw-text', rows: '1', placeholder: 'Type a message…' }),
+      el('button', { id: 'cw-send', type: 'button' }, 'Send')
+    ]);
+
+    body.appendChild(messages);
+    body.appendChild(inputBar);
+
+    panel.appendChild(header);
+    panel.appendChild(body);
+
+    document.body.appendChild(btn);
+    document.body.appendChild(panel);
+
+    // Draggable button and panel
+    makeDraggable(btn, btn);
+    makeDraggable(panel, header);
+
+    const state = {
+      open: false,
+      sessionId: storage.get('cw_sessionId'),
+      lastId: Number(storage.get('cw_lastId') || 0),
+      polling: null
+    };
+
+    function setOpen(open) {
+      state.open = open;
+      panel.style.display = open ? 'block' : 'none';
+      if (open) {
+        ensureStartedUI();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    }
+
+    btn.addEventListener('click', () => setOpen(!state.open));
+    header.querySelector('#cw-close').addEventListener('click', () => setOpen(false));
+
+    async function startSession(name, email) {
+      const resp = await api('/api/chat/start', {
+        method: 'POST',
+        body: JSON.stringify({ name, email })
+      });
+      state.sessionId = resp.sessionId;
+      state.lastId = 0;
+      storage.set('cw_sessionId', state.sessionId);
+      storage.set('cw_lastId', '0');
+    }
+
+    async function sendMessage(text) {
+      await api('/api/chat/send', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: state.sessionId, role: 'user', message: text })
+      });
+    }
+
+    async function sync() {
+      if (!state.sessionId) return;
+      const resp = await api(`/api/chat/sync?sessionId=${encodeURIComponent(state.sessionId)}&sinceId=${encodeURIComponent(String(state.lastId || 0))}`, {
+        method: 'GET'
+      });
+      const list = resp.messages || [];
+      if (list.length) {
+        list.forEach((m) => {
+          renderMessage(messages, m);
+          state.lastId = Math.max(state.lastId, Number(m.id || 0));
+        });
+        storage.set('cw_lastId', String(state.lastId));
+      }
+    }
+
+    function stopPolling() {
+      if (state.polling) {
+        clearInterval(state.polling);
+        state.polling = null;
+      }
+    }
+
+    function startPolling() {
+      stopPolling();
+      state.polling = setInterval(() => {
+        sync().catch(() => {});
+      }, POLL_MS);
+      sync().catch(() => {});
+    }
+
+    function clearMessagesUI() {
+      while (messages.firstChild) messages.removeChild(messages.firstChild);
+    }
+
+    function ensureStartedUI() {
+      if (state.sessionId) {
+        // Remove start UI if present
+        const startEl = panel.querySelector('#cw-start');
+        if (startEl) startEl.remove();
         return;
       }
 
-      try {
-        const res = await fetch(`${WORKER_BASE}/api/chat/start`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email }),
-        });
+      // Hide input bar until started
+      inputBar.style.display = 'none';
+      clearMessagesUI();
 
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data || !data.ok) {
-          throw new Error((data && data.error) || `Start failed (${res.status})`);
+      const start = el('div', { id: 'cw-start' }, [
+        el('h4', {}, 'Before we start'),
+        el('div', { class: 'cw-field' }, [el('label', {}, 'Name'), el('input', { id: 'cw-name', type: 'text', autocomplete: 'name', placeholder: 'Your name' })]),
+        el('div', { class: 'cw-field' }, [el('label', {}, 'Email'), el('input', { id: 'cw-email', type: 'email', autocomplete: 'email', placeholder: 'you@example.com' })]),
+        el('button', { id: 'cw-start-btn', type: 'button' }, 'Start chat'),
+        el('div', { id: 'cw-hint' }, 'We’ll use this to notify the team and follow up if needed.')
+      ]);
+
+      body.insertBefore(start, messages);
+
+      start.querySelector('#cw-start-btn').addEventListener('click', async () => {
+        const name = (start.querySelector('#cw-name').value || '').trim();
+        const email = (start.querySelector('#cw-email').value || '').trim();
+        if (!name || !email) {
+          alert('Please enter your name and email.');
+          return;
         }
-
-        sessionId = data.sessionId;
-        profile = { name, email };
-
-        localStorage.setItem(LS_SESSION_KEY, sessionId);
-        localStorage.setItem(LS_PROFILE_KEY, JSON.stringify(profile));
-
-        lastSeenTimestamp = 0;
-        renderChatUI();
-        await syncMessages();
-      } catch (e) {
-        showError(e.message || "Failed to start");
-      } finally {
-        startEl.disabled = false;
-      }
-    });
-
-    function showError(msg) {
-      errEl.textContent = msg;
-      errEl.style.display = "block";
-    }
-  }
-
-  function renderChatUI() {
-    bodyEl.innerHTML = `
-      <div class="cw-messages" id="cw_msgs"></div>
-      <div class="cw-footer">
-        <div class="cw-row">
-          <input class="cw-input" id="cw_input" type="text" placeholder="Type a message..." />
-          <button class="cw-send" id="cw_send">Send</button>
-        </div>
-      </div>
-    `;
-
-    const input = bodyEl.querySelector("#cw_input");
-    const send = bodyEl.querySelector("#cw_send");
-
-    send.addEventListener("click", async () => {
-      await sendMessage(input, send);
-    });
-
-    input.addEventListener("keydown", async (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        await sendMessage(input, send);
-      }
-    });
-
-    // Helpful welcome bubble (local-only)
-    appendMessage({ role: "assistant", content: "Hi! Send a message and we’ll get back to you.", created_at: Date.now() }, true);
-  }
-
-  async function sendMessage(inputEl, btnEl) {
-    const text = (inputEl.value || "").trim();
-    if (!text || !sessionId) return;
-
-    btnEl.disabled = true;
-
-    // Optimistic render
-    const optimisticTs = Date.now();
-    appendMessage({ role: "user", content: text, created_at: optimisticTs }, true);
-    inputEl.value = "";
-
-    try {
-      const clientMessageId = `c_${Math.random().toString(16).slice(2)}_${optimisticTs}`;
-
-      const res = await fetch(`${WORKER_BASE}/api/chat/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          role: "user",
-          content: text,
-          clientMessageId,
-          payload: {
-            profile,
-            page: {
-              url: location.href,
-              title: document.title,
-              referrer: document.referrer,
-              userAgent: navigator.userAgent,
-            },
-          },
-        }),
+        try {
+          await startSession(name, email);
+          start.remove();
+          inputBar.style.display = 'flex';
+          await sync();
+        } catch (e) {
+          alert(e.message || 'Unable to start chat.');
+        }
       });
+    }
 
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data || !data.ok) {
-        throw new Error((data && data.error) || `Send failed (${res.status})`);
+    // Sending UI
+    const textArea = inputBar.querySelector('#cw-text');
+    const sendBtn = inputBar.querySelector('#cw-send');
+
+    function doSend() {
+      const text = (textArea.value || '').trim();
+      if (!text || !state.sessionId) return;
+      textArea.value = '';
+      renderMessage(messages, { role: 'user', content: text, id: '' });
+      sendMessage(text).then(() => sync()).catch((e) => {
+        renderMessage(messages, { role: 'assistant', content: `Error: ${e.message || 'Failed to send.'}`, id: '' });
+      });
+    }
+
+    sendBtn.addEventListener('click', doSend);
+    textArea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        doSend();
       }
-
-      // Sync after send
-      await syncMessages();
-    } catch (e) {
-      appendMessage({ role: "assistant", content: "Message failed to send. Please try again.", created_at: Date.now() }, true);
-    } finally {
-      btnEl.disabled = false;
-    }
-  }
-
-  async function syncMessages() {
-    if (!sessionId) return;
-
-    const since = lastSeenTimestamp ? String(lastSeenTimestamp) : "";
-    const url = new URL(`${WORKER_BASE}/api/chat/sync`);
-    url.searchParams.set("sessionId", sessionId);
-    url.searchParams.set("limit", "200");
-    if (since) url.searchParams.set("since", since);
-
-    const res = await fetch(url.toString(), { method: "GET" });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data || !data.ok) return;
-
-    const msgs = data.messages || [];
-    if (!Array.isArray(msgs) || msgs.length === 0) return;
-
-    for (const m of msgs) {
-      appendMessage(m, false);
-      if (m.created_at && m.created_at > lastSeenTimestamp) lastSeenTimestamp = m.created_at;
-    }
-  }
-
-  function appendMessage(msg, autoScroll) {
-    const msgsEl = bodyEl.querySelector("#cw_msgs");
-    if (!msgsEl) return;
-
-    const role = msg.role === "user" ? "user" : "assistant";
-    const wrap = document.createElement("div");
-    wrap.className = `cw-msg ${role}`;
-
-    const bubble = document.createElement("div");
-    bubble.className = "cw-bubble";
-    bubble.textContent = String(msg.content || "");
-
-    wrap.appendChild(bubble);
-    msgsEl.appendChild(wrap);
-
-    if (autoScroll) msgsEl.scrollTop = msgsEl.scrollHeight;
-  }
-
-  // ---- Utilities ----
-  function safeJsonParse(s) {
-    try {
-      return JSON.parse(s);
-    } catch {
-      return null;
-    }
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;",
-    }[c]));
-  }
-
-  function makeDraggable(el, hooks) {
-    let startX = 0,
-      startY = 0;
-    let origX = 0,
-      origY = 0;
-    let dragging = false;
-
-    el.addEventListener("pointerdown", (e) => {
-      dragging = true;
-      el.setPointerCapture(e.pointerId);
-
-      hooks && hooks.onDragStart && hooks.onDragStart();
-
-      startX = e.clientX;
-      startY = e.clientY;
-
-      const rect = el.getBoundingClientRect();
-      origX = rect.left;
-      origY = rect.top;
-
-      // Switch to explicit left/top for reliable dragging
-      el.style.right = "auto";
-      el.style.bottom = "auto";
-      el.style.left = `${origX}px`;
-      el.style.top = `${origY}px`;
     });
 
-    el.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-
-      const nx = clamp(origX + dx, 8, window.innerWidth - el.offsetWidth - 8);
-      const ny = clamp(origY + dy, 8, window.innerHeight - el.offsetHeight - 8);
-
-      el.style.left = `${nx}px`;
-      el.style.top = `${ny}px`;
-
-      hooks && hooks.onDragMove && hooks.onDragMove();
-    });
-
-    el.addEventListener("pointerup", () => {
-      dragging = false;
-      hooks && hooks.onDragEnd && hooks.onDragEnd();
-      setTimeout(() => (el._dragMoved = false), 0);
-    });
-
-    function clamp(v, min, max) {
-      return Math.max(min, Math.min(max, v));
+    // If a session already exists, show input bar immediately
+    if (state.sessionId) {
+      inputBar.style.display = 'flex';
+      sync().catch(() => {});
+    } else {
+      inputBar.style.display = 'none';
     }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mount);
+  } else {
+    mount();
   }
 })();

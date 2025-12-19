@@ -20,7 +20,6 @@ not_found_handling = "404-page"
 [[d1_databases]]
 binding = "DB"
 database_name = "secure-shop-db"
-database_id = "YOUR_D1_DB_ID"
 
 [[r2_buckets]]
 binding = "PRODUCT_MEDIA"
@@ -40,6 +39,3 @@ crons = ["0 2 * * *"]
 # help confirm that you are receiving the latest build.
 [vars]
 VERSION = "18"
-
-GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/XXXX/exec"
-ALLOWED_ORIGINS = "*"

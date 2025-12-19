@@ -405,6 +405,25 @@ async function initDB(env) {
     } catch (e) { /* ignore */ }
 
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`).run();
+
+    // Chat automation tables (Customer Data Collection & Notification Workflow)
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS chat_sessions (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      email TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`).run();
+
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT,
+      payload_json TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`).run();
+
+    await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_id ON chat_messages(session_id, id)`).run();
     
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -425,40 +444,7 @@ async function initDB(env) {
       completed_at DATETIME
     )`).run();
 
-    
-    // --- Chat workflow tables ---
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS chat_sessions (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        email TEXT,
-        created_at INTEGER NOT NULL,
-        last_seen_at INTEGER NOT NULL,
-        first_message_sent INTEGER NOT NULL DEFAULT 0,
-        metadata TEXT
-      )
-    `).run();
-
-    await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_chat_sessions_email ON chat_sessions(email)`).run();
-    await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_chat_sessions_created_at ON chat_sessions(created_at)`).run();
-
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS chat_messages (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        client_message_id TEXT,
-        raw_payload TEXT,
-        FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
-      )
-    `).run();
-
-    await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created ON chat_messages(session_id, created_at)`).run();
-    await env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id)`).run();
-
-dbReady = true;
+    dbReady = true;
   } catch (e) {
     console.error('DB init error:', e);
   }
@@ -484,11 +470,6 @@ async function maybePurgeCache(env) {
   try {
     // Ensure the database schema exists
     await initDB(env);
-        // --- Chat workflow routes (Customer Data Collection & Notification) ---
-        if (path === '/api/chat/start') return chat_start(req, env);
-        if (path === '/api/chat/sync') return chat_sync(req, env);
-        if (path === '/api/chat/send') return chat_send(req, env, ctx);
-
     // Fetch the last version that triggered a purge
     let row = null;
     try {
@@ -597,7 +578,7 @@ async function getGoogleScriptUrl(env) {
 }
 
 export default {
-  async fetch(req, env, ctx) {
+  async fetch(req, env) {
     const url = new URL(req.url);
     // Normalize the request path.  Collapse multiple consecutive slashes
     // into a single slash (e.g. //api/debug -> /api/debug) to avoid
@@ -626,6 +607,112 @@ export default {
       // Server time endpoint for accurate countdown calculations
       if (path === '/api/time') {
         return json({ serverTime: Date.now() });
+      }
+
+
+      // ----- CHAT WORKFLOW ENDPOINTS -----
+      // Start a chat session (collect name/email)
+      if (method === 'POST' && path === '/api/chat/start') {
+        await initDB(env);
+        const body = await req.json().catch(() => ({}));
+        const name = (body.name || '').toString().trim();
+        const email = (body.email || '').toString().trim().toLowerCase();
+        if (!name || !email) {
+          return json({ success: false, error: 'Name and email are required.' }, 400);
+        }
+
+        const sessionId = (globalThis.crypto && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        await env.DB.prepare(
+          `INSERT INTO chat_sessions (id, name, email) VALUES (?, ?, ?)`
+        ).bind(sessionId, name, email).run();
+
+        return json({ success: true, sessionId });
+      }
+
+      // Sync chat messages efficiently (polling)
+      if (method === 'GET' && path === '/api/chat/sync') {
+        await initDB(env);
+        const sessionId = (url.searchParams.get('sessionId') || '').trim();
+        const sinceIdRaw = url.searchParams.get('sinceId');
+        const sinceId = sinceIdRaw ? Number(sinceIdRaw) : 0;
+
+        if (!sessionId) {
+          return json({ success: false, error: 'sessionId is required.' }, 400);
+        }
+
+        const rows = await env.DB.prepare(
+          `SELECT id, role, content, created_at FROM chat_messages
+           WHERE session_id = ? AND id > ?
+           ORDER BY id ASC
+           LIMIT 100`
+        ).bind(sessionId, sinceId).all();
+
+        return json({ success: true, messages: rows.results || [] });
+      }
+
+      // Save a new message and trigger webhook on the first user message
+      if (method === 'POST' && path === '/api/chat/send') {
+        await initDB(env);
+        const body = await req.json().catch(() => ({}));
+        const sessionId = (body.sessionId || '').toString().trim();
+        const role = (body.role || 'user').toString().trim() || 'user';
+        const content = (body.message ?? body.content ?? '').toString();
+
+        if (!sessionId || !content) {
+          return json({ success: false, error: 'sessionId and message are required.' }, 400);
+        }
+
+        // Determine whether this is the first user message BEFORE inserting this one
+        let isFirstUserMessage = false;
+        if (role === 'user') {
+          const cRow = await env.DB.prepare(
+            `SELECT COUNT(*) AS c FROM chat_messages WHERE session_id = ? AND role = 'user'`
+          ).bind(sessionId).first();
+          const existingCount = Number(cRow?.c || 0);
+          isFirstUserMessage = existingCount === 0;
+        }
+
+        const payloadJson = JSON.stringify(body);
+        const ins = await env.DB.prepare(
+          `INSERT INTO chat_messages (session_id, role, content, payload_json) VALUES (?, ?, ?, ?)`
+        ).bind(sessionId, role, content, payloadJson).run();
+
+        // CRITICAL AUTOMATION STEP: on first user message, ping Google Script for email alert
+        if (isFirstUserMessage) {
+          try {
+            const session = await env.DB.prepare(
+              `SELECT name, email FROM chat_sessions WHERE id = ?`
+            ).bind(sessionId).first();
+
+            const urlRow = await env.DB.prepare(
+              `SELECT value FROM settings WHERE key = ?`
+            ).bind('GOOGLE_SCRIPT_URL').first();
+
+            const googleScriptUrl = (urlRow?.value || '').toString().trim();
+            if (googleScriptUrl) {
+              await fetch(googleScriptUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event: 'first_user_message',
+                  sessionId,
+                  name: session?.name || '',
+                  email: session?.email || '',
+                  message: content,
+                  messageId: ins?.meta?.last_row_id || null,
+                  createdAt: new Date().toISOString()
+                })
+              });
+            } else {
+              console.warn('GOOGLE_SCRIPT_URL is not set in DB settings.');
+            }
+          } catch (e) {
+            console.error('Error triggering GOOGLE_SCRIPT_URL webhook:', e);
+          }
+        }
+
+        return json({ success: true });
       }
 
       // Test endpoint for admin debugging
@@ -3236,201 +3323,3 @@ export default {
     }
   }
 };
-
-
-
-/** =========================================================
- * Chat Workflow API (Customer Data Collection & Notification)
- * Endpoints:
- *  POST /api/chat/start  { name, email, metadata? } -> { sessionId }
- *  GET  /api/chat/sync?sessionId=...&since=...&limit=... -> { messages }
- *  POST /api/chat/send   { sessionId, content, role?, clientMessageId?, payload? }
- *  On first user message: POST to env.GOOGLE_SCRIPT_URL (if set)
- * ========================================================= */
-
-function chat_uuid() {
-  return crypto.randomUUID();
-}
-
-function chat_nowMs() {
-  return Date.now();
-}
-
-function chat_normEmail(email) {
-  return (email || '').toString().trim().toLowerCase();
-}
-
-function chat_safeStr(v, max = 4000) {
-  const s = (v === undefined || v === null) ? '' : String(v);
-  return s.length > max ? s.slice(0, max) : s;
-}
-
-async function chat_readJson(req) {
-  const ct = req.headers.get('Content-Type') || '';
-  if (!ct.includes('application/json')) {
-    throw new Error('Expected application/json');
-  }
-  return await req.json();
-}
-
-async function chat_start(req, env) {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'POST') return json({ success: false, error: 'Method Not Allowed' }, 405);
-
-  try {
-    const body = await chat_readJson(req);
-    const name = chat_safeStr(body.name, 200);
-    const email = chat_normEmail(body.email);
-    const metadata = body.metadata ? JSON.stringify(body.metadata) : null;
-
-    if (!email) return json({ success: false, error: 'Email is required' }, 400);
-
-    const sessionId = chat_uuid();
-    const ts = chat_nowMs();
-
-    await env.DB.prepare(
-      `INSERT INTO chat_sessions (id, name, email, created_at, last_seen_at, first_message_sent, metadata)
-       VALUES (?, ?, ?, ?, ?, 0, ?)`
-    ).bind(sessionId, name, email, ts, ts, metadata).run();
-
-    return json({ success: true, sessionId });
-  } catch (e) {
-    return json({ success: false, error: e.message || 'Bad Request' }, 400);
-  }
-}
-
-async function chat_sync(req, env) {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'GET') return json({ success: false, error: 'Method Not Allowed' }, 405);
-
-  const url = new URL(req.url);
-  const sessionId = url.searchParams.get('sessionId') || '';
-  const since = url.searchParams.get('since') || '';
-  const limitRaw = url.searchParams.get('limit') || '50';
-  const limit = Math.max(1, Math.min(parseInt(limitRaw, 10) || 50, 200));
-
-  if (!sessionId) return json({ success: false, error: 'sessionId is required' }, 400);
-
-  const session = await env.DB.prepare(`SELECT id FROM chat_sessions WHERE id = ?`).bind(sessionId).first();
-  if (!session) return json({ success: false, error: 'Invalid sessionId' }, 404);
-
-  // Touch session
-  await env.DB.prepare(`UPDATE chat_sessions SET last_seen_at = ? WHERE id = ?`)
-    .bind(chat_nowMs(), sessionId).run();
-
-  const sinceAsNumber = Number(since);
-  const isSinceTimestamp = since && Number.isFinite(sinceAsNumber) && String(sinceAsNumber) === String(since);
-
-  let result;
-  if (!since) {
-    result = await env.DB.prepare(
-      `SELECT id, session_id, role, content, created_at
-       FROM chat_messages
-       WHERE session_id = ?
-       ORDER BY created_at ASC
-       LIMIT ?`
-    ).bind(sessionId, limit).all();
-  } else if (isSinceTimestamp) {
-    result = await env.DB.prepare(
-      `SELECT id, session_id, role, content, created_at
-       FROM chat_messages
-       WHERE session_id = ? AND created_at > ?
-       ORDER BY created_at ASC
-       LIMIT ?`
-    ).bind(sessionId, sinceAsNumber, limit).all();
-  } else {
-    const sinceMsg = await env.DB.prepare(
-      `SELECT created_at FROM chat_messages WHERE id = ? AND session_id = ?`
-    ).bind(since, sessionId).first();
-
-    const sinceTs = sinceMsg?.created_at ?? 0;
-
-    result = await env.DB.prepare(
-      `SELECT id, session_id, role, content, created_at
-       FROM chat_messages
-       WHERE session_id = ? AND created_at > ?
-       ORDER BY created_at ASC
-       LIMIT ?`
-    ).bind(sessionId, sinceTs, limit).all();
-  }
-
-  return json({ success: true, messages: result.results || [] });
-}
-
-async function chat_send(req, env, ctx) {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'POST') return json({ success: false, error: 'Method Not Allowed' }, 405);
-
-  try {
-    const body = await chat_readJson(req);
-
-    const sessionId = chat_safeStr(body.sessionId, 100);
-    const role = chat_safeStr(body.role || 'user', 20) || 'user';
-    const content = chat_safeStr(body.content, 8000);
-    const clientMessageId = body.clientMessageId ? chat_safeStr(body.clientMessageId, 200) : null;
-    const rawPayload = body.payload ? JSON.stringify(body.payload) : null;
-
-    if (!sessionId) return json({ success: false, error: 'sessionId is required' }, 400);
-    if (!content) return json({ success: false, error: 'content is required' }, 400);
-
-    const session = await env.DB.prepare(
-      `SELECT id, email, name, first_message_sent
-       FROM chat_sessions
-       WHERE id = ?`
-    ).bind(sessionId).first();
-
-    if (!session) return json({ success: false, error: 'Invalid sessionId' }, 404);
-
-    const msgId = chat_uuid();
-    const ts = chat_nowMs();
-
-    await env.DB.prepare(
-      `INSERT INTO chat_messages (id, session_id, role, content, created_at, client_message_id, raw_payload)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind(msgId, sessionId, role, content, ts, clientMessageId, rawPayload).run();
-
-    await env.DB.prepare(`UPDATE chat_sessions SET last_seen_at = ? WHERE id = ?`).bind(ts, sessionId).run();
-
-    // First-message webhook trigger (atomic gate)
-    if (role === 'user' && Number(session.first_message_sent) === 0) {
-      const updateStmt = env.DB.prepare(
-        `UPDATE chat_sessions
-         SET first_message_sent = 1
-         WHERE id = ? AND first_message_sent = 0`
-      ).bind(sessionId);
-
-      const changesStmt = env.DB.prepare(`SELECT changes() AS n`);
-      const batchRes = await env.DB.batch([updateStmt, changesStmt]);
-      const changes = batchRes?.[1]?.results?.[0]?.n ?? 0;
-
-      if (changes === 1 && env.GOOGLE_SCRIPT_URL) {
-        const payload = {
-          event: 'first_user_message',
-          sessionId,
-          name: session.name || '',
-          email: session.email || '',
-          firstMessage: content,
-          messageId: msgId,
-          createdAt: ts
-        };
-
-        const doWebhook = async () => {
-          try {
-            await fetch(env.GOOGLE_SCRIPT_URL, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-          } catch (_) { /* ignore */ }
-        };
-
-        if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(doWebhook());
-        else await doWebhook();
-      }
-    }
-
-    return json({ success: true, messageId: msgId, createdAt: ts });
-  } catch (e) {
-    return json({ success: false, error: e.message || 'Bad Request' }, 400);
-  }
-}
