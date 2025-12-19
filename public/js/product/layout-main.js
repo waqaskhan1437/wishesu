@@ -1,7 +1,7 @@
 /*
  * Construct the primary layout for the product detail page.
  * Builds media column, info column, and addons form.
- * Updated for SEO (Alt text) and Performance (LCP/Fetch Priority).
+ * Updated: Implements Click-to-Load Facade for Video to ensure thumbnail visibility.
  */
 
 ;(function(){
@@ -42,34 +42,85 @@
     };
 
     if (product.video_url) {
-      // Use UniversalVideoPlayer for all video types (YouTube, Vimeo, Archive.org, Bunny, Cloudinary, R2, etc.)
-      const playerContainer = document.createElement('div');
-      playerContainer.id = 'universal-player-container';
-      playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: 400px; border-radius: 12px; overflow: hidden; background: #000;';
-      videoWrapper.appendChild(playerContainer);
+      // --- FIX: Manual Facade implementation ---
+      // Instead of loading the heavy player immediately, we load the image + play button.
+      // This ensures the thumbnail IS ALWAYS VISIBLE first.
+      
+      const facade = document.createElement('div');
+      facade.className = 'video-facade';
+      facade.style.cssText = 'position: relative; width: 100%; height: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #000;';
+      
+      // 1. The Image
+      const img = createMainImage(product.thumbnail_url || 'https://via.placeholder.com/600');
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover'; // Ensures image covers the area without distortion
+      img.style.display = 'block';
+      facade.appendChild(img);
 
-      // Render video using UniversalVideoPlayer with thumbnail as poster
-      if (typeof window.UniversalVideoPlayer !== 'undefined') {
-        window.UniversalVideoPlayer.render('universal-player-container', product.video_url, {
-          poster: product.thumbnail_url || '',
-          thumbnailUrl: product.thumbnail_url || ''
-        });
-        hasVideo = true;
-      } else {
-        // Fallback to basic HTML5 video if UniversalVideoPlayer not loaded
-        const video = document.createElement('video');
-        video.id = 'player';
-        video.controls = true;
-        video.playsInline = true;
-        video.src = product.video_url;
-        video.style.cssText = 'width: 100%; height: 100%; border-radius: 12px;';
-        if (product.thumbnail_url) video.poster = product.thumbnail_url;
-        playerContainer.innerHTML = '';
-        playerContainer.appendChild(video);
-        hasVideo = true;
-      }
+      // 2. The Play Button Overlay
+      const playBtn = document.createElement('div');
+      playBtn.className = 'play-btn-overlay';
+      playBtn.style.cssText = `
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 80px; height: 80px;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        color: white;
+        transition: all 0.2s ease;
+        z-index: 10;
+        backdrop-filter: blur(2px);
+      `;
+      // SVG Icon
+      playBtn.innerHTML = `
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" style="display:block; margin-left:4px;">
+          <path d="M8 5v14l11-7z"></path>
+        </svg>
+      `;
+      facade.appendChild(playBtn);
+
+      // 3. Hover Effects
+      facade.onmouseenter = () => {
+        playBtn.style.background = 'rgba(79, 70, 229, 0.9)'; // Brand color on hover
+        playBtn.style.transform = 'translate(-50%, -50%) scale(1.1)';
+      };
+      facade.onmouseleave = () => {
+        playBtn.style.background = 'rgba(0, 0, 0, 0.6)';
+        playBtn.style.transform = 'translate(-50%, -50%) scale(1.0)';
+      };
+
+      // 4. Click Handler - Load the real player
+      facade.onclick = () => {
+        // Clear the facade
+        videoWrapper.innerHTML = '';
+        
+        // Create container for the player
+        const playerContainer = document.createElement('div');
+        playerContainer.id = 'universal-player-container';
+        playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: 400px; border-radius: 12px; overflow: hidden; background: #000;';
+        videoWrapper.appendChild(playerContainer);
+
+        // Initialize Player
+        if (typeof window.UniversalVideoPlayer !== 'undefined') {
+          window.UniversalVideoPlayer.render('universal-player-container', product.video_url, {
+            poster: null, // Don't pass poster here, we already handled the thumbnail
+            thumbnailUrl: null,
+            autoplay: true // Attempt autoplay since user interacted
+          });
+        } else {
+          // Fallback
+          playerContainer.innerHTML = `<video src="${product.video_url}" controls autoplay style="width:100%;height:100%"></video>`;
+        }
+      };
+
+      videoWrapper.appendChild(facade);
+      hasVideo = true;
+
     } else {
-      // No video, show main image
+      // No video, show main image normally
       videoWrapper.appendChild(createMainImage(product.thumbnail_url || 'https://via.placeholder.com/600'));
     }
     
@@ -113,22 +164,46 @@
         thumbsDiv.querySelectorAll('.thumb').forEach(t => t.style.border = '3px solid transparent');
         img.style.border = '3px solid #667eea';
         
-        // Switch back to main video or thumbnail
+        // Reset the main video wrapper to initial state (Thumbnail + Play Button)
         const videoWrapper = document.querySelector('.video-wrapper');
-        if (videoWrapper && product.video_url) {
-          // Re-render the video player
-          const playerContainer = document.getElementById('universal-player-container');
-          if (playerContainer && typeof window.UniversalVideoPlayer !== 'undefined') {
-            window.UniversalVideoPlayer.render('universal-player-container', product.video_url, {
-              poster: product.thumbnail_url || '',
-              thumbnailUrl: product.thumbnail_url || ''
-            });
-          }
-        } else if (videoWrapper) {
-          // Show main thumbnail image
-          videoWrapper.innerHTML = '';
-          const mainImg = createMainImage(product.thumbnail_url);
-          videoWrapper.appendChild(mainImg);
+        if (videoWrapper) {
+            videoWrapper.innerHTML = '';
+            // Re-run the main logic to recreate the facade
+            // We can simply call a small helper or duplicate the facade creation logic lightly here
+            // For simplicity, we just reload the page or re-render. 
+            // Better: Re-trigger the initial render logic for the video wrapper part.
+            
+            // Re-render Main View (Facade)
+            if (product.video_url) {
+                const facade = document.createElement('div');
+                facade.className = 'video-facade';
+                facade.style.cssText = 'position: relative; width: 100%; height: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #000;';
+                
+                const mainImg = createMainImage(product.thumbnail_url);
+                mainImg.style.width = '100%';
+                mainImg.style.height = '100%';
+                mainImg.style.objectFit = 'cover';
+                facade.appendChild(mainImg);
+
+                const playBtn = document.createElement('div');
+                playBtn.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80px; height: 80px; background: rgba(0, 0, 0, 0.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; transition: all 0.2s ease; z-index: 10; backdrop-filter: blur(2px);';
+                playBtn.innerHTML = '<svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" style="display:block; margin-left:4px;"><path d="M8 5v14l11-7z"></path></svg>';
+                facade.appendChild(playBtn);
+
+                facade.onclick = () => {
+                    videoWrapper.innerHTML = '';
+                    const playerContainer = document.createElement('div');
+                    playerContainer.id = 'universal-player-container';
+                    playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: 400px; border-radius: 12px; overflow: hidden; background: #000;';
+                    videoWrapper.appendChild(playerContainer);
+                    if (typeof window.UniversalVideoPlayer !== 'undefined') {
+                        window.UniversalVideoPlayer.render('universal-player-container', product.video_url, { poster: product.thumbnail_url, autoplay: true });
+                    }
+                };
+                videoWrapper.appendChild(facade);
+            } else {
+                videoWrapper.appendChild(createMainImage(product.thumbnail_url));
+            }
         }
       };
       
@@ -137,24 +212,19 @@
     }
 
     // Add gallery images thumbnails
-    // Gallery images are stored as JSON array in database, like: ["url1.jpg", "url2.jpg"]
-    // We need to parse this JSON and create thumbnails for each image
     if (product.gallery_images) {
       let galleryImages = [];
       try {
-        // Try to parse gallery_images if it's a JSON string
         galleryImages = typeof product.gallery_images === 'string' 
           ? JSON.parse(product.gallery_images) 
           : product.gallery_images;
       } catch (e) {
-        console.warn('Failed to parse gallery_images:', e);
         galleryImages = [];
       }
 
-      // Create thumbnails for each gallery image
       if (Array.isArray(galleryImages) && galleryImages.length > 0) {
         galleryImages.forEach((imageUrl, index) => {
-          if (!imageUrl) return; // Skip empty URLs
+          if (!imageUrl) return; 
           
           const galleryThumb = document.createElement('img');
           galleryThumb.src = imageUrl;
@@ -163,29 +233,19 @@
           galleryThumb.alt = (product.title || 'Product') + ' - Gallery Image ' + (index + 1);
           galleryThumb.dataset.type = 'gallery';
           
-          // Click handler to show gallery image in main view
           galleryThumb.onclick = () => {
-            // Remove active from all thumbs
             thumbsDiv.querySelectorAll('.thumb').forEach(t => t.style.border = '3px solid transparent');
             galleryThumb.style.border = '3px solid #667eea';
             
-            // Show this gallery image in main video wrapper
             const videoWrapper = document.querySelector('.video-wrapper');
             if (videoWrapper) {
               videoWrapper.innerHTML = '';
               const largeImg = createMainImage(imageUrl);
+              largeImg.style.width = '100%';
+              largeImg.style.height = '100%';
+              largeImg.style.objectFit = 'contain'; // Better for gallery images
               videoWrapper.appendChild(largeImg);
             }
-          };
-          
-          // Hover effect
-          galleryThumb.onmouseenter = () => {
-            if (galleryThumb.style.border !== '3px solid #667eea') {
-              galleryThumb.style.transform = 'scale(1.05)';
-            }
-          };
-          galleryThumb.onmouseleave = () => {
-            galleryThumb.style.transform = 'scale(1)';
           };
           
           thumbsDiv.appendChild(galleryThumb);
@@ -213,7 +273,6 @@
     thumbsContainer.appendChild(leftArrow);
     thumbsContainer.appendChild(rightArrow);
 
-    // Check if arrows are needed
     setTimeout(() => {
       if (thumbsDiv.scrollWidth > thumbsDiv.clientWidth) {
         leftArrow.style.display = 'block';
@@ -222,8 +281,6 @@
     }, 100);
 
     leftCol.appendChild(thumbsContainer);
-
-    // Store reference for adding delivery videos later
     window.productThumbnailsSlider = thumbsDiv;
     mainRow.appendChild(leftCol);
 
@@ -242,18 +299,16 @@
     const ratingRow = document.createElement('div');
     ratingRow.className = 'rating-row';
     
-    // Get review data from product (with fallbacks)
     const reviewCount = product.review_count || 0;
     const ratingAverage = product.rating_average || 5.0;
     
-    // Generate stars based on rating
     const fullStars = Math.floor(ratingAverage);
     const halfStar = ratingAverage % 1 >= 0.5 ? 1 : 0;
     const emptyStars = 5 - fullStars - halfStar;
     
     let starsHtml = '';
     for (let i = 0; i < fullStars; i++) starsHtml += '★';
-    if (halfStar) starsHtml += '☆'; // Using empty star as half star placeholder
+    if (halfStar) starsHtml += '☆'; 
     for (let i = 0; i < emptyStars; i++) starsHtml += '☆';
     
     const reviewText = reviewCount === 0 
@@ -294,7 +349,6 @@
       if (textEl) textEl.textContent = text;
     };
 
-    // Contrast Fix: main contrast fix will be in CSS.
     badgeRow.innerHTML = `
       <div class="badge-box badge-delivery" id="delivery-badge">
         <div class="icon" id="delivery-badge-icon"></div>
@@ -302,7 +356,6 @@
       </div>
     `;
 
-    // Initial delivery badge state - prefer the default option from the delivery addon when present.
     let initialDeliveryLabel = '';
     const deliveryField = (addonGroups || []).find(g => g && g.id === 'delivery-time' && (g.type === 'radio' || g.type === 'select') && Array.isArray(g.options));
     if (deliveryField) {
@@ -346,10 +399,10 @@
     if (addonGroups && addonGroups.length > 0) {
       addonGroups.forEach(group => {
         if (group.type === 'heading') {
-          const h = document.createElement('h3'); // Changed h4 to h3 for hierarchy
+          const h = document.createElement('h3'); 
           h.textContent = group.text || group.label;
           h.style.marginTop = '1.5rem';
-          h.style.fontSize = '1.1rem'; // Visual adjustment
+          h.style.fontSize = '1.1rem'; 
           addonsForm.appendChild(h);
         } else {
           addonsForm.appendChild(window.renderAddonField(group));

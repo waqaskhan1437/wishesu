@@ -65,8 +65,10 @@ function hideReviewUIElements() {
   const reviewSection = document.getElementById('review-section');
   const approveBtn = document.getElementById('approve-btn');
   const revisionBtn = document.getElementById('revision-btn');
+  const tipSection = document.getElementById('tip-section');
   
   if (reviewSection) reviewSection.style.display = 'none';
   if (approveBtn) approveBtn.style.display = 'none';
   if (revisionBtn) revisionBtn.style.display = 'none';
+  if (tipSection) tipSection.style.display = 'none';
 }

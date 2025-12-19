@@ -67,6 +67,19 @@
         }
       }
       showVideo(o.delivered_video_url, videoMetadata);
+      
+      // Hide review/revision buttons if already reviewed
+      if (o.has_review) {
+        hideReviewUIElements();
+        // Show thank you message
+        const videoSection = document.getElementById('video-section');
+        if (videoSection) {
+          const thankYou = document.createElement('div');
+          thankYou.style.cssText = 'background:#d1fae5;border:2px solid #10b981;padding:20px;border-radius:12px;text-align:center;margin-top:20px;';
+          thankYou.innerHTML = '<h3 style="color:#065f46;margin:0;">✅ Thank you for your review!</h3><p style="color:#047857;margin:10px 0 0;">Your feedback has been submitted.</p>';
+          videoSection.appendChild(thankYou);
+        }
+      }
     } else {
       startCountdown(o.delivery_time_minutes || 60, o.created_at);
     }
@@ -107,25 +120,44 @@
     document.getElementById('countdown-section').style.display = 'none';
     document.getElementById('video-section').style.display = 'block';
 
-    if (window.UniversalPlayer) {
-      window.UniversalPlayer.render('player-container', url, videoMetadata);
+    // FIXED: Use correct global object name
+    if (window.UniversalVideoPlayer) {
+      window.UniversalVideoPlayer.render('player-container', url, videoMetadata);
     }
 
     const downloadBtn = document.getElementById('download-btn');
-    if (downloadBtn && window.UniversalPlayer) {
-      const detected = window.UniversalPlayer.detect(url);
+    if (downloadBtn && window.UniversalVideoPlayer) {
+      const detected = window.UniversalVideoPlayer.detect(url);
       const openOnlyTypes = ['youtube', 'vimeo', 'bunny-embed'];
 
       if (openOnlyTypes.includes(detected.type)) {
+        // External video - open in new tab
         downloadBtn.textContent = '🔗 Open Video';
         downloadBtn.href = url;
         downloadBtn.target = '_blank';
         downloadBtn.removeAttribute('download');
+      } else if (detected.type === 'archive') {
+        // Archive.org - use direct download URL
+        const itemId = window.UniversalVideoPlayer.extractArchiveId(url);
+        if (itemId && url.includes('/download/')) {
+          // Direct download link
+          downloadBtn.textContent = '⬇️ Download';
+          downloadBtn.href = url;
+          downloadBtn.target = '_blank';
+          downloadBtn.removeAttribute('download');
+        } else {
+          // Archive details page - open it
+          downloadBtn.textContent = '🔗 Open Video';
+          downloadBtn.href = url;
+          downloadBtn.target = '_blank';
+          downloadBtn.removeAttribute('download');
+        }
       } else {
+        // Direct video URL - download directly
         downloadBtn.textContent = '⬇️ Download';
-        downloadBtn.href = `/download/${orderId}`;
-        downloadBtn.removeAttribute('target');
-        downloadBtn.setAttribute('download', '');
+        downloadBtn.href = url;
+        downloadBtn.target = '_blank';
+        downloadBtn.removeAttribute('download');
       }
     }
   }

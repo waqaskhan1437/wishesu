@@ -96,7 +96,123 @@
   }
 
   async function loadOrders(panel) {
-    panel.innerHTML = `<div class="table-container"><table><thead><tr><th>Order ID</th><th>Email</th><th>Amount</th><th>Status</th><th>Time Left</th><th>Date</th><th>Action</th></tr></thead><tbody id="orders-tbody"><tr><td colspan="7" style="text-align: center;">Loading...</td></tr></tbody></table></div>`;
+    panel.innerHTML = `
+      <!-- Create Order Modal -->
+      <div id="create-order-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:white; padding:30px; border-radius:12px; max-width:500px; width:90%; max-height:90vh; overflow-y:auto;">
+          <h3 style="margin:0 0 20px; color:#1f2937;">➕ Create New Order</h3>
+          <form id="create-order-form">
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Product</label>
+              <select id="new-order-product" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;" required>
+                <option value="">Select Product...</option>
+              </select>
+            </div>
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Customer Email</label>
+              <input type="email" id="new-order-email" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px; box-sizing:border-box;" required>
+            </div>
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Amount ($)</label>
+              <input type="number" id="new-order-amount" step="0.01" min="0" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px; box-sizing:border-box;" required>
+            </div>
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Delivery Time (minutes)</label>
+              <input type="number" id="new-order-delivery" value="60" min="1" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px; box-sizing:border-box;" required>
+            </div>
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Status</label>
+              <select id="new-order-status" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;">
+                <option value="paid">Paid</option>
+                <option value="pending">Pending</option>
+                <option value="delivered">Delivered</option>
+              </select>
+            </div>
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Notes (Optional)</label>
+              <textarea id="new-order-notes" rows="2" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px; box-sizing:border-box; resize:vertical;" placeholder="Any special requirements..."></textarea>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+              <button type="button" id="cancel-create-order" style="padding:10px 20px; background:#6b7280; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Cancel</button>
+              <button type="submit" style="padding:10px 20px; background:#10b981; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Create Order</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <button class="btn btn-primary" onclick="openCreateOrderModal()" style="margin-bottom: 20px;">➕ Create New Order</button>
+      <div class="table-container"><table><thead><tr><th>Order ID</th><th>Email</th><th>Amount</th><th>Status</th><th>Time Left</th><th>Date</th><th>Action</th></tr></thead><tbody id="orders-tbody"><tr><td colspan="7" style="text-align: center;">Loading...</td></tr></tbody></table></div>`;
+    
+    // Setup modal handlers
+    const modal = document.getElementById('create-order-modal');
+    const createForm = document.getElementById('create-order-form');
+    const cancelBtn = document.getElementById('cancel-create-order');
+    
+    cancelBtn.onclick = () => { modal.style.display = 'none'; };
+    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    
+    // Open modal function
+    window.openCreateOrderModal = async () => {
+      // Load products into dropdown
+      const productSelect = document.getElementById('new-order-product');
+      try {
+        const pdata = await apiFetch('/api/products/list');
+        if (pdata.products && pdata.products.length > 0) {
+          productSelect.innerHTML = '<option value="">Select Product...</option>' + 
+            pdata.products.map(p => `<option value="${p.id}" data-price="${p.sale_price || p.normal_price}">${p.title} - $${p.sale_price || p.normal_price}</option>`).join('');
+        }
+      } catch (err) {
+        console.error('Failed to load products', err);
+      }
+      
+      // Auto-fill amount when product selected
+      productSelect.onchange = function() {
+        const selected = this.options[this.selectedIndex];
+        if (selected && selected.dataset.price) {
+          document.getElementById('new-order-amount').value = selected.dataset.price;
+        }
+      };
+      
+      modal.style.display = 'flex';
+    };
+    
+    // Create order form submit
+    createForm.onsubmit = async (e) => {
+      e.preventDefault();
+      
+      const data = {
+        productId: document.getElementById('new-order-product').value,
+        email: document.getElementById('new-order-email').value.trim(),
+        amount: document.getElementById('new-order-amount').value,
+        deliveryTime: document.getElementById('new-order-delivery').value,
+        status: document.getElementById('new-order-status').value,
+        notes: document.getElementById('new-order-notes').value.trim()
+      };
+      
+      if (!data.productId) {
+        alert('Please select a product');
+        return;
+      }
+      
+      try {
+        const res = await fetch('/api/order/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.success) {
+          alert('✅ Order created! Order ID: ' + result.orderId);
+          modal.style.display = 'none';
+          createForm.reset();
+          loadOrders(panel);
+        } else {
+          alert('Error: ' + (result.error || 'Create failed'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    };
     
     try {
       const data = await apiFetch('/api/orders');
@@ -138,15 +254,167 @@
   }
 
   async function loadReviews(panel) {
-    panel.innerHTML = `<div class="table-container"><table><thead><tr><th>Author</th><th>Rating</th><th>Comment</th><th>Product</th><th>Date</th></tr></thead><tbody id="reviews-tbody"><tr><td colspan="5" style="text-align: center;">Loading...</td></tr></tbody></table></div>`;
+    panel.innerHTML = `
+      <div id="edit-review-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+        <div style="background:white; padding:30px; border-radius:12px; max-width:500px; width:90%; max-height:90vh; overflow-y:auto;">
+          <h3 style="margin:0 0 20px; color:#1f2937;">Edit Review</h3>
+          <form id="edit-review-form">
+            <input type="hidden" id="edit-review-id">
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Author Name</label>
+              <input type="text" id="edit-author" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px; box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Rating</label>
+              <select id="edit-rating" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;">
+                <option value="5">5 Stars</option>
+                <option value="4">4 Stars</option>
+                <option value="3">3 Stars</option>
+                <option value="2">2 Stars</option>
+                <option value="1">1 Star</option>
+              </select>
+            </div>
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Comment</label>
+              <textarea id="edit-comment" rows="4" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px; box-sizing:border-box; resize:vertical;"></textarea>
+            </div>
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Status</label>
+              <select id="edit-status" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;">
+                <option value="approved">Approved</option>
+                <option value="pending">Pending</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div style="margin-bottom:20px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="edit-show-portfolio">
+                <span>Show in Portfolio</span>
+              </label>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+              <button type="button" id="cancel-edit-btn" style="padding:10px 20px; background:#6b7280; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Cancel</button>
+              <button type="submit" style="padding:10px 20px; background:#667eea; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Author</th>
+              <th>Rating</th>
+              <th>Comment</th>
+              <th>Product</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th style="width:140px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="reviews-tbody">
+            <tr><td colspan="8" style="text-align: center;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>`;
+    
+    // Setup modal handlers
+    const modal = document.getElementById('edit-review-modal');
+    const editForm = document.getElementById('edit-review-form');
+    const cancelBtn = document.getElementById('cancel-edit-btn');
+    
+    cancelBtn.onclick = () => { modal.style.display = 'none'; };
+    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    
+    editForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('edit-review-id').value;
+      const data = {
+        id: id,
+        author_name: document.getElementById('edit-author').value.trim(),
+        rating: document.getElementById('edit-rating').value,
+        comment: document.getElementById('edit-comment').value.trim(),
+        status: document.getElementById('edit-status').value,
+        show_on_product: document.getElementById('edit-show-portfolio').checked ? 1 : 0
+      };
+      
+      try {
+        const res = await fetch('/api/reviews/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.success) {
+          alert('✅ Review updated!');
+          modal.style.display = 'none';
+          loadReviews(panel);
+        } else {
+          alert('Error: ' + (result.error || 'Update failed'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    };
+    
+    // Delete function
+    window.deleteReview = async (id) => {
+      if (!confirm('Are you sure you want to delete this review?')) return;
+      try {
+        const res = await fetch(`/api/reviews/delete?id=${id}`, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.success) {
+          alert('✅ Review deleted!');
+          loadReviews(panel);
+        } else {
+          alert('Error: ' + (result.error || 'Delete failed'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    };
+    
+    // Edit function
+    window.editReview = (review) => {
+      document.getElementById('edit-review-id').value = review.id;
+      document.getElementById('edit-author').value = review.author_name || '';
+      document.getElementById('edit-rating').value = review.rating || 5;
+      document.getElementById('edit-comment').value = review.comment || '';
+      document.getElementById('edit-status').value = review.status || 'approved';
+      document.getElementById('edit-show-portfolio').checked = review.show_on_product == 1;
+      modal.style.display = 'flex';
+    };
     
     try {
       const data = await apiFetch('/api/reviews');
       if (data.reviews) {
         reviews = data.reviews;
-        document.getElementById('reviews-tbody').innerHTML = reviews.map(r => `<tr><td>${r.author_name}</td><td style="color:#fbbf24;">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</td><td>${r.comment || ''}</td><td>${r.product_title || 'Product #' + r.product_id}</td><td>${formatDate(r.created_at)}</td></tr>`).join('');
+        document.getElementById('reviews-tbody').innerHTML = reviews.map(r => {
+          const status = r.status || 'approved';
+          const statusColor = status === 'approved' ? '#d1fae5;color:#065f46' : status === 'pending' ? '#fef3c7;color:#92400e' : '#fee2e2;color:#991b1b';
+          const comment = r.comment || '';
+          const shortComment = comment.length > 40 ? comment.substring(0, 40) + '...' : comment;
+          const reviewJson = JSON.stringify(r).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+          
+          return `<tr>
+            <td>${r.id}</td>
+            <td>${r.author_name || 'Anonymous'}</td>
+            <td style="color:#fbbf24;">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</td>
+            <td title="${comment}" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${shortComment}</td>
+            <td>${r.product_title || 'Product #' + r.product_id}</td>
+            <td><span style="padding:4px 8px;border-radius:4px;font-size:12px;font-weight:600;background:${statusColor}">${status}</span></td>
+            <td>${formatDate(r.created_at)}</td>
+            <td>
+              <button onclick='editReview(${reviewJson})' style="padding:5px 8px;background:#667eea;color:white;border:none;border-radius:4px;cursor:pointer;margin-right:4px;font-size:11px;">✏️ Edit</button>
+              <button onclick="deleteReview(${r.id})" style="padding:5px 8px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;">🗑️</button>
+            </td>
+          </tr>`;
+        }).join('');
       }
-    } catch (err) { document.getElementById('reviews-tbody').innerHTML = '<tr><td colspan="5" style="color: red;">Error loading reviews</td></tr>'; }
+    } catch (err) { 
+      document.getElementById('reviews-tbody').innerHTML = '<tr><td colspan="8" style="color: red;">Error loading reviews</td></tr>'; 
+    }
   }
 
   function loadSettings(panel) {
@@ -228,11 +496,84 @@
       <div style="margin-top: 15px; padding: 10px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
         <small style="color: #92400e;"><strong>Note:</strong> Clearing temp files removes uploaded files that haven't been attached to orders. Clearing pending checkouts removes incomplete checkout sessions.</small>
       </div>
+    </div>
+    
+    <!-- Export/Import Section -->
+    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
+      <h3>📦 Export / Import Data</h3>
+      <p style="color: #6b7280; margin-bottom: 20px;">Backup your data or migrate to another instance.</p>
+      
+      <!-- Full Website Export -->
+      <div style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #667eea15, #764ba215); border-radius: 10px; border: 1px solid #667eea30;">
+        <h4 style="margin: 0 0 10px; color: #667eea;">🌐 Full Website Export</h4>
+        <p style="color: #6b7280; font-size: 0.9em; margin-bottom: 15px;">Export all products, pages, reviews, orders, and settings.</p>
+        <button class="btn" id="export-full-btn" style="background: #667eea; color: white;">📥 Export Full Website</button>
+      </div>
+      
+      <!-- Products Export/Import -->
+      <div style="margin-bottom: 25px; padding: 20px; background: #f0fdf4; border-radius: 10px; border: 1px solid #bbf7d0;">
+        <h4 style="margin: 0 0 10px; color: #16a34a;">🎥 Products</h4>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <button class="btn" id="export-products-btn" style="background: #16a34a; color: white;">📥 Export Products</button>
+          <label class="btn" style="background: #22c55e; color: white; cursor: pointer;">
+            📤 Import Products
+            <input type="file" id="import-products-file" accept=".json" style="display: none;">
+          </label>
+          <span id="products-import-status" style="font-size: 0.85em; color: #6b7280;"></span>
+        </div>
+      </div>
+      
+      <!-- Pages Export/Import -->
+      <div style="margin-bottom: 25px; padding: 20px; background: #eff6ff; border-radius: 10px; border: 1px solid #bfdbfe;">
+        <h4 style="margin: 0 0 10px; color: #2563eb;">📄 Pages</h4>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <button class="btn" id="export-pages-btn" style="background: #2563eb; color: white;">📥 Export Pages</button>
+          <label class="btn" style="background: #3b82f6; color: white; cursor: pointer;">
+            📤 Import Pages
+            <input type="file" id="import-pages-file" accept=".json" style="display: none;">
+          </label>
+          <span id="pages-import-status" style="font-size: 0.85em; color: #6b7280;"></span>
+        </div>
+      </div>
+      
+      <!-- Reviews Export/Import -->
+      <div style="margin-bottom: 25px; padding: 20px; background: #fefce8; border-radius: 10px; border: 1px solid #fef08a;">
+        <h4 style="margin: 0 0 10px; color: #ca8a04;">⭐ Reviews</h4>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <button class="btn" id="export-reviews-btn" style="background: #ca8a04; color: white;">📥 Export Reviews</button>
+          <label class="btn" style="background: #eab308; color: white; cursor: pointer;">
+            📤 Import Reviews
+            <input type="file" id="import-reviews-file" accept=".json" style="display: none;">
+          </label>
+          <span id="reviews-import-status" style="font-size: 0.85em; color: #6b7280;"></span>
+        </div>
+      </div>
+      
+      <!-- Orders Export -->
+      <div style="padding: 20px; background: #fdf4ff; border-radius: 10px; border: 1px solid #f5d0fe;">
+        <h4 style="margin: 0 0 10px; color: #a855f7;">📦 Orders</h4>
+        <p style="color: #6b7280; font-size: 0.9em; margin-bottom: 10px;">Export only (orders contain customer data and are not importable).</p>
+        <button class="btn" id="export-orders-btn" style="background: #a855f7; color: white;">📥 Export Orders</button>
+      </div>
+      
+      <!-- Full Import -->
+      <div style="margin-top: 25px; padding: 20px; background: #fef2f2; border-radius: 10px; border: 1px solid #fecaca;">
+        <h4 style="margin: 0 0 10px; color: #dc2626;">⚠️ Full Website Import</h4>
+        <p style="color: #6b7280; font-size: 0.9em; margin-bottom: 15px;">Import full website backup. This will add new items (won't overwrite existing).</p>
+        <label class="btn" style="background: #dc2626; color: white; cursor: pointer;">
+          📤 Import Full Backup
+          <input type="file" id="import-full-file" accept=".json" style="display: none;">
+        </label>
+        <span id="full-import-status" style="margin-left: 10px; font-size: 0.85em; color: #6b7280;"></span>
+      </div>
     </div>`;
 
     loadWhopSettings();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
+    
+    // Export/Import handlers
+    setupExportImportHandlers();
 
     // Google Sheets Integration handlers
     document.getElementById('copy-export-url').addEventListener('click', () => {
@@ -381,6 +722,238 @@
         statusSpan.textContent = '❌ Webhook test failed: ' + err.message;
         statusSpan.style.color = '#ef4444';
       }
+    });
+  }
+
+  // Export/Import functionality
+  function setupExportImportHandlers() {
+    // Helper to download JSON
+    const downloadJSON = (data, filename) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    // Export Full Website
+    document.getElementById('export-full-btn').addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/admin/export/full');
+        const data = await res.json();
+        if (data.success) {
+          downloadJSON(data.data, `website-backup-${new Date().toISOString().split('T')[0]}.json`);
+          alert('✅ Full website exported!');
+        } else {
+          alert('Error: ' + (data.error || 'Export failed'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // Export Products
+    document.getElementById('export-products-btn').addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/admin/export/products');
+        const data = await res.json();
+        if (data.success) {
+          downloadJSON(data.data, `products-${new Date().toISOString().split('T')[0]}.json`);
+          alert('✅ Products exported!');
+        } else {
+          alert('Error: ' + (data.error || 'Export failed'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // Export Pages
+    document.getElementById('export-pages-btn').addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/admin/export/pages');
+        const data = await res.json();
+        if (data.success) {
+          downloadJSON(data.data, `pages-${new Date().toISOString().split('T')[0]}.json`);
+          alert('✅ Pages exported!');
+        } else {
+          alert('Error: ' + (data.error || 'Export failed'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // Export Reviews
+    document.getElementById('export-reviews-btn').addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/admin/export/reviews');
+        const data = await res.json();
+        if (data.success) {
+          downloadJSON(data.data, `reviews-${new Date().toISOString().split('T')[0]}.json`);
+          alert('✅ Reviews exported!');
+        } else {
+          alert('Error: ' + (data.error || 'Export failed'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // Export Orders
+    document.getElementById('export-orders-btn').addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/admin/export/orders');
+        const data = await res.json();
+        if (data.success) {
+          downloadJSON(data.data, `orders-${new Date().toISOString().split('T')[0]}.json`);
+          alert('✅ Orders exported!');
+        } else {
+          alert('Error: ' + (data.error || 'Export failed'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // Import Products
+    document.getElementById('import-products-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById('products-import-status');
+      statusEl.textContent = 'Importing...';
+      statusEl.style.color = '#6b7280';
+      
+      try {
+        const content = await file.text();
+        const data = JSON.parse(content);
+        
+        const res = await fetch('/api/admin/import/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products: data.products || data })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          statusEl.textContent = `✅ Imported ${result.count || 0} products`;
+          statusEl.style.color = '#16a34a';
+        } else {
+          statusEl.textContent = '❌ ' + (result.error || 'Import failed');
+          statusEl.style.color = '#dc2626';
+        }
+      } catch (err) {
+        statusEl.textContent = '❌ ' + err.message;
+        statusEl.style.color = '#dc2626';
+      }
+      e.target.value = '';
+    });
+
+    // Import Pages
+    document.getElementById('import-pages-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById('pages-import-status');
+      statusEl.textContent = 'Importing...';
+      statusEl.style.color = '#6b7280';
+      
+      try {
+        const content = await file.text();
+        const data = JSON.parse(content);
+        
+        const res = await fetch('/api/admin/import/pages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pages: data.pages || data })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          statusEl.textContent = `✅ Imported ${result.count || 0} pages`;
+          statusEl.style.color = '#2563eb';
+        } else {
+          statusEl.textContent = '❌ ' + (result.error || 'Import failed');
+          statusEl.style.color = '#dc2626';
+        }
+      } catch (err) {
+        statusEl.textContent = '❌ ' + err.message;
+        statusEl.style.color = '#dc2626';
+      }
+      e.target.value = '';
+    });
+
+    // Import Reviews
+    document.getElementById('import-reviews-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById('reviews-import-status');
+      statusEl.textContent = 'Importing...';
+      statusEl.style.color = '#6b7280';
+      
+      try {
+        const content = await file.text();
+        const data = JSON.parse(content);
+        
+        const res = await fetch('/api/admin/import/reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reviews: data.reviews || data })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          statusEl.textContent = `✅ Imported ${result.count || 0} reviews`;
+          statusEl.style.color = '#ca8a04';
+        } else {
+          statusEl.textContent = '❌ ' + (result.error || 'Import failed');
+          statusEl.style.color = '#dc2626';
+        }
+      } catch (err) {
+        statusEl.textContent = '❌ ' + err.message;
+        statusEl.style.color = '#dc2626';
+      }
+      e.target.value = '';
+    });
+
+    // Import Full Backup
+    document.getElementById('import-full-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      if (!confirm('This will import all data from the backup. Existing items with same IDs will be skipped. Continue?')) {
+        e.target.value = '';
+        return;
+      }
+      
+      const statusEl = document.getElementById('full-import-status');
+      statusEl.textContent = 'Importing...';
+      statusEl.style.color = '#6b7280';
+      
+      try {
+        const content = await file.text();
+        const data = JSON.parse(content);
+        
+        const res = await fetch('/api/admin/import/full', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          statusEl.textContent = `✅ Imported: ${result.products || 0} products, ${result.pages || 0} pages, ${result.reviews || 0} reviews`;
+          statusEl.style.color = '#16a34a';
+        } else {
+          statusEl.textContent = '❌ ' + (result.error || 'Import failed');
+          statusEl.style.color = '#dc2626';
+        }
+      } catch (err) {
+        statusEl.textContent = '❌ ' + err.message;
+        statusEl.style.color = '#dc2626';
+      }
+      e.target.value = '';
     });
   }
 
@@ -668,7 +1241,114 @@
     const order = orders.find(o => o.order_id === orderId);
     if (!order) return;
     const panel = document.getElementById('right-panel');
-    panel.innerHTML = `<h3>Order #${order.order_id}</h3><div style="margin: 15px 0; padding: 10px; background: #f9fafb; border-radius: 6px;"><div style="font-size: 0.85em; color: #6b7280;">Email</div><div style="font-weight: 600;">${order.email || 'N/A'}</div></div><div style="margin: 15px 0; padding: 10px; background: #f9fafb; border-radius: 6px;"><div style="font-size: 0.85em; color: #6b7280;">Amount</div><div style="font-weight: 600;">$${order.amount || 0}</div></div><div style="margin: 15px 0; padding: 10px; background: #f9fafb; border-radius: 6px;"><div style="font-size: 0.85em; color: #6b7280;">Status</div><div style="font-weight: 600;">${order.status}</div></div><a href="/order-detail.html?id=${order.order_id}&admin=1" class="btn btn-primary" style="width: 100%; text-align: center; margin-top: 15px;">View Full Details</a>`;
+    
+    // Find product info
+    const product = products.find(p => p.id === order.product_id);
+    const productName = order.product_title || (product ? product.title : 'Product #' + order.product_id);
+    const productLink = product ? `/product?id=${product.id}` : '#';
+    
+    panel.innerHTML = `
+      <h3 style="margin-bottom:15px;">Order #${order.order_id}</h3>
+      
+      <!-- Product Link -->
+      <div style="margin-bottom:15px; padding:12px; background:linear-gradient(135deg,#667eea,#764ba2); border-radius:8px;">
+        <div style="font-size:0.8em; color:rgba(255,255,255,0.8);">Product</div>
+        <a href="${productLink}" target="_blank" style="color:white; font-weight:600; text-decoration:none; display:flex; align-items:center; gap:6px;">
+          🎬 ${productName}
+          <span style="font-size:12px;">↗</span>
+        </a>
+      </div>
+      
+      <div style="margin:15px 0; padding:10px; background:#f9fafb; border-radius:6px;">
+        <div style="font-size:0.85em; color:#6b7280;">Email</div>
+        <div style="font-weight:600;">${order.email || 'N/A'}</div>
+      </div>
+      
+      <div style="margin:15px 0; padding:10px; background:#f9fafb; border-radius:6px;">
+        <div style="font-size:0.85em; color:#6b7280;">Amount</div>
+        <div style="font-weight:600;">$${order.amount || 0}</div>
+      </div>
+      
+      <!-- Status with Edit -->
+      <div style="margin:15px 0; padding:10px; background:#f9fafb; border-radius:6px;">
+        <div style="font-size:0.85em; color:#6b7280; margin-bottom:8px;">Status</div>
+        <select id="order-status-select" style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:6px; font-weight:600;">
+          <option value="paid" ${order.status === 'paid' ? 'selected' : ''}>Paid</option>
+          <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>Pending</option>
+          <option value="delivered" ${order.status === 'delivered' ? 'selected' : ''}>Delivered</option>
+          <option value="revision" ${order.status === 'revision' ? 'selected' : ''}>Revision</option>
+          <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+        </select>
+      </div>
+      
+      <div style="margin:15px 0; padding:10px; background:#f9fafb; border-radius:6px;">
+        <div style="font-size:0.85em; color:#6b7280;">Date</div>
+        <div style="font-weight:600;">${formatDate(order.created_at)}</div>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
+        <button onclick="updateOrderStatus('${order.order_id}')" class="btn btn-primary" style="width:100%;">💾 Save Status</button>
+        <a href="/order-detail.html?id=${order.order_id}&admin=1" class="btn" style="width:100%; text-align:center; background:#10b981; color:white;">👁️ Full Details</a>
+        <a href="/buyer-order.html?id=${order.order_id}" target="_blank" class="btn" style="width:100%; text-align:center; background:#6366f1; color:white;">👤 Buyer Link</a>
+        <button onclick="deleteOrder('${order.order_id}', ${order.id})" class="btn" style="width:100%; background:#ef4444; color:white;">🗑️ Delete Order</button>
+      </div>
+    `;
+  };
+
+  // Update order status
+  window.updateOrderStatus = async function(orderId) {
+    const statusSelect = document.getElementById('order-status-select');
+    if (!statusSelect) return;
+    
+    const newStatus = statusSelect.value;
+    
+    try {
+      const res = await fetch('/api/order/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: newStatus })
+      });
+      const result = await res.json();
+      if (result.success) {
+        alert('✅ Order status updated!');
+        // Update local data
+        const order = orders.find(o => o.order_id === orderId);
+        if (order) order.status = newStatus;
+        // Reload orders list
+        const mainPanel = document.getElementById('main-panel');
+        if (mainPanel && currentView === 'orders') loadOrders(mainPanel);
+      } else {
+        alert('Error: ' + (result.error || 'Update failed'));
+      }
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  };
+
+  // Delete order
+  window.deleteOrder = async function(orderId, id) {
+    if (!confirm('Are you sure you want to delete this order? This cannot be undone!')) return;
+    
+    try {
+      const res = await fetch(`/api/order/delete?id=${id}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (result.success) {
+        alert('✅ Order deleted!');
+        // Clear right panel
+        const rightPanel = document.getElementById('right-panel');
+        if (rightPanel) {
+          rightPanel.innerHTML = '<h3 style="margin-bottom:15px;">Quick Actions</h3><div style="text-align:center;color:#6b7280;padding:40px 0;">Select an item</div>';
+        }
+        // Reload orders list
+        const mainPanel = document.getElementById('main-panel');
+        if (mainPanel && currentView === 'orders') loadOrders(mainPanel);
+      } else {
+        alert('Error: ' + (result.error || 'Delete failed'));
+      }
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
   };
 
   window.showProductDetail = function(productId) {

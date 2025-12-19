@@ -336,6 +336,13 @@
       
       // Helper to add thumbnail overlay for iframe-based videos
       const addThumbnailOverlay = (iframeHtml, autoplayIframeHtml) => {
+        // --- ADDED AUTOPLAY CHECK ---
+        // If autoplay is requested and we have an autoplay version, skip the overlay
+        if (video.autoplay && autoplayIframeHtml) {
+          safeSetHTML(autoplayIframeHtml);
+          return;
+        }
+
         const posterUrl = video.poster || video.thumbnailUrl || video.thumbnail_url;
         if (posterUrl) {
           // Initially show just the overlay (no iframe yet for faster load)
@@ -491,13 +498,26 @@
             // Use HTML5 video player for direct URLs
             const videoEl = document.createElement('video');
             videoEl.controls = true;
-            videoEl.preload = 'none';
+            // FIXED: Set preload to auto if autoplay is on, otherwise none
+            videoEl.preload = video.autoplay ? 'auto' : 'none';
             videoEl.style.cssText = 'width: 100%; height: 100%; background: #000; border-radius: 12px;';
             
-            // Add poster for direct Archive.org videos
+            // Disable download button and right-click
+            videoEl.controlsList = 'nodownload noplaybackrate';
+            videoEl.disablePictureInPicture = true;
+            videoEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
+            
+            // Add poster for direct Archive.org videos if NOT autoplaying
             const posterUrl = video.poster || video.thumbnailUrl || video.thumbnail_url;
-            if (posterUrl) {
+            if (posterUrl && !video.autoplay) {
               videoEl.poster = posterUrl;
+            }
+
+            // CHECK AUTOPLAY FOR DIRECT ARCHIVE
+            if (video.autoplay) {
+                videoEl.autoplay = true;
+                // Important: Some browsers block autoplay if not muted, but since this is user-initiated (click), it should work.
+                // We don't force mute unless it fails.
             }
 
             const source = document.createElement('source');
@@ -519,6 +539,11 @@
             };
 
             safeSetElement(videoEl);
+            
+            // FIXED: Explicitly call play() for Archive direct links to ensure it starts
+            if (video.autoplay) {
+                videoEl.play().catch(e => console.warn('Autoplay blocked:', e));
+            }
             break;
           }
 
@@ -538,12 +563,13 @@
               <a href="${detailsUrl}" target="_blank" rel="noopener">View on Archive.org</a></p>
             </iframe>`;
           
+          // UPDATED: Added autoplay=1 and autostart=1 plus allow attributes
           const archiveAutoplayIframeHtml = `<iframe
-              src="${embedUrl}?autostart=true"
+              src="${embedUrl}?autoplay=1&autostart=1"
               width="100%"
               height="100%"
               frameborder="0"
-              allow="fullscreen"
+              allow="fullscreen; autoplay"
               style="border-radius: 12px;"
             >
               <p>Your browser does not support iframes.
@@ -592,15 +618,26 @@
           const showVideoPlayer = (autoplay) => {
             const videoEl = document.createElement('video');
             videoEl.controls = true;
-            videoEl.preload = 'auto';
+            // FIXED: Set preload to auto if autoplay is on, otherwise auto
+            videoEl.preload = autoplay ? 'auto' : 'auto';
             videoEl.playsInline = true;
             videoEl.style.width = '100%';
             videoEl.style.height = '100%';
             videoEl.style.borderRadius = '12px';
             videoEl.style.background = '#000';
+            
+            // Disable download button and right-click
+            videoEl.controlsList = 'nodownload noplaybackrate';
+            videoEl.disablePictureInPicture = true;
+            videoEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
 
             if (poster) {
               videoEl.poster = poster;
+            }
+
+            // CHECK AUTOPLAY
+            if (autoplay) {
+                videoEl.autoplay = true;
             }
 
             for (const s of sources) {
@@ -657,13 +694,14 @@
 
             safeSetElement(videoEl);
             
+            // FIXED: Explicitly call play() to ensure it starts
             if (autoplay) {
-              videoEl.play().catch(() => {});
+              videoEl.play().catch(e => console.warn('Autoplay blocked:', e));
             }
           };
 
-          // Show thumbnail overlay if poster exists, otherwise show video directly
-          if (poster) {
+          // Show thumbnail overlay if poster exists AND no autoplay requested
+          if (poster && !video.autoplay) {
             const overlay = createThumbnailOverlay(container, poster, () => {
               showVideoPlayer(true);
             });
@@ -674,7 +712,8 @@
               showVideoPlayer(false);
             }
           } else {
-            showVideoPlayer(false);
+            // Autoplay true or no poster
+            showVideoPlayer(!!video.autoplay);
           }
           break;
         }

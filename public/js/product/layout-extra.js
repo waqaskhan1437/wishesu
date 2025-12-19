@@ -93,16 +93,32 @@
 
           const setPlayerSource = (videoUrl, posterUrl) => {
             if (!videoUrl) return;
-            // Always use UniversalVideoPlayer to render/re-render the video.
-            if (typeof window.UniversalVideoPlayer !== 'undefined') {
-              const playerContainer = document.getElementById('universal-player-container');
-              if (playerContainer) {
-                // It handles destroying the old instance and creating a new one.
-                window.UniversalVideoPlayer.render('universal-player-container', videoUrl, {
-                  poster: posterUrl || '',
-                  thumbnailUrl: posterUrl || ''
-                });
+            
+            // Find or create player container
+            let playerContainer = document.getElementById('universal-player-container');
+            
+            // If container doesn't exist (main video not clicked yet), create it
+            if (!playerContainer) {
+              const videoWrapper = document.querySelector('.video-wrapper');
+              if (videoWrapper) {
+                // Clear the facade/thumbnail
+                videoWrapper.innerHTML = '';
+                
+                // Create player container
+                playerContainer = document.createElement('div');
+                playerContainer.id = 'universal-player-container';
+                playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: 400px; border-radius: 12px; overflow: hidden; background: #000;';
+                videoWrapper.appendChild(playerContainer);
               }
+            }
+            
+            // Now render the video
+            if (playerContainer && typeof window.UniversalVideoPlayer !== 'undefined') {
+              window.UniversalVideoPlayer.render('universal-player-container', videoUrl, {
+                poster: posterUrl || '',
+                thumbnailUrl: posterUrl || '',
+                autoplay: true
+              });
             }
           };
 
@@ -196,7 +212,7 @@
 
               const btn = document.createElement('button');
               btn.type = 'button';
-              btn.textContent = '▶ Watch Review';
+              btn.textContent = '▶ Watch Video';
               btn.style.cssText = 'background:#111827; color:white; border:0; padding:12px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:15px; transition:background 0.2s;';
 
               const onWatch = () => {
@@ -237,10 +253,11 @@
             grid.appendChild(card);
             }); // End forEach
             
-            // Pagination controls
-            const pag = document.createElement('div');
-            pag.style.cssText = 'display:flex;justify-content:center;gap:12px;margin-top:30px';
+            // Pagination controls - add to grid so they don't get cleared
             if (totalPages > 1) {
+              const pag = document.createElement('div');
+              pag.style.cssText = 'display:flex;justify-content:center;gap:12px;margin-top:30px;padding:20px 0;';
+              
               const prev = document.createElement('button');
               prev.textContent = '← Prev';
               prev.disabled = currentPage === 1;
@@ -250,7 +267,7 @@
               
               const info = document.createElement('span');
               info.textContent = `Page ${currentPage} of ${totalPages}`;
-              info.style.cssText = 'color:#666;font-weight:600;padding:10px';
+              info.style.cssText = 'color:#666;font-weight:600;padding:10px;display:flex;align-items:center;';
               pag.appendChild(info);
               
               const next = document.createElement('button');
@@ -259,17 +276,24 @@
               next.style.cssText = `padding:10px 20px;background:${currentPage===totalPages?'#999':'#667eea'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===totalPages?'not-allowed':'pointer'};font-weight:600`;
               if (currentPage < totalPages) next.onclick = () => { renderPage(currentPage + 1); container.scrollIntoView({behavior:'smooth'}); };
               pag.appendChild(next);
+              
+              grid.appendChild(pag);
             }
-            container.appendChild(pag);
           }; // End renderPage
           
-          // Gallery thumbnails (all reviews with allowed portfolio videos, not paginated)
-          product.reviews.forEach(review => {
+          // Gallery thumbnails - only last 20 reviews with allowed portfolio videos
+          const reviewsWithVideo = product.reviews.filter(review => {
             const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
-            const canWatch = !!portfolioVideoUrl && Number(review.show_on_product) === 1;
+            return !!portfolioVideoUrl && Number(review.show_on_product) === 1;
+          });
+          
+          // Take only last 20 for slider
+          const sliderReviews = reviewsWithVideo.slice(-20);
+          
+          sliderReviews.forEach(review => {
+            const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
 
-            // Only add to gallery if buyer explicitly allowed portfolio display
-            if (canWatch && window.productThumbnailsSlider) {
+            if (window.productThumbnailsSlider) {
               const galleryThumb = document.createElement('div');
               galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s; background:#000;';
 
@@ -334,11 +358,10 @@
             }
           });
 
-          // Initial render
-          renderPage(1);
-          
+          // Initial render - add grid to container first, then render page
           container.innerHTML = '';
           container.appendChild(grid);
+          renderPage(1);
 
           // Add styles if needed
           window.ReviewsWidget.addStyles();
