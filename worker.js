@@ -3112,27 +3112,22 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
          * for guidance on controlling caching behavior.
          */
         // Support pretty product URLs: /product/<slug>
+        // IMPORTANT: Do NOT redirect /product/<slug> back to /product?id=...
+        // That creates a redirect loop once we also redirect legacy ?id URLs to slugs.
+        // Instead, always serve /product.html and let the page load data by slug.
         let assetReq = req;
         let assetPath = path;
         let schemaProductId = null;
+        let schemaProductSlug = null;
 
         if ((method === 'GET' || method === 'HEAD') && assetPath.startsWith('/product/') && assetPath.length > '/product/'.length) {
           const slug = decodeURIComponent(assetPath.slice('/product/'.length));
-          if (env.DB) {
-            await initDB(env);
-            const row = await env.DB.prepare(
-              `SELECT id FROM products WHERE slug = ? LIMIT 1`
-            ).bind(slug).first();
-
-            if (row?.id) {
-              schemaProductId = Number(row.id);
-              const rewritten = new URL(req.url);
-              rewritten.pathname = '/product.html';
-              rewritten.searchParams.set('id', String(schemaProductId));
-              assetReq = new Request(rewritten.toString(), req);
-              assetPath = '/product.html';
-            }
-          }
+          schemaProductSlug = slug;
+          const rewritten = new URL(req.url);
+          rewritten.pathname = '/product.html';
+          // Keep query string as-is (no forced id param)
+          assetReq = new Request(rewritten.toString(), req);
+          assetPath = '/product.html';
         }
 
         const assetResp = await env.ASSETS.fetch(assetReq);
@@ -3149,27 +3144,52 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             
             // Product detail page - inject individual product schema
             if (assetPath === '/product.html' || assetPath === '/product') {
-              const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
-              if (productId && env.DB) {
+              const productIdRaw = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
+              const productSlugRaw = schemaProductSlug || (
+                (path.startsWith('/product/') && path.length > '/product/'.length)
+                  ? decodeURIComponent(path.slice('/product/'.length))
+                  : null
+              );
+
+              if ((productIdRaw || productSlugRaw) && env.DB) {
                 await initDB(env);
-                const product = await env.DB.prepare(`
-                  SELECT p.*, 
-                    COUNT(r.id) as review_count, 
-                    AVG(r.rating) as rating_average
-                  FROM products p
-                  LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
-                  WHERE p.id = ?
-                  GROUP BY p.id
-                `).bind(Number(productId)).first();
-                
-                if (product) {
+
+                let product = null;
+                let productIdForReviews = null;
+
+                if (productIdRaw && !isNaN(Number(productIdRaw))) {
+                  productIdForReviews = Number(productIdRaw);
+                  product = await env.DB.prepare(`
+                    SELECT p.*, 
+                      COUNT(r.id) as review_count, 
+                      AVG(r.rating) as rating_average
+                    FROM products p
+                    LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
+                    WHERE p.id = ?
+                    GROUP BY p.id
+                  `).bind(productIdForReviews).first();
+                } else if (productSlugRaw) {
+                  product = await env.DB.prepare(`
+                    SELECT p.*, 
+                      COUNT(r.id) as review_count, 
+                      AVG(r.rating) as rating_average
+                    FROM products p
+                    LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
+                    WHERE lower(p.slug) = lower(?)
+                    GROUP BY p.id
+                    LIMIT 1
+                  `).bind(String(productSlugRaw)).first();
+                  if (product?.id) productIdForReviews = Number(product.id);
+                }
+
+                if (product && productIdForReviews != null) {
                   // Fetch individual reviews for schema
                   const reviewsResult = await env.DB.prepare(`
                     SELECT * FROM reviews
                     WHERE product_id = ? AND status = 'approved'
                     ORDER BY created_at DESC
                     LIMIT 5
-                  `).bind(Number(productId)).all();
+                  `).bind(productIdForReviews).all();
                   let reviews = reviewsResult.results || [];
 
                   // Convert created_at to ISO 8601 format with Z suffix for UTC
