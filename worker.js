@@ -501,8 +501,6 @@ async function initDB(env) {
         name TEXT NOT NULL,
         email TEXT NOT NULL,
         blocked INTEGER DEFAULT 0,
-        last_message_content TEXT,
-        last_message_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
@@ -518,30 +516,6 @@ async function initDB(env) {
         console.log('Column might already exist:', alterError.message);
       }
     }
-    // Add last_message_content column to existing chat_sessions table if it doesn't exist
-    try {
-      await env.DB.prepare('SELECT last_message_content FROM chat_sessions LIMIT 1').run();
-    } catch (e) {
-      try {
-        console.log('Adding last_message_content column to chat_sessions table...');
-        await env.DB.prepare('ALTER TABLE chat_sessions ADD COLUMN last_message_content TEXT').run();
-      } catch (alterError) {
-        console.log('Column might already exist:', alterError.message);
-      }
-    }
-
-    // Add last_message_at column to existing chat_sessions table if it doesn't exist
-    try {
-      await env.DB.prepare('SELECT last_message_at FROM chat_sessions LIMIT 1').run();
-    } catch (e) {
-      try {
-        console.log('Adding last_message_at column to chat_sessions table...');
-        await env.DB.prepare('ALTER TABLE chat_sessions ADD COLUMN last_message_at DATETIME').run();
-      } catch (alterError) {
-        console.log('Column might already exist:', alterError.message);
-      }
-    }
-
 
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS chat_messages (
@@ -708,11 +682,7 @@ export default {
     // Before processing any request, trigger a cache purge if this is the
     // first request on a new version.  The purge will run only once per
     // deployment and only if the necessary environment variables are set.
-    // Only run cache purge checks for admin surfaces or webhook calls (avoid DB hits for every customer page view)
-    const shouldPurgeCache = path.startsWith('/admin/') || path.startsWith('/api/admin/') || path.startsWith('/api/whop/webhook');
-    if (shouldPurgeCache) {
-      await maybePurgeCache(env);
-    }
+    await maybePurgeCache(env);
 
     if (method === 'OPTIONS') {
       return new Response(null, { headers: CORS });
@@ -880,17 +850,6 @@ export default {
           `INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)`
         ).bind(sessionId, role, safeContent).run();
 
-        // Update denormalized last-message fields for fast admin listing
-        try {
-          await env.DB.prepare(
-            `UPDATE chat_sessions
-             SET last_message_content = ?, last_message_at = CURRENT_TIMESTAMP
-             WHERE id = ?`
-          ).bind(safeContent, sessionId).run();
-        } catch (e) {
-          console.error('Failed to update chat_sessions last-message fields:', e);
-        }
-
         // Trigger email alert webhook on first customer message
         if (isFirstUserMessage) {
           try {
@@ -947,21 +906,9 @@ export default {
               }
             }
 
-            const safeReply = escapeHtml(replyText);
             await env.DB.prepare(
               `INSERT INTO chat_messages (session_id, role, content) VALUES (?, 'system', ?)`
-            ).bind(sessionId, safeReply).run();
-
-            // Update denormalized last-message fields
-            try {
-              await env.DB.prepare(
-                `UPDATE chat_sessions
-                 SET last_message_content = ?, last_message_at = CURRENT_TIMESTAMP
-                 WHERE id = ?`
-              ).bind(safeReply, sessionId).run();
-            } catch (e) {
-              console.error('Failed to update chat_sessions last-message fields:', e);
-            }
+            ).bind(sessionId, escapeHtml(replyText)).run();
           }
 
           // "Check Delivery Status"
@@ -976,21 +923,9 @@ export default {
               }
             }
 
-            const safeReply = escapeHtml(replyText);
             await env.DB.prepare(
               `INSERT INTO chat_messages (session_id, role, content) VALUES (?, 'system', ?)`
-            ).bind(sessionId, safeReply).run();
-
-            // Update denormalized last-message fields
-            try {
-              await env.DB.prepare(
-                `UPDATE chat_sessions
-                 SET last_message_content = ?, last_message_at = CURRENT_TIMESTAMP
-                 WHERE id = ?`
-              ).bind(safeReply, sessionId).run();
-            } catch (e) {
-              console.error('Failed to update chat_sessions last-message fields:', e);
-            }
+            ).bind(sessionId, escapeHtml(replyText)).run();
           }
         }
 
@@ -1045,16 +980,15 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
         await initDB(env);
 
         // One row per email (canonical session = oldest created_at for that email)
-        // Denormalized fields on chat_sessions let us avoid heavy subqueries.
         const rows = await env.DB.prepare(
           `SELECT
              s.id,
              s.name,
              s.email,
              s.blocked,
-             s.last_message_at,
-             s.last_message_content AS last_message,
-             s.created_at
+             s.created_at,
+             (SELECT MAX(created_at) FROM chat_messages m WHERE m.session_id = s.id) AS last_message_at,
+             (SELECT content FROM chat_messages m2 WHERE m2.session_id = s.id ORDER BY id DESC LIMIT 1) AS last_message
            FROM chat_sessions s
            JOIN (
              SELECT lower(email) AS em, MIN(datetime(created_at)) AS min_created
@@ -1062,13 +996,12 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
              GROUP BY lower(email)
            ) x
              ON lower(s.email) = x.em AND datetime(s.created_at) = x.min_created
-           ORDER BY COALESCE(s.last_message_at, s.created_at) DESC
+           ORDER BY COALESCE(last_message_at, s.created_at) DESC
            LIMIT 200`
         ).all();
 
         return json({ sessions: rows?.results || [] });
       }
-
 
 return new Response(assetResp.body, { status: 200, headers });
         }
