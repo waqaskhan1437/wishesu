@@ -8,18 +8,88 @@
   const API_SYNC = '/api/chat/sync';
 
   const MAX_LEN = 500;
-  const POLL_MS = 5000;
+  const POLL_MS = 10000;
   const COOLDOWN_MS = 10000;
 
+  const LS_SESSION_OBJ = 'wishesu_chat_session';
+  // Back-compat keys (older widget versions)
   const LS_SESSION_ID = 'chat_session_id';
   const LS_NAME = 'chat_name';
   const LS_EMAIL = 'chat_email';
   const LS_OPEN = 'chat_is_open';
+  const TAB_ID = (crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
+  const LS_POLL_LEADER = 'chat_poll_leader_v1'; // { id, ts }
+  const LEADER_STALE_MS = 15000;
+
+  function getLeader() {
+    try { return JSON.parse(localStorage.getItem(LS_POLL_LEADER) || 'null'); } catch { return null; }
+  }
+  function isLeaderFresh(leader) {
+    return leader && leader.id && leader.ts && (Date.now() - leader.ts) < LEADER_STALE_MS;
+  }
+  function tryBecomeLeader() {
+    const leader = getLeader();
+    if (!isLeaderFresh(leader) || leader.id === TAB_ID) {
+      localStorage.setItem(LS_POLL_LEADER, JSON.stringify({ id: TAB_ID, ts: Date.now() }));
+      return true;
+    }
+    return false;
+  }
+  function heartbeatLeader() {
+    const leader = getLeader();
+    if (leader && leader.id === TAB_ID) {
+      localStorage.setItem(LS_POLL_LEADER, JSON.stringify({ id: TAB_ID, ts: Date.now() }));
+      return true;
+    }
+    return false;
+  }
+  function releaseLeader() {
+    const leader = getLeader();
+    if (leader && leader.id === TAB_ID) {
+      localStorage.removeItem(LS_POLL_LEADER);
+    }
+  }
+
+  window.addEventListener('storage', (e) => {
+    if (e.key === LS_POLL_LEADER && isOpen) {
+      // if another tab became leader, stop polling here
+      const leader = getLeader();
+      if (leader && leader.id !== TAB_ID) stopPolling();
+      if ((!leader || !isLeaderFresh(leader)) && !document.hidden) startPolling();
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopPolling();
+      releaseLeader();
+      releaseLeader();
+    } else if (isOpen) {
+      startPolling();
+      syncNow();
+    }
+  });
+
   const LS_COOLDOWN_UNTIL = 'chat_cooldown_until';
 
-  let sessionId = localStorage.getItem(LS_SESSION_ID) || '';
-  let name = localStorage.getItem(LS_NAME) || '';
-  let email = localStorage.getItem(LS_EMAIL) || '';
+  let sessionId = '';
+  let name = '';
+  let email = '';
+
+  // Prefer the new single-key session object
+  try {
+    const obj = JSON.parse(localStorage.getItem(LS_SESSION_OBJ) || 'null');
+    if (obj && typeof obj === 'object') {
+      sessionId = String(obj.sessionId || '');
+      name = String(obj.name || '');
+      email = String(obj.email || '');
+    }
+  } catch {}
+
+  // Back-compat: fall back to older separate keys
+  if (!sessionId) sessionId = localStorage.getItem(LS_SESSION_ID) || '';
+  if (!name) name = localStorage.getItem(LS_NAME) || '';
+  if (!email) email = localStorage.getItem(LS_EMAIL) || '';
   let isOpen = localStorage.getItem(LS_OPEN) === 'true';
 
   let lastId = 0;
@@ -156,7 +226,7 @@
   const btn = el('button', { class: 'wc-chat-btn', title: 'Chat' }, ['💬']);
   const panel = el('div', { class: 'wc-chat-panel', role: 'dialog', 'aria-label': 'Chat' });
 
-  const logoutBtn = el('button', { class: 'wc-link', type: 'button' }, ['Change email']);
+  const logoutBtn = el('button', { class: 'wc-link', type: 'button' }, ['Log out / Change Email']);
   const closeBtn = el('button', {
     style: 'border:0;background:transparent;font-size:18px;cursor:pointer;padding:6px;',
     type: 'button',
@@ -242,9 +312,14 @@
 
   // ---- Logout / Change Email ----
   function clearSessionLocal() {
+    // New single-key session
+    localStorage.removeItem(LS_SESSION_OBJ);
+
+    // Back-compat cleanup
     localStorage.removeItem(LS_SESSION_ID);
     localStorage.removeItem(LS_NAME);
     localStorage.removeItem(LS_EMAIL);
+
     localStorage.removeItem(LS_COOLDOWN_UNTIL);
     sessionId = '';
     name = '';
@@ -308,6 +383,7 @@
           name = n; email = e;
           localStorage.setItem(LS_NAME, name);
           localStorage.setItem(LS_EMAIL, email);
+          localStorage.setItem(LS_SESSION_OBJ, JSON.stringify({ sessionId: sessionId || '', name, email }));
 
           await startSession();
           modal.remove();
@@ -336,6 +412,11 @@
       throw new Error(data.error || 'Failed to start session');
     }
     sessionId = data.sessionId;
+
+    // Save in the new single-key format
+    localStorage.setItem(LS_SESSION_OBJ, JSON.stringify({ sessionId, name, email }));
+
+    // Back-compat (keep for older code paths)
     localStorage.setItem(LS_SESSION_ID, sessionId);
   }
 
@@ -486,8 +567,25 @@
 
   function startPolling() {
     if (pollTimer) return;
-    pollTimer = window.setInterval(() => {
-      if (isOpen) syncNow();
+    if (document.hidden) return;
+
+    // Only one tab should poll to save requests
+    if (!tryBecomeLeader()) return;
+
+    pollTimer = window.setInterval(async () => {
+      if (!isOpen) return;
+      if (document.hidden) {
+        stopPolling();
+        return;
+      }
+
+      // keep leadership alive; if we lost it, stop
+      if (!heartbeatLeader()) {
+        stopPolling();
+        return;
+      }
+
+      await syncNow();
     }, POLL_MS);
   }
 

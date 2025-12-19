@@ -2210,53 +2210,86 @@
     renderReviewLists();
   }
 
-  async function loadChats(panel) {
+    async function loadChats(panel) {
+    // Master-Detail inbox layout (consistent with Orders styling)
     panel.innerHTML = `
-      <div style="display:flex; gap:12px; height:calc(100vh - 170px); min-height:520px;">
-        <div style="width:340px; border:1px solid #e6e6e6; border-radius:12px; overflow:hidden; background:#fff; display:flex; flex-direction:column;">
-          <div style="padding:10px 12px; border-bottom:1px solid #eee; font-weight:800; display:flex; align-items:center; justify-content:space-between;">
-            <span>💬 Chats</span>
-            <button id="chats-refresh" style="border:1px solid #e6e6e6;background:#fff;border-radius:10px;padding:6px 10px;cursor:pointer;">Refresh</button>
+      <div style="display:flex; gap:16px; height:calc(100vh - 170px); min-height:560px;">
+        <!-- Master: Sessions list -->
+        <div style="width:30%; min-width:320px; max-width:420px; background:#fff; border:1px solid #d1d5db; border-radius:10px; overflow:hidden; display:flex; flex-direction:column;">
+          <div style="padding:12px 14px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+            <div>
+              <div style="font-weight:700; color:#111827;">💬 Chats</div>
+              <div style="font-size:12px; color:#6b7280; margin-top:2px;">Inbox-style customer conversations</div>
+            </div>
+            <button id="chats-refresh" class="btn btn-secondary" style="padding:8px 10px; border-radius:8px;">Refresh</button>
           </div>
+
+          <div style="padding:10px 14px; border-bottom:1px solid #e5e7eb;">
+            <input id="chats-search" placeholder="Search name or email..." style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; font-size:14px;" />
+          </div>
+
           <div id="chats-sessions-list" style="overflow:auto; flex:1;"></div>
         </div>
 
-        <div style="flex:1; border:1px solid #e6e6e6; border-radius:12px; overflow:hidden; background:#fff; display:flex; flex-direction:column;">
-          <div id="chats-header" style="padding:10px 12px; border-bottom:1px solid #eee; font-weight:800;">
-            Select a chat
-          </div>
-          <div id="chats-messages" style="flex:1; overflow:auto; padding:12px; background:#fafafa;"></div>
-
-          <div style="display:flex; gap:10px; padding:10px 12px; border-top:1px solid #eee; align-items:flex-start;">
-            <div style="flex:1;">
-              <input id="chats-input" maxlength="500" placeholder="Type your reply..." style="width:100%; height:40px; padding:0 10px; border:1px solid #ddd; border-radius:10px; font-size:14px;" />
-              <div id="chats-counter" style="font-size:11px; color:#666; margin-top:6px; text-align:right;">0/500</div>
+        <!-- Detail: Chat view -->
+        <div style="flex:1; background:#fff; border:1px solid #d1d5db; border-radius:10px; overflow:hidden; display:flex; flex-direction:column;">
+          <div id="chats-header" style="padding:12px 14px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <div>
+              <div id="chats-detail-title" style="font-weight:700; color:#111827;">Select a conversation</div>
+              <div id="chats-detail-subtitle" style="font-size:12px; color:#6b7280; margin-top:2px;">Click a user on the left to view messages</div>
             </div>
-            <button id="chats-send" style="background:#111; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:800; height:40px;">
-              Send
-            </button>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button id="chats-block-btn" class="btn btn-secondary" style="padding:8px 10px; border-radius:8px; display:none;">[🚫 Block]</button>
+              <button id="chats-delete-btn" class="btn btn-danger" style="padding:8px 10px; border-radius:8px; display:none; background:#dc2626; color:white; border:none;">[🗑️ Delete]</button>
+            </div>
+          </div>
+
+          <div id="chats-blocked-banner" style="display:none; padding:10px 14px; background:#fef2f2; border-bottom:1px solid #fecaca; color:#991b1b; font-size:13px;">
+            🔒 This user is blocked. They cannot send new messages.
+          </div>
+
+          <div id="chats-messages" style="flex:1; overflow:auto; padding:14px; background:#f9fafb;"></div>
+
+          <div style="padding:12px 14px; border-top:1px solid #e5e7eb;">
+            <div style="display:flex; gap:10px; align-items:flex-start;">
+              <div style="flex:1;">
+                <textarea id="chats-input" maxlength="500" rows="2" placeholder="Write a reply..." style="width:100%; resize:none; padding:10px; border:1px solid #d1d5db; border-radius:10px; font-size:14px; line-height:1.35;"></textarea>
+                <div style="display:flex; justify-content:flex-end; font-size:12px; color:#6b7280; margin-top:6px;">
+                  <span id="chats-counter">0/500</span>
+                </div>
+              </div>
+              <button id="chats-send" class="btn btn-primary" style="padding:10px 14px; border-radius:10px; font-weight:700;">Send</button>
+            </div>
           </div>
         </div>
       </div>
     `;
 
     const sessionsListEl = panel.querySelector('#chats-sessions-list');
-    const headerEl = panel.querySelector('#chats-header');
+    const searchEl = panel.querySelector('#chats-search');
+    const refreshBtn = panel.querySelector('#chats-refresh');
+
+    const detailTitleEl = panel.querySelector('#chats-detail-title');
+    const detailSubtitleEl = panel.querySelector('#chats-detail-subtitle');
+
+    const blockBtn = panel.querySelector('#chats-block-btn');
+    const deleteBtn = panel.querySelector('#chats-delete-btn');
+    const blockedBanner = panel.querySelector('#chats-blocked-banner');
+
     const messagesEl = panel.querySelector('#chats-messages');
     const inputEl = panel.querySelector('#chats-input');
     const sendBtn = panel.querySelector('#chats-send');
-    const refreshBtn = panel.querySelector('#chats-refresh');
     const counterEl = panel.querySelector('#chats-counter');
 
-    let activeSessionId = null;
+    const POLL_MS = 10000;
+
+    let sessions = [];
+    let active = null; // { id, name, email, blocked }
     let lastId = 0;
     let pollTimer = null;
-
-    function formatTime(ts) {
-      const d = new Date(ts);
-      if (Number.isNaN(d.getTime())) return '';
-      return d.toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: '2-digit' });
-    }
+    let isSending = false;
+    let isBlocking = false;
+    let isDeleting = false;
 
     function escapeText(str) {
       return String(str ?? '')
@@ -2267,59 +2300,127 @@
         .replaceAll("'", '&#39;');
     }
 
-    function renderSessions(sessions) {
+    function formatTime(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: '2-digit' });
+    }
+
+    function stopPolling() {
+      if (!pollTimer) return;
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(async () => {
+        // Only poll when tab is visible to save resources
+        if (document.hidden) return;
+        if (!active?.id) return;
+        await syncMessages(false);
+        await refreshSessions(false);
+      }, POLL_MS);
+    }
+
+    function setActiveSession(sess) {
+      active = sess;
+      lastId = 0;
+      messagesEl.innerHTML = '';
+
+      detailTitleEl.textContent = `${sess.name || 'Customer'}`;
+      detailSubtitleEl.textContent = `${sess.email || ''}`;
+
+      blockBtn.style.display = 'inline-block';
+      deleteBtn.style.display = 'inline-block';
+
+      updateBlockedUI(!!sess.blocked);
+
+      renderSessionsList(); // highlight selection
+      syncMessages(true);
+      startPolling();
+    }
+
+    function updateBlockedUI(isBlocked) {
+      blockedBanner.style.display = isBlocked ? 'block' : 'none';
+      blockBtn.textContent = isBlocked ? '[✅ Unblock]' : '[🚫 Block]';
+    }
+
+    function renderSessionsList() {
+      const q = String(searchEl.value || '').trim().toLowerCase();
+
+      const filtered = !q ? sessions : sessions.filter(s => {
+        const n = String(s.name || '').toLowerCase();
+        const e = String(s.email || '').toLowerCase();
+        const lm = String(s.last_message_content || '').toLowerCase();
+        return n.includes(q) || e.includes(q) || lm.includes(q);
+      });
+
       sessionsListEl.innerHTML = '';
 
-      if (!sessions.length) {
-        sessionsListEl.innerHTML = `<div style="padding:12px;color:#666;">No chat sessions yet.</div>`;
+      if (!filtered.length) {
+        sessionsListEl.innerHTML = `<div style="padding:14px; color:#6b7280;">No chats found.</div>`;
         return;
       }
 
-      for (const s of sessions) {
-        const isActive = s.id === activeSessionId;
-
+      for (const s of filtered) {
         const row = document.createElement('div');
+        row.dataset.sessionId = String(s.id);
+
+        const isActive = active?.id === s.id;
+        const isBlocked = Number(s.blocked || 0) === 1;
+
+        const bg = isActive
+          ? (isBlocked ? '#7f1d1d' : '#111827')     // active: dark; blocked-active: deep red
+          : (isBlocked ? '#fef2f2' : '#fff');       // inactive: normal or light red
+
+        const fg = isActive ? '#fff' : '#111827';
+
         row.style.cssText = `
-          padding:10px 12px;
-          border-bottom:1px solid #f0f0f0;
+          padding:12px 14px;
+          border-bottom:1px solid #f3f4f6;
           cursor:pointer;
-          background:${isActive ? '#111' : '#fff'};
-          color:${isActive ? '#fff' : '#111'};
+          background:${bg};
+          color:${fg};
         `;
 
         const name = escapeText(s.name || 'Unknown');
         const email = escapeText(s.email || '');
-        const lastMsg = escapeText((s.last_message || '').slice(0, 80));
-        const time = s.last_message_at || s.created_at;
+        const preview = escapeText(String(s.last_message_content || '').slice(0, 80));
+        const time = formatTime(s.last_message_at || s.created_at);
 
         row.innerHTML = `
-          <div style="font-weight:800; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${name}</span>
-            <span style="font-weight:600; font-size:11px; opacity:${isActive ? '0.8' : '0.6'};">${escapeText(formatTime(time))}</span>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div style="font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              ${isBlocked ? '🔴 ' : ''}${name}
+            </div>
+            <div style="font-size:12px; opacity:${isActive ? '0.85' : '0.65'};">${escapeText(time)}</div>
           </div>
-          <div style="font-size:12px; opacity:${isActive ? '0.9' : '0.7'}; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          <div style="font-size:12px; opacity:${isActive ? '0.9' : '0.7'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px;">
             ${email}
           </div>
-          <div style="font-size:12px; opacity:${isActive ? '0.9' : '0.7'}; margin-top:6px; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-            ${lastMsg}
+          <div style="font-size:12px; opacity:${isActive ? '0.9' : '0.7'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:6px;">
+            ${preview || '<span style="opacity:.7;">No messages yet</span>'}
           </div>
         `;
 
-        row.addEventListener('click', async () => {
-          activeSessionId = s.id;
-          lastId = 0;
-          messagesEl.innerHTML = '';
-          headerEl.textContent = `Chat with ${s.name || 'Customer'} (${s.email || ''})`;
-          await syncMessages(true);
-          await refreshSessions();
-          startPolling();
-        });
+        row.addEventListener('click', () => setActiveSession({
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          blocked: Number(s.blocked || 0) === 1
+        }));
 
         sessionsListEl.appendChild(row);
       }
     }
 
-    function appendMessage(role, content, created_at) {
+    function appendMessage(m) {
+      const role = m.role;
+      const content = m.content;
+      const created_at = m.created_at;
+
       const wrap = document.createElement('div');
       wrap.style.cssText = 'margin:10px 0; display:flex; flex-direction:column; gap:4px;';
       wrap.style.alignItems = role === 'admin' ? 'flex-end' : 'flex-start';
@@ -2329,18 +2430,19 @@
         max-width: 78%;
         border-radius: 12px;
         padding: 10px 12px;
-        border: 1px solid #e6e6e6;
-        background: ${role === 'admin' ? '#111' : '#fff'};
-        color: ${role === 'admin' ? '#fff' : '#111'};
+        border: 1px solid ${role === 'admin' ? '#111827' : '#e5e7eb'};
+        background: ${role === 'admin' ? '#111827' : '#fff'};
+        color: ${role === 'admin' ? '#fff' : '#111827'};
         white-space: pre-wrap;
         word-break: break-word;
         font-size: 14px;
-        line-height: 1.25;
+        line-height: 1.35;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.06);
       `;
       bubble.innerHTML = escapeText(content);
 
       const meta = document.createElement('div');
-      meta.style.cssText = 'font-size:11px; color:#777;';
+      meta.style.cssText = 'font-size:12px; color:#6b7280;';
       meta.textContent = `${role === 'admin' ? 'Admin' : (role === 'user' ? 'Customer' : 'System')}${created_at ? ` • ${formatTime(created_at)}` : ''}`;
 
       wrap.appendChild(bubble);
@@ -2349,68 +2451,174 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    async function refreshSessions() {
+    async function refreshSessions(autoSelectIfEmpty = true) {
       const data = await apiFetch('/api/admin/chats/sessions');
-      renderSessions(data.sessions || []);
+      sessions = (data.sessions || []);
+
+      // If active session exists, update its blocked status & identity from list
+      if (active?.id) {
+        const fresh = sessions.find(s => s.id === active.id);
+        if (fresh) {
+          active.blocked = Number(fresh.blocked || 0) === 1;
+          updateBlockedUI(active.blocked);
+        }
+      }
+
+      renderSessionsList();
+
+      // Auto-select first conversation if none selected
+      if (autoSelectIfEmpty && !active?.id && sessions.length) {
+        setActiveSession({
+          id: sessions[0].id,
+          name: sessions[0].name,
+          email: sessions[0].email,
+          blocked: Number(sessions[0].blocked || 0) === 1
+        });
+      }
     }
 
     async function syncMessages(clear) {
-      if (!activeSessionId) return;
+      if (!active?.id) return;
 
-      const data = await apiFetch(`/api/chat/sync?sessionId=${encodeURIComponent(activeSessionId)}&sinceId=${encodeURIComponent(String(lastId))}`);
+      const data = await apiFetch(`/api/chat/sync?sessionId=${encodeURIComponent(active.id)}&sinceId=${encodeURIComponent(String(lastId))}`);
       const msgs = data.messages || [];
 
-      if (clear) {
-        messagesEl.innerHTML = '';
-      }
+      if (clear) messagesEl.innerHTML = '';
 
       for (const m of msgs) {
         lastId = Math.max(lastId, Number(m.id) || lastId);
-        appendMessage(m.role, m.content, m.created_at);
+        appendMessage(m);
+      }
+    }
+
+    async function toggleBlock() {
+      if (!active?.id || isBlocking) return;
+
+      const previous = !!active.blocked;
+      const next = !previous;
+
+      // Optimistic UI: flip immediately
+      isBlocking = true;
+      blockBtn.disabled = true;
+
+      active.blocked = next;
+      updateBlockedUI(next);
+
+      // Update master list immediately (turn row red)
+      const idx = sessions.findIndex(s => s.id === active.id);
+      if (idx !== -1) sessions[idx].blocked = next ? 1 : 0;
+      renderSessionsList();
+
+      try {
+        await apiFetch('/api/admin/chats/block', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: active.id, blocked: next })
+        });
+
+        // Keep in sync with server
+        await refreshSessions(false);
+      } catch (e) {
+        // Revert if API failed
+        active.blocked = previous;
+        updateBlockedUI(previous);
+        if (idx !== -1) sessions[idx].blocked = previous ? 1 : 0;
+        renderSessionsList();
+        alert(e?.message || 'Failed to update block status');
+      } finally {
+        isBlocking = false;
+        blockBtn.disabled = false;
+      }
+    }
+
+    async function deleteChat() {
+      if (!active?.id || isDeleting) return;
+
+      const ok = confirm('Are you sure you want to permanently delete this chat and all messages?');
+      if (!ok) return;
+
+      isDeleting = true;
+      deleteBtn.disabled = true;
+
+      const deletingId = active.id;
+
+      // Optimistic UI: remove from list immediately
+      sessions = sessions.filter(s => s.id !== deletingId);
+      renderSessionsList();
+
+      // Clear detail immediately
+      active = null;
+      lastId = 0;
+      messagesEl.innerHTML = '';
+      detailTitleEl.textContent = 'Select a conversation';
+      detailSubtitleEl.textContent = 'Click a user on the left to view messages';
+      blockBtn.style.display = 'none';
+      deleteBtn.style.display = 'none';
+      blockedBanner.style.display = 'none';
+      stopPolling();
+
+      try {
+        await apiFetch('/api/admin/chats/delete', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: deletingId })
+        });
+
+        // If there are remaining sessions, auto-select first
+        if (sessions.length) {
+          setActiveSession({
+            id: sessions[0].id,
+            name: sessions[0].name,
+            email: sessions[0].email,
+            blocked: Number(sessions[0].blocked || 0) === 1
+          });
+        }
+      } catch (e) {
+        alert(e?.message || 'Failed to delete chat');
+        // Re-fetch truth from server
+        await refreshSessions(true);
+      } finally {
+        isDeleting = false;
+        deleteBtn.disabled = false;
       }
     }
 
     async function sendReply() {
-      const text = (inputEl.value || '').trim();
+      if (isSending) return;
+      if (!active?.id) return alert('Select a chat first.');
+
+      const text = String(inputEl.value || '').trim();
       if (!text) return;
-      if (!activeSessionId) return alert('Select a chat first.');
       if (text.length > 500) return alert('Max 500 characters.');
 
+      isSending = true;
       sendBtn.disabled = true;
+
       try {
         await apiFetch('/api/chat/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: activeSessionId, role: 'admin', content: text })
+          body: JSON.stringify({ sessionId: active.id, role: 'admin', content: text })
         });
 
-        appendMessage('admin', text, new Date().toISOString());
+        // optimistic UI
+        appendMessage({ role: 'admin', content: text, created_at: new Date().toISOString() });
         inputEl.value = '';
         counterEl.textContent = '0/500';
 
         await syncMessages(false);
-        await refreshSessions();
+        await refreshSessions(false);
       } catch (e) {
         alert(e?.message || 'Failed to send');
       } finally {
+        isSending = false;
         sendBtn.disabled = false;
       }
     }
 
-    function startPolling() {
-      if (pollTimer) return;
-      pollTimer = setInterval(async () => {
-        if (!activeSessionId) return;
-        await syncMessages(false);
-        await refreshSessions();
-      }, 5000);
-    }
-
-    function stopPolling() {
-      if (!pollTimer) return;
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
+    // Events
+    refreshBtn.addEventListener('click', () => refreshSessions(false));
+    searchEl.addEventListener('input', renderSessionsList);
 
     inputEl.addEventListener('input', () => {
       counterEl.textContent = `${(inputEl.value || '').length}/500`;
@@ -2418,14 +2626,24 @@
 
     sendBtn.addEventListener('click', sendReply);
     inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendReply();
       }
     });
 
-    refreshBtn.addEventListener('click', refreshSessions);
+    blockBtn.addEventListener('click', toggleBlock);
+    deleteBtn.addEventListener('click', deleteChat);
 
+    // Save resources: sync when tab becomes visible again
+    document.addEventListener('visibilitychange', async () => {
+      if (!document.hidden && active?.id) {
+        await syncMessages(false);
+        await refreshSessions(false);
+      }
+    });
+
+    // Stop polling if panel is removed (switching tabs)
     const obs = new MutationObserver(() => {
       if (!document.body.contains(panel)) {
         stopPolling();
@@ -2434,7 +2652,6 @@
     });
     obs.observe(document.body, { childList: true, subtree: true });
 
-    await refreshSessions();
+    await refreshSessions(true);
   }
-
 })();

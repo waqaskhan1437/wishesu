@@ -500,9 +500,48 @@ async function initDB(env) {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         email TEXT NOT NULL,
+        blocked INTEGER DEFAULT 0,
+        last_message_content TEXT,
+        last_message_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
+
+    // Add blocked column to existing chat_sessions table if it doesn't exist
+    try {
+      await env.DB.prepare('SELECT blocked FROM chat_sessions LIMIT 1').run();
+    } catch (e) {
+      try {
+        console.log('Adding blocked column to chat_sessions table...');
+        await env.DB.prepare('ALTER TABLE chat_sessions ADD COLUMN blocked INTEGER DEFAULT 0').run();
+      } catch (alterError) {
+        console.log('Column might already exist:', alterError.message);
+      }
+    }
+    // Add last_message_content column to existing chat_sessions table if it doesn't exist
+    try {
+      await env.DB.prepare('SELECT last_message_content FROM chat_sessions LIMIT 1').run();
+    } catch (e) {
+      try {
+        console.log('Adding last_message_content column to chat_sessions table...');
+        await env.DB.prepare('ALTER TABLE chat_sessions ADD COLUMN last_message_content TEXT').run();
+      } catch (alterError) {
+        console.log('Column might already exist:', alterError.message);
+      }
+    }
+
+    // Add last_message_at column to existing chat_sessions table if it doesn't exist
+    try {
+      await env.DB.prepare('SELECT last_message_at FROM chat_sessions LIMIT 1').run();
+    } catch (e) {
+      try {
+        console.log('Adding last_message_at column to chat_sessions table...');
+        await env.DB.prepare('ALTER TABLE chat_sessions ADD COLUMN last_message_at DATETIME').run();
+      } catch (alterError) {
+        console.log('Column might already exist:', alterError.message);
+      }
+    }
+
 
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS chat_messages (
@@ -669,7 +708,11 @@ export default {
     // Before processing any request, trigger a cache purge if this is the
     // first request on a new version.  The purge will run only once per
     // deployment and only if the necessary environment variables are set.
-    await maybePurgeCache(env);
+    // Only run cache purge checks for admin surfaces or webhook calls (avoid DB hits for every customer page view)
+    const shouldPurgeCache = path.startsWith('/admin/') || path.startsWith('/api/admin/') || path.startsWith('/api/whop/webhook');
+    if (shouldPurgeCache) {
+      await maybePurgeCache(env);
+    }
 
     if (method === 'OPTIONS') {
       return new Response(null, { headers: CORS });
@@ -796,6 +839,15 @@ export default {
 
         if (!sessionId) return json({ error: 'sessionId is required' }, 400);
 
+        // Strict blocking: do not allow blocked sessions to send customer messages
+        const sess = await env.DB.prepare(
+          `SELECT blocked FROM chat_sessions WHERE id = ?`
+        ).bind(sessionId).first();
+
+        if (role === 'user' && Number(sess?.blocked || 0) === 1) {
+          return json({ success: false, error: "You have been blocked by support." }, 403);
+        }
+
         const trimmed = rawContent.trim();
         if (!trimmed) return json({ error: 'content is required' }, 400);
 
@@ -827,6 +879,17 @@ export default {
         const insertRes = await env.DB.prepare(
           `INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)`
         ).bind(sessionId, role, safeContent).run();
+
+        // Update denormalized last-message fields for fast admin listing
+        try {
+          await env.DB.prepare(
+            `UPDATE chat_sessions
+             SET last_message_content = ?, last_message_at = CURRENT_TIMESTAMP
+             WHERE id = ?`
+          ).bind(safeContent, sessionId).run();
+        } catch (e) {
+          console.error('Failed to update chat_sessions last-message fields:', e);
+        }
 
         // Trigger email alert webhook on first customer message
         if (isFirstUserMessage) {
@@ -884,9 +947,21 @@ export default {
               }
             }
 
+            const safeReply = escapeHtml(replyText);
             await env.DB.prepare(
               `INSERT INTO chat_messages (session_id, role, content) VALUES (?, 'system', ?)`
-            ).bind(sessionId, escapeHtml(replyText)).run();
+            ).bind(sessionId, safeReply).run();
+
+            // Update denormalized last-message fields
+            try {
+              await env.DB.prepare(
+                `UPDATE chat_sessions
+                 SET last_message_content = ?, last_message_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`
+              ).bind(safeReply, sessionId).run();
+            } catch (e) {
+              console.error('Failed to update chat_sessions last-message fields:', e);
+            }
           }
 
           // "Check Delivery Status"
@@ -901,9 +976,21 @@ export default {
               }
             }
 
+            const safeReply = escapeHtml(replyText);
             await env.DB.prepare(
               `INSERT INTO chat_messages (session_id, role, content) VALUES (?, 'system', ?)`
-            ).bind(sessionId, escapeHtml(replyText)).run();
+            ).bind(sessionId, safeReply).run();
+
+            // Update denormalized last-message fields
+            try {
+              await env.DB.prepare(
+                `UPDATE chat_sessions
+                 SET last_message_content = ?, last_message_at = CURRENT_TIMESTAMP
+                 WHERE id = ?`
+              ).bind(safeReply, sessionId).run();
+            } catch (e) {
+              console.error('Failed to update chat_sessions last-message fields:', e);
+            }
           }
         }
 
@@ -911,19 +998,63 @@ export default {
       }
 
       // ----- ADMIN CHAT API -----
-      if (path === '/api/admin/chats/sessions' && method === 'GET') {
+      // ----- ADMIN CHAT API -----
+      if (path === '/api/admin/chats/block' && method === 'POST') {
+        if (!env.DB) return json({ error: 'Database not configured' }, 500);
+        await initDB(env);
+
+        let body;
+        try { body = await req.json(); } catch { body = {}; }
+
+        const sessionId = String(body.sessionId || '').trim();
+        const blocked = body.blocked === true || body.blocked === 1 || body.blocked === 'true';
+
+        if (!sessionId) return json({ error: 'sessionId is required' }, 400);
+
+        await env.DB.prepare(
+          `UPDATE chat_sessions SET blocked = ? WHERE id = ?`
+        ).bind(blocked ? 1 : 0, sessionId).run();
+
+        return json({ success: true, blocked: blocked ? 1 : 0 });
+      }
+
+      if (path === '/api/admin/chats/delete' && method === 'DELETE') {
+        if (!env.DB) return json({ error: 'Database not configured' }, 500);
+        await initDB(env);
+
+        let sessionId = url.searchParams.get('sessionId');
+        if (!sessionId) {
+          let body;
+          try { body = await req.json(); } catch { body = {}; }
+          sessionId = String(body.sessionId || '').trim();
+        } else {
+          sessionId = String(sessionId).trim();
+        }
+
+        if (!sessionId) return json({ error: 'sessionId is required' }, 400);
+
+        // Delete messages first, then session
+        await env.DB.prepare(`DELETE FROM chat_messages WHERE session_id = ?`).bind(sessionId).run();
+        await env.DB.prepare(`DELETE FROM chat_sessions WHERE id = ?`).bind(sessionId).run();
+
+        return json({ success: true });
+      }
+
+if (path === '/api/admin/chats/sessions' && method === 'GET') {
         if (!env.DB) return json({ error: 'Database not configured' }, 500);
         await initDB(env);
 
         // One row per email (canonical session = oldest created_at for that email)
+        // Denormalized fields on chat_sessions let us avoid heavy subqueries.
         const rows = await env.DB.prepare(
           `SELECT
              s.id,
              s.name,
              s.email,
-             s.created_at,
-             (SELECT MAX(created_at) FROM chat_messages m WHERE m.session_id = s.id) AS last_message_at,
-             (SELECT content FROM chat_messages m2 WHERE m2.session_id = s.id ORDER BY id DESC LIMIT 1) AS last_message
+             s.blocked,
+             s.last_message_at,
+             s.last_message_content AS last_message,
+             s.created_at
            FROM chat_sessions s
            JOIN (
              SELECT lower(email) AS em, MIN(datetime(created_at)) AS min_created
@@ -931,12 +1062,13 @@ export default {
              GROUP BY lower(email)
            ) x
              ON lower(s.email) = x.em AND datetime(s.created_at) = x.min_created
-           ORDER BY COALESCE(last_message_at, s.created_at) DESC
+           ORDER BY COALESCE(s.last_message_at, s.created_at) DESC
            LIMIT 200`
         ).all();
 
         return json({ sessions: rows?.results || [] });
       }
+
 
 return new Response(assetResp.body, { status: 200, headers });
         }
