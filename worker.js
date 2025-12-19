@@ -3112,25 +3112,71 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
          * for guidance on controlling caching behavior.
          */
         // Support pretty product URLs: /product/<slug>
-        // IMPORTANT: Do NOT redirect /product/<slug> back to /product?id=...
-        // That creates a redirect loop once we also redirect legacy ?id URLs to slugs.
-        // Instead, always serve /product.html and let the page load data by slug.
         let assetReq = req;
         let assetPath = path;
         let schemaProductId = null;
-        let schemaProductSlug = null;
 
         if ((method === 'GET' || method === 'HEAD') && assetPath.startsWith('/product/') && assetPath.length > '/product/'.length) {
           const slug = decodeURIComponent(assetPath.slice('/product/'.length));
-          schemaProductSlug = slug;
-          const rewritten = new URL(req.url);
-          rewritten.pathname = '/product.html';
-          // Keep query string as-is (no forced id param)
-          assetReq = new Request(rewritten.toString(), req);
-          assetPath = '/product.html';
+          if (env.DB) {
+            await initDB(env);
+            // 1) Try direct slug match.
+            let row = await env.DB.prepare(
+              `SELECT id, title, slug FROM products WHERE slug = ? LIMIT 1`
+            ).bind(slug).first();
+
+            // 2) Backwards-compat: if DB slug is blank for older products,
+            // allow URLs that use a slugified title.
+            if (!row) {
+              // Limit is intentionally a bit higher to cover stores with many products.
+              const candidates = await env.DB.prepare(
+                `SELECT id, title, slug FROM products ORDER BY id DESC LIMIT 2000`
+              ).all();
+              const list = candidates?.results || [];
+              const wanted = slugify(slug);
+              for (const p of list) {
+                const existing = String(p?.slug || '').trim();
+                const titleSlug = slugify(p?.title || '');
+                if ((!existing && titleSlug && titleSlug === wanted) || (existing && slugify(existing) === wanted)) {
+                  row = p;
+                  break;
+                }
+              }
+            }
+
+            if (row?.id) {
+              // Ensure the product has a stable, unique slug saved in DB.
+              const stableSlug = await ensureProductSlug(env, row);
+              schemaProductId = Number(row.id);
+
+              // If the requested slug isn't the stable one, redirect to canonical.
+              if (slugify(slug) !== slugify(stableSlug)) {
+                const canonical = new URL(req.url);
+                canonical.pathname = `/product/${encodeURIComponent(stableSlug)}`;
+                return Response.redirect(canonical.toString(), 301);
+              }
+
+              // Internally rewrite to the product template with id query.
+              const rewritten = new URL(req.url);
+              rewritten.pathname = '/product.html';
+              rewritten.searchParams.set('id', String(schemaProductId));
+              assetReq = new Request(rewritten.toString(), req);
+              assetPath = '/product.html';
+            }
+          }
         }
 
-        const assetResp = await env.ASSETS.fetch(assetReq);
+        let assetResp = await env.ASSETS.fetch(assetReq);
+
+        // If someone visits /product/<something> that isn't in DB yet, the static
+        // asset won't exist (404). In that case, serve the product template anyway
+        // so the page can show a clean "not found" message without redirecting.
+        if (assetResp.status === 404 && (method === 'GET' || method === 'HEAD') && path.startsWith('/product/') && path.length > '/product/'.length) {
+          const fallbackUrl = new URL(req.url);
+          fallbackUrl.pathname = '/product.html';
+          fallbackUrl.search = '';
+          assetResp = await env.ASSETS.fetch(new Request(fallbackUrl.toString(), req));
+        }
         
         // For HTML pages with schema placeholders, inject server-side schemas
         const contentType = assetResp.headers.get('content-type') || '';
@@ -3144,52 +3190,27 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             
             // Product detail page - inject individual product schema
             if (assetPath === '/product.html' || assetPath === '/product') {
-              const productIdRaw = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
-              const productSlugRaw = schemaProductSlug || (
-                (path.startsWith('/product/') && path.length > '/product/'.length)
-                  ? decodeURIComponent(path.slice('/product/'.length))
-                  : null
-              );
-
-              if ((productIdRaw || productSlugRaw) && env.DB) {
+              const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
+              if (productId && env.DB) {
                 await initDB(env);
-
-                let product = null;
-                let productIdForReviews = null;
-
-                if (productIdRaw && !isNaN(Number(productIdRaw))) {
-                  productIdForReviews = Number(productIdRaw);
-                  product = await env.DB.prepare(`
-                    SELECT p.*, 
-                      COUNT(r.id) as review_count, 
-                      AVG(r.rating) as rating_average
-                    FROM products p
-                    LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
-                    WHERE p.id = ?
-                    GROUP BY p.id
-                  `).bind(productIdForReviews).first();
-                } else if (productSlugRaw) {
-                  product = await env.DB.prepare(`
-                    SELECT p.*, 
-                      COUNT(r.id) as review_count, 
-                      AVG(r.rating) as rating_average
-                    FROM products p
-                    LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
-                    WHERE lower(p.slug) = lower(?)
-                    GROUP BY p.id
-                    LIMIT 1
-                  `).bind(String(productSlugRaw)).first();
-                  if (product?.id) productIdForReviews = Number(product.id);
-                }
-
-                if (product && productIdForReviews != null) {
+                const product = await env.DB.prepare(`
+                  SELECT p.*, 
+                    COUNT(r.id) as review_count, 
+                    AVG(r.rating) as rating_average
+                  FROM products p
+                  LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
+                  WHERE p.id = ?
+                  GROUP BY p.id
+                `).bind(Number(productId)).first();
+                
+                if (product) {
                   // Fetch individual reviews for schema
                   const reviewsResult = await env.DB.prepare(`
                     SELECT * FROM reviews
                     WHERE product_id = ? AND status = 'approved'
                     ORDER BY created_at DESC
                     LIMIT 5
-                  `).bind(productIdForReviews).all();
+                  `).bind(Number(productId)).all();
                   let reviews = reviewsResult.results || [];
 
                   // Convert created_at to ISO 8601 format with Z suffix for UTC
