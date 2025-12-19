@@ -27,6 +27,74 @@ function json(data, status = 200) {
   });
 }
 
+
+function escapeHtml(input) {
+  return String(input ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function normalizeQuickAction(text) {
+  return String(text || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+async function enforceUserRateLimit(env, sessionId) {
+  const row = await env.DB.prepare(
+    `SELECT strftime('%s', created_at) AS ts
+     FROM chat_messages
+     WHERE session_id = ? AND role = 'user'
+     ORDER BY id DESC
+     LIMIT 1`
+  ).bind(sessionId).first();
+
+  if (!row?.ts) return;
+
+  const lastTs = Number(row.ts) || 0;
+  const nowTs = Math.floor(Date.now() / 1000);
+
+  if (nowTs - lastTs < 1) {
+    const err = new Error('Rate limited');
+    err.status = 429;
+    throw err;
+  }
+}
+
+async function getLatestOrderForEmail(env, email) {
+  const candidates = await env.DB.prepare(
+    `SELECT order_id, status, archive_url, encrypted_data, created_at
+     FROM orders
+     ORDER BY datetime(created_at) DESC
+     LIMIT 80`
+  ).all();
+
+  const list = candidates?.results || [];
+  const target = String(email || '').trim().toLowerCase();
+  if (!target) return null;
+
+  for (const o of list) {
+    try {
+      if (!o.encrypted_data) continue;
+      const data = JSON.parse(o.encrypted_data);
+      const e = String(data.email || '').trim().toLowerCase();
+      if (e && e === target) {
+        return {
+          order_id: o.order_id,
+          status: o.status,
+          trackLink: `/buyer-order.html?id=${encodeURIComponent(o.order_id)}`
+        };
+      }
+    } catch {}
+  }
+  return null;
+}
+
+
 function getMimeTypeFromFilename(filename) {
   const ext = (filename || '').split('.').pop()?.toLowerCase();
   switch (ext) {
@@ -406,32 +474,7 @@ async function initDB(env) {
 
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`).run();
     
-    
-    // Chat sessions/messages for customer support widget
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS chat_sessions (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        email TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
-
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS chat_messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT,
-        role TEXT,
-        content TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
-
-    await env.DB.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_id
-      ON chat_messages(session_id, id)
-    `).run();
-await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pages (
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       slug TEXT UNIQUE, title TEXT, content TEXT,
       meta_description TEXT, status TEXT DEFAULT 'published',
@@ -450,7 +493,34 @@ await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pages (
       completed_at DATETIME
     )`).run();
 
-    dbReady = true;
+    
+    // Chat tables
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS chat_sessions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
+      )
+    `).run();
+
+    await env.DB.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_id
+      ON chat_messages(session_id, id)
+    `).run();
+
+dbReady = true;
   } catch (e) {
     console.error('DB init error:', e);
   }
@@ -615,15 +685,20 @@ export default {
         return json({ serverTime: Date.now() });
       }
 
-      // ----- CUSTOMER CHAT API -----
+
+
+      // ------------------------------
+      // Chat APIs (Customer + Admin)
+      // ------------------------------
       if (path === '/api/chat/start' && method === 'POST') {
         if (!env.DB) return json({ error: 'Database not configured' }, 500);
         await initDB(env);
 
         let body;
         try { body = await req.json(); } catch { body = {}; }
-        const name = (body.name || '').toString().trim();
-        const email = (body.email || '').toString().trim();
+
+        const name = String(body.name || '').trim();
+        const email = String(body.email || '').trim();
 
         if (!name || !email) return json({ error: 'Name and email are required' }, 400);
 
@@ -667,16 +742,29 @@ export default {
         let body;
         try { body = await req.json(); } catch { body = {}; }
 
-        const sessionId = (body.sessionId || '').toString().trim();
-        const roleRaw = (body.role || 'user').toString().trim().toLowerCase();
-        const content = (body.content ?? body.message ?? '').toString();
+        const sessionId = String(body.sessionId || '').trim();
+        const roleRaw = String(body.role || 'user').trim().toLowerCase();
+        const rawContent = String(body.content ?? body.message ?? '');
 
         const role = ['user', 'admin', 'system'].includes(roleRaw) ? roleRaw : 'user';
 
         if (!sessionId) return json({ error: 'sessionId is required' }, 400);
-        if (!content || !content.trim()) return json({ error: 'content is required' }, 400);
 
-        // Determine if this is the user's first message BEFORE inserting the new one
+        const trimmed = rawContent.trim();
+        if (!trimmed) return json({ error: 'content is required' }, 400);
+
+        // 500 char limit (backend)
+        if (trimmed.length > 500) return json({ error: 'Message too long (max 500 characters)' }, 400);
+
+        // Rate limit customers only
+        try {
+          if (role === 'user') await enforceUserRateLimit(env, sessionId);
+        } catch (e) {
+          if (e?.status === 429) return json({ error: 'Too many messages. Please wait a moment.' }, 429);
+          throw e;
+        }
+
+        // Determine if this is the user's first message BEFORE inserting
         let isFirstUserMessage = false;
         if (role === 'user') {
           const countRow = await env.DB.prepare(
@@ -687,18 +775,21 @@ export default {
           isFirstUserMessage = Number(countRow?.c || 0) === 0;
         }
 
+        // XSS protection: escape before storing
+        const safeContent = escapeHtml(trimmed);
+
         const insertRes = await env.DB.prepare(
           `INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)`
-        ).bind(sessionId, role, content).run();
+        ).bind(sessionId, role, safeContent).run();
 
-        // CRITICAL AUTOMATION STEP: trigger email alert webhook on first customer message
+        // Email alert webhook on first customer message
         if (isFirstUserMessage) {
           try {
             const setting = await env.DB.prepare(
               `SELECT value FROM settings WHERE key = ?`
             ).bind('GOOGLE_SCRIPT_URL').first();
 
-            const scriptUrl = (setting?.value || '').toString().trim();
+            const scriptUrl = String(setting?.value || '').trim();
 
             if (scriptUrl) {
               const session = await env.DB.prepare(
@@ -714,7 +805,7 @@ export default {
                   name: session?.name || null,
                   email: session?.email || null,
                   created_at: session?.created_at || null,
-                  message: content
+                  message: trimmed
                 })
               });
             }
@@ -723,10 +814,37 @@ export default {
           }
         }
 
+        // Smart Quick Action Auto-Reply: My Order Status
+        if (role === 'user') {
+          const normalized = normalizeQuickAction(trimmed);
+          if (normalized === 'my order status') {
+            const session = await env.DB.prepare(
+              `SELECT email FROM chat_sessions WHERE id = ?`
+            ).bind(sessionId).first();
+
+            const email = String(session?.email || '').trim();
+            let replyText = "We couldn't find any recent orders for this email.";
+
+            if (email) {
+              const lastOrder = await getLatestOrderForEmail(env, email);
+              if (lastOrder) {
+                const safeOrderId = escapeHtml(lastOrder.order_id);
+                const safeStatus = escapeHtml(lastOrder.status || 'unknown');
+                const safeLink = escapeHtml(lastOrder.trackLink);
+
+                replyText = `Your last order #${safeOrderId} is currently ${safeStatus}. Track it here: ${safeLink}`;
+              }
+            }
+
+            await env.DB.prepare(
+              `INSERT INTO chat_messages (session_id, role, content) VALUES (?, 'system', ?)`
+            ).bind(sessionId, escapeHtml(replyText)).run();
+          }
+        }
+
         return json({ success: true, messageId: insertRes?.meta?.last_row_id || null });
       }
 
-      // ----- ADMIN CHAT API -----
       if (path === '/api/admin/chats/sessions' && method === 'GET') {
         if (!env.DB) return json({ error: 'Database not configured' }, 500);
         await initDB(env);
@@ -746,7 +864,6 @@ export default {
 
         return json({ sessions: rows?.results || [] });
       }
-
 
       // Test endpoint for admin debugging
       if (path === '/api/admin/test') {

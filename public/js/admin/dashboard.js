@@ -49,20 +49,15 @@
   }
 
   async function loadView(view) {
-    // Cleanup chat polling if user navigates away
-    if (window.__chatPollTimer) {
-      clearInterval(window.__chatPollTimer);
-      window.__chatPollTimer = null;
-    }
     document.getElementById('page-title').textContent = view.charAt(0).toUpperCase() + view.slice(1);
     const panel = document.getElementById('main-panel');
     
     switch(view) {
       case 'dashboard': await loadDashboard(panel); break;
       case 'orders': await loadOrders(panel); break;
-      case 'chats': await loadChats(panel); break;
       case 'products': await loadProducts(panel); break;
       case 'reviews': await loadReviews(panel); break;
+      case 'chats': await loadChats(panel); break;
       case 'settings': loadSettings(panel); break;
       case 'pages':
         // Load the landing pages manager directly inside the dashboard.  In
@@ -2215,23 +2210,31 @@
     renderReviewLists();
   }
 
-  // ------------------------------
-  // Chats (Admin support inbox)
-  // ------------------------------
   async function loadChats(panel) {
     panel.innerHTML = `
       <div style="display:flex; gap:12px; height:calc(100vh - 170px); min-height:520px;">
-        <div id="chats-sessions" style="width:320px; border:1px solid #e6e6e6; border-radius:12px; overflow:auto; background:#fff;">
-          <div style="padding:10px 12px; border-bottom:1px solid #eee; font-weight:700;">Chats</div>
-          <div id="chats-sessions-list"></div>
+        <div style="width:340px; border:1px solid #e6e6e6; border-radius:12px; overflow:hidden; background:#fff; display:flex; flex-direction:column;">
+          <div style="padding:10px 12px; border-bottom:1px solid #eee; font-weight:800; display:flex; align-items:center; justify-content:space-between;">
+            <span>💬 Chats</span>
+            <button id="chats-refresh" style="border:1px solid #e6e6e6;background:#fff;border-radius:10px;padding:6px 10px;cursor:pointer;">Refresh</button>
+          </div>
+          <div id="chats-sessions-list" style="overflow:auto; flex:1;"></div>
         </div>
 
         <div style="flex:1; border:1px solid #e6e6e6; border-radius:12px; overflow:hidden; background:#fff; display:flex; flex-direction:column;">
-          <div id="chats-header" style="padding:10px 12px; border-bottom:1px solid #eee; font-weight:700;">Select a chat</div>
+          <div id="chats-header" style="padding:10px 12px; border-bottom:1px solid #eee; font-weight:800;">
+            Select a chat
+          </div>
           <div id="chats-messages" style="flex:1; overflow:auto; padding:12px; background:#fafafa;"></div>
-          <div style="display:flex; gap:10px; padding:10px 12px; border-top:1px solid #eee;">
-            <input id="chats-input" placeholder="Type your reply…" style="flex:1; border:1px solid #ddd; border-radius:10px; padding:10px; font:14px system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;" />
-            <button id="chats-send" style="background:#111; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:700;">Send</button>
+
+          <div style="display:flex; gap:10px; padding:10px 12px; border-top:1px solid #eee; align-items:flex-start;">
+            <div style="flex:1;">
+              <input id="chats-input" maxlength="500" placeholder="Type your reply..." style="width:100%; height:40px; padding:0 10px; border:1px solid #ddd; border-radius:10px; font-size:14px;" />
+              <div id="chats-counter" style="font-size:11px; color:#666; margin-top:6px; text-align:right;">0/500</div>
+            </div>
+            <button id="chats-send" style="background:#111; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:800; height:40px;">
+              Send
+            </button>
           </div>
         </div>
       </div>
@@ -2242,119 +2245,128 @@
     const messagesEl = panel.querySelector('#chats-messages');
     const inputEl = panel.querySelector('#chats-input');
     const sendBtn = panel.querySelector('#chats-send');
+    const refreshBtn = panel.querySelector('#chats-refresh');
+    const counterEl = panel.querySelector('#chats-counter');
 
     let activeSessionId = null;
     let lastId = 0;
+    let pollTimer = null;
 
-    function escapeHtml(str) {
-      return String(str || '')
+    function formatTime(ts) {
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return '';
+      return d.toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: '2-digit' });
+    }
+
+    function escapeText(str) {
+      return String(str ?? '')
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
+        .replaceAll("'", '&#39;');
     }
 
-    function renderBubble(msg) {
-      const mine = msg.role === 'admin';
-      const wrap = document.createElement('div');
-      wrap.style.display = 'flex';
-      wrap.style.margin = '8px 0';
-      wrap.style.justifyContent = mine ? 'flex-end' : 'flex-start';
-
-      const bubble = document.createElement('div');
-      bubble.style.maxWidth = '78%';
-      bubble.style.padding = '10px 12px';
-      bubble.style.borderRadius = '12px';
-      bubble.style.whiteSpace = 'pre-wrap';
-      bubble.style.wordBreak = 'break-word';
-
-      if (mine) {
-        bubble.style.background = '#111';
-        bubble.style.color = '#fff';
-        bubble.style.borderBottomRightRadius = '4px';
-      } else {
-        bubble.style.background = '#fff';
-        bubble.style.border = '1px solid #e6e6e6';
-        bubble.style.borderBottomLeftRadius = '4px';
-      }
-
-      const meta = document.createElement('div');
-      meta.style.fontSize = '11px';
-      meta.style.opacity = '0.7';
-      meta.style.marginTop = '6px';
-      meta.textContent = new Date(msg.created_at || Date.now()).toLocaleString();
-
-      bubble.innerHTML = `${escapeHtml(msg.content || '')}`;
-      bubble.appendChild(meta);
-
-      wrap.appendChild(bubble);
-      return wrap;
-    }
-
-    async function refreshSessions() {
-      const data = await apiFetch('/api/admin/chats/sessions');
-      const sessions = data.sessions || [];
-
+    function renderSessions(sessions) {
       sessionsListEl.innerHTML = '';
+
       if (!sessions.length) {
-        sessionsListEl.innerHTML = '<div style="padding:12px; opacity:.7;">No chats yet.</div>';
+        sessionsListEl.innerHTML = `<div style="padding:12px;color:#666;">No chat sessions yet.</div>`;
         return;
       }
 
       for (const s of sessions) {
-        const item = document.createElement('div');
-        item.style.padding = '10px 12px';
-        item.style.borderBottom = '1px solid #f0f0f0';
-        item.style.cursor = 'pointer';
-        item.dataset.sessionId = s.id;
+        const isActive = s.id === activeSessionId;
 
-        if (s.id === activeSessionId) {
-          item.style.background = '#f7f7f7';
-        }
+        const row = document.createElement('div');
+        row.style.cssText = `
+          padding:10px 12px;
+          border-bottom:1px solid #f0f0f0;
+          cursor:pointer;
+          background:${isActive ? '#111' : '#fff'};
+          color:${isActive ? '#fff' : '#111'};
+        `;
 
-        const title = document.createElement('div');
-        title.style.fontWeight = '700';
-        title.textContent = s.name ? `${s.name}` : s.email || s.id;
+        const name = escapeText(s.name || 'Unknown');
+        const email = escapeText(s.email || '');
+        const lastMsg = escapeText((s.last_message || '').slice(0, 80));
+        const time = s.last_message_at || s.created_at;
 
-        const sub = document.createElement('div');
-        sub.style.fontSize = '12px';
-        sub.style.opacity = '0.75';
-        sub.textContent = s.email || '';
+        row.innerHTML = `
+          <div style="font-weight:800; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${name}</span>
+            <span style="font-weight:600; font-size:11px; opacity:${isActive ? '0.8' : '0.6'};">${escapeText(formatTime(time))}</span>
+          </div>
+          <div style="font-size:12px; opacity:${isActive ? '0.9' : '0.7'}; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${email}
+          </div>
+          <div style="font-size:12px; opacity:${isActive ? '0.9' : '0.7'}; margin-top:6px; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${lastMsg}
+          </div>
+        `;
 
-        const preview = document.createElement('div');
-        preview.style.fontSize = '12px';
-        preview.style.opacity = '0.7';
-        preview.style.marginTop = '6px';
-        preview.textContent = (s.last_message || '').slice(0, 60);
-
-        item.appendChild(title);
-        item.appendChild(sub);
-        if (s.last_message) item.appendChild(preview);
-
-        item.addEventListener('click', async () => {
+        row.addEventListener('click', async () => {
           activeSessionId = s.id;
           lastId = 0;
-          headerEl.textContent = `${s.name || 'Customer'} • ${s.email || ''}`.trim();
           messagesEl.innerHTML = '';
+          headerEl.textContent = `Chat with ${s.name || 'Customer'} (${s.email || ''})`;
           await syncMessages(true);
           await refreshSessions();
+          startPolling();
         });
 
-        sessionsListEl.appendChild(item);
+        sessionsListEl.appendChild(row);
       }
     }
 
-    async function syncMessages(forceScroll) {
+    function appendMessage(role, content, created_at) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'margin:10px 0; display:flex; flex-direction:column; gap:4px;';
+      wrap.style.alignItems = role === 'admin' ? 'flex-end' : 'flex-start';
+
+      const bubble = document.createElement('div');
+      bubble.style.cssText = `
+        max-width: 78%;
+        border-radius: 12px;
+        padding: 10px 12px;
+        border: 1px solid #e6e6e6;
+        background: ${role === 'admin' ? '#111' : '#fff'};
+        color: ${role === 'admin' ? '#fff' : '#111'};
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 14px;
+        line-height: 1.25;
+      `;
+      bubble.innerHTML = escapeText(content);
+
+      const meta = document.createElement('div');
+      meta.style.cssText = 'font-size:11px; color:#777;';
+      meta.textContent = `${role === 'admin' ? 'Admin' : (role === 'user' ? 'Customer' : 'System')}${created_at ? ` • ${formatTime(created_at)}` : ''}`;
+
+      wrap.appendChild(bubble);
+      wrap.appendChild(meta);
+      messagesEl.appendChild(wrap);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function refreshSessions() {
+      const data = await apiFetch('/api/admin/chats/sessions');
+      renderSessions(data.sessions || []);
+    }
+
+    async function syncMessages(clear) {
       if (!activeSessionId) return;
-      const data = await apiFetch(`/api/chat/sync?sessionId=${encodeURIComponent(activeSessionId)}&sinceId=${encodeURIComponent(String(lastId || 0))}`);
+
+      const data = await apiFetch(`/api/chat/sync?sessionId=${encodeURIComponent(activeSessionId)}&sinceId=${encodeURIComponent(String(lastId))}`);
       const msgs = data.messages || [];
-      for (const m of msgs) {
-        messagesEl.appendChild(renderBubble(m));
+
+      if (clear) {
+        messagesEl.innerHTML = '';
       }
-      if (msgs.length) {
-        lastId = Number(data.lastId || msgs[msgs.length - 1].id) || lastId;
-        if (forceScroll) messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      for (const m of msgs) {
+        lastId = Math.max(lastId, Number(m.id) || lastId);
+        appendMessage(m.role, m.content, m.created_at);
       }
     }
 
@@ -2362,6 +2374,7 @@
       const text = (inputEl.value || '').trim();
       if (!text) return;
       if (!activeSessionId) return alert('Select a chat first.');
+      if (text.length > 500) return alert('Max 500 characters.');
 
       sendBtn.disabled = true;
       try {
@@ -2370,33 +2383,58 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId: activeSessionId, role: 'admin', content: text })
         });
+
+        appendMessage('admin', text, new Date().toISOString());
         inputEl.value = '';
-        await syncMessages(true);
+        counterEl.textContent = '0/500';
+
+        await syncMessages(false);
         await refreshSessions();
+      } catch (e) {
+        alert(e?.message || 'Failed to send');
       } finally {
         sendBtn.disabled = false;
       }
     }
 
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(async () => {
+        if (!activeSessionId) return;
+        await syncMessages(false);
+        await refreshSessions();
+      }, 5000);
+    }
+
+    function stopPolling() {
+      if (!pollTimer) return;
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+
+    inputEl.addEventListener('input', () => {
+      counterEl.textContent = `${(inputEl.value || '').length}/500`;
+    });
+
     sendBtn.addEventListener('click', sendReply);
     inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter') {
         e.preventDefault();
         sendReply();
       }
     });
 
-    await refreshSessions();
+    refreshBtn.addEventListener('click', refreshSessions);
 
-    // Poll sessions and active thread
-    window.__chatPollTimer = setInterval(async () => {
-      try {
-        await refreshSessions();
-        await syncMessages(false);
-      } catch (e) {
-        // ignore polling errors
+    const obs = new MutationObserver(() => {
+      if (!document.body.contains(panel)) {
+        stopPolling();
+        obs.disconnect();
       }
-    }, 5000);
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+
+    await refreshSessions();
   }
 
 })();

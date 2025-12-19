@@ -1,308 +1,391 @@
 (() => {
-  const STORAGE_KEY = 'wishesu_chat_session';
+  // Prevent double init across navigations / partial reloads
+  if (window.__WISHESU_CHAT_WIDGET_INITIALIZED__) return;
+  window.__WISHESU_CHAT_WIDGET_INITIALIZED__ = true;
+
+  const API_START = '/api/chat/start';
+  const API_SEND = '/api/chat/send';
+  const API_SYNC = '/api/chat/sync';
+
+  const MAX_LEN = 500;
   const POLL_MS = 5000;
 
-  const state = {
-    sessionId: null,
-    lastId: 0,
-    open: false,
-    polling: null,
-    dragging: null
-  };
+  const LS_SESSION_ID = 'chat_session_id';
+  const LS_NAME = 'chat_name';
+  const LS_EMAIL = 'chat_email';
+  const LS_OPEN = 'chat_is_open';
+
+  let sessionId = localStorage.getItem(LS_SESSION_ID) || '';
+  let name = localStorage.getItem(LS_NAME) || '';
+  let email = localStorage.getItem(LS_EMAIL) || '';
+  let isOpen = localStorage.getItem(LS_OPEN) === 'true';
+
+  let lastId = 0;
+  let pollTimer = null;
+
+  let isSending = false;
 
   function el(tag, attrs = {}, children = []) {
-    const n = document.createElement(tag);
+    const node = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
-      if (k === 'style' && v && typeof v === 'object') Object.assign(n.style, v);
-      else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2), v);
-      else if (v !== null && v !== undefined) n.setAttribute(k, String(v));
+      if (k === 'style') node.style.cssText = v;
+      else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
+      else if (k === 'class') node.className = v;
+      else node.setAttribute(k, String(v));
     }
-    for (const c of children) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
-    return n;
+    for (const c of children) node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    return node;
   }
 
-  async function api(url, options) {
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...(options && options.headers ? options.headers : {}) },
-      ...options
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'Request failed');
-    return data;
+  function escapeText(str) {
+    // Client-side safe rendering
+    return String(str ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
   }
 
-  function loadStoredSession() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.sessionId) {
-        state.sessionId = parsed.sessionId;
-        state.lastId = Number(parsed.lastId || 0) || 0;
-      }
-    } catch {}
+  function formatTime(ts) {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: '2-digit' });
   }
 
-  function saveStoredSession() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessionId: state.sessionId, lastId: state.lastId }));
-    } catch {}
-  }
+  // ---- UI ----
+  const style = el('style', {}, [`
+    .wc-chat-btn {
+      position: fixed; right: 18px; bottom: 18px; z-index: 999999;
+      width: 56px; height: 56px; border-radius: 999px;
+      background: #111; color: #fff; border: 0; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; box-shadow: 0 12px 30px rgba(0,0,0,.25);
+      user-select: none;
+    }
+    .wc-chat-panel {
+      position: fixed; right: 18px; bottom: 86px; z-index: 999999;
+      width: 340px; max-width: calc(100vw - 24px);
+      height: 460px; max-height: calc(100vh - 120px);
+      border-radius: 14px; background: #fff;
+      box-shadow: 0 18px 50px rgba(0,0,0,.2);
+      border: 1px solid #eaeaea;
+      display: none; overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial;
+    }
+    .wc-chat-header {
+      height: 48px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 12px; border-bottom: 1px solid #eee; background: #fafafa;
+      cursor: move; user-select: none;
+      font-weight: 700;
+    }
+    .wc-chat-body { height: calc(100% - 48px); display: flex; flex-direction: column; }
+    .wc-chat-messages {
+      flex: 1; overflow: auto; padding: 12px; background: #f8f8f8;
+    }
+    .wc-msg { margin: 8px 0; display: flex; flex-direction: column; gap: 2px; }
+    .wc-bubble {
+      max-width: 85%;
+      padding: 10px 12px; border-radius: 12px;
+      line-height: 1.25; font-size: 14px;
+      border: 1px solid #e6e6e6;
+      background: #fff;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .wc-msg.user { align-items: flex-end; }
+    .wc-msg.user .wc-bubble { background: #111; color: #fff; border-color: #111; }
+    .wc-meta { font-size: 11px; color: #777; }
+    .wc-quick {
+      padding: 10px 12px; border-top: 1px solid #eee; background: #fff;
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .wc-quick button {
+      border: 1px solid #e6e6e6; background: #fff; border-radius: 999px;
+      padding: 6px 10px; cursor: pointer; font-size: 12px;
+    }
+    .wc-inputbar {
+      border-top: 1px solid #eee; background: #fff;
+      padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; gap: 10px;
+      align-items: center;
+    }
+    .wc-inputbar input {
+      height: 40px; border-radius: 10px; border: 1px solid #ddd;
+      padding: 0 10px; font-size: 14px; outline: none;
+    }
+    .wc-inputbar button {
+      height: 40px; border-radius: 10px; border: 0;
+      background: #111; color: #fff; font-weight: 700;
+      padding: 0 14px; cursor: pointer;
+    }
+    .wc-inputbar button:disabled { opacity: .6; cursor: not-allowed; }
+    .wc-counter {
+      margin-top: 6px; font-size: 11px; color: #666;
+      display: flex; justify-content: flex-end;
+    }
+    .wc-modal {
+      padding: 12px; background: #fff; border-top: 1px solid #eee;
+    }
+    .wc-modal label { display:block; font-size: 12px; color:#555; margin: 8px 0 4px; }
+    .wc-modal input { width: 100%; height: 38px; border: 1px solid #ddd; border-radius: 10px; padding: 0 10px; }
+    .wc-modal .row { display:flex; gap: 10px; margin-top: 10px; }
+    .wc-modal .row button { flex:1; height: 40px; border-radius: 10px; border:0; font-weight:700; cursor:pointer; }
+    .wc-primary { background:#111; color:#fff; }
+    .wc-secondary { background:#f1f1f1; color:#111; }
+  `]);
 
-  function injectStyles() {
-    const css = `
-      .ws-chat-btn{position:fixed;right:18px;bottom:18px;z-index:99999;background:#111;color:#fff;border-radius:999px;
-        padding:12px 14px;font:600 14px/1.1 system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial;cursor:pointer;
-        box-shadow:0 10px 30px rgba(0,0,0,.18);user-select:none}
-      .ws-chat-btn:active{transform:scale(.98)}
-      .ws-chat-wrap{position:fixed;right:18px;bottom:78px;z-index:99999;width:320px;height:420px;background:#fff;border:1px solid #e6e6e6;
-        border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.18);display:none;overflow:hidden;font:14px system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
-      .ws-chat-head{background:#111;color:#fff;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;cursor:move}
-      .ws-chat-title{font-weight:700;font-size:13px}
-      .ws-chat-close{background:transparent;border:0;color:#fff;font-size:18px;cursor:pointer;line-height:1}
-      .ws-chat-body{display:flex;flex-direction:column;height:calc(100% - 42px)}
-      .ws-chat-messages{flex:1;overflow:auto;padding:10px;background:#fafafa}
-      .ws-chat-msg{max-width:85%;padding:8px 10px;border-radius:12px;margin:6px 0;white-space:pre-wrap;word-break:break-word}
-      .ws-chat-msg.user{margin-left:auto;background:#111;color:#fff;border-bottom-right-radius:4px}
-      .ws-chat-msg.admin{margin-right:auto;background:#fff;border:1px solid #e6e6e6;border-bottom-left-radius:4px}
-      .ws-chat-meta{font-size:11px;opacity:.7;margin-top:4px}
-      .ws-chat-compose{display:flex;gap:8px;padding:10px;border-top:1px solid #eee;background:#fff}
-      .ws-chat-input{flex:1;border:1px solid #ddd;border-radius:10px;padding:10px;font:14px system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
-      .ws-chat-send{background:#111;color:#fff;border:0;border-radius:10px;padding:10px 12px;cursor:pointer;font-weight:700}
-      .ws-chat-send:disabled{opacity:.6;cursor:not-allowed}
-      .ws-chat-form{display:flex;flex-direction:column;gap:8px;padding:10px}
-      .ws-chat-form input{border:1px solid #ddd;border-radius:10px;padding:10px;font:14px system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
-      .ws-chat-form button{background:#111;color:#fff;border:0;border-radius:10px;padding:10px 12px;cursor:pointer;font-weight:700}
-      .ws-chat-note{font-size:12px;opacity:.8}
-    `;
-    const style = document.createElement('style');
-    style.textContent = css;
-    document.head.appendChild(style);
-  }
+  const btn = el('button', { class: 'wc-chat-btn', title: 'Chat' }, ['💬']);
+  const panel = el('div', { class: 'wc-chat-panel', role: 'dialog', 'aria-label': 'Chat' });
 
-  function makeUI() {
-    const btn = el('div', { class: 'ws-chat-btn', title: 'Chat' }, ['Chat']);
-    const wrap = el('div', { class: 'ws-chat-wrap' });
+  const header = el('div', { class: 'wc-chat-header' }, [
+    el('div', {}, ['Support']),
+    el('button', {
+      style: 'border:0;background:transparent;font-size:18px;cursor:pointer;padding:6px;',
+      onclick: () => setOpen(false),
+      'aria-label': 'Close'
+    }, ['✕'])
+  ]);
 
-    const head = el('div', { class: 'ws-chat-head' }, [
-      el('div', { class: 'ws-chat-title' }, ['Support chat']),
-      el('button', { class: 'ws-chat-close', type: 'button', title: 'Close' }, ['×'])
-    ]);
+  const messagesEl = el('div', { class: 'wc-chat-messages' });
+  const quickRow = el('div', { class: 'wc-quick' }, []);
 
-    const messages = el('div', { class: 'ws-chat-messages' });
+  const input = el('input', {
+    type: 'text',
+    placeholder: 'Type a message…',
+    maxlength: String(MAX_LEN)
+  });
 
-    const input = el('input', { class: 'ws-chat-input', placeholder: 'Type a message…' });
-    const sendBtn = el('button', { class: 'ws-chat-send', type: 'button' }, ['Send']);
-    const compose = el('div', { class: 'ws-chat-compose' }, [input, sendBtn]);
+  const sendBtn = el('button', { type: 'button' }, ['Send']);
+  const counter = el('div', { class: 'wc-counter' }, [`0/${MAX_LEN}`]);
 
-    const body = el('div', { class: 'ws-chat-body' }, [messages, compose]);
+  const inputWrap = el('div', {}, [input, counter]);
+  const inputBar = el('div', { class: 'wc-inputbar' }, [inputWrap, sendBtn]);
 
-    // Simple onboarding form if no session yet
-    const formWrap = el('div', { class: 'ws-chat-form', style: { display: 'none' } }, [
-      el('div', { class: 'ws-chat-note' }, ['Enter your name and email so we can reply if you leave the page.']),
-      el('input', { id: 'ws-chat-name', placeholder: 'Name' }),
-      el('input', { id: 'ws-chat-email', placeholder: 'Email', type: 'email' }),
-      el('button', { type: 'button', id: 'ws-chat-start' }, ['Start chat'])
-    ]);
+  const body = el('div', { class: 'wc-chat-body' }, [messagesEl, quickRow, inputBar]);
+  panel.appendChild(header);
+  panel.appendChild(body);
 
-    body.insertBefore(formWrap, messages);
+  document.head.appendChild(style);
+  document.body.appendChild(btn);
+  document.body.appendChild(panel);
 
-    wrap.appendChild(head);
-    wrap.appendChild(body);
+  // Draggable panel by header
+  (function enableDrag() {
+    let dragging = false;
+    let startX = 0, startY = 0;
+    let startLeft = 0, startTop = 0;
 
-    // Button toggle
-    btn.addEventListener('click', () => toggle(true));
-    head.querySelector('.ws-chat-close').addEventListener('click', () => toggle(false));
-
-    // Send actions
-    sendBtn.addEventListener('click', () => onSend(input, sendBtn, messages));
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        onSend(input, sendBtn, messages);
-      }
-    });
-
-    // Start chat
-    formWrap.querySelector('#ws-chat-start').addEventListener('click', async () => {
-      const name = (formWrap.querySelector('#ws-chat-name').value || '').trim();
-      const email = (formWrap.querySelector('#ws-chat-email').value || '').trim();
-      if (!name || !email) return alert('Please enter name and email.');
-      try {
-        const data = await api('/api/chat/start', { method: 'POST', body: JSON.stringify({ name, email }) });
-        state.sessionId = data.sessionId;
-        state.lastId = 0;
-        saveStoredSession();
-        formWrap.style.display = 'none';
-        input.disabled = false;
-        sendBtn.disabled = false;
-        await sync(messages);
-      } catch (e) {
-        alert(e.message || 'Unable to start chat.');
-      }
-    });
-
-    // Dragging (button and window)
-    makeDraggable(btn, { clamp: true });
-    makeDraggable(wrap, { handle: head, clamp: true });
-
-    document.body.appendChild(btn);
-    document.body.appendChild(wrap);
-
-    // expose references
-    state.ui = { btn, wrap, messages, input, sendBtn, formWrap };
-  }
-
-  function makeDraggable(target, opts = {}) {
-    const handle = opts.handle || target;
-    handle.style.touchAction = 'none';
-
-    let startX = 0, startY = 0, startLeft = 0, startTop = 0, dragging = false;
-
-    function onDown(e) {
+    header.addEventListener('mousedown', (e) => {
       dragging = true;
-      const p = point(e);
-      startX = p.x;
-      startY = p.y;
-
-      const rect = target.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = panel.getBoundingClientRect();
       startLeft = rect.left;
       startTop = rect.top;
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+      panel.style.left = `${startLeft}px`;
+      panel.style.top = `${startTop}px`;
+      e.preventDefault();
+    });
 
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onUp);
-    }
-
-    function onMove(e) {
+    window.addEventListener('mousemove', (e) => {
       if (!dragging) return;
-      if (e.cancelable) e.preventDefault();
-      const p = point(e);
-      let left = startLeft + (p.x - startX);
-      let top = startTop + (p.y - startY);
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      panel.style.left = `${startLeft + dx}px`;
+      panel.style.top = `${startTop + dy}px`;
+    });
 
-      target.style.right = 'auto';
-      target.style.bottom = 'auto';
-      target.style.left = left + 'px';
-      target.style.top = top + 'px';
+    window.addEventListener('mouseup', () => { dragging = false; });
+  })();
 
-      if (opts.clamp) clampToViewport(target);
-    }
-
-    function onUp() {
-      dragging = false;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.removeEventListener('touchmove', onMove);
-      document.removeEventListener('touchend', onUp);
-    }
-
-    handle.addEventListener('mousedown', onDown);
-    handle.addEventListener('touchstart', onDown, { passive: false });
-  }
-
-  function clampToViewport(node) {
-    const rect = node.getBoundingClientRect();
-    const pad = 8;
-    let left = rect.left;
-    let top = rect.top;
-
-    const maxLeft = window.innerWidth - rect.width - pad;
-    const maxTop = window.innerHeight - rect.height - pad;
-
-    left = Math.min(Math.max(left, pad), maxLeft);
-    top = Math.min(Math.max(top, pad), maxTop);
-
-    node.style.left = left + 'px';
-    node.style.top = top + 'px';
-  }
-
-  function point(e) {
-    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    return { x: e.clientX, y: e.clientY };
-  }
-
-  function toggle(open) {
-    state.open = open;
-    const { wrap, formWrap, input, sendBtn, messages } = state.ui;
-    wrap.style.display = open ? 'block' : 'none';
-
-    if (!open) return;
-
-    // Show form if no session
-    if (!state.sessionId) {
-      formWrap.style.display = 'flex';
-      input.disabled = true;
-      sendBtn.disabled = true;
+  // ---- Persistence (open/closed across pages) ----
+  function setOpen(open) {
+    isOpen = !!open;
+    localStorage.setItem(LS_OPEN, isOpen ? 'true' : 'false');
+    panel.style.display = isOpen ? 'block' : 'none';
+    if (isOpen) {
+      ensureSession().then(() => {
+        startPolling();
+        syncNow();
+      }).catch(() => {});
     } else {
-      formWrap.style.display = 'none';
-      input.disabled = false;
-      sendBtn.disabled = false;
-      sync(messages).catch(() => {});
+      stopPolling();
     }
-
-    startPolling(messages);
   }
 
-  function renderMessage(container, msg) {
-    const bubble = el('div', { class: `ws-chat-msg ${msg.role}` }, [
-      msg.content || '',
-      el('div', { class: 'ws-chat-meta' }, [new Date(msg.created_at || Date.now()).toLocaleString()])
+  btn.addEventListener('click', () => setOpen(!isOpen));
+
+  // ---- Quick actions ----
+  function addQuickAction(label, payload) {
+    const b = el('button', { type: 'button' }, [label]);
+    b.addEventListener('click', () => {
+      sendMessage(payload);
+    });
+    quickRow.appendChild(b);
+  }
+
+  addQuickAction('📦 My Order Status', 'My Order Status');
+  addQuickAction('🚚 Shipping Info', 'Shipping Info');
+  addQuickAction('💬 Talk to Human', 'Talk to Human');
+
+  // ---- Message rendering ----
+  function appendMessage(role, content, created_at) {
+    const wrap = el('div', { class: `wc-msg ${role}` });
+    const bubble = el('div', { class: 'wc-bubble' });
+    bubble.innerHTML = escapeText(content);
+
+    const meta = el('div', { class: 'wc-meta' }, [
+      role === 'user' ? 'You' : (role === 'admin' ? 'Admin' : 'System'),
+      created_at ? ` • ${formatTime(created_at)}` : ''
     ]);
-    container.appendChild(bubble);
+
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  async function sync(messagesEl) {
-    if (!state.sessionId) return;
-
-    const data = await api(`/api/chat/sync?sessionId=${encodeURIComponent(state.sessionId)}&sinceId=${encodeURIComponent(String(state.lastId || 0))}`, { method: 'GET' });
-    const msgs = data.messages || [];
-    for (const m of msgs) renderMessage(messagesEl, m);
-    if (msgs.length) {
-      state.lastId = Number(data.lastId || msgs[msgs.length - 1].id) || state.lastId;
-      saveStoredSession();
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-  }
-
-  async function onSend(input, sendBtn, messagesEl) {
-    const text = (input.value || '').trim();
-    if (!text) return;
-    if (!state.sessionId) return alert('Please start the chat first.');
-
+  // ---- Session creation modal ----
+  function showSessionModal() {
+    input.disabled = true;
     sendBtn.disabled = true;
+
+    const modal = el('div', { class: 'wc-modal', id: 'wc-modal' }, [
+      el('div', { style: 'font-weight:700; margin-bottom:8px;' }, ['Start chat']),
+      el('label', {}, ['Name']),
+      el('input', { id: 'wc-name', value: name || '' }),
+      el('label', {}, ['Email']),
+      el('input', { id: 'wc-email', value: email || '' }),
+      el('div', { class: 'row' }, [
+        el('button', { class: 'wc-secondary', type: 'button', onclick: () => setOpen(false) }, ['Cancel']),
+        el('button', { class: 'wc-primary', type: 'button', onclick: async () => {
+          const n = String(modal.querySelector('#wc-name').value || '').trim();
+          const e = String(modal.querySelector('#wc-email').value || '').trim();
+          if (!n || !e) return alert('Please enter name and email.');
+          name = n; email = e;
+          localStorage.setItem(LS_NAME, name);
+          localStorage.setItem(LS_EMAIL, email);
+          await startSession();
+          modal.remove();
+          input.disabled = false;
+          sendBtn.disabled = false;
+          input.focus();
+          syncNow();
+        } }, ['Start'])
+      ])
+    ]);
+
+    body.insertBefore(modal, messagesEl.nextSibling);
+  }
+
+  async function startSession() {
+    const res = await fetch(API_START, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.sessionId) {
+      throw new Error(data.error || 'Failed to start session');
+    }
+    sessionId = data.sessionId;
+    localStorage.setItem(LS_SESSION_ID, sessionId);
+  }
+
+  async function ensureSession() {
+    if (sessionId) return;
+    const old = panel.querySelector('#wc-modal');
+    if (old) old.remove();
+    showSessionModal();
+  }
+
+  // ---- Sending (fix duplicates) ----
+  function updateCounter() {
+    const val = String(input.value || '');
+    counter.textContent = `${val.length}/${MAX_LEN}`;
+  }
+  input.addEventListener('input', updateCounter);
+
+  async function sendMessage(text) {
+    if (!isOpen) setOpen(true);
+
+    if (isSending) return;
+    if (!sessionId) return;
+
+    const msg = String(text ?? input.value ?? '').trim();
+    if (!msg) return;
+
+    if (msg.length > MAX_LEN) {
+      alert(`Max ${MAX_LEN} characters.`);
+      return;
+    }
+
+    isSending = true;
+    sendBtn.disabled = true;
+
     try {
-      await api('/api/chat/send', {
+      const res = await fetch(API_SEND, {
         method: 'POST',
-        body: JSON.stringify({ sessionId: state.sessionId, role: 'user', content: text })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, role: 'user', content: msg })
       });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Failed to send');
+        return;
+      }
+
+      appendMessage('user', msg, new Date().toISOString());
+
       input.value = '';
-      await sync(messagesEl);
-    } catch (e) {
-      alert(e.message || 'Unable to send message.');
+      updateCounter();
+
+      await syncNow();
     } finally {
+      isSending = false;
       sendBtn.disabled = false;
     }
   }
 
-  function startPolling(messagesEl) {
-    if (state.polling) clearInterval(state.polling);
-    state.polling = setInterval(() => {
-      if (state.open) sync(messagesEl).catch(() => {});
+  sendBtn.addEventListener('click', () => sendMessage());
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  // ---- Polling ----
+  async function syncNow() {
+    if (!sessionId) return;
+
+    const res = await fetch(`${API_SYNC}?sessionId=${encodeURIComponent(sessionId)}&sinceId=${encodeURIComponent(String(lastId))}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return;
+
+    const messages = data.messages || [];
+    for (const m of messages) {
+      lastId = Math.max(lastId, Number(m.id) || lastId);
+      appendMessage(m.role, m.content, m.created_at);
+    }
+  }
+
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = window.setInterval(() => {
+      if (isOpen) syncNow();
     }, POLL_MS);
   }
 
-  function boot() {
-    injectStyles();
-    loadStoredSession();
-    makeUI();
-
-    // If session exists, pre-sync quietly
-    if (state.sessionId) {
-      sync(state.ui.messages).catch(() => {});
-    }
+  function stopPolling() {
+    if (!pollTimer) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
   }
 
-  boot();
+  if (isOpen) setOpen(true);
 })();
