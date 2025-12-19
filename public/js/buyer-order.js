@@ -49,57 +49,6 @@
   function displayOrder(o) {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('order-content').style.display = 'block';
-
-    // Product summary (title + thumbnail)
-    const productTitle = o.product_title || '';
-    const productThumb = o.product_thumbnail || '';
-    const productId = o.product_id || '';
-    const productCard = document.getElementById('product-summary-card');
-    if (productCard) {
-      productCard.innerHTML = '';
-      const img = document.createElement('img');
-      img.className = 'product-summary-thumb';
-      img.alt = productTitle ? `Product: ${productTitle}` : 'Product thumbnail';
-      if (productThumb) img.src = productThumb;
-
-      const meta = document.createElement('div');
-      meta.className = 'product-summary-meta';
-
-      const titleEl = document.createElement('p');
-      titleEl.className = 'product-summary-title';
-
-      const productUrl = productId ? `/product.html?id=${encodeURIComponent(productId)}` : '/product.html';
-      const a = document.createElement('a');
-      a.href = productUrl;
-      a.textContent = productTitle || 'View purchased product';
-      a.rel = 'noopener';
-      titleEl.appendChild(a);
-
-      const actions = document.createElement('div');
-      actions.className = 'product-summary-actions';
-
-      const viewBtn = document.createElement('a');
-      viewBtn.href = productUrl;
-      viewBtn.textContent = 'View Product';
-      viewBtn.rel = 'noopener';
-
-      const buyAgainBtn = document.createElement('a');
-      buyAgainBtn.href = productUrl;
-      buyAgainBtn.textContent = 'Buy Again';
-      buyAgainBtn.className = 'secondary';
-      buyAgainBtn.rel = 'noopener';
-
-      actions.appendChild(viewBtn);
-      actions.appendChild(buyAgainBtn);
-
-      meta.appendChild(titleEl);
-      meta.appendChild(actions);
-
-      // Only show image if we have a thumbnail, otherwise keep layout clean
-      if (productThumb) productCard.appendChild(img);
-      productCard.appendChild(meta);
-      productCard.style.display = 'flex';
-    }
     document.getElementById('order-id').textContent = o.order_id;
     document.getElementById('email').textContent = o.email || 'N/A';
     document.getElementById('amount').textContent = '$' + (o.amount || 0);
