@@ -146,6 +146,55 @@ function normalizeArchiveMetaValue(value) {
   return (value || '').toString().replace(/[\r\n\t]+/g, ' ').trim();
 }
 
+// ----------------------------------------
+// Slug helpers
+// ----------------------------------------
+function slugify(input) {
+  return String(input || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-+/g, '-');
+}
+
+async function ensureUniqueSlug(env, desiredSlug, currentId = null) {
+  let base = slugify(desiredSlug);
+  if (!base) base = 'product';
+  let candidate = base;
+  let i = 0;
+  while (true) {
+    const row = await env.DB.prepare(
+      'SELECT id FROM products WHERE slug = ? LIMIT 1'
+    ).bind(candidate).first();
+
+    if (!row?.id) return candidate;
+
+    const foundId = Number(row.id);
+    if (currentId != null && foundId === Number(currentId)) return candidate;
+
+    i += 1;
+    // Keep it deterministic and short
+    candidate = i === 1 && currentId ? `${base}-${Number(currentId)}` : `${base}-${i}`;
+  }
+}
+
+async function ensureProductSlug(env, productRow) {
+  const existing = String(productRow?.slug || '').trim();
+  if (existing) return existing;
+
+  const desired = slugify(productRow?.title || '') || `product-${Number(productRow?.id || 0)}`;
+  const unique = await ensureUniqueSlug(env, desired, productRow?.id);
+  try {
+    await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?')
+      .bind(unique, Number(productRow.id))
+      .run();
+  } catch (e) {
+    // If update fails for any reason, still return best-effort slug
+  }
+  return unique;
+}
+
 // ========================================
 // SERVER-SIDE SCHEMA GENERATION FOR SEO
 // ========================================
@@ -164,13 +213,14 @@ function generateOfferObject(product, baseUrl) {
   const date = new Date();
   date.setFullYear(date.getFullYear() + 1);
   const priceValidUntil = date.toISOString().split('T')[0];
+  const safeSlug = slugify(product.slug || '') || slugify(product.title || '') || `product-${Number(product.id || 0)}`;
   
   // Check if product is digital (instant_delivery = 1 means digital/no shipping)
   const isDigital = product.instant_delivery === 1;
 
   const offer = {
     "@type": "Offer",
-    "url": `${baseUrl}/product?id=${product.id}`,
+    "url": `${baseUrl}/product/${encodeURIComponent(safeSlug)}`,
     "priceCurrency": "USD",
     "price": price.toString(),
     "availability": "https://schema.org/InStock",
@@ -253,12 +303,13 @@ function generateOfferObject(product, baseUrl) {
  * @returns {string} JSON-LD schema as string
  */
 function generateProductSchema(product, baseUrl, reviews = []) {
+  const safeSlug = slugify(product.slug || '') || slugify(product.title || '') || `product-${Number(product.id || 0)}`;
   const sku = product.slug ? `WV-${product.id}-${product.slug.toUpperCase().replace(/-/g, '')}` : `WV-${product.id}`;
 
   const schema = {
     "@context": "https://schema.org/",
     "@type": "Product",
-    "@id": `${baseUrl}/product?id=${product.id}`,
+    "@id": `${baseUrl}/product/${encodeURIComponent(safeSlug)}`,
     "name": product.title,
     "description": product.seo_description || product.description || product.title,
     "sku": sku,
@@ -322,13 +373,14 @@ function generateCollectionSchema(products, baseUrl) {
   }
 
   const itemListElement = products.map((product, index) => {
+    const safeSlug = slugify(product.slug || '') || slugify(product.title || '') || `product-${Number(product.id || 0)}`;
     const item = {
       "@type": "ListItem",
       "position": index + 1,
-      "url": `${baseUrl}/product?id=${product.id}`,
+      "url": `${baseUrl}/product/${encodeURIComponent(safeSlug)}`,
       "item": {
         "@type": "Product",
-        "@id": `${baseUrl}/product?id=${product.id}`,
+        "@id": `${baseUrl}/product/${encodeURIComponent(safeSlug)}`,
         "name": product.title,
         "description": product.description || product.title,
         "image": product.thumbnail_url || `${baseUrl}/placeholder.jpg`,
@@ -730,7 +782,27 @@ export default {
 
 
 
-            // ------------------------------
+      
+      // Redirect legacy product URLs (/product?id=123) to pretty slug URLs (/product/<slug>).
+      // If slug is empty in DB, backfill it from title.
+      if ((method === 'GET' || method === 'HEAD') && (path === '/product' || path === '/product.html')) {
+        const idParam = url.searchParams.get('id');
+        if (idParam && !isNaN(Number(idParam)) && env.DB) {
+          await initDB(env);
+          const row = await env.DB.prepare('SELECT id, title, slug FROM products WHERE id = ? LIMIT 1')
+            .bind(Number(idParam)).first();
+          if (row?.id) {
+            const slug = await ensureProductSlug(env, row);
+            const redirected = new URL(req.url);
+            redirected.pathname = `/product/${encodeURIComponent(slug)}`;
+            // Keep all query params except id
+            redirected.searchParams.delete('id');
+            return Response.redirect(redirected.toString(), 301);
+          }
+        }
+      }
+
+      // ------------------------------
       // Chat APIs (Customer + Admin)
       // ------------------------------
       if (path === '/api/chat/start' && method === 'POST') {
@@ -1070,9 +1142,6 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
       }
 
 
-return new Response(assetResp.body, { status: 200, headers });
-        }
-      }
       if (path === '/api/debug') {
         return json({
           status: 'running',
@@ -1125,6 +1194,8 @@ return new Response(assetResp.body, { status: 200, headers });
 
         // ----- PRODUCTS -----
         if (method === 'GET' && path === '/api/products') {
+          if (!env.DB) return json({ error: 'Database not configured' }, 500);
+          await initDB(env);
           const r = await env.DB.prepare(
             'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text FROM products WHERE status = ? ORDER BY sort_order ASC, id DESC'
           ).bind('active').all();
@@ -1132,12 +1203,15 @@ return new Response(assetResp.body, { status: 200, headers });
           // Fetch review statistics for each product
           const products = r.results || [];
           const productsWithReviews = await Promise.all(products.map(async (product) => {
+            // Backfill slug if blank
+            const fixedSlug = await ensureProductSlug(env, product);
             const stats = await env.DB.prepare(
               'SELECT COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id = ? AND status = ?'
             ).bind(product.id, 'approved').first();
             
             return {
               ...product,
+              slug: fixedSlug,
               review_count: stats?.cnt || 0,
               rating_average: stats?.avg ? Math.round(stats.avg * 10) / 10 : 0
             };
@@ -1709,6 +1783,8 @@ return new Response(assetResp.body, { status: 200, headers });
         }
 
         if (method === 'GET' && path.startsWith('/api/product/')) {
+          if (!env.DB) return json({ error: 'Database not configured' }, 500);
+          await initDB(env);
           const id = path.split('/').pop();
           let row;
           if (isNaN(Number(id))) {
@@ -1717,6 +1793,9 @@ return new Response(assetResp.body, { status: 200, headers });
             row = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(Number(id)).first();
           }
           if (!row) return json({ error: 'Product not found' }, 404);
+          // Backfill slug if missing
+          const fixedSlug = await ensureProductSlug(env, row);
+          row.slug = fixedSlug;
           
           let addons = [];
           try {
@@ -1762,11 +1841,15 @@ return new Response(assetResp.body, { status: 200, headers });
         }
 
         if (method === 'POST' && path === '/api/product/save') {
+          if (!env.DB) return json({ error: 'Database not configured' }, 500);
+          await initDB(env);
           const body = await req.json();
           const title = (body.title || '').trim();
           if (!title) return json({ error: 'Title required' }, 400);
           
-          const slug = (body.slug || '').trim() || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          // If slug field is empty, auto-generate from title
+          const desiredSlug = (body.slug || '').trim() || title;
+          const slug = await ensureUniqueSlug(env, desiredSlug, body.id ? Number(body.id) : null);
           const addonsJson = JSON.stringify(body.addons || []);
           
           if (body.id) {
@@ -1823,10 +1906,16 @@ return new Response(assetResp.body, { status: 200, headers });
         // manage published and draft products.  Includes the status column to
         // drive publish/unpublish toggles.
         if (method === 'GET' && path === '/api/products/list') {
+          if (!env.DB) return json({ error: 'Database not configured' }, 500);
+          await initDB(env);
           const r = await env.DB.prepare(
             'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text, status FROM products ORDER BY id DESC'
           ).all();
-          return json({ products: r.results || [] });
+          const list = r.results || [];
+          for (const p of list) {
+            if (!p.slug) p.slug = await ensureProductSlug(env, p);
+          }
+          return json({ products: list });
         }
 
         // ----- PRODUCTS STATUS UPDATE -----
@@ -2977,10 +3066,7 @@ return new Response(assetResp.body, { status: 200, headers });
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
             headers.set('X-Worker-Version', VERSION);
-            return new Response(assetResp.body, {
-              status: assetResp.status,
-              headers
-            });
+            return new Response(assetResp.body, { status: assetResp.status, headers });
           }
         } else if (path.endsWith('.html')) {
           // For any other /admin/*.html requests, redirect to dashboard.html
@@ -2991,10 +3077,7 @@ return new Response(assetResp.body, { status: 200, headers });
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
             headers.set('X-Worker-Version', VERSION);
-            return new Response(assetResp.body, {
-              status: assetResp.status,
-              headers
-            });
+            return new Response(assetResp.body, { status: assetResp.status, headers });
           }
         }
       }
@@ -3028,7 +3111,31 @@ return new Response(assetResp.body, { status: 200, headers });
          * the browser cache.  See https://developers.cloudflare.com/workers/
          * for guidance on controlling caching behavior.
          */
-        const assetResp = await env.ASSETS.fetch(req);
+        // Support pretty product URLs: /product/<slug>
+        let assetReq = req;
+        let assetPath = path;
+        let schemaProductId = null;
+
+        if ((method === 'GET' || method === 'HEAD') && assetPath.startsWith('/product/') && assetPath.length > '/product/'.length) {
+          const slug = decodeURIComponent(assetPath.slice('/product/'.length));
+          if (env.DB) {
+            await initDB(env);
+            const row = await env.DB.prepare(
+              `SELECT id FROM products WHERE slug = ? LIMIT 1`
+            ).bind(slug).first();
+
+            if (row?.id) {
+              schemaProductId = Number(row.id);
+              const rewritten = new URL(req.url);
+              rewritten.pathname = '/product.html';
+              rewritten.searchParams.set('id', String(schemaProductId));
+              assetReq = new Request(rewritten.toString(), req);
+              assetPath = '/product.html';
+            }
+          }
+        }
+
+        const assetResp = await env.ASSETS.fetch(assetReq);
         
         // For HTML pages with schema placeholders, inject server-side schemas
         const contentType = assetResp.headers.get('content-type') || '';
@@ -3041,8 +3148,8 @@ return new Response(assetResp.body, { status: 200, headers });
             let html = await assetResp.text();
             
             // Product detail page - inject individual product schema
-            if (path === '/product.html' || path === '/product') {
-              const productId = url.searchParams.get('id');
+            if (assetPath === '/product.html' || assetPath === '/product') {
+              const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
               if (productId && env.DB) {
                 await initDB(env);
                 const product = await env.DB.prepare(`
@@ -3126,10 +3233,7 @@ return new Response(assetResp.body, { status: 200, headers });
         headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         headers.set('Pragma', 'no-cache');
         headers.set('X-Worker-Version', VERSION);
-        return new Response(assetResp.body, {
-          status: assetResp.status,
-          headers
-        });
+        return new Response(assetResp.body, { status: assetResp.status, headers });
       }
 
       return new Response('Worker is running', { headers: { 'Content-Type': 'text/plain' } });

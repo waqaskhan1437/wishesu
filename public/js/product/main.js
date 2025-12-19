@@ -21,11 +21,19 @@
       window.whopSettings = {};
     }
     const params = new URLSearchParams(location.search);
-    const productId = params.get('id');
+    let productId = params.get('id');
+    // Support pretty URLs: /product/<slug>
+    // If no id is present, fall back to reading the slug from the pathname.
+    if (!productId) {
+      const m = (location.pathname || '').match(/^\/product\/(.+)$/);
+      if (m && m[1]) {
+        productId = decodeURIComponent(m[1]);
+      }
+    }
     const container = document.getElementById('product-container');
     if (!container) return;
     if (!productId) {
-      container.innerHTML = '<div class="loading-state"><p>Product ID missing.</p><a href="/" class="btn">Go Home</a></div>';
+      container.innerHTML = '<div class="loading-state"><p>Product link is invalid.</p><a href="/" class="btn">Go Home</a></div>';
       return;
     }
     try {

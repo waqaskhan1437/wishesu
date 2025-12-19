@@ -94,6 +94,16 @@
         review_count
       } = product;
 
+      const makeSlug = (s) => String(s || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-+/g, '-');
+
+      const finalSlug = slug ? String(slug) : makeSlug(title);
+      const productUrl = `/product/${encodeURIComponent(finalSlug)}`;
+
       // Price calculation
       const originalPrice = parseFloat(normal_price || 0);
       const salePrice = parseFloat(sale_price || originalPrice);
@@ -127,7 +137,7 @@
         </div>
       `;
       return `
-        <div class="product-card" data-product-id="${id}" onclick="window.location.href='/product?id=${id}'">
+        <div class="product-card" data-product-id="${id}" onclick="window.location.href='${productUrl}'">
           <!-- Thumbnail -->
           <div class="product-thumbnail">
             <img src="${thumbnail_url || '/placeholder.jpg'}" alt="${title}">
@@ -149,7 +159,7 @@
             ${showDelivery ? deliveryHtml : ''}
 
             <!-- Book Now Button -->
-            <button class="book-now-btn" onclick="event.stopPropagation(); window.location.href='/product?id=${id}'">
+            <button class="book-now-btn" onclick="event.stopPropagation(); window.location.href='${productUrl}'">
               Book Now
             </button>
           </div>

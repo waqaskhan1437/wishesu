@@ -32,6 +32,9 @@
     if (typeof initAddonsBuilder === 'function') initAddonsBuilder(form);
     // Wait a tick for builder to fully initialize before syncing
     setTimeout(() => initDeliveryTimeAddonSync(form, { applyInitial: true }), 10);
+
+    // Add a Delete button in edit mode
+    addDeleteProductButton(form, productId);
     } else {
     if (typeof initAddonsBuilder === 'function') initAddonsBuilder(form);
     fillDemoProduct(form);
@@ -230,6 +233,48 @@
     }
   });
 })();
+
+// Add Delete button to the sticky form actions when editing an existing product
+function addDeleteProductButton(form, productId) {
+  const actions = form.querySelector('.form-actions');
+  if (!actions) return;
+
+  // Avoid double-inserting
+  if (actions.querySelector('[data-action="delete-product"]')) return;
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.dataset.action = 'delete-product';
+  btn.className = 'btn-danger';
+  btn.style.cssText = 'margin-left: 10px; background:#ef4444; border:none; color:white; padding:12px 18px; border-radius:10px; font-weight:600; cursor:pointer; display:inline-flex; gap:8px; align-items:center;';
+  btn.innerHTML = '<span>🗑️</span><span>Delete Product</span>';
+
+  btn.addEventListener('click', async () => {
+    const ok = confirm('Are you sure you want to permanently delete this product? This cannot be undone.');
+    if (!ok) return;
+
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    try {
+      const resp = await fetch(`/api/product/delete?id=${encodeURIComponent(productId)}`, { method: 'DELETE' });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.success) throw new Error(data.error || 'Delete failed');
+
+      alert('Product deleted successfully');
+      // Back to admin products list
+      window.location.href = '/admin/dashboard.html';
+    } catch (err) {
+      console.error('Delete error', err);
+      alert('Error deleting product: ' + (err.message || 'Unknown error'));
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
+  actions.appendChild(btn);
+}
 
 // ... (Baqi helper functions same rahenge: setupGalleryField, collectBase etc)
 function setupGalleryField(form){

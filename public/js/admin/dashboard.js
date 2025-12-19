@@ -1246,7 +1246,14 @@
     // Find product info
     const product = products.find(p => p.id === order.product_id);
     const productName = order.product_title || (product ? product.title : 'Product #' + order.product_id);
-    const productLink = product ? `/product?id=${product.id}` : '#';
+    const makeSlug = (s) => String(s || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-+/g, '-');
+    const productSlug = product ? (product.slug || makeSlug(product.title || '') || String(product.id)) : '';
+    const productLink = product ? `/product/${encodeURIComponent(productSlug)}` : '#';
     
     panel.innerHTML = `
       <h3 style="margin-bottom:15px;">Order #${order.order_id}</h3>
@@ -1364,7 +1371,7 @@
     const toggleLabel = product.status === 'draft' ? 'Publish' : 'Unpublish';
     panel.innerHTML = `
       <h3 style="display:flex;justify-content:space-between;align-items:center;">
-        <a href="/product?id=${product.id}" target="_blank" style="color:#1f2937;text-decoration:underline;">${product.title}</a>
+        <a href="/product/${encodeURIComponent(product.slug || (String(product.title || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-+/g, '-') || String(product.id)))}" target="_blank" style="color:#1f2937;text-decoration:underline;">${product.title}</a>
         ${statusBadge}
       </h3>
       <img src="${product.thumbnail_url}" style="width: 100%; border-radius: 8px; margin: 15px 0;">
