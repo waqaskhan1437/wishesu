@@ -500,22 +500,9 @@ async function initDB(env) {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         email TEXT NOT NULL,
-        blocked INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
-
-    // Add blocked column to existing chat_sessions table if it doesn't exist
-    try {
-      await env.DB.prepare('SELECT blocked FROM chat_sessions LIMIT 1').run();
-    } catch (e) {
-      try {
-        console.log('Adding blocked column to chat_sessions table...');
-        await env.DB.prepare('ALTER TABLE chat_sessions ADD COLUMN blocked INTEGER DEFAULT 0').run();
-      } catch (alterError) {
-        console.log('Column might already exist:', alterError.message);
-      }
-    }
 
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS chat_messages (
@@ -809,15 +796,6 @@ export default {
 
         if (!sessionId) return json({ error: 'sessionId is required' }, 400);
 
-        // Strict blocking: do not allow blocked sessions to send customer messages
-        const sess = await env.DB.prepare(
-          `SELECT blocked FROM chat_sessions WHERE id = ?`
-        ).bind(sessionId).first();
-
-        if (role === 'user' && Number(sess?.blocked || 0) === 1) {
-          return json({ success: false, error: "You have been blocked by support." }, 403);
-        }
-
         const trimmed = rawContent.trim();
         if (!trimmed) return json({ error: 'content is required' }, 400);
 
@@ -933,49 +911,7 @@ export default {
       }
 
       // ----- ADMIN CHAT API -----
-      // ----- ADMIN CHAT API -----
-      if (path === '/api/admin/chats/block' && method === 'POST') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-
-        let body;
-        try { body = await req.json(); } catch { body = {}; }
-
-        const sessionId = String(body.sessionId || '').trim();
-        const blocked = body.blocked === true || body.blocked === 1 || body.blocked === 'true';
-
-        if (!sessionId) return json({ error: 'sessionId is required' }, 400);
-
-        await env.DB.prepare(
-          `UPDATE chat_sessions SET blocked = ? WHERE id = ?`
-        ).bind(blocked ? 1 : 0, sessionId).run();
-
-        return json({ success: true, blocked: blocked ? 1 : 0 });
-      }
-
-      if (path === '/api/admin/chats/delete' && method === 'DELETE') {
-        if (!env.DB) return json({ error: 'Database not configured' }, 500);
-        await initDB(env);
-
-        let sessionId = url.searchParams.get('sessionId');
-        if (!sessionId) {
-          let body;
-          try { body = await req.json(); } catch { body = {}; }
-          sessionId = String(body.sessionId || '').trim();
-        } else {
-          sessionId = String(sessionId).trim();
-        }
-
-        if (!sessionId) return json({ error: 'sessionId is required' }, 400);
-
-        // Delete messages first, then session
-        await env.DB.prepare(`DELETE FROM chat_messages WHERE session_id = ?`).bind(sessionId).run();
-        await env.DB.prepare(`DELETE FROM chat_sessions WHERE id = ?`).bind(sessionId).run();
-
-        return json({ success: true });
-      }
-
-if (path === '/api/admin/chats/sessions' && method === 'GET') {
+      if (path === '/api/admin/chats/sessions' && method === 'GET') {
         if (!env.DB) return json({ error: 'Database not configured' }, 500);
         await initDB(env);
 
@@ -985,7 +921,6 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
              s.id,
              s.name,
              s.email,
-             s.blocked,
              s.created_at,
              (SELECT MAX(created_at) FROM chat_messages m WHERE m.session_id = s.id) AS last_message_at,
              (SELECT content FROM chat_messages m2 WHERE m2.session_id = s.id ORDER BY id DESC LIMIT 1) AS last_message
