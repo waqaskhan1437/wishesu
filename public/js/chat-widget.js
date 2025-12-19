@@ -8,13 +8,66 @@
   const API_SYNC = '/api/chat/sync';
 
   const MAX_LEN = 500;
-  const POLL_MS = 5000;
+  const POLL_MS = 10000;
   const COOLDOWN_MS = 10000;
 
   const LS_SESSION_ID = 'chat_session_id';
   const LS_NAME = 'chat_name';
   const LS_EMAIL = 'chat_email';
   const LS_OPEN = 'chat_is_open';
+  const TAB_ID = (crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
+  const LS_POLL_LEADER = 'chat_poll_leader_v1'; // { id, ts }
+  const LEADER_STALE_MS = 15000;
+
+  function getLeader() {
+    try { return JSON.parse(localStorage.getItem(LS_POLL_LEADER) || 'null'); } catch { return null; }
+  }
+  function isLeaderFresh(leader) {
+    return leader && leader.id && leader.ts && (Date.now() - leader.ts) < LEADER_STALE_MS;
+  }
+  function tryBecomeLeader() {
+    const leader = getLeader();
+    if (!isLeaderFresh(leader) || leader.id === TAB_ID) {
+      localStorage.setItem(LS_POLL_LEADER, JSON.stringify({ id: TAB_ID, ts: Date.now() }));
+      return true;
+    }
+    return false;
+  }
+  function heartbeatLeader() {
+    const leader = getLeader();
+    if (leader && leader.id === TAB_ID) {
+      localStorage.setItem(LS_POLL_LEADER, JSON.stringify({ id: TAB_ID, ts: Date.now() }));
+      return true;
+    }
+    return false;
+  }
+  function releaseLeader() {
+    const leader = getLeader();
+    if (leader && leader.id === TAB_ID) {
+      localStorage.removeItem(LS_POLL_LEADER);
+    }
+  }
+
+  window.addEventListener('storage', (e) => {
+    if (e.key === LS_POLL_LEADER && isOpen) {
+      // if another tab became leader, stop polling here
+      const leader = getLeader();
+      if (leader && leader.id !== TAB_ID) stopPolling();
+      if ((!leader || !isLeaderFresh(leader)) && !document.hidden) startPolling();
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopPolling();
+      releaseLeader();
+      releaseLeader();
+    } else if (isOpen) {
+      startPolling();
+      syncNow();
+    }
+  });
+
   const LS_COOLDOWN_UNTIL = 'chat_cooldown_until';
 
   let sessionId = localStorage.getItem(LS_SESSION_ID) || '';
@@ -486,8 +539,25 @@
 
   function startPolling() {
     if (pollTimer) return;
-    pollTimer = window.setInterval(() => {
-      if (isOpen) syncNow();
+    if (document.hidden) return;
+
+    // Only one tab should poll to save requests
+    if (!tryBecomeLeader()) return;
+
+    pollTimer = window.setInterval(async () => {
+      if (!isOpen) return;
+      if (document.hidden) {
+        stopPolling();
+        return;
+      }
+
+      // keep leadership alive; if we lost it, stop
+      if (!heartbeatLeader()) {
+        stopPolling();
+        return;
+      }
+
+      await syncNow();
     }, POLL_MS);
   }
 

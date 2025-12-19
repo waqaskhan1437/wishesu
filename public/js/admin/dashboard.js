@@ -2261,6 +2261,57 @@
   let lastId = 0;
   let pollTimer = null;
 
+  const ADMIN_POLL_MS = 10000;
+  const TAB_ID = (crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
+  const LS_POLL_LEADER = 'admin_chats_poll_leader_v1'; // { id, ts }
+  const LEADER_STALE_MS = 20000;
+
+  function getLeader() {
+    try { return JSON.parse(localStorage.getItem(LS_POLL_LEADER) || 'null'); } catch { return null; }
+  }
+  function isLeaderFresh(leader) {
+    return leader && leader.id && leader.ts && (Date.now() - leader.ts) < LEADER_STALE_MS;
+  }
+  function tryBecomeLeader() {
+    const leader = getLeader();
+    if (!isLeaderFresh(leader) || leader.id === TAB_ID) {
+      localStorage.setItem(LS_POLL_LEADER, JSON.stringify({ id: TAB_ID, ts: Date.now() }));
+      return true;
+    }
+    return false;
+  }
+  function heartbeatLeader() {
+    const leader = getLeader();
+    if (leader && leader.id === TAB_ID) {
+      localStorage.setItem(LS_POLL_LEADER, JSON.stringify({ id: TAB_ID, ts: Date.now() }));
+      return true;
+    }
+    return false;
+  }
+  function releaseLeader() {
+    const leader = getLeader();
+    if (leader && leader.id === TAB_ID) localStorage.removeItem(LS_POLL_LEADER);
+  }
+
+  window.addEventListener('storage', (e) => {
+    if (e.key === LS_POLL_LEADER) {
+      const leader = getLeader();
+      if (leader && leader.id !== TAB_ID) stopPolling();
+      if ((!leader || !isLeaderFresh(leader)) && !document.hidden && activeSessionId) startPolling();
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopPolling();
+      releaseLeader();
+    } else if (activeSessionId) {
+      startPolling();
+      syncMessages(false);
+    }
+  });
+
+
   function formatTime(ts) {
     const d = new Date(ts);
     if (Number.isNaN(d.getTime())) return '';
@@ -2493,11 +2544,25 @@
 
   function startPolling() {
     if (pollTimer) return;
+    if (!activeSessionId) return;
+    if (document.hidden) return;
+
+    // Only one admin tab should poll to save requests
+    if (!tryBecomeLeader()) return;
+
     pollTimer = setInterval(async () => {
       if (!activeSessionId) return;
+      if (document.hidden) {
+        stopPolling();
+        return;
+      }
+      if (!heartbeatLeader()) {
+        stopPolling();
+        return;
+      }
       await syncMessages(false);
       await refreshSessions();
-    }, 5000);
+    }, ADMIN_POLL_MS);
   }
 
   function stopPolling() {
@@ -2528,10 +2593,12 @@
   const obs = new MutationObserver(() => {
     if (!document.body.contains(panel)) {
       stopPolling();
+      releaseLeader();
       obs.disconnect();
     }
   });
   obs.observe(document.body, { childList: true, subtree: true });
 
   await refreshSessions();
+}
 })();
