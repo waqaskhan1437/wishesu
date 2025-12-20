@@ -2016,43 +2016,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
           return json({ success: true, orderId });
         }
 
-        
-        // Buyer video download (force attachment via same-origin stream)
-        // GET /api/order/buyer/<ORDER_ID>/download
-        if (method === 'GET' && path.match(/^\/api\/order\/buyer\/[^\/]+\/download$/)) {
-          const orderId = path.split('/').slice(-2)[0];
-          const row = await env.DB.prepare('SELECT delivered_video_url FROM orders WHERE order_id = ?')
-            .bind(orderId).first();
-
-          if (!row || !row.delivered_video_url) return json({ error: 'Video not found' }, 404);
-
-          // Pass through Range header if present (some browsers request partial content)
-          const upstreamHeaders = new Headers();
-          const range = req.headers.get('Range');
-          if (range) upstreamHeaders.set('Range', range);
-
-          const upstreamResp = await fetch(row.delivered_video_url, { headers: upstreamHeaders });
-
-          const outHeaders = new Headers(upstreamResp.headers);
-
-          // Force download in browser
-          outHeaders.set('Content-Disposition', `attachment; filename="wishvideo-${orderId}.mp4"`);
-          // Ensure content-type
-          if (!outHeaders.get('Content-Type')) outHeaders.set('Content-Type', 'video/mp4');
-
-          // Do not cache user downloads
-          outHeaders.set('Cache-Control', 'no-store');
-
-          // Avoid content-encoding issues when proxying
-          outHeaders.delete('Content-Encoding');
-
-          return new Response(upstreamResp.body, {
-            status: upstreamResp.status,
-            headers: outHeaders
-          });
-        }
-
-if (method === 'GET' && path.startsWith('/api/order/buyer/')) {
+        if (method === 'GET' && path.startsWith('/api/order/buyer/')) {
            const orderId = path.split('/').pop();
            const row = await env.DB.prepare(
              'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'

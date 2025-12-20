@@ -205,11 +205,11 @@
           downloadBtn.removeAttribute('download');
         }
       } else {
-        // Direct video URL (or file) - download via same-origin proxy
+        // Direct video URL - download directly
         downloadBtn.textContent = '⬇️ Download';
-        downloadBtn.href = `/api/order/buyer/${orderId}/download`;
-        downloadBtn.target = '_self';
-        downloadBtn.setAttribute('download', `wishvideo-${orderId}.mp4`);
+        downloadBtn.href = url;
+        downloadBtn.target = '_blank';
+        downloadBtn.removeAttribute('download');
       }
     }
   }
