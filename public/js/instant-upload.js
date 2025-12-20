@@ -145,7 +145,7 @@
   }
 
   async function uploadFileDirectly(inputId, file) {
-    console.log('🚀 STARTING DIRECT UPLOAD (ZERO-CPU)');
+    console.log('🚀 STARTING R2 UPLOAD');
     console.log('   Input ID:', inputId);
     console.log('   File:', file.name);
 
@@ -154,67 +154,57 @@
       const sessionId = 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
       const filename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
 
-      console.log('☁️ Using Direct R2 Upload Flow');
+      console.log('☁️ Using R2 Upload via Worker');
       console.log('   Session ID:', sessionId);
       console.log('   Filename:', filename);
 
-      // STEP 1: Get presigned URL from Worker (NO binary data sent)
-      console.log('🔑 Getting R2 presigned URL...');
-      const presignUrl = `/api/upload/presign-r2?sessionId=${sessionId}&filename=${encodeURIComponent(filename)}&contentType=${encodeURIComponent(file.type || 'application/octet-stream')}`;
-      
-      const presignResponse = await fetch(presignUrl);
-      
-      if (!presignResponse.ok) {
-        const errorText = await presignResponse.text();
-        console.error('❌ Presigned URL request failed:', errorText);
-        throw new Error(`Failed to get upload URL: ${presignResponse.status} - ${errorText}`);
-      }
+      // Upload directly to R2 via worker endpoint
+      console.log('☁️ Uploading to R2...');
+      const uploadUrl = `/api/upload/temp-file?sessionId=${encodeURIComponent(sessionId)}&filename=${encodeURIComponent(filename)}`;
 
-      const presignData = await presignResponse.json();
-      console.log('🔑 Presigned URL received:', presignData);
-
-      if (!presignData.success || !presignData.presignedUrl) {
-        throw new Error(presignData.error || 'Failed to get upload URL');
-      }
-
-      // STEP 2: Upload DIRECTLY to R2 (bypassing Worker completely)
-      console.log('☁️ Uploading directly to R2...');
-      const uploadResponse = await fetch(presignData.presignedUrl, {
-        method: 'PUT',
-        body: file, // Send file directly to R2
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        body: file,
         headers: {
           'Content-Type': file.type || 'application/octet-stream'
         }
       });
 
-      console.log('☁️ R2 Upload status:', uploadResponse.status);
+      console.log('☁️ Upload status:', uploadResponse.status);
 
       if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        console.error('❌ R2 Upload failed:', errorText);
-        throw new Error(`R2 upload failed: ${uploadResponse.status} - ${errorText}`);
+        const errorData = await uploadResponse.json().catch(() => ({}));
+        console.error('❌ Upload failed:', errorData);
+        throw new Error(errorData.error || `Upload failed: ${uploadResponse.status}`);
       }
 
-      console.log('✅ R2 Upload successful! ZERO CPU used!');
+      const uploadData = await uploadResponse.json();
+      console.log('✅ Upload response:', uploadData);
 
-      // STEP 3: Store upload results
+      if (!uploadData.success) {
+        throw new Error(uploadData.error || 'Upload failed');
+      }
+
+      // Build the final URL for accessing the file
+      const finalUrl = `/api/r2/file?key=${encodeURIComponent(uploadData.tempUrl.replace('r2://', ''))}`;
+
+      // Store upload results
       uploadQueue.set(inputId, {
         sessionId: sessionId,
         fileName: file.name,
         status: 'uploaded',
-        url: presignData.finalUrl, // Clean URL without query params
-        r2Key: presignData.key,
-        uploadMethod: 'direct-r2-zero-cpu'
+        url: finalUrl,
+        tempUrl: uploadData.tempUrl,
+        uploadMethod: 'r2-worker'
       });
 
       updatePreviewSuccess(inputId, file);
-      console.log('✅ DIRECT UPLOAD COMPLETE!');
-      console.log('   Final URL:', presignData.finalUrl);
-      console.log('   R2 Key:', presignData.key);
-      console.log('   CPU Usage: 0% (ZERO-CPU Upload!)');
-      
+      console.log('✅ UPLOAD COMPLETE!');
+      console.log('   Final URL:', finalUrl);
+      console.log('   Temp URL:', uploadData.tempUrl);
+
     } catch (err) {
-      console.error('❌ DIRECT UPLOAD FAILED:', err);
+      console.error('❌ UPLOAD FAILED:', err);
       uploadQueue.set(inputId, { status: 'failed', error: err.message });
       updatePreviewError(inputId, file, err.message);
     }

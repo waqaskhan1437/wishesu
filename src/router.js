@@ -81,7 +81,8 @@ import {
   getWhopSettings,
   saveWhopSettings,
   getR2File,
-  uploadEncryptedFile
+  uploadEncryptedFile,
+  uploadTempFile
 } from './controllers/admin.js';
 
 /**
@@ -109,6 +110,11 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'GET' && path === '/api/whop/test-webhook') {
     return testWhopWebhook();
+  }
+
+  // ----- FILE UPLOAD ROUTES (no DB required) -----
+  if (method === 'POST' && path === '/api/upload/temp-file') {
+    return uploadTempFile(env, req, url);
   }
 
   // ----- ALL OTHER API ROUTES REQUIRE DB -----
