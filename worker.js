@@ -748,7 +748,7 @@ export default {
       }
 
       // Private asset: never serve the raw product template directly
-      if ((method === 'GET' || method === 'HEAD') && path === '/_product_template.html') {
+      if ((method === 'GET' || method === 'HEAD') && (path === '/_product_template.tpl' || path === '/_product_template' || path === '/_product_template.html')) {
         return new Response('Not found', { status: 404 });
       }
 
@@ -768,7 +768,7 @@ export default {
           await initDB(env);
 
           // Block direct access to the private template asset from the public internet.
-          if (path === '/_product_template.html') {
+          if (path === '/_product_template.tpl') {
             return new Response('Not found', { status: 404 });
           }
 
@@ -3111,10 +3111,10 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             if (!Number.isNaN(pid)) {
               schemaProductId = pid;
               const rewritten = new URL(req.url);
-              rewritten.pathname = '/_product_template.html';
+              rewritten.pathname = '/_product_template.tpl';
               rewritten.searchParams.set('id', String(schemaProductId));
               assetReq = new Request(rewritten.toString(), req);
-              assetPath = '/_product_template.html';
+              assetPath = '/_product_template.tpl';
             }
           }
         }
@@ -3132,7 +3132,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             let html = await assetResp.text();
             
             // Product detail page - inject individual product schema
-            if (assetPath === '/_product_template.html' || assetPath === '/product.html' || assetPath === '/product') {
+            if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
               const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
               if (productId && env.DB) {
                 await initDB(env);
