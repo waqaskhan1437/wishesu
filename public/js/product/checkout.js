@@ -120,11 +120,16 @@
     const formEl = document.getElementById('addons-form');
     const selectedAddons = [];
 
+    console.log('🔵 Form element found:', !!formEl);
+
     if (formEl) {
+      // Method 1: FormData
       const formData = new FormData(formEl);
+      console.log('🔵 FormData entries:');
       for (const pair of formData.entries()) {
         const key = pair[0];
         const val = pair[1];
+        console.log(`   - ${key}:`, val instanceof File ? `[File: ${val.name}]` : val);
 
         // Skip file inputs - they are handled by instant-upload.js
         if (val instanceof File) {
@@ -135,7 +140,19 @@
           selectedAddons.push({ field: key, value: val });
         }
       }
+
+      // Method 2: Also check all form elements directly
+      console.log('🔵 Direct form elements:');
+      const allInputs = formEl.querySelectorAll('input, select, textarea');
+      allInputs.forEach(el => {
+        if (el.type === 'file') return;
+        if (el.type === 'radio' && !el.checked) return;
+        if (el.type === 'checkbox' && !el.checked) return;
+        console.log(`   - ${el.name || el.id}: ${el.value} (type: ${el.type})`);
+      });
     }
+
+    console.log('🔵 Selected addons from form:', selectedAddons);
 
     // 3. Get uploaded files from instant-upload.js
     const uploadedFiles = window.getUploadedFiles ? window.getUploadedFiles() : {};

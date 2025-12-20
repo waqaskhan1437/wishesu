@@ -283,8 +283,10 @@
         }
 
         // Get addons from pending order data (already includes photo URLs from checkout.js)
+        console.log('📦 Full pendingOrderData:', JSON.stringify(pendingOrderData, null, 2));
+        console.log('📦 pendingOrderData.metadata:', pendingOrderData?.metadata);
         const addons = pendingOrderData?.metadata?.addons || [];
-        console.log('📦 Addons from metadata:', addons.length, addons);
+        console.log('📦 Addons array:', addons.length, 'items:', addons);
 
         // Calculate delivery time based on selected delivery option
         let deliveryTime = 2880; // Default: 48 hours (2 days);
