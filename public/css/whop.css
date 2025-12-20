@@ -81,3 +81,29 @@
   margin-top: 1rem;
   padding: 1.5rem;
 }
+
+/* Sticky footer button for embedded checkout */
+.whop-sticky-footer {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  z-index: 2;
+}
+
+.whop-place-order {
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.whop-place-order:hover {
+  background: #1d4ed8;
+}

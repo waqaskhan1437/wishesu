@@ -92,12 +92,34 @@
           </div>
           <button class="whop-close" type="button">×</button>
           <div class="whop-container"></div>
+          <div class="whop-sticky-footer">
+            <button class="whop-place-order" type="button">Place Order</button>
+          </div>
         </div>
       `;
       document.body.appendChild(overlay);
       const close = () => { overlay.style.display = 'none'; };
       overlay.querySelector('.whop-close').addEventListener('click', close);
       overlay.querySelector('.whop-backdrop').addEventListener('click', close);
+
+      // Custom sticky button handler (submit embedded checkout)
+      const placeBtn = overlay.querySelector('.whop-place-order');
+      if (placeBtn) {
+        placeBtn.addEventListener('click', () => {
+          try {
+            if (window.wco && typeof window.wco.submit === 'function') {
+              window.wco.submit('whop-embedded-checkout');
+              return;
+            }
+            // Fallback: try to click a primary button inside the embed
+            const embedRoot = document.getElementById('whop-embedded-checkout');
+            const btn = embedRoot ? embedRoot.querySelector('button') : null;
+            if (btn) btn.click();
+          } catch (e) {
+            console.error('Failed to submit checkout:', e);
+          }
+        });
+      }
     }
     return overlay;
   }
@@ -269,7 +291,8 @@
     console.log('🟢 Email attribute:', emailAttribute);
 
     // Construct the embed HTML with email attribute
-    const embed = `<div id="whop-embedded-checkout" data-whop-checkout-plan-id="${selectedPlan}" data-whop-checkout-theme="${theme}" ${emailAttribute} data-whop-checkout-metadata='${metadataStr}' data-whop-checkout-on-complete="whopCheckoutComplete"></div>`;
+    // Hide Whop's internal submit button so we can use our own sticky "Place Order" button.
+    const embed = `<div id="whop-embedded-checkout" data-whop-checkout-plan-id="${selectedPlan}" data-whop-checkout-theme="${theme}" ${emailAttribute} data-whop-checkout-hide-submit-button="true" data-whop-checkout-metadata='${metadataStr}' data-whop-checkout-on-complete="whopCheckoutComplete"></div>`;
     
     console.log('🟢 Embed HTML:', embed);
 
