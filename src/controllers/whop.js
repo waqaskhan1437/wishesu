@@ -255,12 +255,22 @@ export async function createPlanCheckout(env, body, origin) {
 
     const expiryTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-    // Store plan for cleanup
+    // Prepare metadata to store locally for webhook fallback
+    const checkoutMetadata = {
+      product_id: product.id.toString(),
+      product_title: product.title,
+      addons: metadata?.addons || [],
+      email: email || '',
+      amount: amount || priceValue,
+      created_at: new Date().toISOString()
+    };
+
+    // Store plan for cleanup (with metadata for webhook fallback)
     try {
       await env.DB.prepare(`
-        INSERT INTO checkout_sessions (checkout_id, product_id, plan_id, expires_at, status, created_at)
-        VALUES (?, ?, ?, ?, 'pending', datetime('now'))
-      `).bind('plan_' + planId, product.id, planId, expiryTime).run();
+        INSERT INTO checkout_sessions (checkout_id, product_id, plan_id, metadata, expires_at, status, created_at)
+        VALUES (?, ?, ?, ?, ?, 'pending', datetime('now'))
+      `).bind('plan_' + planId, product.id, planId, JSON.stringify(checkoutMetadata), expiryTime).run();
     } catch (e) {
       console.log('Plan tracking insert failed:', e.message);
     }
@@ -269,13 +279,7 @@ export async function createPlanCheckout(env, body, origin) {
     const checkoutBody = {
       plan_id: planId,
       redirect_url: `${origin}/success.html?product=${product.id}`,
-      metadata: {
-        product_id: product.id.toString(),
-        product_title: product.title,
-        addons: metadata?.addons || [],
-        amount: amount || priceValue,
-        created_at: new Date().toISOString()
-      }
+      metadata: checkoutMetadata
     };
 
     if (email && email.includes('@')) {
@@ -358,9 +362,32 @@ export async function handleWebhook(env, webhookData) {
     if (eventType === 'payment.succeeded') {
       const checkoutSessionId = webhookData.data?.checkout_session_id;
       const membershipId = webhookData.data?.id;
-      const metadata = webhookData.data?.metadata || {};
-      
+      let metadata = webhookData.data?.metadata || {};
+
       console.log('Payment succeeded:', { checkoutSessionId, membershipId, metadata });
+
+      // Fallback: If metadata from Whop is empty/incomplete, try to get from our database
+      if (checkoutSessionId && (!metadata.addons || !metadata.addons.length)) {
+        try {
+          const sessionRow = await env.DB.prepare(
+            'SELECT metadata FROM checkout_sessions WHERE checkout_id = ?'
+          ).bind(checkoutSessionId).first();
+
+          if (sessionRow?.metadata) {
+            const storedMetadata = JSON.parse(sessionRow.metadata);
+            console.log('Retrieved stored metadata from DB:', storedMetadata);
+            // Merge stored metadata with webhook metadata (prefer stored for addons)
+            metadata = {
+              ...metadata,
+              ...storedMetadata,
+              // Ensure addons come from stored metadata if available
+              addons: storedMetadata.addons || metadata.addons || []
+            };
+          }
+        } catch (e) {
+          console.log('Failed to retrieve stored metadata:', e.message);
+        }
+      }
       
       // Mark checkout as completed in database
       if (checkoutSessionId) {
@@ -408,11 +435,20 @@ export async function handleWebhook(env, webhookData) {
       if (metadata.product_id) {
         try {
           const orderId = `WHOP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+          // Build encrypted_data with addons and other details
+          const encryptedData = JSON.stringify({
+            email: metadata.email || webhookData.data?.email || webhookData.data?.user?.email || '',
+            amount: metadata.amount || webhookData.data?.final_amount || 0,
+            productId: metadata.product_id,
+            addons: metadata.addons || []
+          });
+
           await env.DB.prepare(
-            'INSERT INTO orders (order_id, product_id, status, created_at) VALUES (?, ?, ?, datetime("now"))'
-          ).bind(orderId, Number(metadata.product_id), 'completed').run();
-          
-          console.log('Order created:', orderId);
+            'INSERT INTO orders (order_id, product_id, encrypted_data, status, created_at) VALUES (?, ?, ?, ?, datetime("now"))'
+          ).bind(orderId, Number(metadata.product_id), encryptedData, 'completed').run();
+
+          console.log('Order created with addons:', orderId, 'Addons count:', (metadata.addons || []).length);
         } catch (e) {
           console.error('Failed to create order:', e);
         }

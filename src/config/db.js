@@ -82,6 +82,7 @@ export async function initDB(env) {
           checkout_id TEXT UNIQUE,
           product_id INTEGER,
           plan_id TEXT,
+          metadata TEXT,
           expires_at DATETIME,
           status TEXT DEFAULT 'pending',
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -142,7 +143,8 @@ async function runMigrations(env) {
     { table: 'reviews', column: 'delivered_thumbnail_url', type: 'TEXT' },
     { table: 'chat_sessions', column: 'blocked', type: 'INTEGER DEFAULT 0' },
     { table: 'chat_sessions', column: 'last_message_content', type: 'TEXT' },
-    { table: 'chat_sessions', column: 'last_message_at', type: 'DATETIME' }
+    { table: 'chat_sessions', column: 'last_message_at', type: 'DATETIME' },
+    { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' }
   ];
 
   for (const m of migrations) {
