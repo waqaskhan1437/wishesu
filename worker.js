@@ -2016,6 +2016,54 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
           return json({ success: true, orderId });
         }
 
+        // Buyer video download (force attachment download instead of opening a player tab)
+        if (method === 'GET' && /^\/api\/order\/buyer\/[^\/]+\/download$/.test(path)) {
+          const parts = path.split('/');
+          const orderId = parts[parts.length - 2];
+
+          const row = await env.DB.prepare(
+            'SELECT order_id, status, delivered_video_url FROM orders WHERE order_id = ?'
+          ).bind(orderId).first();
+
+          if (!row) return new Response('Order not found', { status: 404 });
+          if (row.status !== 'delivered' || !row.delivered_video_url) {
+            return new Response('Video not available', { status: 404 });
+          }
+
+          const videoUrl = row.delivered_video_url;
+
+          // Do not attempt to "download" external embeds
+          const lower = String(videoUrl).toLowerCase();
+          if (lower.includes('youtube.com') || lower.includes('youtu.be') || lower.includes('vimeo.com')) {
+            return Response.redirect(videoUrl, 302);
+          }
+
+          // Pass through Range headers for better compatibility with large files
+          const range = req.headers.get('Range');
+          const upstream = await fetch(videoUrl, {
+            headers: range ? { 'Range': range } : undefined
+          });
+
+          if (!upstream.ok) {
+            return new Response('Failed to fetch video', { status: 502 });
+          }
+
+          const contentType = upstream.headers.get('Content-Type') || 'application/octet-stream';
+          const dispositionName = `wishvideo-order-${orderId}`;
+          const ext = contentType.includes('mp4') ? 'mp4'
+            : contentType.includes('webm') ? 'webm'
+            : contentType.includes('quicktime') ? 'mov'
+            : 'bin';
+
+          const headers = new Headers(upstream.headers);
+          headers.set('Content-Type', contentType);
+          headers.set('Content-Disposition', `attachment; filename="${dispositionName}.${ext}"`);
+          // Ensure this response isn't cached incorrectly
+          headers.set('Cache-Control', 'no-store');
+
+          return new Response(upstream.body, { status: upstream.status, headers });
+        }
+
         if (method === 'GET' && path.startsWith('/api/order/buyer/')) {
            const orderId = path.split('/').pop();
            const row = await env.DB.prepare(

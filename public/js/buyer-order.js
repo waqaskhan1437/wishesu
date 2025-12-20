@@ -182,6 +182,10 @@
       const detected = window.UniversalVideoPlayer.detect(url);
       const openOnlyTypes = ['youtube', 'vimeo', 'bunny-embed'];
 
+      // For direct file links, we download through our Worker so the browser
+      // gets Content-Disposition: attachment (instead of opening a player tab).
+      const workerDownloadUrl = `/api/order/buyer/${encodeURIComponent(orderId)}/download`;
+
       if (openOnlyTypes.includes(detected.type)) {
         // External video - open in new tab
         downloadBtn.textContent = '🔗 Open Video';
@@ -205,11 +209,11 @@
           downloadBtn.removeAttribute('download');
         }
       } else {
-        // Direct video URL - download directly
+        // Direct video URL - download via Worker (forces file download)
         downloadBtn.textContent = '⬇️ Download';
-        downloadBtn.href = url;
-        downloadBtn.target = '_blank';
-        downloadBtn.removeAttribute('download');
+        downloadBtn.href = workerDownloadUrl;
+        downloadBtn.removeAttribute('target');
+        downloadBtn.setAttribute('download', `wishvideo-order-${orderId}.mp4`);
       }
     }
   }
