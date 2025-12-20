@@ -75,14 +75,13 @@ import {
 } from './controllers/pages.js';
 
 // Admin
-import { 
-  getDebugInfo, 
-  purgeCache, 
-  getWhopSettings, 
-  saveWhopSettings, 
-  getPresignedR2Url,
-  getR2File, 
-  uploadEncryptedFile 
+import {
+  getDebugInfo,
+  purgeCache,
+  getWhopSettings,
+  saveWhopSettings,
+  getR2File,
+  uploadEncryptedFile
 } from './controllers/admin.js';
 
 /**
@@ -110,11 +109,6 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'GET' && path === '/api/whop/test-webhook') {
     return testWhopWebhook();
-  }
-
-  // ----- ZERO-CPU DIRECT UPLOAD ROUTES -----
-  if (method === 'GET' && path === '/api/upload/presign-r2') {
-    return getPresignedR2Url(env, url);
   }
 
   // ----- ALL OTHER API ROUTES REQUIRE DB -----
