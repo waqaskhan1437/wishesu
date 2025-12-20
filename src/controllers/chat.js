@@ -1,12 +1,45 @@
-// Chat API controller
+/**
+ * Chat controller - Customer and Admin chat functionality
+ */
+
 import { json } from '../utils/response.js';
-import { escapeHtml, enforceUserRateLimit, normalizeQuickAction, getLatestOrderForEmail, getGoogleScriptUrl } from '../utils/helpers.js';
+import { escapeHtml, normalizeQuickAction } from '../utils/formatting.js';
+import { enforceUserRateLimit } from '../utils/validation.js';
 
 /**
- * Start a new chat session
- * @param {Object} env - Environment bindings
- * @param {Object} body - Request body
- * @returns {Promise<Response>}
+ * Get latest order for an email address
+ */
+async function getLatestOrderForEmail(env, email) {
+  const candidates = await env.DB.prepare(
+    `SELECT order_id, status, archive_url, encrypted_data, created_at
+     FROM orders
+     ORDER BY datetime(created_at) DESC
+     LIMIT 80`
+  ).all();
+
+  const list = candidates?.results || [];
+  const target = String(email || '').trim().toLowerCase();
+  if (!target) return null;
+
+  for (const o of list) {
+    try {
+      if (!o.encrypted_data) continue;
+      const data = JSON.parse(o.encrypted_data);
+      const e = String(data.email || '').trim().toLowerCase();
+      if (e && e === target) {
+        return {
+          order_id: o.order_id,
+          status: o.status,
+          trackLink: `/buyer-order.html?id=${encodeURIComponent(o.order_id)}`
+        };
+      }
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Start a new chat session or reuse existing one
  */
 export async function startChat(env, body) {
   const nameIn = String(body.name || '').trim();
@@ -14,7 +47,6 @@ export async function startChat(env, body) {
 
   if (!nameIn || !emailIn) return json({ error: 'Name and email are required' }, 400);
 
-  // Basic normalization
   const email = emailIn.toLowerCase();
   const name = nameIn;
 
@@ -30,7 +62,7 @@ export async function startChat(env, body) {
   if (canonical?.id) {
     const canonicalId = String(canonical.id);
 
-    // Update name if it changed (optional but keeps admin tidy)
+    // Update name if it changed
     if (name && canonical.name !== name) {
       await env.DB.prepare(
         `UPDATE chat_sessions SET name = ? WHERE id = ?`
@@ -68,10 +100,7 @@ export async function startChat(env, body) {
 }
 
 /**
- * Sync chat messages
- * @param {Object} env - Environment bindings
- * @param {URL} url - Request URL with query parameters
- * @returns {Promise<Response>}
+ * Sync chat messages for a session
  */
 export async function syncChat(env, url) {
   const sessionId = url.searchParams.get('sessionId');
@@ -95,19 +124,12 @@ export async function syncChat(env, url) {
 }
 
 /**
- * Send a chat message
- * @param {Object} env - Environment bindings
- * @param {Request} req - Request object
- * @param {Object} body - Request body
- * @returns {Promise<Response>}
+ * Send a message in a chat session
  */
-export async function sendChat(env, req, body) {
+export async function sendMessage(env, body, reqUrl) {
   const sessionId = String(body.sessionId || '').trim();
   const roleRaw = String(body.role || 'user').trim().toLowerCase();
-
-  // accept content or message
   const rawContent = String(body.content ?? body.message ?? '');
-
   const role = ['user', 'admin', 'system'].includes(roleRaw) ? roleRaw : 'user';
 
   if (!sessionId) return json({ error: 'sessionId is required' }, 400);
@@ -135,7 +157,7 @@ export async function sendChat(env, req, body) {
     throw e;
   }
 
-  // Determine if this is the user's first message BEFORE inserting
+  // Determine if this is the user's first message
   let isFirstUserMessage = false;
   if (role === 'user') {
     const countRow = await env.DB.prepare(
@@ -196,9 +218,7 @@ export async function sendChat(env, req, body) {
     }
   }
 
-  // ------------------------------
   // Smart Quick Action Auto-Replies
-  // ------------------------------
   if (role === 'user') {
     const normalized = normalizeQuickAction(trimmed);
     const session = await env.DB.prepare(
@@ -206,7 +226,7 @@ export async function sendChat(env, req, body) {
     ).bind(sessionId).first();
 
     const email = String(session?.email || '').trim();
-    const origin = new URL(req.url).origin;
+    const origin = new URL(reqUrl).origin;
 
     // "My Order Status"
     if (normalized === 'my order status') {
@@ -225,16 +245,13 @@ export async function sendChat(env, req, body) {
         `INSERT INTO chat_messages (session_id, role, content) VALUES (?, 'system', ?)`
       ).bind(sessionId, safeReply).run();
 
-      // Update denormalized last-message fields
       try {
         await env.DB.prepare(
           `UPDATE chat_sessions
            SET last_message_content = ?, last_message_at = CURRENT_TIMESTAMP
            WHERE id = ?`
         ).bind(safeReply, sessionId).run();
-      } catch (e) {
-        console.error('Failed to update chat_sessions last-message fields:', e);
-      }
+      } catch (e) {}
     }
 
     // "Check Delivery Status"
@@ -254,16 +271,13 @@ export async function sendChat(env, req, body) {
         `INSERT INTO chat_messages (session_id, role, content) VALUES (?, 'system', ?)`
       ).bind(sessionId, safeReply).run();
 
-      // Update denormalized last-message fields
       try {
         await env.DB.prepare(
           `UPDATE chat_sessions
            SET last_message_content = ?, last_message_at = CURRENT_TIMESTAMP
            WHERE id = ?`
         ).bind(safeReply, sessionId).run();
-      } catch (e) {
-        console.error('Failed to update chat_sessions last-message fields:', e);
-      }
+      } catch (e) {}
     }
   }
 
@@ -271,13 +285,37 @@ export async function sendChat(env, req, body) {
 }
 
 /**
- * Get all chat sessions for admin
- * @param {Object} env - Environment bindings
- * @returns {Promise<Response>}
+ * Block/unblock a chat session
  */
-export async function getChatSessions(env) {
-  // One row per email (canonical session = oldest created_at for that email)
-  // Denormalized fields on chat_sessions let us avoid heavy subqueries.
+export async function blockSession(env, body) {
+  const sessionId = String(body.sessionId || '').trim();
+  const blocked = body.blocked === true || body.blocked === 1 || body.blocked === 'true';
+
+  if (!sessionId) return json({ error: 'sessionId is required' }, 400);
+
+  await env.DB.prepare(
+    `UPDATE chat_sessions SET blocked = ? WHERE id = ?`
+  ).bind(blocked ? 1 : 0, sessionId).run();
+
+  return json({ success: true, blocked: blocked ? 1 : 0 });
+}
+
+/**
+ * Delete a chat session and its messages
+ */
+export async function deleteSession(env, sessionId) {
+  if (!sessionId) return json({ error: 'sessionId is required' }, 400);
+
+  await env.DB.prepare(`DELETE FROM chat_messages WHERE session_id = ?`).bind(sessionId).run();
+  await env.DB.prepare(`DELETE FROM chat_sessions WHERE id = ?`).bind(sessionId).run();
+
+  return json({ success: true });
+}
+
+/**
+ * Get all chat sessions for admin
+ */
+export async function getSessions(env) {
   const rows = await env.DB.prepare(
     `SELECT
        s.id,
@@ -299,44 +337,4 @@ export async function getChatSessions(env) {
   ).all();
 
   return json({ sessions: rows?.results || [] });
-}
-
-/**
- * Block/unblock a chat session
- * @param {Object} env - Environment bindings
- * @param {Object} body - Request body
- * @returns {Promise<Response>}
- */
-export async function blockChatSession(env, body) {
-  const sessionId = String(body.sessionId || '').trim();
-  const blocked = body.blocked === true || body.blocked === 1 || body.blocked === 'true';
-
-  if (!sessionId) return json({ error: 'sessionId is required' }, 400);
-
-  await env.DB.prepare(
-    `UPDATE chat_sessions SET blocked = ? WHERE id = ?`
-  ).bind(blocked ? 1 : 0, sessionId).run();
-
-  return json({ success: true, blocked: blocked ? 1 : 0 });
-}
-
-/**
- * Delete a chat session and its messages
- * @param {Object} env - Environment bindings
- * @param {string} sessionId - Session ID (from query or body)
- * @param {Object} body - Optional request body
- * @returns {Promise<Response>}
- */
-export async function deleteChatSession(env, sessionId, body = {}) {
-  if (!sessionId) {
-    sessionId = String(body.sessionId || '').trim();
-  }
-
-  if (!sessionId) return json({ error: 'sessionId is required' }, 400);
-
-  // Delete messages first, then session
-  await env.DB.prepare(`DELETE FROM chat_messages WHERE session_id = ?`).bind(sessionId).run();
-  await env.DB.prepare(`DELETE FROM chat_sessions WHERE id = ?`).bind(sessionId).run();
-
-  return json({ success: true });
 }

@@ -1,11 +1,45 @@
-// Orders API controller
+/**
+ * Orders controller - Order management
+ */
+
 import { json } from '../utils/response.js';
-import { getGoogleScriptUrl } from '../utils/helpers.js';
+import { toISO8601 } from '../utils/formatting.js';
+import { getGoogleScriptUrl } from '../config/secrets.js';
 
 /**
- * Get all orders
- * @param {Object} env - Environment bindings
- * @returns {Promise<Response>}
+ * Get latest order for an email (used for chat)
+ */
+export async function getLatestOrderForEmail(env, email) {
+  const candidates = await env.DB.prepare(
+    `SELECT order_id, status, archive_url, encrypted_data, created_at
+     FROM orders
+     ORDER BY datetime(created_at) DESC
+     LIMIT 80`
+  ).all();
+
+  const list = candidates?.results || [];
+  const target = String(email || '').trim().toLowerCase();
+  if (!target) return null;
+
+  for (const o of list) {
+    try {
+      if (!o.encrypted_data) continue;
+      const data = JSON.parse(o.encrypted_data);
+      const e = String(data.email || '').trim().toLowerCase();
+      if (e && e === target) {
+        return {
+          order_id: o.order_id,
+          status: o.status,
+          trackLink: `/buyer-order.html?id=${encodeURIComponent(o.order_id)}`
+        };
+      }
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Get all orders (admin)
  */
 export async function getOrders(env) {
   const r = await env.DB.prepare('SELECT * FROM orders ORDER BY id DESC').all();
@@ -27,10 +61,7 @@ export async function getOrders(env) {
 }
 
 /**
- * Create a new order
- * @param {Object} env - Environment bindings
- * @param {Object} body - Order data
- * @returns {Promise<Response>}
+ * Create order (from checkout)
  */
 export async function createOrder(env, body) {
   if (!body.productId) return json({ error: 'productId required' }, 400);
@@ -51,51 +82,74 @@ export async function createOrder(env, body) {
 }
 
 /**
- * Get buyer order details
- * @param {Object} env - Environment bindings
- * @param {string} orderId - Order ID
- * @returns {Promise<Response>}
+ * Create manual order (admin)
  */
-export async function getBuyerOrder(env, orderId) {
-   const row = await env.DB.prepare(
-     'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'
-   ).bind(orderId).first();
-
-   if (!row) return json({ error: 'Order not found' }, 404);
-
-   // Check if review already exists for this order
-   const reviewCheck = await env.DB.prepare(
-     'SELECT id FROM reviews WHERE order_id = ? LIMIT 1'
-   ).bind(orderId).first();
-   const hasReview = !!reviewCheck;
-
-   let addons = [], email = '', amount = null;
-   try {
-     if (row.encrypted_data && row.encrypted_data[0] === '{') {
-       const d = JSON.parse(row.encrypted_data);
-       addons = d.addons || [];
-       email = d.email || '';
-       amount = d.amount;
-     }
-   } catch(e) {
-     console.error('Failed to parse order encrypted_data for buyer order:', orderId, e.message);
-   }
-
-   // Convert SQLite datetime to ISO 8601 format with Z suffix for UTC
-   const orderData = { ...row, addons, email, amount, has_review: hasReview };
-   if (orderData.created_at && typeof orderData.created_at === 'string') {
-     // SQLite format: YYYY-MM-DD HH:MM:SS -> ISO 8601: YYYY-MM-DDTHH:MM:SSZ
-     orderData.created_at = orderData.created_at.replace(' ', 'T') + 'Z';
-   }
-
-   return json({ order: orderData });
+export async function createManualOrder(env, body) {
+  if (!body.productId || !body.email) {
+    return json({ error: 'productId and email required' }, 400);
+  }
+  
+  const orderId = 'MO' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 6).toUpperCase();
+  
+  const encryptedData = JSON.stringify({
+    email: body.email,
+    amount: body.amount || 0,
+    addons: body.notes ? [{ field: 'Admin Notes', value: body.notes }] : [],
+    manualOrder: true
+  });
+  
+  await env.DB.prepare(
+    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
+  ).bind(
+    orderId,
+    Number(body.productId),
+    encryptedData,
+    body.status || 'paid',
+    Number(body.deliveryTime) || 60
+  ).run();
+  
+  return json({ success: true, orderId });
 }
 
 /**
- * Delete an order
- * @param {Object} env - Environment bindings
- * @param {string} id - Order ID
- * @returns {Promise<Response>}
+ * Get buyer order view
+ */
+export async function getBuyerOrder(env, orderId) {
+  const row = await env.DB.prepare(
+    'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'
+  ).bind(orderId).first();
+
+  if (!row) return json({ error: 'Order not found' }, 404);
+
+  // Check if review already exists for this order
+  const reviewCheck = await env.DB.prepare(
+    'SELECT id FROM reviews WHERE order_id = ? LIMIT 1'
+  ).bind(orderId).first();
+  const hasReview = !!reviewCheck;
+
+  let addons = [], email = '', amount = null;
+  try {
+    if (row.encrypted_data && row.encrypted_data[0] === '{') {
+      const d = JSON.parse(row.encrypted_data);
+      addons = d.addons || [];
+      email = d.email || '';
+      amount = d.amount;
+    }
+  } catch(e) {
+    console.error('Failed to parse order encrypted_data for buyer order:', orderId, e.message);
+  }
+
+  // Convert SQLite datetime to ISO 8601 format
+  const orderData = { ...row, addons, email, amount, has_review: hasReview };
+  if (orderData.created_at && typeof orderData.created_at === 'string') {
+    orderData.created_at = toISO8601(orderData.created_at);
+  }
+
+  return json({ order: orderData });
+}
+
+/**
+ * Delete order
  */
 export async function deleteOrder(env, id) {
   await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(Number(id)).run();
@@ -103,10 +157,7 @@ export async function deleteOrder(env, id) {
 }
 
 /**
- * Update an order
- * @param {Object} env - Environment bindings
- * @param {Object} body - Update data
- * @returns {Promise<Response>}
+ * Update order
  */
 export async function updateOrder(env, body) {
   const orderId = body.orderId;
@@ -135,45 +186,7 @@ export async function updateOrder(env, body) {
 }
 
 /**
- * Create manual order (admin)
- * @param {Object} env - Environment bindings
- * @param {Object} body - Order data
- * @returns {Promise<Response>}
- */
-export async function createManualOrder(env, body) {
-  if (!body.productId || !body.email) {
-    return json({ error: 'productId and email required' }, 400);
-  }
-  
-  // Generate unique order ID
-  const orderId = 'MO' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 6).toUpperCase();
-  
-  // Store order data
-  const encryptedData = JSON.stringify({
-    email: body.email,
-    amount: body.amount || 0,
-    addons: body.notes ? [{ field: 'Admin Notes', value: body.notes }] : [],
-    manualOrder: true
-  });
-  
-  await env.DB.prepare(
-    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
-  ).bind(
-    orderId,
-    Number(body.productId),
-    encryptedData,
-    body.status || 'paid',
-    Number(body.deliveryTime) || 60
-  ).run();
-  
-  return json({ success: true, orderId });
-}
-
-/**
- * Deliver video to order
- * @param {Object} env - Environment bindings
- * @param {Object} body - Delivery data
- * @returns {Promise<Response>}
+ * Deliver order
  */
 export async function deliverOrder(env, body) {
   if (!body.orderId || !body.videoUrl) return json({ error: 'orderId and videoUrl required' }, 400);
@@ -183,7 +196,7 @@ export async function deliverOrder(env, body) {
     'SELECT orders.*, products.title as product_title FROM orders LEFT JOIN products ON orders.product_id = products.id WHERE orders.order_id = ?'
   ).bind(body.orderId).first();
 
-  // Prepare additional metadata for delivered videos (Archive.org + subtitles, etc)
+  // Prepare additional metadata for delivered videos
   const deliveredVideoMetadata = JSON.stringify({
     embedUrl: body.embedUrl,
     itemId: body.itemId,
@@ -200,7 +213,6 @@ export async function deliverOrder(env, body) {
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
     if (googleScriptUrl && orderResult) {
-      // Extract email from encrypted data
       let customerEmail = '';
       try {
         const decrypted = JSON.parse(orderResult.encrypted_data);
@@ -209,7 +221,6 @@ export async function deliverOrder(env, body) {
         console.warn('Could not decrypt order data for email');
       }
       
-      // Send delivery notification webhook
       await fetch(googleScriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -233,10 +244,7 @@ export async function deliverOrder(env, body) {
 }
 
 /**
- * Request revision for order
- * @param {Object} env - Environment bindings
- * @param {Object} body - Revision data
- * @returns {Promise<Response>}
+ * Request revision
  */
 export async function requestRevision(env, body) {
   if (!body.orderId) return json({ error: 'orderId required' }, 400);
@@ -254,7 +262,6 @@ export async function requestRevision(env, body) {
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
     if (googleScriptUrl && orderResult) {
-      // Extract email from encrypted data
       let customerEmail = '';
       try {
         const decrypted = JSON.parse(orderResult.encrypted_data);
@@ -263,7 +270,6 @@ export async function requestRevision(env, body) {
         console.warn('Could not decrypt order data for email');
       }
       
-      // Send revision notification webhook
       await fetch(googleScriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -288,10 +294,7 @@ export async function requestRevision(env, body) {
 }
 
 /**
- * Update portfolio settings for order
- * @param {Object} env - Environment bindings
- * @param {Object} body - Portfolio data
- * @returns {Promise<Response>}
+ * Update portfolio flag
  */
 export async function updatePortfolio(env, body) {
   await env.DB.prepare(
@@ -301,40 +304,9 @@ export async function updatePortfolio(env, body) {
 }
 
 /**
- * Update archive URL for order
- * @param {Object} env - Environment bindings
- * @param {Object} body - Archive data
- * @returns {Promise<Response>}
+ * Update archive link
  */
-export async function updateArchiveUrl(env, body) {
+export async function updateArchiveLink(env, body) {
   await env.DB.prepare('UPDATE orders SET archive_url=? WHERE order_id=?').bind(body.archiveUrl, body.orderId).run();
   return json({ success: true });
-}
-
-/**
- * Upload encrypted file for order
- * @param {Object} env - Environment bindings
- * @param {Request} req - Request object
- * @param {Object} queryParams - Query parameters
- * @returns {Promise<Response>}
- */
-export async function uploadEncryptedFile(env, req, queryParams) {
-  if (!env.R2_BUCKET) {
-    return json({ error: 'R2 not configured' }, 500);
-  }
-  const orderId = queryParams.get('orderId');
-  const itemId = queryParams.get('itemId');
-  const filename = queryParams.get('filename');
-  if (!orderId || !itemId || !filename) {
-    return json({ error: 'orderId, itemId and filename required' }, 400);
-  }
-  // Read the request body into a buffer
-  const fileBuf = await req.arrayBuffer();
-  const key = `orders/${orderId}/${itemId}/${filename}`;
-  await env.R2_BUCKET.put(key, fileBuf, {
-    httpMetadata: { contentType: req.headers.get('content-type') || 'application/octet-stream' }
-  });
-  // You could update the orders table with the uploaded file key or URL here.
-  // We return the R2 key so the caller can take further action if needed.
-  return json({ success: true, r2Key: key });
 }

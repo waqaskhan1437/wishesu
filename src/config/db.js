@@ -1,16 +1,18 @@
-// Database initialization and schema creation for Cloudflare Workers D1
+/**
+ * Database initialization and schema management
+ */
 
 let dbReady = false;
 
 /**
- * Initialize database and create all necessary tables
+ * Initialize database schema - creates all required tables and migrations
  * @param {Object} env - Environment bindings
- * @returns {Promise<void>}
  */
 export async function initDB(env) {
   if (dbReady || !env.DB) return;
   
   try {
+    // Products table
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,6 +43,7 @@ export async function initDB(env) {
       }
     }
 
+    // Orders table
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,6 +74,7 @@ export async function initDB(env) {
       }
     }
 
+    // Reviews table
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,7 +86,7 @@ export async function initDB(env) {
       )
     `).run();
     
-    // Auto-migration: Add delivery columns if missing
+    // Auto-migration: Add delivery columns to reviews if missing
     try {
       const tableInfo = await env.DB.prepare(`PRAGMA table_info(reviews)`).all();
       const columns = tableInfo.results.map(col => col.name);
@@ -94,8 +98,10 @@ export async function initDB(env) {
       }
     } catch (e) { /* ignore */ }
 
+    // Settings table
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`).run();
     
+    // Pages table
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS pages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       slug TEXT UNIQUE, title TEXT, content TEXT,
@@ -104,6 +110,7 @@ export async function initDB(env) {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`).run();
 
+    // Checkout sessions table
     await env.DB.prepare(`CREATE TABLE IF NOT EXISTS checkout_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       checkout_id TEXT UNIQUE,
@@ -115,8 +122,7 @@ export async function initDB(env) {
       completed_at DATETIME
     )`).run();
 
-    
-    // Chat tables
+    // Chat sessions table
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS chat_sessions (
         id TEXT PRIMARY KEY,
@@ -140,6 +146,7 @@ export async function initDB(env) {
         console.log('Column might already exist:', alterError.message);
       }
     }
+
     // Add last_message_content column to existing chat_sessions table if it doesn't exist
     try {
       await env.DB.prepare('SELECT last_message_content FROM chat_sessions LIMIT 1').run();
@@ -164,7 +171,7 @@ export async function initDB(env) {
       }
     }
 
-
+    // Chat messages table
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS chat_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,6 +183,7 @@ export async function initDB(env) {
       )
     `).run();
 
+    // Index for chat messages
     await env.DB.prepare(`
       CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_id
       ON chat_messages(session_id, id)
@@ -185,4 +193,19 @@ export async function initDB(env) {
   } catch (e) {
     console.error('DB init error:', e);
   }
+}
+
+/**
+ * Check if database is initialized
+ * @returns {boolean}
+ */
+export function isDBReady() {
+  return dbReady;
+}
+
+/**
+ * Reset the database ready flag (for testing)
+ */
+export function resetDBReady() {
+  dbReady = false;
 }

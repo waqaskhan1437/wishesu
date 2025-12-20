@@ -1,18 +1,18 @@
-// Products API controller
+/**
+ * Products controller - Product CRUD operations
+ */
+
 import { json } from '../utils/response.js';
-import { slugifyStr } from '../utils/helpers.js';
+import { slugifyStr, toISO8601 } from '../utils/formatting.js';
 
 /**
- * Get all active products with review statistics
- * @param {Object} env - Environment bindings
- * @returns {Promise<Response>}
+ * Get active products (public)
  */
 export async function getProducts(env) {
   const r = await env.DB.prepare(
     'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text FROM products WHERE status = ? ORDER BY sort_order ASC, id DESC'
   ).bind('active').all();
   
-  // Fetch review statistics for each product
   const products = r.results || [];
   const productsWithReviews = await Promise.all(products.map(async (product) => {
     const stats = await env.DB.prepare(
@@ -30,10 +30,17 @@ export async function getProducts(env) {
 }
 
 /**
- * Get a single product by ID or slug with reviews
- * @param {Object} env - Environment bindings
- * @param {string} id - Product ID or slug
- * @returns {Promise<Response>}
+ * Get all products (admin)
+ */
+export async function getProductsList(env) {
+  const r = await env.DB.prepare(
+    'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text, status FROM products ORDER BY id DESC'
+  ).all();
+  return json({ products: r.results || [] });
+}
+
+/**
+ * Get single product by ID or slug
  */
 export async function getProduct(env, id) {
   let row;
@@ -55,7 +62,7 @@ export async function getProduct(env, id) {
     'SELECT COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id = ? AND status = ?'
   ).bind(row.id, 'approved').first();
   
-  // Fetch reviews for rich results schema (directly use review's own video URLs)
+  // Fetch reviews for rich results schema
   const reviewsResult = await env.DB.prepare(
     `SELECT reviews.*, orders.delivered_video_url, orders.delivered_thumbnail_url 
      FROM reviews 
@@ -64,13 +71,13 @@ export async function getProduct(env, id) {
      ORDER BY reviews.created_at DESC`
   ).bind(row.id, 'approved').all();
 
-  // Convert created_at to ISO 8601 format with Z suffix for UTC
+  // Convert created_at to ISO 8601 format
   const reviews = (reviewsResult.results || []).map(review => {
     if (review.created_at && typeof review.created_at === 'string') {
-      review.created_at = review.created_at.replace(' ', 'T') + 'Z';
+      review.created_at = toISO8601(review.created_at);
     }
     if (review.updated_at && typeof review.updated_at === 'string') {
-      review.updated_at = review.updated_at.replace(' ', 'T') + 'Z';
+      review.updated_at = toISO8601(review.updated_at);
     }
     return review;
   });
@@ -88,20 +95,16 @@ export async function getProduct(env, id) {
 }
 
 /**
- * Save a product (create or update)
- * @param {Object} env - Environment bindings
- * @param {Object} body - Product data
- * @returns {Promise<Response>}
+ * Save product (create or update)
  */
 export async function saveProduct(env, body) {
   const title = (body.title || '').trim();
   if (!title) return json({ error: 'Title required' }, 400);
   
-  const slug = (body.slug || '').trim() || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const slug = (body.slug || '').trim() || slugifyStr(title);
   const addonsJson = JSON.stringify(body.addons || []);
   
   if (body.id) {
-    // Prepare gallery_images as JSON string if it's an array
     const galleryJson = Array.isArray(body.gallery_images) 
       ? JSON.stringify(body.gallery_images) 
       : (body.gallery_images || '[]');
@@ -121,7 +124,6 @@ export async function saveProduct(env, body) {
     return json({ success: true, id: body.id, slug, url: `/product-${body.id}/${encodeURIComponent(slug)}` });
   }
   
-  // Prepare gallery_images as JSON string if it's an array
   const galleryJson = Array.isArray(body.gallery_images) 
     ? JSON.stringify(body.gallery_images) 
     : (body.gallery_images || '[]');
@@ -144,10 +146,7 @@ export async function saveProduct(env, body) {
 }
 
 /**
- * Delete a product
- * @param {Object} env - Environment bindings
- * @param {string} id - Product ID
- * @returns {Promise<Response>}
+ * Delete product
  */
 export async function deleteProduct(env, id) {
   if (!id) return json({ error: 'ID required' }, 400);
@@ -156,22 +155,7 @@ export async function deleteProduct(env, id) {
 }
 
 /**
- * Get all products for admin (including inactive)
- * @param {Object} env - Environment bindings
- * @returns {Promise<Response>}
- */
-export async function getProductsList(env) {
-  const r = await env.DB.prepare(
-    'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text, status FROM products ORDER BY id DESC'
-  ).all();
-  return json({ products: r.results || [] });
-}
-
-/**
  * Update product status
- * @param {Object} env - Environment bindings
- * @param {Object} body - Request body with id and status
- * @returns {Promise<Response>}
  */
 export async function updateProductStatus(env, body) {
   const id = body.id;
@@ -187,10 +171,7 @@ export async function updateProductStatus(env, body) {
 }
 
 /**
- * Duplicate a product
- * @param {Object} env - Environment bindings
- * @param {Object} body - Request body with id
- * @returns {Promise<Response>}
+ * Duplicate product
  */
 export async function duplicateProduct(env, body) {
   const id = body.id;
@@ -201,8 +182,7 @@ export async function duplicateProduct(env, body) {
   if (!row) {
     return json({ error: 'Product not found' }, 404);
   }
-  const baseSlug = row.slug || row.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  // Determine unique new slug
+  const baseSlug = row.slug || slugifyStr(row.title);
   let newSlug = baseSlug + '-copy';
   let idx = 1;
   let exists = await env.DB.prepare('SELECT slug FROM products WHERE slug = ?').bind(newSlug).first();
@@ -211,7 +191,7 @@ export async function duplicateProduct(env, body) {
     idx++;
     exists = await env.DB.prepare('SELECT slug FROM products WHERE slug = ?').bind(newSlug).first();
   }
-  // Copy all relevant fields into a new product row
+  
   const r = await env.DB.prepare(
     `INSERT INTO products (
       title, slug, description, normal_price, sale_price,
@@ -240,4 +220,43 @@ export async function duplicateProduct(env, body) {
     0
   ).run();
   return json({ success: true, id: r.meta?.last_row_id, slug: newSlug });
+}
+
+/**
+ * Handle product routing (canonical URLs and redirects)
+ */
+export async function handleProductRouting(env, url, path) {
+  // Legacy: /product?id=123 -> /product-123/<slug>
+  const legacyId = (path === '/product') ? url.searchParams.get('id') : null;
+  if (legacyId) {
+    const p = await env.DB.prepare('SELECT id, title, slug FROM products WHERE id = ? LIMIT 1').bind(Number(legacyId)).first();
+    if (p) {
+      const slug = p.slug ? String(p.slug) : slugifyStr(p.title);
+      if (!p.slug) {
+        try {
+          await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?').bind(slug, Number(p.id)).run();
+        } catch (e) {}
+      }
+      const canonical = `/product-${p.id}/${encodeURIComponent(slug)}`;
+      return Response.redirect(`${url.origin}${canonical}`, 301);
+    }
+  }
+
+  // Old pretty: /product/<slug> -> /product-<id>/<slug>
+  if (path.startsWith('/product/') && path.length > '/product/'.length) {
+    const slugIn = decodeURIComponent(path.slice('/product/'.length));
+    const row = await env.DB.prepare('SELECT id, title, slug FROM products WHERE slug = ? LIMIT 1').bind(slugIn).first();
+    if (row) {
+      const canonicalSlug = row.slug ? String(row.slug) : slugifyStr(row.title);
+      if (!row.slug) {
+        try {
+          await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?').bind(canonicalSlug, Number(row.id)).run();
+        } catch (e) {}
+      }
+      const canonical = `/product-${row.id}/${encodeURIComponent(canonicalSlug)}`;
+      return Response.redirect(`${url.origin}${canonical}`, 301);
+    }
+  }
+
+  return null;
 }

@@ -1,23 +1,37 @@
-// Response utilities for Cloudflare Workers
+/**
+ * Standard response helpers for JSON and error responses
+ */
 
-// The CORS and cache configuration for all API responses.
-export const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Cache-Control': 'no-store, no-cache, must-revalidate',
-  'Pragma': 'no-cache'
-};
+import { CORS } from '../config/cors.js';
 
 /**
- * Standard JSON response helper
- * @param {any} data - Response data
- * @param {number} status - HTTP status code (default: 200)
- * @returns {Response} Response object
+ * Create a JSON response with CORS headers
+ * @param {Object} data - Data to serialize
+ * @param {number} status - HTTP status code
+ * @returns {Response}
  */
 export function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...CORS, 'Content-Type': 'application/json' }
   });
+}
+
+/**
+ * Create an error response
+ * @param {string} message - Error message
+ * @param {number} status - HTTP status code
+ * @returns {Response}
+ */
+export function errorResponse(message, status = 500) {
+  return json({ error: message }, status);
+}
+
+/**
+ * Create a success response
+ * @param {Object} data - Additional data to include
+ * @returns {Response}
+ */
+export function successResponse(data = {}) {
+  return json({ success: true, ...data });
 }

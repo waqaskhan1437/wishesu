@@ -6,14 +6,14 @@ compatibility_date = "2024-01-01"
 directory = "./public"
 # Expose the static asset directory as the `ASSETS` binding.  With a Worker
 # script present, Cloudflare still serves matching files automatically
-# †679589428825689†L551-L555; however, binding the directory allows our worker to
+#【679589428825689†L551-L555】; however, binding the directory allows our worker to
 # explicitly fetch assets and modify response headers (for example, to set
-# `Cache-Control` and attach a version header)†679589428825689†L520-L544.
+# `Cache-Control` and attach a version header)【679589428825689†L520-L544】.
 binding = "ASSETS"
 # Always run the worker before serving assets.  This setting allows the
 # worker to inject custom headers and perform routing logic before
 # delegating to the static asset server.  Without this option, asset requests
-# would bypass the worker entirely when a matching file exists†679589428825689†L594-L641.
+# would bypass the worker entirely when a matching file exists【679589428825689†L594-L641】.
 run_worker_first = true
 not_found_handling = "404-page"
 
