@@ -94,15 +94,7 @@
         review_count
       } = product;
 
-      const makeSlug = (s) => String(s || '')
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .replace(/-+/g, '-');
-
-      const finalSlug = slug ? String(slug) : makeSlug(title);
-      const productUrl = `/product/${encodeURIComponent(finalSlug)}`;
+      const productUrl = slug ? `/product/${encodeURIComponent(slug)}` : `/product?id=${id}`;
 
       // Price calculation
       const originalPrice = parseFloat(normal_price || 0);

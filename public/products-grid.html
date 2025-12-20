@@ -58,7 +58,7 @@
       const deliveryTime = product.instant_delivery ? 'Instant' : (product.normal_delivery_text || '60 min');
       
       return `
-        <div class="product-card" onclick="window.location.href='/product.html?id=${product.id}'">
+        <div class="product-card" onclick="window.location.href='/product?id=${product.id}'">
           <div class="product-thumbnail">
             ${product.thumbnail_url ? 
               `<img src="${product.thumbnail_url}" alt="${product.title}">` : 
@@ -90,7 +90,7 @@
     }
 
     function buyNow(productId) {
-      window.location.href = '/product.html?id=' + productId;
+      window.location.href = '/product?id=' + productId;
     }
 
     loadProducts();

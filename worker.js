@@ -146,55 +146,6 @@ function normalizeArchiveMetaValue(value) {
   return (value || '').toString().replace(/[\r\n\t]+/g, ' ').trim();
 }
 
-// ----------------------------------------
-// Slug helpers
-// ----------------------------------------
-function slugify(input) {
-  return String(input || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-+/g, '-');
-}
-
-async function ensureUniqueSlug(env, desiredSlug, currentId = null) {
-  let base = slugify(desiredSlug);
-  if (!base) base = 'product';
-  let candidate = base;
-  let i = 0;
-  while (true) {
-    const row = await env.DB.prepare(
-      'SELECT id FROM products WHERE slug = ? LIMIT 1'
-    ).bind(candidate).first();
-
-    if (!row?.id) return candidate;
-
-    const foundId = Number(row.id);
-    if (currentId != null && foundId === Number(currentId)) return candidate;
-
-    i += 1;
-    // Keep it deterministic and short
-    candidate = i === 1 && currentId ? `${base}-${Number(currentId)}` : `${base}-${i}`;
-  }
-}
-
-async function ensureProductSlug(env, productRow) {
-  const existing = String(productRow?.slug || '').trim();
-  if (existing) return existing;
-
-  const desired = slugify(productRow?.title || '') || `product-${Number(productRow?.id || 0)}`;
-  const unique = await ensureUniqueSlug(env, desired, productRow?.id);
-  try {
-    await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?')
-      .bind(unique, Number(productRow.id))
-      .run();
-  } catch (e) {
-    // If update fails for any reason, still return best-effort slug
-  }
-  return unique;
-}
-
 // ========================================
 // SERVER-SIDE SCHEMA GENERATION FOR SEO
 // ========================================
@@ -213,14 +164,13 @@ function generateOfferObject(product, baseUrl) {
   const date = new Date();
   date.setFullYear(date.getFullYear() + 1);
   const priceValidUntil = date.toISOString().split('T')[0];
-  const safeSlug = slugify(product.slug || '') || slugify(product.title || '') || `product-${Number(product.id || 0)}`;
   
   // Check if product is digital (instant_delivery = 1 means digital/no shipping)
   const isDigital = product.instant_delivery === 1;
 
   const offer = {
     "@type": "Offer",
-    "url": `${baseUrl}/product/${encodeURIComponent(safeSlug)}`,
+    "url": `${baseUrl}/product?id=${product.id}`,
     "priceCurrency": "USD",
     "price": price.toString(),
     "availability": "https://schema.org/InStock",
@@ -303,13 +253,12 @@ function generateOfferObject(product, baseUrl) {
  * @returns {string} JSON-LD schema as string
  */
 function generateProductSchema(product, baseUrl, reviews = []) {
-  const safeSlug = slugify(product.slug || '') || slugify(product.title || '') || `product-${Number(product.id || 0)}`;
   const sku = product.slug ? `WV-${product.id}-${product.slug.toUpperCase().replace(/-/g, '')}` : `WV-${product.id}`;
 
   const schema = {
     "@context": "https://schema.org/",
     "@type": "Product",
-    "@id": `${baseUrl}/product/${encodeURIComponent(safeSlug)}`,
+    "@id": `${baseUrl}/product?id=${product.id}`,
     "name": product.title,
     "description": product.seo_description || product.description || product.title,
     "sku": sku,
@@ -373,14 +322,13 @@ function generateCollectionSchema(products, baseUrl) {
   }
 
   const itemListElement = products.map((product, index) => {
-    const safeSlug = slugify(product.slug || '') || slugify(product.title || '') || `product-${Number(product.id || 0)}`;
     const item = {
       "@type": "ListItem",
       "position": index + 1,
-      "url": `${baseUrl}/product/${encodeURIComponent(safeSlug)}`,
+      "url": `${baseUrl}/product?id=${product.id}`,
       "item": {
         "@type": "Product",
-        "@id": `${baseUrl}/product/${encodeURIComponent(safeSlug)}`,
+        "@id": `${baseUrl}/product?id=${product.id}`,
         "name": product.title,
         "description": product.description || product.title,
         "image": product.thumbnail_url || `${baseUrl}/placeholder.jpg`,
@@ -783,24 +731,10 @@ export default {
 
 
       
-      // Redirect legacy product URLs (/product?id=123) to pretty slug URLs (/product/<slug>).
-      // If slug is empty in DB, backfill it from title.
-      if ((method === 'GET' || method === 'HEAD') && (path === '/product' || path === '/product.html')) {
-        const idParam = url.searchParams.get('id');
-        if (idParam && !isNaN(Number(idParam)) && env.DB) {
-          await initDB(env);
-          const row = await env.DB.prepare('SELECT id, title, slug FROM products WHERE id = ? LIMIT 1')
-            .bind(Number(idParam)).first();
-          if (row?.id) {
-            const slug = await ensureProductSlug(env, row);
-            const redirected = new URL(req.url);
-            redirected.pathname = `/product/${encodeURIComponent(slug)}`;
-            // Keep all query params except id
-            redirected.searchParams.delete('id');
-            return Response.redirect(redirected.toString(), 301);
-          }
-        }
-      }
+      // NOTE: We intentionally do NOT 301-redirect /product?id=123 to /product/<slug>
+      // because the product page JS can load by either ID or slug. Redirecting here
+      // can create redirect loops if anything (browser, cache, older scripts) bounces
+      // back to the ID form. Both URL styles are supported.
 
       // ------------------------------
       // Chat APIs (Customer + Admin)
@@ -1194,8 +1128,6 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
 
         // ----- PRODUCTS -----
         if (method === 'GET' && path === '/api/products') {
-          if (!env.DB) return json({ error: 'Database not configured' }, 500);
-          await initDB(env);
           const r = await env.DB.prepare(
             'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text FROM products WHERE status = ? ORDER BY sort_order ASC, id DESC'
           ).bind('active').all();
@@ -1203,15 +1135,12 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
           // Fetch review statistics for each product
           const products = r.results || [];
           const productsWithReviews = await Promise.all(products.map(async (product) => {
-            // Backfill slug if blank
-            const fixedSlug = await ensureProductSlug(env, product);
             const stats = await env.DB.prepare(
               'SELECT COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id = ? AND status = ?'
             ).bind(product.id, 'approved').first();
             
             return {
               ...product,
-              slug: fixedSlug,
               review_count: stats?.cnt || 0,
               rating_average: stats?.avg ? Math.round(stats.avg * 10) / 10 : 0
             };
@@ -1783,8 +1712,6 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
         }
 
         if (method === 'GET' && path.startsWith('/api/product/')) {
-          if (!env.DB) return json({ error: 'Database not configured' }, 500);
-          await initDB(env);
           const id = path.split('/').pop();
           let row;
           if (isNaN(Number(id))) {
@@ -1793,9 +1720,6 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             row = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(Number(id)).first();
           }
           if (!row) return json({ error: 'Product not found' }, 404);
-          // Backfill slug if missing
-          const fixedSlug = await ensureProductSlug(env, row);
-          row.slug = fixedSlug;
           
           let addons = [];
           try {
@@ -1841,15 +1765,11 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
         }
 
         if (method === 'POST' && path === '/api/product/save') {
-          if (!env.DB) return json({ error: 'Database not configured' }, 500);
-          await initDB(env);
           const body = await req.json();
           const title = (body.title || '').trim();
           if (!title) return json({ error: 'Title required' }, 400);
           
-          // If slug field is empty, auto-generate from title
-          const desiredSlug = (body.slug || '').trim() || title;
-          const slug = await ensureUniqueSlug(env, desiredSlug, body.id ? Number(body.id) : null);
+          const slug = (body.slug || '').trim() || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
           const addonsJson = JSON.stringify(body.addons || []);
           
           if (body.id) {
@@ -1906,16 +1826,10 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
         // manage published and draft products.  Includes the status column to
         // drive publish/unpublish toggles.
         if (method === 'GET' && path === '/api/products/list') {
-          if (!env.DB) return json({ error: 'Database not configured' }, 500);
-          await initDB(env);
           const r = await env.DB.prepare(
             'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text, status FROM products ORDER BY id DESC'
           ).all();
-          const list = r.results || [];
-          for (const p of list) {
-            if (!p.slug) p.slug = await ensureProductSlug(env, p);
-          }
-          return json({ products: list });
+          return json({ products: r.results || [] });
         }
 
         // ----- PRODUCTS STATUS UPDATE -----
@@ -3120,63 +3034,24 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
           const slug = decodeURIComponent(assetPath.slice('/product/'.length));
           if (env.DB) {
             await initDB(env);
-            // 1) Try direct slug match.
-            let row = await env.DB.prepare(
-              `SELECT id, title, slug FROM products WHERE slug = ? LIMIT 1`
+            const row = await env.DB.prepare(
+              `SELECT id FROM products WHERE slug = ? LIMIT 1`
             ).bind(slug).first();
 
-            // 2) Backwards-compat: if DB slug is blank for older products,
-            // allow URLs that use a slugified title.
-            if (!row) {
-              // Limit is intentionally a bit higher to cover stores with many products.
-              const candidates = await env.DB.prepare(
-                `SELECT id, title, slug FROM products ORDER BY id DESC LIMIT 2000`
-              ).all();
-              const list = candidates?.results || [];
-              const wanted = slugify(slug);
-              for (const p of list) {
-                const existing = String(p?.slug || '').trim();
-                const titleSlug = slugify(p?.title || '');
-                if ((!existing && titleSlug && titleSlug === wanted) || (existing && slugify(existing) === wanted)) {
-                  row = p;
-                  break;
-                }
-              }
-            }
-
             if (row?.id) {
-              // Ensure the product has a stable, unique slug saved in DB.
-              const stableSlug = await ensureProductSlug(env, row);
               schemaProductId = Number(row.id);
-
-              // If the requested slug isn't the stable one, redirect to canonical.
-              if (slugify(slug) !== slugify(stableSlug)) {
-                const canonical = new URL(req.url);
-                canonical.pathname = `/product/${encodeURIComponent(stableSlug)}`;
-                return Response.redirect(canonical.toString(), 301);
-              }
-
-              // Internally rewrite to the product template with id query.
               const rewritten = new URL(req.url);
-              rewritten.pathname = '/product.html';
+              // IMPORTANT: use a private template filename to avoid Cloudflare "clean URL"
+              // redirects (e.g. /product.html -> /product) which can cause redirect loops.
+              rewritten.pathname = '/_product_template.html';
               rewritten.searchParams.set('id', String(schemaProductId));
               assetReq = new Request(rewritten.toString(), req);
-              assetPath = '/product.html';
+              assetPath = '/_product_template.html';
             }
           }
         }
 
-        let assetResp = await env.ASSETS.fetch(assetReq);
-
-        // If someone visits /product/<something> that isn't in DB yet, the static
-        // asset won't exist (404). In that case, serve the product template anyway
-        // so the page can show a clean "not found" message without redirecting.
-        if (assetResp.status === 404 && (method === 'GET' || method === 'HEAD') && path.startsWith('/product/') && path.length > '/product/'.length) {
-          const fallbackUrl = new URL(req.url);
-          fallbackUrl.pathname = '/product.html';
-          fallbackUrl.search = '';
-          assetResp = await env.ASSETS.fetch(new Request(fallbackUrl.toString(), req));
-        }
+        const assetResp = await env.ASSETS.fetch(assetReq);
         
         // For HTML pages with schema placeholders, inject server-side schemas
         const contentType = assetResp.headers.get('content-type') || '';
@@ -3189,7 +3064,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             let html = await assetResp.text();
             
             // Product detail page - inject individual product schema
-            if (assetPath === '/product.html' || assetPath === '/product') {
+            if (assetPath === '/_product_template.html' || assetPath === '/product.html' || assetPath === '/product') {
               const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
               if (productId && env.DB) {
                 await initDB(env);

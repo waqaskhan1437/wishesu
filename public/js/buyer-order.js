@@ -68,7 +68,8 @@
       const titleEl = document.createElement('p');
       titleEl.className = 'product-summary-title';
 
-      const productUrl = productId ? `/product.html?id=${encodeURIComponent(productId)}` : '/product.html';
+      // Use the legacy /product?id= route (Worker will redirect to the pretty slug URL).
+      const productUrl = productId ? `/product?id=${encodeURIComponent(productId)}` : '/products';
       const a = document.createElement('a');
       a.href = productUrl;
       a.textContent = productTitle || 'View purchased product';
