@@ -357,6 +357,22 @@ main {
 @media screen and (max-width: 768px) {
   .video-wrapper { max-height: 50vh; }
   .video-wrapper video { object-fit: contain !important; max-height: 50vh; }
+
+  /* Review section - Watch Video button below thumbnail on mobile */
+  .review-portfolio-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .review-portfolio-row > div:first-child {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 16/9;
+  }
+  .review-portfolio-row > button {
+    width: 100% !important;
+    margin-top: 8px;
+  }
 }
 
 /* Fix for disappearing play button on hover */

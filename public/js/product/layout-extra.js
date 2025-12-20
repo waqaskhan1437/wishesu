@@ -182,7 +182,8 @@
 
             if (canWatch) {
               const portfolioRow = document.createElement('div');
-              portfolioRow.style.cssText = 'display:flex; align-items:center; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid #f3f4f6;';
+              portfolioRow.className = 'review-portfolio-row';
+              portfolioRow.style.cssText = 'display:flex; align-items:center; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid #f3f4f6; flex-wrap:wrap;';
 
               // Create video thumbnail container - use video itself as thumbnail source
               const thumbContainer = document.createElement('div');
