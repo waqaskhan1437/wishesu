@@ -12,6 +12,45 @@
   // Yeh variable order ki details store karega taake completion par save kar saken
   let pendingOrderData = null;
 
+  let lastAmount = 0;
+
+  function formatUSD(amount) {
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return '';
+    return `$${n.toFixed(2)}`;
+  }
+
+  function setPlaceOrderLabel(overlay, amount) {
+    const btn = overlay?.querySelector?.('.whop-place-order');
+    if (!btn) return;
+    const price = formatUSD(amount);
+    btn.dataset.originalLabel = 'Place Order';
+    btn.textContent = price ? `Place Order · ${price}` : 'Place Order';
+  }
+
+  function hideTotalDueRow(overlay) {
+    // Whop embed DOM can change, so we search by text and hide the nearest row.
+    const root = overlay?.querySelector?.('.whop-container');
+    if (!root) return false;
+
+    const needle = 'total due today';
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    let node = walker.currentNode;
+    while (node) {
+      if (node instanceof HTMLElement) {
+        const text = (node.textContent || '').trim().toLowerCase();
+        if (text === needle || text.includes(needle)) {
+          // Try to hide a reasonable container (row)
+          const row = node.closest('div') || node;
+          row.style.display = 'none';
+          return true;
+        }
+      }
+      node = walker.nextNode();
+    }
+    return false;
+  }
+
   /**
    * Load the Whop checkout loader script.
    */
@@ -102,22 +141,39 @@
       overlay.querySelector('.whop-close').addEventListener('click', close);
       overlay.querySelector('.whop-backdrop').addEventListener('click', close);
 
-      // Custom sticky button handler (submit embedded checkout)
+      // Sticky Place Order button: disable + show Processing... to prevent double clicks
       const placeBtn = overlay.querySelector('.whop-place-order');
       if (placeBtn) {
+        let isProcessing = false;
         placeBtn.addEventListener('click', () => {
+          if (isProcessing) return;
+          isProcessing = true;
+
+          const original = placeBtn.dataset.originalLabel || 'Place Order';
+          placeBtn.disabled = true;
+          placeBtn.textContent = 'Processing...';
+          placeBtn.setAttribute('aria-busy', 'true');
+
           try {
             if (window.wco && typeof window.wco.submit === 'function') {
               window.wco.submit('whop-embedded-checkout');
-              return;
+            } else {
+              const embedRoot = document.getElementById('whop-embedded-checkout');
+              const btn = embedRoot ? embedRoot.querySelector('button') : null;
+              if (btn) btn.click();
             }
-            // Fallback: try to click a primary button inside the embed
-            const embedRoot = document.getElementById('whop-embedded-checkout');
-            const btn = embedRoot ? embedRoot.querySelector('button') : null;
-            if (btn) btn.click();
           } catch (e) {
             console.error('Failed to submit checkout:', e);
           }
+
+          // Safety reset (if modal stays open due to validation errors, etc.)
+          setTimeout(() => {
+            isProcessing = false;
+            placeBtn.disabled = false;
+            // restore label with latest amount
+            setPlaceOrderLabel(overlay, lastAmount);
+            placeBtn.removeAttribute('aria-busy');
+          }, 15000);
         });
       }
     }
@@ -245,8 +301,14 @@
     const mergedEmail = opts.email || window.cachedAddonEmail || '';
     pendingOrderData = Object.assign({}, opts, { email: mergedEmail });
 
+    // Keep the latest calculated total so we can show it on the sticky button.
+    lastAmount = Number(opts.amount || 0);
+
     const overlay = ensureOverlay();
     console.log('🟢 Overlay element:', overlay ? 'Created' : 'Failed');
+
+    // Always show total price next to "Place Order".
+    setPlaceOrderLabel(overlay, lastAmount);
 
     const globals = window.whopSettings || {};
     console.log('🟢 Global Whop Settings:', globals);
@@ -291,7 +353,7 @@
     console.log('🟢 Email attribute:', emailAttribute);
 
     // Construct the embed HTML with email attribute
-    // Hide Whop's internal submit button so we can use our own sticky "Place Order" button.
+    // Hide Whop's internal submit button (we use our own sticky Place Order button)
     const embed = `<div id="whop-embedded-checkout" data-whop-checkout-plan-id="${selectedPlan}" data-whop-checkout-theme="${theme}" ${emailAttribute} data-whop-checkout-hide-submit-button="true" data-whop-checkout-metadata='${metadataStr}' data-whop-checkout-on-complete="whopCheckoutComplete"></div>`;
     
     console.log('🟢 Embed HTML:', embed);
@@ -317,6 +379,17 @@
     try {
       await loadWhopScript();
       console.log('✅ Whop script loaded successfully!');
+
+      // The embed renders async. Hide the "Total due today" row and rely on our sticky
+      // button to show the total price.
+      let tries = 0;
+      const interval = setInterval(() => {
+        tries += 1;
+        const hidden = hideTotalDueRow(overlay);
+        if (hidden || tries > 40) {
+          clearInterval(interval);
+        }
+      }, 150);
     } catch (err) {
       console.error('🔴 FAILED TO LOAD WHOP SCRIPT:', err);
       alert('❌ Failed to load Whop checkout:\n\n' + err.message + '\n\nPlease refresh and try again.');
