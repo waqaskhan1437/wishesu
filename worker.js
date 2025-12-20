@@ -1370,14 +1370,22 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
           if (!product) {
             return json({ error: 'Product not found' }, 404);
           }
-          // Determine the price to charge; prefer sale_price over normal_price
+          // Determine the base product price (sale_price preferred).
           const priceValue = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
             ? Number(product.sale_price)
             : Number(product.normal_price);
-          // Allow $0 for testing, but reject negative prices
-          if (isNaN(priceValue) || priceValue < 0) {
+          // Allow $0, but reject negative / invalid prices
+          if (!Number.isFinite(priceValue) || priceValue < 0) {
             return json({ error: 'Invalid price for product' }, 400);
           }
+
+          // IMPORTANT:
+          // `amount` can include addon totals from the frontend.
+          // If the product price is 0 but addons are selected, we still must charge the addon total.
+          const requestedAmount = Number(amount);
+          const finalAmount = (Number.isFinite(requestedAmount) && requestedAmount >= 0)
+            ? requestedAmount
+            : priceValue;
           // Ensure we have the Whop product ID for attaching the plan to the correct product
           // Use the product's specific Whop product ID if available.
           const directProdId = (product.whop_product_id || '').trim();
@@ -1420,6 +1428,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             plan_type: 'one_time',
             release_method: 'buy_now',
             currency: currency,
+            // Charge the FINAL amount (base price + addons).
             initial_price: finalAmount,
             // Do NOT set renewal_price for one_time plans - it causes error
             // Provide a default title for the plan so the seller can see it in their dashboard
@@ -1474,7 +1483,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
                 product_id: product.id.toString(),
                 product_title: product.title,
                 addons: metadata?.addons || [],
-                amount: amount || priceValue,
+                amount: finalAmount,
                 created_at: new Date().toISOString()
               }
             };
@@ -1508,7 +1517,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
                   product_id: product.id.toString(),
                   product_title: product.title,
                   addons: metadata?.addons || [],
-                  amount: amount || priceValue
+                  amount: finalAmount
                 },
                 expires_in: '15 minutes',
                 warning: 'Email prefill not available'
@@ -1540,7 +1549,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
                 product_id: product.id.toString(),
                 product_title: product.title,
                 addons: metadata?.addons || [],
-                amount: amount || priceValue
+                  amount: finalAmount
               },
               expires_in: '15 minutes',
               email_prefilled: !!(email && email.includes('@'))
