@@ -1370,13 +1370,72 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
           if (!product) {
             return json({ error: 'Product not found' }, 404);
           }
-          // Determine the price to charge; prefer sale_price over normal_price
-          const priceValue = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
+          // --- Determine final amount to charge (base + addons) ---
+          // We DO NOT trust client-provided `amount` blindly. Instead we recompute the
+          // total from the product's addons_json and the selected addons sent in metadata.
+          const basePrice = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
             ? Number(product.sale_price)
             : Number(product.normal_price);
+
+          if (isNaN(basePrice) || basePrice < 0) {
+            return json({ error: 'Invalid base price for product' }, 400);
+          }
+
+          let addonsTotal = 0;
+          try {
+            const selected = Array.isArray(metadata?.addons) ? metadata.addons : [];
+
+            // Build a map: fieldId -> [values]
+            const selMap = new Map();
+            for (const item of selected) {
+              if (!item || typeof item.field !== 'string') continue;
+              const rawKey = item.field;
+              // Ignore file/text helper fields
+              if (rawKey.startsWith('file_') || rawKey.startsWith('text_') || rawKey === '_temp_session') continue;
+              // Normalize checkbox group keys like "extras[]"
+              const key = rawKey.endsWith('[]') ? rawKey.slice(0, -2) : rawKey;
+              const val = (item.value ?? '').toString();
+              if (!val) continue;
+              if (val.startsWith('[TEMP_FILE]')) continue;
+              const arr = selMap.get(key) || [];
+              arr.push(val);
+              selMap.set(key, arr);
+            }
+
+            const addonDefs = JSON.parse(product.addons_json || '[]');
+            if (Array.isArray(addonDefs)) {
+              for (const field of addonDefs) {
+                if (!field || !field.id || !Array.isArray(field.options)) continue;
+                const values = selMap.get(field.id) || [];
+                if (values.length === 0) continue;
+
+                // For select/radio: one value. For checkbox_group: multiple values.
+                const matchAndAdd = (v) => {
+                  const opt = field.options.find(o => (o?.label ?? '') === v);
+                  if (opt && opt.price) {
+                    const p = Number(opt.price);
+                    if (!isNaN(p) && p > 0) addonsTotal += p;
+                  }
+                };
+
+                if (field.type === 'checkbox_group') {
+                  values.forEach(matchAndAdd);
+                } else {
+                  matchAndAdd(values[0]);
+                }
+              }
+            }
+          } catch (e) {
+            console.log('Addon total compute failed (fallback to base):', e.message);
+            addonsTotal = 0;
+          }
+
+          // Final total (rounded to 2 decimals)
+          const priceValue = Math.round((basePrice + addonsTotal) * 100) / 100;
+
           // Allow $0 for testing, but reject negative prices
           if (isNaN(priceValue) || priceValue < 0) {
-            return json({ error: 'Invalid price for product' }, 400);
+            return json({ error: 'Invalid total price' }, 400);
           }
           // Ensure we have the Whop product ID for attaching the plan to the correct product
           // Use the product's specific Whop product ID if available.
@@ -1474,7 +1533,8 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
                 product_id: product.id.toString(),
                 product_title: product.title,
                 addons: metadata?.addons || [],
-                amount: amount || priceValue,
+                // Total actually charged on Whop (base + addons)
+                amount: priceValue,
                 created_at: new Date().toISOString()
               }
             };
@@ -1508,7 +1568,8 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
                   product_id: product.id.toString(),
                   product_title: product.title,
                   addons: metadata?.addons || [],
-                  amount: amount || priceValue
+                  // Total actually charged on Whop (base + addons)
+                  amount: priceValue
                 },
                 expires_in: '15 minutes',
                 warning: 'Email prefill not available'
@@ -1540,7 +1601,8 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
                 product_id: product.id.toString(),
                 product_title: product.title,
                 addons: metadata?.addons || [],
-                amount: amount || priceValue
+                // Total actually charged on Whop (base + addons)
+                amount: priceValue
               },
               expires_in: '15 minutes',
               email_prefilled: !!(email && email.includes('@'))
