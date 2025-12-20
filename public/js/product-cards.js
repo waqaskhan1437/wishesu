@@ -94,7 +94,8 @@
         review_count
       } = product;
 
-      const productUrl = slug ? `/product/${encodeURIComponent(slug)}` : `/product?id=${id}`;
+      const safeSlug = slug ? String(slug) : (title ? String(title).toLowerCase().trim().replace(/['"`]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-+/g, '-') : 'product');
+      const productUrl = id ? `/product-${encodeURIComponent(id)}/${encodeURIComponent(safeSlug)}` : (slug ? `/product/${encodeURIComponent(slug)}` : '/');
 
       // Price calculation
       const originalPrice = parseFloat(normal_price || 0);

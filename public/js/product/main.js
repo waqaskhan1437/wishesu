@@ -22,12 +22,12 @@
     }
     const params = new URLSearchParams(location.search);
     let productId = params.get('id');
-    // Support pretty URLs: /product/<slug>
-    // If no id is present, fall back to reading the slug from the pathname.
+    // Canonical URLs are /product-<id>/<slug>. If the worker forgets to
+    // inject ?id=, we can still recover the numeric id from the path.
     if (!productId) {
-      const m = (location.pathname || '').match(/^\/product\/(.+)$/);
+      const m = (location.pathname || '').match(/^\/product-(\d+)\//);
       if (m && m[1]) {
-        productId = decodeURIComponent(m[1]);
+        productId = m[1];
       }
     }
     const container = document.getElementById('product-container');

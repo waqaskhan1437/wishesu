@@ -147,6 +147,25 @@ function normalizeArchiveMetaValue(value) {
 }
 
 // ========================================
+// SLUG + CANONICAL PRODUCT URL HELPERS
+// ========================================
+function slugifyStr(input) {
+  return String(input || '')
+    .toLowerCase()
+    .trim()
+    .replace(/['"`]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-+/g, '-');
+}
+
+function canonicalProductPath(product) {
+  const id = product && product.id != null ? String(product.id) : '';
+  const slug = (product && product.slug) ? String(product.slug) : slugifyStr(product && product.title ? product.title : 'product');
+  return `/product-${id}/${encodeURIComponent(slug)}`;
+}
+
+// ========================================
 // SERVER-SIDE SCHEMA GENERATION FOR SEO
 // ========================================
 // These functions generate JSON-LD structured data server-side to prevent
@@ -170,7 +189,7 @@ function generateOfferObject(product, baseUrl) {
 
   const offer = {
     "@type": "Offer",
-    "url": `${baseUrl}/product?id=${product.id}`,
+    "url": `${baseUrl}${canonicalProductPath(product)}`,
     "priceCurrency": "USD",
     "price": price.toString(),
     "availability": "https://schema.org/InStock",
@@ -258,7 +277,7 @@ function generateProductSchema(product, baseUrl, reviews = []) {
   const schema = {
     "@context": "https://schema.org/",
     "@type": "Product",
-    "@id": `${baseUrl}/product?id=${product.id}`,
+    "@id": `${baseUrl}${canonicalProductPath(product)}`,
     "name": product.title,
     "description": product.seo_description || product.description || product.title,
     "sku": sku,
@@ -325,10 +344,10 @@ function generateCollectionSchema(products, baseUrl) {
     const item = {
       "@type": "ListItem",
       "position": index + 1,
-      "url": `${baseUrl}/product?id=${product.id}`,
+      "url": `${baseUrl}${canonicalProductPath(product)}`,
       "item": {
         "@type": "Product",
-        "@id": `${baseUrl}/product?id=${product.id}`,
+        "@id": `${baseUrl}${canonicalProductPath(product)}`,
         "name": product.title,
         "description": product.description || product.title,
         "image": product.thumbnail_url || `${baseUrl}/placeholder.jpg`,
@@ -728,13 +747,65 @@ export default {
         return json({ serverTime: Date.now() });
       }
 
+      // Private asset: never serve the raw product template directly
+      if ((method === 'GET' || method === 'HEAD') && path === '/_product_template.html') {
+        return new Response('Not found', { status: 404 });
+      }
 
 
-      
-      // NOTE: We intentionally do NOT 301-redirect /product?id=123 to /product/<slug>
-      // because the product page JS can load by either ID or slug. Redirecting here
-      // can create redirect loops if anything (browser, cache, older scripts) bounces
-      // back to the ID form. Both URL styles are supported.
+
+      // ------------------------------
+      // Canonical product URLs
+      // ------------------------------
+      // We keep supporting legacy /product?id=123 but we canonicalize to:
+      //   /product-123/<slug>
+      // We also support old pretty URLs /product/<slug> by redirecting to the
+      // canonical form to ensure the product page always has the numeric ID.
+      if ((method === 'GET' || method === 'HEAD') && (path === '/product' || path.startsWith('/product/'))) {
+        if (!env.DB) {
+          // If DB is not configured, fall through to assets (will likely 404).
+        } else {
+          await initDB(env);
+
+          // Block direct access to the private template asset from the public internet.
+          if (path === '/_product_template.html') {
+            return new Response('Not found', { status: 404 });
+          }
+
+          // Legacy: /product?id=123  ->  /product-123/<slug>
+          const legacyId = (path === '/product') ? url.searchParams.get('id') : null;
+          if (legacyId) {
+            const p = await env.DB.prepare('SELECT id, title, slug FROM products WHERE id = ? LIMIT 1').bind(Number(legacyId)).first();
+            if (p) {
+              const slug = p.slug ? String(p.slug) : slugifyStr(p.title);
+              // Backfill slug if missing
+              if (!p.slug) {
+                try {
+                  await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?').bind(slug, Number(p.id)).run();
+                } catch (e) {}
+              }
+              const canonical = `/product-${p.id}/${encodeURIComponent(slug)}`;
+              return Response.redirect(`${url.origin}${canonical}`, 301);
+            }
+          }
+
+          // Old pretty: /product/<slug>  ->  /product-<id>/<slug>
+          if (path.startsWith('/product/') && path.length > '/product/'.length) {
+            const slugIn = decodeURIComponent(path.slice('/product/'.length));
+            const row = await env.DB.prepare('SELECT id, title, slug FROM products WHERE slug = ? LIMIT 1').bind(slugIn).first();
+            if (row) {
+              const canonicalSlug = row.slug ? String(row.slug) : slugifyStr(row.title);
+              if (!row.slug) {
+                try {
+                  await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?').bind(canonicalSlug, Number(row.id)).run();
+                } catch (e) {}
+              }
+              const canonical = `/product-${row.id}/${encodeURIComponent(canonicalSlug)}`;
+              return Response.redirect(`${url.origin}${canonical}`, 301);
+            }
+          }
+        }
+      }
 
       // ------------------------------
       // Chat APIs (Customer + Admin)
@@ -1790,7 +1861,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
               body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
               body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || '', Number(body.id)
             ).run();
-            return json({ success: true, id: body.id, slug });
+            return json({ success: true, id: body.id, slug, url: `/product-${body.id}/${encodeURIComponent(slug)}` });
           }
           
           // Prepare gallery_images as JSON string if it's an array
@@ -1811,7 +1882,8 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
             body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || ''
           ).run();
-          return json({ success: true, id: r.meta?.last_row_id, slug });
+          const newId = r.meta?.last_row_id;
+          return json({ success: true, id: newId, slug, url: `/product-${newId}/${encodeURIComponent(slug)}` });
         }
 
         if (method === 'DELETE' && path === '/api/product/delete') {
@@ -3030,19 +3102,15 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
         let assetPath = path;
         let schemaProductId = null;
 
-        if ((method === 'GET' || method === 'HEAD') && assetPath.startsWith('/product/') && assetPath.length > '/product/'.length) {
-          const slug = decodeURIComponent(assetPath.slice('/product/'.length));
-          if (env.DB) {
-            await initDB(env);
-            const row = await env.DB.prepare(
-              `SELECT id FROM products WHERE slug = ? LIMIT 1`
-            ).bind(slug).first();
-
-            if (row?.id) {
-              schemaProductId = Number(row.id);
+        // Canonical product URLs: /product-<id>/<slug>
+        // Render without redirecting (page JS reads the id from the querystring).
+        if ((method === 'GET' || method === 'HEAD')) {
+          const canonicalMatch = assetPath.match(/^\/product-(\d+)\/(.+)$/);
+          if (canonicalMatch) {
+            const pid = Number(canonicalMatch[1]);
+            if (!Number.isNaN(pid)) {
+              schemaProductId = pid;
               const rewritten = new URL(req.url);
-              // IMPORTANT: use a private template filename to avoid Cloudflare "clean URL"
-              // redirects (e.g. /product.html -> /product) which can cause redirect loops.
               rewritten.pathname = '/_product_template.html';
               rewritten.searchParams.set('id', String(schemaProductId));
               assetReq = new Request(rewritten.toString(), req);
