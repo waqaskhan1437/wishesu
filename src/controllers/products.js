@@ -7,26 +7,29 @@ import { slugifyStr, toISO8601 } from '../utils/formatting.js';
 
 /**
  * Get active products (public)
+ * OPTIMIZED: Single JOIN query instead of N+1 queries
  */
 export async function getProducts(env) {
-  const r = await env.DB.prepare(
-    'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text FROM products WHERE status = ? ORDER BY sort_order ASC, id DESC'
-  ).bind('active').all();
-  
-  const products = r.results || [];
-  const productsWithReviews = await Promise.all(products.map(async (product) => {
-    const stats = await env.DB.prepare(
-      'SELECT COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id = ? AND status = ?'
-    ).bind(product.id, 'approved').first();
-    
-    return {
-      ...product,
-      review_count: stats?.cnt || 0,
-      rating_average: stats?.avg ? Math.round(stats.avg * 10) / 10 : 0
-    };
+  const r = await env.DB.prepare(`
+    SELECT
+      p.id, p.title, p.slug, p.normal_price, p.sale_price,
+      p.thumbnail_url, p.normal_delivery_text,
+      COUNT(r.id) as review_count,
+      AVG(r.rating) as rating_average
+    FROM products p
+    LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
+    WHERE p.status = ?
+    GROUP BY p.id
+    ORDER BY p.sort_order ASC, p.id DESC
+  `).bind('active').all();
+
+  const products = (r.results || []).map(product => ({
+    ...product,
+    review_count: product.review_count || 0,
+    rating_average: product.rating_average ? Math.round(product.rating_average * 10) / 10 : 0
   }));
-  
-  return json({ products: productsWithReviews });
+
+  return json({ products });
 }
 
 /**

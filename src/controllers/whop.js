@@ -471,69 +471,76 @@ export function testWebhook() {
 
 /**
  * Cleanup expired checkout sessions
+ * OPTIMIZED: Parallel API calls with batching
  */
 export async function cleanupExpired(env) {
   const apiKey = await getWhopApiKey(env);
   if (!apiKey) {
     return json({ error: 'Whop API key not configured' }, 500);
   }
-  
+
   try {
     const expiredCheckouts = await env.DB.prepare(`
       SELECT checkout_id, product_id, plan_id, expires_at
       FROM checkout_sessions
-      WHERE status = 'pending' 
+      WHERE status = 'pending'
       AND datetime(expires_at) < datetime('now')
       ORDER BY created_at ASC
       LIMIT 50
     `).all();
-    
+
+    const checkouts = expiredCheckouts.results || [];
+    if (checkouts.length === 0) {
+      return json({ success: true, deleted: 0, failed: 0, message: 'No expired checkouts' });
+    }
+
+    // Process in parallel batches of 5 to avoid rate limiting
+    const batchSize = 5;
     let deleted = 0;
     let failed = 0;
-    
-    for (const checkout of (expiredCheckouts.results || [])) {
-      try {
-        // Delete the checkout session from Whop
-        const deleteSessionResp = await fetch(`https://api.whop.com/api/v2/checkout_sessions/${checkout.checkout_id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${apiKey}` }
-        });
 
-        // Attempt to delete the associated plan
-        let planDeleted = false;
-        try {
-          if (checkout.plan_id) {
-            const delPlanResp = await fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
-              method: 'DELETE',
-              headers: { 'Authorization': `Bearer ${apiKey}` }
-            });
-            planDeleted = delPlanResp.ok || delPlanResp.status === 404;
-          }
-        } catch (pe) {
-          console.error('Plan deletion error:', pe);
-        }
+    for (let i = 0; i < checkouts.length; i += batchSize) {
+      const batch = checkouts.slice(i, i + batchSize);
 
-        if (deleteSessionResp.ok || deleteSessionResp.status === 404) {
+      const results = await Promise.allSettled(batch.map(async (checkout) => {
+        const headers = { 'Authorization': `Bearer ${apiKey}` };
+
+        // Delete session and plan in parallel
+        const [sessionResp, planResp] = await Promise.allSettled([
+          fetch(`https://api.whop.com/api/v2/checkout_sessions/${checkout.checkout_id}`, {
+            method: 'DELETE', headers
+          }),
+          checkout.plan_id
+            ? fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
+                method: 'DELETE', headers
+              })
+            : Promise.resolve({ ok: true })
+        ]);
+
+        const sessionOk = sessionResp.status === 'fulfilled' &&
+          (sessionResp.value.ok || sessionResp.value.status === 404);
+
+        if (sessionOk) {
           await env.DB.prepare(`
-            UPDATE checkout_sessions 
+            UPDATE checkout_sessions
             SET status = 'expired', completed_at = datetime('now')
             WHERE checkout_id = ?
           `).bind(checkout.checkout_id).run();
-          deleted++;
-          console.log('🗑️ Expired checkout deleted:', checkout.checkout_id, planDeleted ? 'and plan cleaned up' : '');
-        } else {
-          failed++;
+          return { success: true, id: checkout.checkout_id };
         }
-      } catch (e) {
-        failed++;
-        console.error('Failed to delete checkout:', checkout.checkout_id, e);
-      }
+        return { success: false, id: checkout.checkout_id };
+      }));
+
+      results.forEach(r => {
+        if (r.status === 'fulfilled' && r.value.success) deleted++;
+        else failed++;
+      });
     }
-    
+
     return json({
       success: true,
-      deleted: deleted,
-      failed: failed,
+      deleted,
+      failed,
       message: `Cleaned up ${deleted} expired checkouts`
     });
   } catch (e) {
