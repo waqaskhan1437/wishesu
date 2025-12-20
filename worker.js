@@ -3123,7 +3123,10 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
         
         // For HTML pages with schema placeholders, inject server-side schemas
         const contentType = assetResp.headers.get('content-type') || '';
-        const isHTML = contentType.includes('text/html');
+        // The product template is stored as a .tpl asset to avoid Clean URL redirects.
+        // ASSETS may serve unknown extensions as application/octet-stream, which makes
+        // browsers download it instead of rendering. Treat the template as HTML.
+        const isHTML = contentType.includes('text/html') || assetPath === '/_product_template.tpl';
         const isSuccess = assetResp.status === 200;
         
         if (isHTML && isSuccess) {
@@ -3201,6 +3204,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             headers.set('Pragma', 'no-cache');
             headers.set('X-Worker-Version', VERSION);
             headers.set('Content-Type', 'text/html; charset=utf-8');
+            headers.set('Content-Disposition', 'inline');
             
             return new Response(html, {
               status: assetResp.status,
@@ -3217,6 +3221,12 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
         headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         headers.set('Pragma', 'no-cache');
         headers.set('X-Worker-Version', VERSION);
+        // Safety: if the product template ever falls through here (e.g. schema injection error),
+        // ensure the browser renders it instead of downloading.
+        if (assetPath === '/_product_template.tpl') {
+          headers.set('Content-Type', 'text/html; charset=utf-8');
+          headers.set('Content-Disposition', 'inline');
+        }
         return new Response(assetResp.body, { status: assetResp.status, headers });
       }
 
