@@ -1,6 +1,7 @@
 /*
-  * Instant File Upload - Direct to Archive.org
-  * Zero Worker CPU - Browser uploads directly to Archive.org
+  * Instant File Upload
+  * Photos → R2 (fast, free tier)
+  * Videos → Archive.org (unlimited, streaming)
   */
 
 (function() {
@@ -9,7 +10,6 @@
 
   initFileUploads();
 
-  // Disable/Enable checkout button during upload
   function setCheckoutButtonState(disabled) {
     const btn = document.getElementById('checkout-btn');
     if (btn) {
@@ -21,32 +21,21 @@
 
   function initFileUploads() {
     document.addEventListener('change', handleFileChange, true);
-
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === 1) {
-            // Watch for new file inputs
-          }
-        });
-      });
-    });
-
+    const observer = new MutationObserver(() => {});
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
   function handleFileChange(e) {
     if (e.target && e.target.type === 'file' && e.target.files.length > 0) {
       const file = e.target.files[0];
+      const isVideo = file.type.startsWith('video/') || file.name.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|m4v|flv|wmv)$/);
 
-      // Validate file size
-      const isVideo = file.name.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|m4v|flv|wmv)$/);
+      // Size limits
       const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
       const maxSizeLabel = isVideo ? '500MB' : '10MB';
 
       if (file.size > maxSize) {
-        const sizeMB = (file.size / 1024 / 1024).toFixed(2);
-        alert(`File too large: ${sizeMB}MB\n\nMaximum size: ${maxSizeLabel}`);
+        alert(`File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB\nMaximum: ${maxSizeLabel}`);
         e.target.value = '';
         return;
       }
@@ -55,7 +44,13 @@
       e.target.id = inputId;
 
       showPreview(e.target, file);
-      uploadToArchive(inputId, file);
+
+      // Route based on file type
+      if (isVideo) {
+        uploadToArchive(inputId, file);
+      } else {
+        uploadToR2(inputId, file);
+      }
     }
   }
 
@@ -96,68 +91,115 @@
     }
   }
 
+  // Upload Photos to R2 (fast, free tier 10GB)
+  async function uploadToR2(inputId, file) {
+    activeUploads++;
+    setCheckoutButtonState(true);
+
+    try {
+      const sessionId = 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      const filename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+      const uploadUrl = `/api/upload/temp-file?sessionId=${encodeURIComponent(sessionId)}&filename=${encodeURIComponent(filename)}`;
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' }
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Upload failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Upload failed');
+
+      const finalUrl = `/api/r2/file?key=${encodeURIComponent(data.tempUrl.replace('r2://', ''))}`;
+
+      uploadQueue.set(inputId, {
+        fileName: file.name,
+        status: 'uploaded',
+        url: finalUrl,
+        storage: 'r2'
+      });
+
+      updatePreviewSuccess(inputId, file);
+
+    } catch (err) {
+      console.error('R2 upload failed:', err);
+      uploadQueue.set(inputId, { status: 'failed', error: err.message });
+      updatePreviewError(inputId, file, err.message);
+    } finally {
+      activeUploads--;
+      if (activeUploads <= 0) {
+        activeUploads = 0;
+        setCheckoutButtonState(false);
+      }
+    }
+  }
+
+  // Upload Videos to Archive.org (unlimited, streaming)
   async function uploadToArchive(inputId, file) {
     activeUploads++;
     setCheckoutButtonState(true);
 
     try {
-      // Step 1: Get upload credentials from worker (lightweight - no file data)
+      // Get credentials from worker (lightweight call)
+      const credResponse = await fetch('/api/upload/archive-credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+
+      if (!credResponse.ok) throw new Error('Failed to get upload credentials');
+
+      const creds = await credResponse.json();
+      if (!creds.success) throw new Error(creds.error || 'Credentials error');
+
+      // Generate unique item ID
       const timestamp = Date.now();
       const randomStr = Math.random().toString(36).substr(2, 9);
       const itemId = `wishesu_${timestamp}_${randomStr}`;
       const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
 
-      const credResponse = await fetch('/api/upload/archive-credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId, filename: safeFilename })
-      });
-
-      if (!credResponse.ok) {
-        throw new Error('Failed to get upload credentials');
-      }
-
-      const creds = await credResponse.json();
-      if (!creds.success) {
-        throw new Error(creds.error || 'Failed to get credentials');
-      }
-
-      // Step 2: Upload DIRECTLY to Archive.org from browser (Zero Worker CPU)
+      // Direct upload to Archive.org (streaming - zero worker CPU)
       const archiveUrl = `https://s3.us.archive.org/${itemId}/${safeFilename}`;
 
       const uploadResponse = await fetch(archiveUrl, {
         method: 'PUT',
         headers: {
           'Authorization': `LOW ${creds.accessKey}:${creds.secretKey}`,
-          'Content-Type': file.type || 'application/octet-stream',
+          'Content-Type': file.type || 'video/mp4',
           'x-archive-auto-make-bucket': '1',
-          'x-archive-meta-mediatype': file.type.startsWith('video/') ? 'movies' : (file.type.startsWith('image/') ? 'image' : 'data'),
-          'x-archive-meta-collection': file.type.startsWith('video/') ? 'opensource_movies' : 'opensource',
+          'x-archive-meta-mediatype': 'movies',
+          'x-archive-meta-collection': 'opensource_movies',
           'x-archive-meta-title': file.name,
-          'x-archive-meta-description': 'Uploaded via WishesU'
+          'x-archive-meta-description': 'Video uploaded via WishesU'
         },
         body: file
       });
 
       if (!uploadResponse.ok) {
         const errorText = await uploadResponse.text().catch(() => '');
-        throw new Error(`Archive.org upload failed: ${uploadResponse.status} ${errorText}`);
+        throw new Error(`Archive upload failed: ${uploadResponse.status}`);
       }
 
-      // Success - build final URL
       const finalUrl = `https://archive.org/download/${itemId}/${safeFilename}`;
 
       uploadQueue.set(inputId, {
         fileName: file.name,
         status: 'uploaded',
         url: finalUrl,
-        itemId: itemId
+        itemId: itemId,
+        storage: 'archive'
       });
 
       updatePreviewSuccess(inputId, file);
 
     } catch (err) {
-      console.error('Upload failed:', err);
+      console.error('Archive upload failed:', err);
       uploadQueue.set(inputId, { status: 'failed', error: err.message });
       updatePreviewError(inputId, file, err.message);
     } finally {
