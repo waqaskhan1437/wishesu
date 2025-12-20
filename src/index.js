@@ -1,7 +1,7 @@
 // Main Cloudflare Worker entry point
 import { initDB } from './db/init.js';
 import { json } from './utils/response.js';
-import { escapeHtml, slugifyStr, canonicalProductPath, generateProductSchema, injectSchemaIntoHTML } from './utils/helpers.js';
+import { escapeHtml, slugifyStr, canonicalProductPath, generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from './utils/helpers.js';
 
 // Import controllers
 import * as productsController from './controllers/products.js';
@@ -40,6 +40,16 @@ export default {
     try {
       const staticAsset = await env.ASSETS.fetch(request);
       if (!staticAsset.ok) {
+        // Try to serve index.html for SPA routing (for pages like /products-grid)
+        if (url.pathname !== '/' && !url.pathname.includes('.')) {
+          const indexResponse = await env.ASSETS.fetch(new Request(url.origin + '/', request));
+          if (indexResponse.ok) {
+            let response = new Response(indexResponse.body, indexResponse);
+            response.headers.set('Cache-Control', 'public, max-age=86400');
+            response.headers.set('X-Worker-Version', VERSION);
+            return response;
+          }
+        }
         // Not a static asset, continue to API routes
         throw new Error('Not a static asset');
       }
@@ -60,31 +70,43 @@ export default {
       // Add version header
       response.headers.set('X-Worker-Version', VERSION);
 
-      // SEO Schema injection for product pages
-      if (path.startsWith('/product-')) {
+      // SEO Schema injection for product pages and collection pages
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('text/html')) {
         try {
-          // Extract product ID from path
-          const match = path.match(/\/product-(\d+)\//);
-          if (match) {
-            const productId = parseInt(match[1], 10);
-            const contentType = response.headers.get('content-type') || '';
+          const html = await response.text();
+          const baseUrl = url.origin;
+          let modifiedHtml = html;
 
-            // Only process HTML responses
-            if (contentType.includes('text/html')) {
+          // Product schema injection for individual product pages
+          if (path.startsWith('/product-')) {
+            const match = path.match(/\/product-(\d+)\//);
+            if (match) {
+              const productId = parseInt(match[1], 10);
               const product = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(productId).first();
               
               if (product) {
-                const html = await response.text();
-                const schema = generateProductSchema(product);
-                const modifiedHtml = injectSchemaIntoHTML(html, schema);
-                
-                return new Response(modifiedHtml, {
-                  status: response.status,
-                  headers: response.headers
-                });
+                const schema = generateProductSchema(product, baseUrl);
+                modifiedHtml = injectSchemaIntoHTML(html, 'product-schema', schema);
               }
             }
           }
+          // Collection schema injection for main products page
+          else if (path === '/' || path === '/index.html' || path === '/products-grid.html') {
+            const productsResult = await env.DB.prepare(
+              'SELECT id, title, slug, description, thumbnail_url, sale_price, normal_price, instant_delivery, rating_average, review_count FROM products WHERE status = ? ORDER BY sort_order ASC, id DESC LIMIT 50'
+            ).bind('active').all();
+            
+            if (productsResult.results && productsResult.results.length > 0) {
+              const schema = generateCollectionSchema(productsResult.results, baseUrl);
+              modifiedHtml = injectSchemaIntoHTML(html, 'collection-schema', schema);
+            }
+          }
+
+          return new Response(modifiedHtml, {
+            status: response.status,
+            headers: response.headers
+          });
         } catch (e) {
           console.error('Schema injection error:', e);
           // Return original response if injection fails
@@ -94,7 +116,46 @@ export default {
 
       return response;
     } catch (staticError) {
-      // Not a static asset, continue to API routes
+      // Check if this is a page route that should serve static files
+      const pageRoutes = [
+        '/products-grid',
+        '/page-builder',
+        '/success',
+        '/order-success',
+        '/buyer-order',
+        '/order-detail'
+      ];
+      
+      // Try to serve the corresponding .html file for common page routes
+      if (pageRoutes.some(route => url.pathname.startsWith(route)) || 
+          url.pathname === '/' || 
+          url.pathname.endsWith('.html')) {
+        
+        let filePath = url.pathname;
+        
+        // Handle root path
+        if (filePath === '/') {
+          filePath = '/index.html';
+        }
+        // Add .html extension if missing for page routes
+        else if (!filePath.endsWith('.html') && !filePath.includes('.')) {
+          filePath = filePath + '.html';
+        }
+        
+        try {
+          const pageResponse = await env.ASSETS.fetch(new Request(url.origin + filePath, request));
+          if (pageResponse.ok) {
+            let response = new Response(pageResponse.body, pageResponse);
+            response.headers.set('Cache-Control', 'public, max-age=86400');
+            response.headers.set('X-Worker-Version', VERSION);
+            return response;
+          }
+        } catch (pageError) {
+          console.error('Page serving error:', pageError);
+        }
+      }
+      
+      // If we get here, continue to API routes
     }
 
     // Enable CORS for all API routes
