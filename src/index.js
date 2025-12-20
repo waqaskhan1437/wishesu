@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker - Main Entry Point
+ * Cloudflare Worker - Main Entry Point with HTML Caching
  * Modular ES Module Structure
  */
 
@@ -14,7 +14,7 @@ import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML }
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     // Normalize the request path
     let path = url.pathname.replace(/\/+/g, '/');
@@ -101,7 +101,7 @@ export default {
         }
       }
 
-      // ----- STATIC ASSETS WITH SERVER-SIDE SCHEMA INJECTION -----
+      // ----- STATIC ASSETS WITH SERVER-SIDE SCHEMA INJECTION & CACHING -----
       if (env.ASSETS) {
         let assetReq = req;
         let assetPath = path;
@@ -128,6 +128,34 @@ export default {
         const contentType = assetResp.headers.get('content-type') || '';
         const isHTML = contentType.includes('text/html') || assetPath === '/_product_template.tpl';
         const isSuccess = assetResp.status === 200;
+        
+        // Caching: Only cache HTML pages, never admin routes
+        const shouldCache = isHTML && isSuccess && !path.startsWith('/admin') && !path.includes('/admin/');
+        const cacheKey = new Request(req.url, { 
+          method: 'GET',
+          headers: { 'Accept': 'text/html' }
+        });
+
+        if (shouldCache) {
+          try {
+            // Check cache first
+            const cachedResponse = await caches.default.match(cacheKey);
+            if (cachedResponse) {
+              console.log('Cache HIT for:', req.url);
+              const headers = new Headers(cachedResponse.headers);
+              headers.set('X-Cache', 'HIT');
+              headers.set('X-Worker-Version', VERSION);
+              return new Response(cachedResponse.body, { 
+                status: cachedResponse.status, 
+                headers 
+              });
+            }
+            console.log('Cache MISS for:', req.url);
+          } catch (cacheError) {
+            console.warn('Cache check failed:', cacheError);
+            // Continue with normal processing if cache fails
+          }
+        }
         
         if (isHTML && isSuccess) {
           try {
@@ -187,11 +215,34 @@ export default {
             
             const headers = new Headers();
             headers.set('Content-Type', 'text/html; charset=utf-8');
-            headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-            headers.set('Pragma', 'no-cache');
             headers.set('X-Worker-Version', VERSION);
+            headers.set('X-Cache', 'MISS');
             
-            return new Response(html, { status: 200, headers });
+            const response = new Response(html, { status: 200, headers });
+            
+            // Cache the response for non-admin pages (5 minutes TTL)
+            if (shouldCache) {
+              try {
+                const cacheResponse = new Response(html, {
+                  status: 200,
+                  headers: {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'Cache-Control': 'public, max-age=300', // 5 minutes
+                    'X-Worker-Version': VERSION,
+                    'X-Cache-Created': new Date().toISOString()
+                  }
+                });
+                
+                // Store in cache asynchronously
+                ctx.waitUntil(caches.default.put(cacheKey, cacheResponse));
+                console.log('Cached response for:', req.url);
+              } catch (cacheError) {
+                console.warn('Cache storage failed:', cacheError);
+                // Continue even if caching fails
+              }
+            }
+            
+            return response;
           } catch (e) {
             console.error('Schema injection error:', e);
           }

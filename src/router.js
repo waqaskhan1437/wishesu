@@ -1,5 +1,5 @@
 /**
- * Router - Route matching logic
+ * Router - Route matching logic with Zero-CPU Upload Support
  * Optimized: DB initialization performed once at top level for all /api/ routes
  */
 
@@ -80,9 +80,8 @@ import {
   purgeCache, 
   getWhopSettings, 
   saveWhopSettings, 
-  uploadTempFile, 
+  getPresignedR2Url,
   getR2File, 
-  uploadCustomerFile, 
   uploadEncryptedFile 
 } from './controllers/admin.js';
 
@@ -113,6 +112,11 @@ export async function routeApiRequest(req, env, url, path, method) {
     return testWhopWebhook();
   }
 
+  // ----- ZERO-CPU DIRECT UPLOAD ROUTES -----
+  if (method === 'GET' && path === '/api/upload/presign-r2') {
+    return getPresignedR2Url(env, url);
+  }
+
   // ----- ALL OTHER API ROUTES REQUIRE DB -----
   // Consolidated DB check - performed once for all routes below
   if (!path.startsWith('/api/')) {
@@ -123,7 +127,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return json({ error: 'Database not configured' }, 500);
   }
   
-  // Initialize DB once for all subsequent routes
+  // Initialize DB once for all subsequent routes (optimization)
   await initDB(env);
 
   // ----- CHAT APIs -----
@@ -360,18 +364,10 @@ export async function routeApiRequest(req, env, url, path, method) {
     return loadPageBuilder(env, name);
   }
 
-  // ----- R2 UPLOAD -----
-  if (method === 'POST' && path === '/api/upload/temp-file') {
-    return uploadTempFile(env, req, url);
-  }
-
+  // ----- R2 FILE ACCESS -----
   if (method === 'GET' && path === '/api/r2/file') {
     const key = url.searchParams.get('key');
     return getR2File(env, key);
-  }
-
-  if (method === 'POST' && path === '/api/upload/customer-file') {
-    return uploadCustomerFile(env, req, url);
   }
 
   // API endpoint not found
