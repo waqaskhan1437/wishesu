@@ -1,0 +1,50 @@
+      "position": index + 1,
+      "url": `${baseUrl}${canonicalProductPath(product)}`,
+      "item": {
+        "@type": "Product",
+        "@id": `${baseUrl}${canonicalProductPath(product)}`,
+        "name": product.title,
+        "description": product.description || product.title,
+        "image": product.thumbnail_url || `${baseUrl}/placeholder.jpg`,
+        "brand": {
+          "@type": "Brand",
+          "name": "WishVideo"
+        },
+        "offers": generateOfferObject(product, baseUrl)
+      }
+    };
+
+    // Add aggregateRating (always present for better Rich Results)
+    item.item.aggregateRating = {
+      "@type": "AggregateRating",
+      "ratingValue": parseFloat(product.rating_average) || 5.0,
+      "reviewCount": Math.max(1, parseInt(product.review_count) || 1),
+      "bestRating": 5,
+      "worstRating": 1
+    };
+
+    return item;
+  });
+
+  const schema = {
+    "@context": "https://schema.org/",
+    "@type": "ItemList",
+    "itemListElement": itemListElement
+  };
+
+  return JSON.stringify(schema);
+}
+
+/**
+ * Inject schema into HTML by replacing placeholder
+ * @param {string} html - Original HTML content
+ * @param {string} schemaId - ID of schema tag (product-schema or collection-schema)
+ * @param {string} schemaJson - JSON-LD schema string
+ * @returns {string} Modified HTML with schema injected
+ */
+export function injectSchemaIntoHTML(html, schemaId, schemaJson) {
+  // Replace empty schema placeholder with actual data
+  const placeholder = `<script type="application/ld+json" id="${schemaId}">{}</script>`;
+  const replacement = `<script type="application/ld+json" id="${schemaId}">${schemaJson}</script>`;
+  return html.replace(placeholder, replacement);
+}
