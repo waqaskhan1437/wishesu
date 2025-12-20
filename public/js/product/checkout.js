@@ -121,10 +121,12 @@
     const selectedAddons = [];
 
     console.log('🔵 Form element found:', !!formEl);
+    console.log('🔵 Form innerHTML preview:', formEl ? formEl.innerHTML.substring(0, 500) : 'N/A');
 
     if (formEl) {
       // Method 1: FormData
       const formData = new FormData(formEl);
+      console.log('🔵 FormData entries count:', [...formData.entries()].length);
       console.log('🔵 FormData entries:');
       for (const pair of formData.entries()) {
         const key = pair[0];

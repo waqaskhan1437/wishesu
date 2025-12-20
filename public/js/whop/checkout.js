@@ -120,9 +120,11 @@
   /**
    * Handle successful checkout: Save Order -> Redirect
    */
-  async function handleComplete() {
-    console.log('🎉 WHOP CHECKOUT COMPLETE!');
+  async function handleComplete(checkoutData) {
+    console.log('🎉🎉🎉 WHOP CHECKOUT COMPLETE CALLBACK FIRED! 🎉🎉🎉');
+    console.log('📦 Checkout data from Whop:', checkoutData);
     console.log('📦 Pending order data:', pendingOrderData);
+    console.log('📦 Saved addons backup:', savedAddons);
     
     const overlay = document.getElementById('whop-overlay');
     
