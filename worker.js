@@ -1420,10 +1420,10 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             plan_type: 'one_time',
             release_method: 'buy_now',
             currency: currency,
-            initial_price: priceValue,
+            initial_price: finalAmount,
             // Do NOT set renewal_price for one_time plans - it causes error
             // Provide a default title for the plan so the seller can see it in their dashboard
-            title: `${product.title || 'One‑time purchase'} - $${priceValue}`,
+            title: `${product.title || 'One‑time purchase'} - $${finalAmount}`,
             // Set unlimited stock to prevent "out of stock" errors
             stock: 999999,
             internal_notes: `Auto-generated for product ${product.id} - ${new Date().toISOString()}`

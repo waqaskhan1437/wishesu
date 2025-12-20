@@ -55,14 +55,15 @@
     inputs.forEach(el => {
       if (el.dataset.price) addonTotal += parseFloat(el.dataset.price);
     });
-    window.currentTotal = window.basePrice + addonTotal;
+    window.currentTotal = (Number(window.basePrice)||0) + addonTotal;
     const btn = document.getElementById('checkout-btn');
     if (btn) btn.textContent = 'Checkout - $' + window.currentTotal.toLocaleString();
   }
 
   async function handleCheckout() {
-
-    const btn = document.getElementById('checkout-btn');
+    
+    try { if (typeof updateTotal === "function") updateTotal(); } catch (e) {}
+const btn = document.getElementById('checkout-btn');
     if (!btn) {
       console.error('🔴 CHECKOUT BUTTON NOT FOUND');
       return;
@@ -90,7 +91,6 @@
       alert('Please fill required fields');
       return;
     }
-
     const originalText = btn.textContent;
     
     // Show loading spinner
@@ -204,8 +204,6 @@
     const emailInput = document.querySelector('#addons-form input[type="email"]');
     if (emailInput && emailInput.value.includes('@')) email = emailInput.value.trim();
     if (email) syncEmailToWhop(email);
-
-
     try {
       // Call dynamic plan creation endpoint
       const response = await fetch('/api/whop/create-plan-checkout', {
@@ -222,9 +220,7 @@
           }
         })
       });
-
       const data = await response.json();
-
       if (!response.ok || data.error) {
         console.error('🔴 Checkout creation failed:', data);
         let errorMsg = 'Failed to create checkout';
@@ -248,15 +244,12 @@
         btn.textContent = originalText;
         return;
       }
-
-
       // Reset button
       btn.disabled = false;
       btn.textContent = originalText;
 
       // Always use embedded popup with email prefill
       if (typeof window.whopCheckout === 'function') {
-        
         // Show email prefill status
         if (data.email_prefilled) {
           btn.textContent = '✅ Email Auto-filled! Opening checkout...';

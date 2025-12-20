@@ -199,7 +199,6 @@
    * Handle successful checkout: Save Order -> Redirect
    */
   async function handleComplete() {
-    
     const overlay = document.getElementById('whop-overlay');
     
     // User ko batayen ke order save ho raha hai
@@ -217,7 +216,6 @@
 
         // Get uploaded files
         const uploadedFiles = window.getUploadedFiles ? window.getUploadedFiles() : {};
-
         // Get addons from pending order data
         const addons = pendingOrderData?.metadata?.addons || [];
 
@@ -226,8 +224,6 @@
             // Remove any addon that's a file input (will be replaced with actual URL)
             return !uploadedFiles.hasOwnProperty(a.field);
         });
-
-
         // Add uploaded file URLs to addons in proper format
         Object.keys(uploadedFiles).forEach(inputId => {
             const fileUrl = uploadedFiles[inputId];
@@ -239,8 +235,6 @@
                 });
             }
         });
-
-
         // Calculate delivery time based on selected delivery option
         let deliveryTime = 2880; // Default: 48 hours (2 days);
         const deliveryAddon = nonFileAddons.find(a => a.field === 'delivery-time');
@@ -256,7 +250,6 @@
                 deliveryTime = 2880; // 48 hours (2 days)
             }
         }
-
         // Data prepare karein
         const payload = {
             // Check metadata.product_id (from backend), metadata.productId, or root productId
@@ -266,17 +259,13 @@
             addons: nonFileAddons, // Includes uploaded file URLs without duplicates
             deliveryTime: deliveryTime
         };
-
-
         // Backend API call to save order
         const res = await fetch('/api/order/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-
         const data = await res.json();
-        
         // Success: Redirect DIRECTLY to buyer order page
         if (data && data.orderId) {
             // Direct buyer order page pe redirect
@@ -296,7 +285,6 @@
    * Main function to open the Whop checkout.
    */
   async function openCheckout(opts = {}) {
-
     // 1. Store order details for later use in handleComplete
     const mergedEmail = opts.email || window.cachedAddonEmail || '';
     pendingOrderData = Object.assign({}, opts, { email: mergedEmail });
@@ -305,12 +293,10 @@
     lastAmount = Number(opts.amount || 0);
 
     const overlay = ensureOverlay();
-
     // Always show total price next to "Place Order".
     setPlaceOrderLabel(overlay, lastAmount);
 
     const globals = window.whopSettings || {};
-
     // Check if planId is directly provided (from dynamic plan creation)
     let selectedPlan = opts.planId || '';
 
@@ -319,13 +305,9 @@
       const prodMapStr = opts.productPriceMap || (window.productData && window.productData.whop_price_map) || '';
       const globalMapStr = globals.price_map || '';
       const priceMap = Object.assign({}, parseMap(globalMapStr), parseMap(prodMapStr));
-
       const defaultPlan = opts.productPlan || (window.productData && window.productData.whop_plan) || globals.default_plan_id || '';
-
       selectedPlan = choosePlan(opts.amount || 0, priceMap, defaultPlan);
     }
-
-
     if (!selectedPlan) {
       console.error('🔴 NO PLAN ID FOUND!');
       console.error('🔴 Options:', opts);
@@ -340,16 +322,12 @@
     // The email is also in `pendingOrderData` for the `handleComplete` function.
     
     const metadataStr = JSON.stringify(metadataObj);
-
     // Prepare email attribute for the embed
     const email = pendingOrderData.email || '';
     const emailAttribute = email ? `data-whop-checkout-email="${email}"` : '';
-
     // Construct the embed HTML with email attribute
     // Hide Whop's internal submit button (we use our own sticky Place Order button)
     const embed = `<div id="whop-embedded-checkout" data-whop-checkout-plan-id="${selectedPlan}" data-whop-checkout-theme="${theme}" ${emailAttribute} data-whop-checkout-hide-submit-button="true" data-whop-checkout-metadata='${metadataStr}' data-whop-checkout-on-complete="whopCheckoutComplete"></div>`;
-    
-
     const container = overlay.querySelector('.whop-container');
     if (!container) {
       console.error('🔴 WHOP CONTAINER NOT FOUND!');
@@ -358,15 +336,11 @@
     }
 
     container.innerHTML = embed;
-
     overlay.style.display = 'flex';
-
     // Attach our custom save handler to the global scope
     window.whopCheckoutComplete = handleComplete;
-
     try {
       await loadWhopScript();
-
       // The embed renders async. Hide the "Total due today" row and rely on our sticky
       // button to show the total price.
       let tries = 0;
