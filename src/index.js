@@ -64,21 +64,20 @@ export default {
       // ----- ADMIN SPA ROUTING -----
       // Handle both /admin and /admin/ and all admin sub-routes
       if ((path === '/admin' || path.startsWith('/admin/')) && !path.startsWith('/api/')) {
-        // Special handling for standalone pages that remain separate
-        // Check both with and without .html extension
-        const isProductForm = path.endsWith('/product-form.html') || path.endsWith('/product-form');
-        const isPageBuilder = path.endsWith('/page-builder.html') || path.endsWith('/page-builder');
-        const isLandingBuilder = path.endsWith('/landing-builder.html') || path.endsWith('/landing-builder');
-
-        if (isProductForm || isPageBuilder || isLandingBuilder) {
-          // Redirect to .html version if missing extension
-          if (!path.endsWith('.html')) {
-            return Response.redirect(`${url.origin}${path}.html${url.search}`, 301);
-          }
+        // Special handling for standalone pages - let .html files fall through to asset serving
+        if (path.endsWith('/product-form.html') ||
+            path.endsWith('/page-builder.html') ||
+            path.endsWith('/landing-builder.html')) {
           // Let them fall through to asset serving
-        } else {
-          // Serve the main dashboard.html for all other admin routes
-          // This includes: /admin, /admin/, /admin/dashboard.html, /admin/orders.html, etc.
+        }
+        // Redirect non-.html versions to .html
+        else if (path.endsWith('/product-form') ||
+                 path.endsWith('/page-builder') ||
+                 path.endsWith('/landing-builder')) {
+          return Response.redirect(`${url.origin}${path}.html${url.search}`, 301);
+        }
+        // Serve the main dashboard.html for all other admin routes
+        else {
           if (env.ASSETS) {
             const assetResp = await env.ASSETS.fetch(new Request(new URL('/admin/dashboard.html', req.url)));
             const headers = new Headers(assetResp.headers);
