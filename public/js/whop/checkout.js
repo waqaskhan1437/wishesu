@@ -20,67 +20,61 @@
     return `$${n.toFixed(2)}`;
   }
 
+  function getTotalDueInfo(overlay) {
+    const root = overlay?.querySelector?.('.whop-container');
+    if (!root) return null;
+
+    const needle = 'total due today';
+    const moneyRe = /\$\s*[0-9][0-9.,]*/;
+
+    let bestEl = null;
+    let bestText = '';
+
+    const nodes = root.querySelectorAll('div, span, p, strong, b, label');
+    for (const el of nodes) {
+      const raw = (el.textContent || '').trim();
+      const low = raw.toLowerCase();
+      if (!low.includes(needle)) continue;
+      if (!moneyRe.test(raw)) continue;
+
+      // Prefer the smallest/most-specific element to avoid hiding large containers.
+      if (!bestEl || raw.length < bestText.length) {
+        bestEl = el;
+        bestText = raw;
+      }
+    }
+
+    if (!bestEl) return null;
+
+    const match = bestText.match(moneyRe);
+    const priceText = match ? match[0].replace(/\s+/g, '') : null;
+
+    return { row: bestEl, priceText };
+  }
+
   function setPlaceOrderLabel(overlay, amount) {
     const btn = overlay?.querySelector?.('.whop-place-order');
     if (!btn) return;
-    const price = formatUSD(amount);
+
+    // Prefer the real total shown inside Whop UI (updates when addons change).
+    const info = getTotalDueInfo(overlay);
+    const uiPrice = info?.priceText || '';
+
+    // Fallback to passed amount only if UI total not available yet.
+    const fallback = formatUSD(amount);
+    const price = uiPrice || fallback;
+
     btn.dataset.originalLabel = 'Place Order';
     btn.textContent = price ? `Place Order · ${price}` : 'Place Order';
   }
 
   function hideTotalDueRow(overlay) {
-    // Whop embed DOM can change, so we search by text and hide the nearest row.
-    const root = overlay?.querySelector?.('.whop-container');
-    if (!root) return false;
+    const info = getTotalDueInfo(overlay);
+    if (!info?.row) return false;
 
-    const needle = 'total due today';
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
-    let node = walker.currentNode;
-    while (node) {
-      if (node instanceof HTMLElement) {
-        const text = (node.textContent || '').trim().toLowerCase();
-        if (text === needle || text.includes(needle)) {
-          // Try to hide a reasonable container (row)
-          const row = node.closest('div') || node;
-          row.style.display = 'none';
-          return true;
-        }
-      }
-      node = walker.nextNode();
-    }
-    return false;
-  }
-
-  /**
-   * Load the Whop checkout loader script.
-   */
-  function loadWhopScript() {
-    console.log('🟢 loadWhopScript: Checking if Whop already loaded...');
-    if (window.Whop) {
-      console.log('✅ Whop already loaded');
-      return Promise.resolve();
-    }
-    if (scriptPromise) {
-      console.log('⚠️ Whop script already loading, waiting...');
-      return scriptPromise;
-    }
-    console.log('🟢 Creating new script tag for Whop...');
-    scriptPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://js.whop.com/static/checkout/loader.js';
-      s.async = true;
-      s.onload = () => {
-        console.log('✅ Whop script onload fired');
-        resolve();
-      };
-      s.onerror = () => {
-        console.error('🔴 Whop script onerror fired');
-        reject(new Error('Failed to load Whop checkout'));
-      };
-      console.log('🟢 Appending Whop script to head...');
-      document.head.appendChild(s);
-    });
-    return scriptPromise;
+    const row = info.row.closest('div') || info.row;
+    row.style.display = 'none';
+    return true;
   }
 
   function parseMap(str) {
@@ -385,8 +379,15 @@
       let tries = 0;
       const interval = setInterval(() => {
         tries += 1;
+
+        // Keep updating the button label from the live Whop UI total.
+        setPlaceOrderLabel(overlay, lastAmount);
+
         const hidden = hideTotalDueRow(overlay);
-        if (hidden || tries > 40) {
+        const btn = overlay?.querySelector?.('.whop-place-order');
+        const hasPrice = btn && /\$\s*[0-9]/.test(btn.textContent || '');
+
+        if ((hidden && hasPrice) || tries > 40) {
           clearInterval(interval);
         }
       }, 150);

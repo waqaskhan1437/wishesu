@@ -56,6 +56,8 @@
 
 .whop-place-order {
   width: 100%;
+  background-color: #2563EB;
+  color: #FFFFFF;
   border: 0;
   border-radius: 10px;
   padding: 0.9rem 1rem;
@@ -65,7 +67,8 @@
 
 .whop-place-order[disabled] {
   opacity: 0.75;
-  cursor: not-allowed;
+  background-color: #2563EB;
+  cursor: not-allowedlowed;
 }
 
 .whop-header {
