@@ -376,6 +376,81 @@ export async function routeApiRequest(req, env, url, path, method) {
     return getR2File(env, key);
   }
 
+  // ----- ADMIN MAINTENANCE ENDPOINTS -----
+  if (method === 'POST' && path === '/api/admin/test-google-sync') {
+    const body = await req.json().catch(() => ({}));
+    const googleUrl = body.googleUrl;
+    if (!googleUrl) {
+      return json({ error: 'Google Web App URL required' }, 400);
+    }
+    try {
+      // Test by sending a simple ping to the Google Apps Script
+      const testRes = await fetch(googleUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ping', timestamp: Date.now() })
+      });
+      if (testRes.ok) {
+        return json({ success: true, message: 'Google Sync test successful' });
+      } else {
+        return json({ error: 'Google Apps Script returned error: ' + testRes.status });
+      }
+    } catch (err) {
+      return json({ error: 'Failed to connect: ' + err.message });
+    }
+  }
+
+  if (method === 'POST' && path === '/api/admin/clear-temp-files') {
+    try {
+      if (!env.R2_BUCKET) {
+        return json({ success: true, count: 0, message: 'R2 not configured' });
+      }
+      // List and delete temp files (files starting with 'temp/')
+      const listed = await env.R2_BUCKET.list({ prefix: 'temp/', limit: 100 });
+      let count = 0;
+      for (const obj of listed.objects || []) {
+        await env.R2_BUCKET.delete(obj.key);
+        count++;
+      }
+      return json({ success: true, count });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
+  if (method === 'POST' && path === '/api/admin/clear-pending-checkouts') {
+    try {
+      // Delete pending checkouts older than 24 hours
+      const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+      const result = await env.DB.prepare(
+        'DELETE FROM pending_checkouts WHERE created_at < ?'
+      ).bind(cutoff).run();
+      return json({ success: true, count: result.changes || 0 });
+    } catch (err) {
+      // Table might not exist, that's okay
+      return json({ success: true, count: 0, message: 'No pending checkouts table or already empty' });
+    }
+  }
+
+  if (method === 'GET' && path === '/api/admin/export-data') {
+    try {
+      // Export all data for Google Sheets integration
+      const products = await env.DB.prepare('SELECT * FROM products').all();
+      const orders = await env.DB.prepare('SELECT * FROM orders').all();
+      const reviews = await env.DB.prepare('SELECT * FROM reviews').all();
+      return json({
+        success: true,
+        data: {
+          products: products.results || [],
+          orders: orders.results || [],
+          reviews: reviews.results || []
+        }
+      });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
   // API endpoint not found
   return json({ error: 'API endpoint not found', path, method }, 404);
 }
