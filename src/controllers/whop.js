@@ -142,10 +142,16 @@ export async function createPlanCheckout(env, body, origin) {
     return json({ error: 'Product not found' }, 404);
   }
 
-  // Determine the price to charge
-  const priceValue = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
+  // Determine the base price
+  const basePrice = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
     ? Number(product.sale_price)
     : Number(product.normal_price);
+
+  // Use the amount from frontend (includes addons) if provided, otherwise use base price
+  // Frontend sends window.currentTotal which is basePrice + addon prices
+  const priceValue = (amount !== null && amount !== undefined && !isNaN(Number(amount)) && Number(amount) > 0)
+    ? Number(amount)
+    : basePrice;
 
   if (isNaN(priceValue) || priceValue < 0) {
     return json({ error: 'Invalid price for product' }, 400);
