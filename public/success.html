@@ -167,20 +167,81 @@
   </div>
 
   <script>
-    // Get product ID from URL if available
-    const urlParams = new URLSearchParams(window.location.search);
-    const productId = urlParams.get('product');
-    
-    // Generate order ID for display
-    const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-    document.getElementById('orderId').textContent = orderId;
-    
-    // Log for analytics
-    console.log('Payment success:', {
-      product: productId,
-      orderId: orderId,
-      timestamp: new Date().toISOString()
-    });
+    (async function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const productId = urlParams.get('product');
+
+      console.log('🎉 Success page loaded');
+
+      // Check localStorage for pending order data
+      let orderData = null;
+      try {
+        const stored = localStorage.getItem('pendingOrderData');
+        if (stored) {
+          orderData = JSON.parse(stored);
+          console.log('📦 Found pending order data:', orderData);
+          localStorage.removeItem('pendingOrderData'); // Clear after use
+        }
+      } catch (e) {
+        console.error('Failed to parse localStorage:', e);
+      }
+
+      // If we have order data, create the order
+      if (orderData && orderData.addons && orderData.addons.length > 0) {
+        console.log('🚀 Creating order with addons...');
+
+        // Calculate delivery time
+        let deliveryTime = 2880; // Default 48 hours
+        const deliveryAddon = orderData.addons.find(a => a.field === 'delivery-time');
+        if (deliveryAddon) {
+          const v = (deliveryAddon.value || '').toLowerCase();
+          if (v.includes('instant') || v.includes('60')) deliveryTime = 60;
+          else if (v.includes('24') || v.includes('express')) deliveryTime = 1440;
+          else if (v.includes('48') || v.includes('2 day')) deliveryTime = 2880;
+        }
+
+        const payload = {
+          productId: orderData.productId || productId || 1,
+          amount: orderData.amount || 0,
+          email: orderData.email || '',
+          addons: orderData.addons,
+          deliveryTime: deliveryTime
+        };
+
+        console.log('📤 Sending to API:', payload);
+
+        try {
+          const res = await fetch('/api/order/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+          console.log('📥 API Response:', data);
+
+          if (data && data.orderId) {
+            document.getElementById('orderId').textContent = data.orderId;
+            console.log('✅ Order created:', data.orderId);
+
+            // Redirect to buyer order page after 2 seconds
+            setTimeout(() => {
+              window.location.href = `/buyer-order?id=${data.orderId}`;
+            }, 2000);
+          } else {
+            document.getElementById('orderId').textContent = 'Order processing...';
+          }
+        } catch (err) {
+          console.error('❌ Order creation failed:', err);
+          document.getElementById('orderId').textContent = 'Error - Please contact support';
+        }
+      } else {
+        // No pending order data - just display generic success
+        const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        document.getElementById('orderId').textContent = orderId;
+        console.log('⚠️ No pending order data found in localStorage');
+      }
+    })();
   </script>
 </body>
 </html>

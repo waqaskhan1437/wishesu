@@ -29,6 +29,8 @@
   }
   // Yeh variable order ki details store karega taake completion par save kar saken
   let pendingOrderData = null;
+  // Backup storage for addons (in case metadata gets lost)
+  let savedAddons = [];
 
   let lastAmount = 0;
 
@@ -141,11 +143,21 @@
         console.log('📦 Full pendingOrderData:', JSON.stringify(pendingOrderData, null, 2));
         console.log('📦 pendingOrderData.metadata:', pendingOrderData?.metadata);
 
-        // Try to get addons from multiple sources
-        let addons = pendingOrderData?.metadata?.addons || [];
+        // Try to get addons from multiple sources (in priority order)
+        let addons = [];
 
-        // Fallback: Check localStorage if addons are empty
-        if (!addons || addons.length === 0) {
+        // Source 1: pendingOrderData.metadata.addons
+        if (pendingOrderData?.metadata?.addons?.length > 0) {
+            addons = pendingOrderData.metadata.addons;
+            console.log('📦 Addons from metadata:', addons.length);
+        }
+        // Source 2: savedAddons (backup variable)
+        else if (savedAddons && savedAddons.length > 0) {
+            addons = savedAddons;
+            console.log('📦 Addons from savedAddons backup:', addons.length);
+        }
+        // Source 3: localStorage
+        else {
             try {
                 const storedData = localStorage.getItem('pendingOrderData');
                 if (storedData) {
@@ -153,6 +165,7 @@
                     console.log('📦 Found stored order data in localStorage:', parsed);
                     if (parsed.addons && parsed.addons.length > 0) {
                         addons = parsed.addons;
+                        console.log('📦 Addons from localStorage:', addons.length);
                         // Also update email/amount if missing
                         if (!pendingOrderData.email && parsed.email) {
                             pendingOrderData.email = parsed.email;
@@ -249,6 +262,10 @@
     // 1. Store order details for later use in handleComplete
     const mergedEmail = opts.email || window.cachedAddonEmail || '';
     pendingOrderData = Object.assign({}, opts, { email: mergedEmail });
+
+    // Save addons separately as backup
+    savedAddons = opts.metadata?.addons || [];
+    console.log('🔵 Saved addons backup:', savedAddons.length, 'items');
 
     // Keep the latest calculated total so we can show it on the sticky button.
     lastAmount = Number(opts.amount || 0);
