@@ -2016,55 +2016,43 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
           return json({ success: true, orderId });
         }
 
-        // Buyer video download (force attachment download instead of opening a player tab)
-        if (method === 'GET' && /^\/api\/order\/buyer\/[^\/]+\/download$/.test(path)) {
-          const parts = path.split('/');
-          const orderId = parts[parts.length - 2];
+        
+        // Buyer video download (force attachment via same-origin stream)
+        // GET /api/order/buyer/<ORDER_ID>/download
+        if (method === 'GET' && path.match(/^\/api\/order\/buyer\/[^\/]+\/download$/)) {
+          const orderId = path.split('/').slice(-2)[0];
+          const row = await env.DB.prepare('SELECT delivered_video_url FROM orders WHERE order_id = ?')
+            .bind(orderId).first();
 
-          const row = await env.DB.prepare(
-            'SELECT order_id, status, delivered_video_url FROM orders WHERE order_id = ?'
-          ).bind(orderId).first();
+          if (!row || !row.delivered_video_url) return json({ error: 'Video not found' }, 404);
 
-          if (!row) return new Response('Order not found', { status: 404 });
-          if (row.status !== 'delivered' || !row.delivered_video_url) {
-            return new Response('Video not available', { status: 404 });
-          }
-
-          const videoUrl = row.delivered_video_url;
-
-          // Do not attempt to "download" external embeds
-          const lower = String(videoUrl).toLowerCase();
-          if (lower.includes('youtube.com') || lower.includes('youtu.be') || lower.includes('vimeo.com')) {
-            return Response.redirect(videoUrl, 302);
-          }
-
-          // Pass through Range headers for better compatibility with large files
+          // Pass through Range header if present (some browsers request partial content)
+          const upstreamHeaders = new Headers();
           const range = req.headers.get('Range');
-          const upstream = await fetch(videoUrl, {
-            headers: range ? { 'Range': range } : undefined
+          if (range) upstreamHeaders.set('Range', range);
+
+          const upstreamResp = await fetch(row.delivered_video_url, { headers: upstreamHeaders });
+
+          const outHeaders = new Headers(upstreamResp.headers);
+
+          // Force download in browser
+          outHeaders.set('Content-Disposition', `attachment; filename="wishvideo-${orderId}.mp4"`);
+          // Ensure content-type
+          if (!outHeaders.get('Content-Type')) outHeaders.set('Content-Type', 'video/mp4');
+
+          // Do not cache user downloads
+          outHeaders.set('Cache-Control', 'no-store');
+
+          // Avoid content-encoding issues when proxying
+          outHeaders.delete('Content-Encoding');
+
+          return new Response(upstreamResp.body, {
+            status: upstreamResp.status,
+            headers: outHeaders
           });
-
-          if (!upstream.ok) {
-            return new Response('Failed to fetch video', { status: 502 });
-          }
-
-          const contentType = upstream.headers.get('Content-Type') || 'application/octet-stream';
-          const dispositionName = `wishvideo-order-${orderId}`;
-          const ext = contentType.includes('mp4') ? 'mp4'
-            : contentType.includes('webm') ? 'webm'
-            : contentType.includes('quicktime') ? 'mov'
-            : 'bin';
-
-          const headers = new Headers(upstream.headers);
-          headers.set('Content-Type', contentType);
-          headers.set('Content-Disposition', `attachment; filename="${dispositionName}.${ext}"`);
-          // Ensure this response isn't cached incorrectly
-          headers.set('Cache-Control', 'no-store');
-
-          return new Response(upstream.body, { status: upstream.status, headers });
         }
 
-        if (method === 'GET' && path.startsWith('/api/order/buyer/')) {
+if (method === 'GET' && path.startsWith('/api/order/buyer/')) {
            const orderId = path.split('/').pop();
            const row = await env.DB.prepare(
              'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'

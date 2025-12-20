@@ -77,13 +77,10 @@
     // Prefer the real total shown inside Whop UI (updates when addons change).
     const info = getTotalDueInfo(overlay);
     const uiPrice = info?.priceText || '';
-    // Whop/Stripe sometimes shows $0.00 briefly while calculating.
-    // Treat that as "not ready" so we can fall back to the real amount.
-    const uiReady = uiPrice && uiPrice !== '$0.00';
 
     // Fallback to passed amount only if UI total not available yet.
     const fallback = formatUSD(amount);
-    const price = uiReady ? uiPrice : fallback;
+    const price = uiPrice || fallback;
 
     btn.dataset.originalLabel = 'Place Order';
     btn.textContent = price ? `Place Order · ${price}` : 'Place Order';

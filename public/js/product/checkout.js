@@ -288,9 +288,6 @@
           email: data.email || email,
           metadata: data.metadata,
           productId: data.product_id,
-          // Pass the latest calculated total so the embedded modal can display
-          // the correct price next to our sticky "Place Order" button.
-          amount: window.currentTotal,
           checkoutUrl: data.checkout_url // Pass checkout URL for embedded popup
         });
       } 
