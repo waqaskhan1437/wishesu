@@ -140,8 +140,39 @@
         // Get addons from pending order data (already includes photo URLs from checkout.js)
         console.log('📦 Full pendingOrderData:', JSON.stringify(pendingOrderData, null, 2));
         console.log('📦 pendingOrderData.metadata:', pendingOrderData?.metadata);
-        const addons = pendingOrderData?.metadata?.addons || [];
-        console.log('📦 Addons array:', addons.length, 'items:', addons);
+
+        // Try to get addons from multiple sources
+        let addons = pendingOrderData?.metadata?.addons || [];
+
+        // Fallback: Check localStorage if addons are empty
+        if (!addons || addons.length === 0) {
+            try {
+                const storedData = localStorage.getItem('pendingOrderData');
+                if (storedData) {
+                    const parsed = JSON.parse(storedData);
+                    console.log('📦 Found stored order data in localStorage:', parsed);
+                    if (parsed.addons && parsed.addons.length > 0) {
+                        addons = parsed.addons;
+                        // Also update email/amount if missing
+                        if (!pendingOrderData.email && parsed.email) {
+                            pendingOrderData.email = parsed.email;
+                        }
+                        if (!pendingOrderData.amount && parsed.amount) {
+                            pendingOrderData.amount = parsed.amount;
+                        }
+                        if (!pendingOrderData.productId && parsed.productId) {
+                            pendingOrderData.productId = parsed.productId;
+                        }
+                    }
+                    // Clear localStorage after use
+                    localStorage.removeItem('pendingOrderData');
+                }
+            } catch (e) {
+                console.log('localStorage parse error:', e);
+            }
+        }
+
+        console.log('📦 Final Addons array:', addons.length, 'items:', addons);
 
         // Calculate delivery time based on selected delivery option
         let deliveryTime = 2880; // Default: 48 hours (2 days);
@@ -166,9 +197,16 @@
             productId: pendingOrderData?.metadata?.product_id || pendingOrderData?.metadata?.productId || pendingOrderData?.productId || 1,
             amount: pendingOrderData?.amount || 0,
             email: pendingOrderData?.email || '',
-            addons: addons, // Already includes photo URLs from checkout.js
+            addons: addons, // Includes photo URLs and form data
             deliveryTime: deliveryTime
         };
+
+        // Final validation - make sure we have addons
+        if (!payload.addons || payload.addons.length === 0) {
+            console.warn('⚠️ No addons found in payload!');
+        } else {
+            console.log('✅ Payload has', payload.addons.length, 'addons');
+        }
 
         console.log('🚀 Sending to API:', payload);
 

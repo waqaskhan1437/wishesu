@@ -255,6 +255,17 @@
           }, 2000);
         }
 
+        // Store addons in localStorage as backup (in case Whop redirects before callback)
+        const orderData = {
+          addons: selectedAddons,
+          email: data.email || email,
+          amount: window.currentTotal,
+          productId: data.product_id || window.productData.id,
+          timestamp: Date.now()
+        };
+        localStorage.setItem('pendingOrderData', JSON.stringify(orderData));
+        console.log('🔵 Stored order data in localStorage:', orderData);
+
         window.whopCheckout({
           planId: data.plan_id,
           email: data.email || email,
