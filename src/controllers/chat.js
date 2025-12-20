@@ -5,38 +5,7 @@
 import { json } from '../utils/response.js';
 import { escapeHtml, normalizeQuickAction } from '../utils/formatting.js';
 import { enforceUserRateLimit } from '../utils/validation.js';
-
-/**
- * Get latest order for an email address
- */
-async function getLatestOrderForEmail(env, email) {
-  const candidates = await env.DB.prepare(
-    `SELECT order_id, status, archive_url, encrypted_data, created_at
-     FROM orders
-     ORDER BY datetime(created_at) DESC
-     LIMIT 80`
-  ).all();
-
-  const list = candidates?.results || [];
-  const target = String(email || '').trim().toLowerCase();
-  if (!target) return null;
-
-  for (const o of list) {
-    try {
-      if (!o.encrypted_data) continue;
-      const data = JSON.parse(o.encrypted_data);
-      const e = String(data.email || '').trim().toLowerCase();
-      if (e && e === target) {
-        return {
-          order_id: o.order_id,
-          status: o.status,
-          trackLink: `/buyer-order.html?id=${encodeURIComponent(o.order_id)}`
-        };
-      }
-    } catch {}
-  }
-  return null;
-}
+import { getLatestOrderForEmail } from '../utils/order-helpers.js';
 
 /**
  * Start a new chat session or reuse existing one

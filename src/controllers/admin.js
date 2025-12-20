@@ -4,11 +4,9 @@
 
 import { json } from '../utils/response.js';
 import { CORS } from '../config/cors.js';
+import { VERSION } from '../config/constants.js';
 import { getMimeTypeFromFilename, resolveContentType } from '../utils/upload-helper.js';
 import { normalizeArchiveMetaValue } from '../utils/formatting.js';
-
-// Version for debug info
-const VERSION = globalThis.VERSION || "15";
 
 // Flag to track if version purge check was done
 let purgeVersionChecked = false;
@@ -251,25 +249,24 @@ export async function uploadCustomerFile(env, req, url) {
       }, 400);
     }
 
-    if (buf.byteLength === 0) {
-      console.error('Empty file');
-      return json({ error: 'Empty file - please select a valid file' }, 400);
+    if (!buf || buf.byteLength === 0) {
+      console.error('Empty file buffer');
+      return json({ error: 'Empty file' }, 400);
     }
 
     console.log('File size:', (buf.byteLength / 1024 / 1024).toFixed(2), 'MB');
 
-    // Force video MIME type for video files
-    const contentType = isVideo 
-      ? (getMimeTypeFromFilename(filename) || 'video/mp4')
-      : resolveContentType(req, filename);
-    const isVideoUpload = isVideo;
+    // Detect content type
+    const contentType = resolveContentType(filename, req.headers.get('content-type'));
+    const isVideoUpload = contentType.startsWith('video/');
 
-    // STAGE 1: Upload to R2 temp bucket
-    console.log('STAGE 1: Uploading to R2 temp bucket...');
-    const r2TempKey = `temp/${itemId}/${filename}`;
+    // STAGE 1: Upload to R2 as temporary storage
+    console.log('STAGE 1: Uploading to R2 temp storage...');
+    const r2TempKey = `temp-archive/${itemId}/${filename}`;
+    
     try {
       await env.R2_BUCKET.put(r2TempKey, buf, {
-        httpMetadata: { contentType: contentType }
+        httpMetadata: { contentType }
       });
       console.log('R2 temp upload successful:', r2TempKey);
     } catch (r2Err) {

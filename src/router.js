@@ -1,5 +1,6 @@
 /**
  * Router - Route matching logic
+ * Optimized: DB initialization performed once at top level for all /api/ routes
  */
 
 import { json } from './utils/response.js';
@@ -95,53 +96,58 @@ import {
  * @returns {Promise<Response|null>}
  */
 export async function routeApiRequest(req, env, url, path, method) {
-  // Health check
+  // ----- NON-DB ROUTES (health checks, debug) -----
   if (path === '/api/health') {
     return json({ ok: true, time: Date.now() });
   }
 
-  // Server time endpoint
   if (path === '/api/time') {
     return json({ serverTime: Date.now() });
   }
 
-  // Debug endpoint
   if (path === '/api/debug') {
     return getDebugInfo(env);
   }
 
+  if (method === 'GET' && path === '/api/whop/test-webhook') {
+    return testWhopWebhook();
+  }
+
+  // ----- ALL OTHER API ROUTES REQUIRE DB -----
+  // Consolidated DB check - performed once for all routes below
+  if (!path.startsWith('/api/')) {
+    return null;
+  }
+
+  if (!env.DB) {
+    return json({ error: 'Database not configured' }, 500);
+  }
+  
+  // Initialize DB once for all subsequent routes
+  await initDB(env);
+
   // ----- CHAT APIs -----
   if (path === '/api/chat/start' && method === 'POST') {
-    if (!env.DB) return json({ error: 'Database not configured' }, 500);
-    await initDB(env);
     const body = await req.json().catch(() => ({}));
     return startChat(env, body);
   }
 
   if (path === '/api/chat/sync' && method === 'GET') {
-    if (!env.DB) return json({ error: 'Database not configured' }, 500);
-    await initDB(env);
     return syncChat(env, url);
   }
 
   if (path === '/api/chat/send' && method === 'POST') {
-    if (!env.DB) return json({ error: 'Database not configured' }, 500);
-    await initDB(env);
     const body = await req.json().catch(() => ({}));
     return sendMessage(env, body, req.url);
   }
 
   // ----- ADMIN CHAT APIs -----
   if (path === '/api/admin/chats/block' && method === 'POST') {
-    if (!env.DB) return json({ error: 'Database not configured' }, 500);
-    await initDB(env);
     const body = await req.json().catch(() => ({}));
     return blockSession(env, body);
   }
 
   if (path === '/api/admin/chats/delete' && method === 'DELETE') {
-    if (!env.DB) return json({ error: 'Database not configured' }, 500);
-    await initDB(env);
     let sessionId = url.searchParams.get('sessionId');
     if (!sessionId) {
       const body = await req.json().catch(() => ({}));
@@ -151,18 +157,8 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (path === '/api/admin/chats/sessions' && method === 'GET') {
-    if (!env.DB) return json({ error: 'Database not configured' }, 500);
-    await initDB(env);
     return getSessions(env);
   }
-
-  // ----- API routes requiring DB -----
-  if (!path.startsWith('/api/')) {
-    return null;
-  }
-
-  if (!env.DB) return json({ error: 'Database not configured' }, 500);
-  await initDB(env);
 
   // ----- CACHE PURGE -----
   if (method === 'POST' && path === '/api/purge-cache') {
@@ -221,10 +217,6 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'GET' && path === '/api/whop/test-api') {
     return testWhopApi(env);
-  }
-
-  if (method === 'GET' && path === '/api/whop/test-webhook') {
-    return testWhopWebhook();
   }
 
   if (method === 'POST' && path === '/api/whop/cleanup') {

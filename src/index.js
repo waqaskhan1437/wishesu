@@ -5,16 +5,13 @@
 
 import { CORS, handleOptions } from './config/cors.js';
 import { initDB } from './config/db.js';
+import { VERSION } from './config/constants.js';
 import { routeApiRequest } from './router.js';
 import { handleProductRouting } from './controllers/products.js';
 import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
-import { slugifyStr, canonicalProductPath } from './utils/formatting.js';
 import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
-
-// Version identifier
-const VERSION = globalThis.VERSION || "15";
 
 export default {
   async fetch(req, env) {
@@ -27,7 +24,7 @@ export default {
     const method = req.method;
 
     // Auto-purge cache on version change (only for admin/webhook routes)
-    const shouldPurgeCache = path.startsWith('/admin/') || path.startsWith('/api/admin/') || path.startsWith('/api/whop/webhook');
+    const shouldPurgeCache = path.startsWith('/admin') || path.startsWith('/api/admin/') || path.startsWith('/api/whop/webhook');
     if (shouldPurgeCache) {
       await maybePurgeCache(env, initDB);
     }
@@ -65,14 +62,16 @@ export default {
       }
 
       // ----- ADMIN SPA ROUTING -----
-      if (path.startsWith('/admin/') && !path.startsWith('/api/')) {
+      // Handle both /admin and /admin/ and all admin sub-routes
+      if ((path === '/admin' || path.startsWith('/admin/')) && !path.startsWith('/api/')) {
         // Special handling for standalone pages that remain separate
         if (path.endsWith('/page-builder.html') || 
             path.endsWith('/landing-builder.html') ||
             path.endsWith('/product-form.html')) {
           // Let them fall through to asset serving
-        } else if (path === '/admin/' || path === '/admin' || path.endsWith('/dashboard.html') || path.endsWith('.html')) {
-          // Serve the main dashboard.html for all admin routes
+        } else {
+          // Serve the main dashboard.html for all other admin routes
+          // This includes: /admin, /admin/, /admin/dashboard.html, /admin/orders.html, etc.
           if (env.ASSETS) {
             const assetResp = await env.ASSETS.fetch(new Request(new URL('/admin/dashboard.html', req.url)));
             const headers = new Headers(assetResp.headers);
@@ -85,7 +84,7 @@ export default {
       }
 
       // ----- DYNAMIC PAGES -----
-      if (path.endsWith('.html') && !path.includes('/admin/')) {
+      if (path.endsWith('.html') && !path.includes('/admin/') && !path.startsWith('/admin')) {
         const slug = path.slice(1).replace(/\.html$/, '');
         try {
           if (env.DB) {

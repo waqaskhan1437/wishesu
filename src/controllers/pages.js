@@ -23,20 +23,45 @@ export async function getPages(env) {
 }
 
 /**
- * Get all pages (admin)
+ * Get all pages (admin) - Returns format expected by dashboard.js
+ * Maps to: { name, url, size, uploaded, id, status }
  */
 export async function getPagesList(env) {
   const r = await env.DB.prepare(
-    'SELECT * FROM pages ORDER BY id DESC'
+    'SELECT id, slug, title, content, status, created_at, updated_at FROM pages ORDER BY id DESC'
   ).all();
   
   const pages = (r.results || []).map(page => {
-    if (page.created_at) page.created_at = toISO8601(page.created_at);
-    if (page.updated_at) page.updated_at = toISO8601(page.updated_at);
-    return page;
+    // Calculate approximate size of content
+    const contentSize = page.content ? page.content.length : 0;
+    
+    // Format size for display
+    let sizeStr = '0 B';
+    if (contentSize >= 1024 * 1024) {
+      sizeStr = (contentSize / (1024 * 1024)).toFixed(2) + ' MB';
+    } else if (contentSize >= 1024) {
+      sizeStr = (contentSize / 1024).toFixed(2) + ' KB';
+    } else {
+      sizeStr = contentSize + ' B';
+    }
+    
+    // Convert datetime to ISO format
+    const uploaded = page.updated_at 
+      ? toISO8601(page.updated_at) 
+      : (page.created_at ? toISO8601(page.created_at) : new Date().toISOString());
+    
+    return {
+      id: page.id,
+      name: page.slug || page.title || 'Untitled',
+      title: page.title || page.slug || 'Untitled',
+      url: `/${page.slug}.html`,
+      size: sizeStr,
+      uploaded: uploaded,
+      status: page.status || 'draft'
+    };
   });
 
-  return json({ pages });
+  return json({ success: true, pages });
 }
 
 /**
