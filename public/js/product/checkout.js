@@ -61,10 +61,6 @@
   }
 
   async function handleCheckout() {
-    console.log('🔵 CHECKOUT STARTED');
-    console.log('🔵 Product Data:', window.productData);
-    console.log('🔵 Current Total:', window.currentTotal);
-    console.log('🔵 Base Price:', window.basePrice);
 
     const btn = document.getElementById('checkout-btn');
     if (!btn) {
@@ -74,7 +70,6 @@
 
     // Prevent double clicks
     if (btn.disabled) {
-      console.warn('⚠️ CHECKOUT BUTTON ALREADY DISABLED');
       return;
     }
 
@@ -95,7 +90,6 @@
       alert('Please fill required fields');
       return;
     }
-    console.log('✅ Validation passed');
 
     const originalText = btn.textContent;
     
@@ -211,11 +205,6 @@
     if (emailInput && emailInput.value.includes('@')) email = emailInput.value.trim();
     if (email) syncEmailToWhop(email);
 
-    console.log('🔵 Creating Dynamic Whop Checkout...');
-    console.log('🔵 Product ID:', window.productData.id);
-    console.log('🔵 Amount:', window.currentTotal);
-    console.log('🔵 Email:', email || '(none)');
-    console.log('🔵 Selected Addons:', selectedAddons);
 
     try {
       // Call dynamic plan creation endpoint
@@ -234,9 +223,7 @@
         })
       });
 
-      console.log('🔵 API Response Status:', response.status);
       const data = await response.json();
-      console.log('🔵 API Response Data:', data);
 
       if (!response.ok || data.error) {
         console.error('🔴 Checkout creation failed:', data);
@@ -262,10 +249,6 @@
         return;
       }
 
-      console.log('✅ Checkout created successfully!');
-      console.log('🔵 Plan ID:', data.plan_id);
-      console.log('🔵 Checkout URL:', data.checkout_url);
-      console.log('🔵 Email Prefilled:', data.email_prefilled);
 
       // Reset button
       btn.disabled = false;
@@ -273,7 +256,6 @@
 
       // Always use embedded popup with email prefill
       if (typeof window.whopCheckout === 'function') {
-        console.log('🔵 Opening Whop embedded checkout modal with email prefill...');
         
         // Show email prefill status
         if (data.email_prefilled) {
@@ -296,7 +278,6 @@
       } 
       // Fallback to direct URL only if embedded not available
       else if (data.checkout_url) {
-        console.log('🔵 Embedded checkout not available, using direct URL...');
         window.location.href = data.checkout_url;
       } else {
         console.error('🔴 No checkout method available!');

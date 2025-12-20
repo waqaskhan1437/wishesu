@@ -45,71 +45,29 @@
     const needle = 'total due today';
     const moneyRe = /\$\s*[0-9][0-9.,]*/;
 
-    // 1) Find the smallest element that contains the label text (price may be in a sibling).
-    let labelEl = null;
-    let labelText = '';
+    let bestEl = null;
+    let bestText = '';
 
     const nodes = root.querySelectorAll('div, span, p, strong, b, label');
     for (const el of nodes) {
       const raw = (el.textContent || '').trim();
-      if (!raw) continue;
       const low = raw.toLowerCase();
       if (!low.includes(needle)) continue;
-
-      // Prefer the most specific (shortest) match so we don't grab huge containers.
-      if (!labelEl || raw.length < labelText.length) {
-        labelEl = el;
-        labelText = raw;
-      }
-    }
-
-    if (!labelEl) return null;
-
-    // 2) Walk up from the label to find the smallest container that also contains a money value.
-    let row = null;
-    let rowText = '';
-    let cur = labelEl;
-    let steps = 0;
-
-    while (cur && steps < 8) {
-      const raw = (cur.textContent || '').trim();
-      const low = raw.toLowerCase();
-      if (low.includes(needle) && moneyRe.test(raw)) {
-        if (!row || raw.length < rowText.length) {
-          row = cur;
-          rowText = raw;
-        }
-      }
-      cur = cur.parentElement;
-      steps += 1;
-    }
-
-    // If none of the ancestors contain both, fall back to the label's parent container.
-    row = row || labelEl.parentElement || labelEl;
-
-    // 3) Extract the price from the smallest descendant inside the chosen row.
-    let priceText = null;
-    let bestMoneyEl = null;
-    let bestMoneyText = '';
-
-    const moneyNodes = row.querySelectorAll('div, span, p, strong, b, label');
-    for (const el of moneyNodes) {
-      const raw = (el.textContent || '').trim();
       if (!moneyRe.test(raw)) continue;
 
-      // Prefer a short node that looks like a single price.
-      if (!bestMoneyEl || raw.length < bestMoneyText.length) {
-        bestMoneyEl = el;
-        bestMoneyText = raw;
+      // Prefer the smallest/most-specific element to avoid hiding large containers.
+      if (!bestEl || raw.length < bestText.length) {
+        bestEl = el;
+        bestText = raw;
       }
     }
 
-    if (bestMoneyText) {
-      const match = bestMoneyText.match(moneyRe);
-      priceText = match ? match[0].replace(/\s+/g, '') : null;
-    }
+    if (!bestEl) return null;
 
-    return { row, labelEl, priceEl: bestMoneyEl, priceText };
+    const match = bestText.match(moneyRe);
+    const priceText = match ? match[0].replace(/\s+/g, '') : null;
+
+    return { row: bestEl, priceText };
   }
 
   function setPlaceOrderLabel(overlay, amount) {
@@ -131,36 +89,13 @@
     btn.textContent = price ? `Place Order · ${price}` : 'Place Order';
   }
 
-  function syncTotalDueRow(overlay, amount) {
+  function hideTotalDueRow(overlay) {
     const info = getTotalDueInfo(overlay);
     if (!info?.row) return false;
 
-    const target = info.priceEl || info.row;
-    const fallback = formatUSD(amount);
-    if (!fallback) return false;
-
-    // If we have a dedicated price element, replace only the $xx.xx substring.
-    if (info.priceEl) {
-      const raw = (info.priceEl.textContent || '').trim();
-      if (!raw) return false;
-
-      const moneyRe = /\$\s*[0-9][0-9.,]*/;
-      const updated = raw.replace(moneyRe, fallback);
-      if (updated !== raw) info.priceEl.textContent = updated;
-      else info.priceEl.textContent = fallback;
-
-      return true;
-    }
-
-    // Otherwise, replace the first money value in the row's text.
-    const rawRow = (target.textContent || '').trim();
-    const moneyRe = /\$\s*[0-9][0-9.,]*/;
-    if (moneyRe.test(rawRow)) {
-      target.textContent = rawRow.replace(moneyRe, fallback);
-      return true;
-    }
-
-    return false;
+    const row = info.row.closest('div') || info.row;
+    row.style.display = 'none';
+    return true;
   }
 
   function parseMap(str) {
@@ -264,8 +199,6 @@
    * Handle successful checkout: Save Order -> Redirect
    */
   async function handleComplete() {
-    console.log('🎉 WHOP CHECKOUT COMPLETE!');
-    console.log('📦 Pending order data:', pendingOrderData);
     
     const overlay = document.getElementById('whop-overlay');
     
@@ -284,7 +217,6 @@
 
         // Get uploaded files
         const uploadedFiles = window.getUploadedFiles ? window.getUploadedFiles() : {};
-        console.log('📁 Uploaded files:', uploadedFiles);
 
         // Get addons from pending order data
         const addons = pendingOrderData?.metadata?.addons || [];
@@ -295,7 +227,6 @@
             return !uploadedFiles.hasOwnProperty(a.field);
         });
 
-        console.log('🔧 Filtered addons (removed file placeholders):', nonFileAddons.length);
 
         // Add uploaded file URLs to addons in proper format
         Object.keys(uploadedFiles).forEach(inputId => {
@@ -306,11 +237,9 @@
                     field: inputId,
                     value: `[PHOTO LINK]: ${fileUrl}`
                 });
-                console.log(`📸 Added photo link: ${inputId} -> ${fileUrl}`);
             }
         });
 
-        console.log('📦 Final addons count:', nonFileAddons.length);
 
         // Calculate delivery time based on selected delivery option
         let deliveryTime = 2880; // Default: 48 hours (2 days);
@@ -327,7 +256,6 @@
                 deliveryTime = 2880; // 48 hours (2 days)
             }
         }
-        console.log('⏰ Delivery time:', deliveryTime, 'minutes');
 
         // Data prepare karein
         const payload = {
@@ -339,7 +267,6 @@
             deliveryTime: deliveryTime
         };
 
-        console.log('🚀 Sending to API:', payload);
 
         // Backend API call to save order
         const res = await fetch('/api/order/create', {
@@ -348,18 +275,13 @@
             body: JSON.stringify(payload)
         });
 
-        console.log('📡 API Response status:', res.status);
         const data = await res.json();
-        console.log('📦 API Response data:', data);
         
         // Success: Redirect DIRECTLY to buyer order page
         if (data && data.orderId) {
-            console.log('✅ Order created! ID:', data.orderId);
-            console.log('🎯 Redirecting to buyer order page...');
             // Direct buyer order page pe redirect
             window.location.href = `/buyer-order?id=${data.orderId}`;
         } else {
-            console.warn('⚠️ No order ID in response');
             window.location.href = '/';
         }
 
@@ -374,8 +296,6 @@
    * Main function to open the Whop checkout.
    */
   async function openCheckout(opts = {}) {
-    console.log('🟢 WHOP CHECKOUT: openCheckout called');
-    console.log('🟢 Options received:', opts);
 
     // 1. Store order details for later use in handleComplete
     const mergedEmail = opts.email || window.cachedAddonEmail || '';
@@ -385,13 +305,11 @@
     lastAmount = Number(opts.amount || 0);
 
     const overlay = ensureOverlay();
-    console.log('🟢 Overlay element:', overlay ? 'Created' : 'Failed');
 
     // Always show total price next to "Place Order".
     setPlaceOrderLabel(overlay, lastAmount);
 
     const globals = window.whopSettings || {};
-    console.log('🟢 Global Whop Settings:', globals);
 
     // Check if planId is directly provided (from dynamic plan creation)
     let selectedPlan = opts.planId || '';
@@ -401,15 +319,12 @@
       const prodMapStr = opts.productPriceMap || (window.productData && window.productData.whop_price_map) || '';
       const globalMapStr = globals.price_map || '';
       const priceMap = Object.assign({}, parseMap(globalMapStr), parseMap(prodMapStr));
-      console.log('🟢 Price Map:', priceMap);
 
       const defaultPlan = opts.productPlan || (window.productData && window.productData.whop_plan) || globals.default_plan_id || '';
-      console.log('🟢 Default Plan:', defaultPlan);
 
       selectedPlan = choosePlan(opts.amount || 0, priceMap, defaultPlan);
     }
 
-    console.log('🟢 Selected Plan ID:', selectedPlan);
 
     if (!selectedPlan) {
       console.error('🔴 NO PLAN ID FOUND!');
@@ -425,18 +340,15 @@
     // The email is also in `pendingOrderData` for the `handleComplete` function.
     
     const metadataStr = JSON.stringify(metadataObj);
-    console.log('🟢 Metadata:', metadataStr);
 
     // Prepare email attribute for the embed
     const email = pendingOrderData.email || '';
     const emailAttribute = email ? `data-whop-checkout-email="${email}"` : '';
-    console.log('🟢 Email attribute:', emailAttribute);
 
     // Construct the embed HTML with email attribute
     // Hide Whop's internal submit button (we use our own sticky Place Order button)
     const embed = `<div id="whop-embedded-checkout" data-whop-checkout-plan-id="${selectedPlan}" data-whop-checkout-theme="${theme}" ${emailAttribute} data-whop-checkout-hide-submit-button="true" data-whop-checkout-metadata='${metadataStr}' data-whop-checkout-on-complete="whopCheckoutComplete"></div>`;
     
-    console.log('🟢 Embed HTML:', embed);
 
     const container = overlay.querySelector('.whop-container');
     if (!container) {
@@ -446,19 +358,14 @@
     }
 
     container.innerHTML = embed;
-    console.log('🟢 Embed inserted into container');
 
     overlay.style.display = 'flex';
-    console.log('🟢 Overlay displayed');
 
     // Attach our custom save handler to the global scope
     window.whopCheckoutComplete = handleComplete;
-    console.log('🟢 Completion handler attached');
 
-    console.log('🟢 Loading Whop script...');
     try {
       await loadWhopScript();
-      console.log('✅ Whop script loaded successfully!');
 
       // The embed renders async. Hide the "Total due today" row and rely on our sticky
       // button to show the total price.
@@ -469,11 +376,11 @@
         // Keep updating the button label from the live Whop UI total.
         setPlaceOrderLabel(overlay, lastAmount);
 
-        const synced = syncTotalDueRow(overlay, lastAmount);
+        const hidden = hideTotalDueRow(overlay);
         const btn = overlay?.querySelector?.('.whop-place-order');
         const hasPrice = btn && /\$\s*[0-9]/.test(btn.textContent || '');
 
-        if ((synced && hasPrice) || tries > 40) {
+        if ((hidden && hasPrice) || tries > 40) {
           clearInterval(interval);
         }
       }, 150);

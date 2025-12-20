@@ -66,13 +66,13 @@
         top: 50%; left: 50%;
         transform: translate(-50%, -50%);
         width: 80px; height: 80px;
-        background: rgba(0, 0, 0, 0.6);
+        background: rgba(0,0,0,0.8);
         border-radius: 50%;
         display: flex; align-items: center; justify-content: center;
         color: white;
         transition: all 0.2s ease;
         z-index: 10;
-        backdrop-filter: blur(2px);
+        
       `;
       // SVG Icon
       playBtn.innerHTML = `
@@ -88,7 +88,7 @@
         playBtn.style.transform = 'translate(-50%, -50%) scale(1.1)';
       };
       facade.onmouseleave = () => {
-        playBtn.style.background = 'rgba(0, 0, 0, 0.6)';
+        playBtn.style.background = 'rgba(0,0,0,0.8)';
         playBtn.style.transform = 'translate(-50%, -50%) scale(1.0)';
       };
 
@@ -153,7 +153,7 @@
       if (product.video_url) {
         const playOverlay = document.createElement('div');
         playOverlay.className = 'thumb-play-btn';
-        playOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; padding-left: 2px; pointer-events: none; opacity: 1 !important; visibility: visible !important; z-index: 100;';
+        playOverlay.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; padding-left: 2px; pointer-events: none; opacity: 1 !important; visibility: visible !important; z-index: 100;';
         playOverlay.innerHTML = '▶';
         thumbWrapper.appendChild(playOverlay);
       }
@@ -186,7 +186,7 @@
                 facade.appendChild(mainImg);
 
                 const playBtn = document.createElement('div');
-                playBtn.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80px; height: 80px; background: rgba(0, 0, 0, 0.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; transition: all 0.2s ease; z-index: 10; backdrop-filter: blur(2px);';
+                playBtn.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80px; height: 80px; background: rgba(0,0,0,0.8); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; transition: all 0.2s ease; z-index: 10; ';
                 playBtn.innerHTML = '<svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" style="display:block; margin-left:4px;"><path d="M8 5v14l11-7z"></path></svg>';
                 facade.appendChild(playBtn);
 
@@ -258,14 +258,14 @@
     // Add slider arrows
     const leftArrow = document.createElement('button');
     leftArrow.innerHTML = '‹';
-    leftArrow.style.cssText = 'position: absolute; left: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: none;';
+    leftArrow.style.cssText = 'position: absolute; left: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.8); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: none;';
     leftArrow.onclick = () => {
       thumbsDiv.scrollBy({ left: -160, behavior: 'smooth' });
     };
 
     const rightArrow = document.createElement('button');
     rightArrow.innerHTML = '›';
-    rightArrow.style.cssText = 'position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: none;';
+    rightArrow.style.cssText = 'position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.8); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: none;';
     rightArrow.onclick = () => {
       thumbsDiv.scrollBy({ left: 160, behavior: 'smooth' });
     };
