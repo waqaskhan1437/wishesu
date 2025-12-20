@@ -140,18 +140,39 @@
   function displayRequirements(addons) {
     const list = document.getElementById('requirements');
     const photos = [];
-    list.innerHTML = addons.filter(a => a.field !== '_temp_session').map(a => {
+
+    if (!addons || addons.length === 0) {
+      list.innerHTML = '<div class="addon-item" style="color:#6b7280;font-style:italic;">No requirements provided.</div>';
+      return;
+    }
+
+    const filtered = addons.filter(a => a.field !== '_temp_session');
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="addon-item" style="color:#6b7280;font-style:italic;">No requirements provided.</div>';
+      return;
+    }
+
+    list.innerHTML = filtered.map(a => {
       let val = a.value || '';
+      let label = a.field || 'Item';
+
+      // Check for photo links
       if (val.includes('[TEMP_FILE]') || val.includes('[PHOTO LINK]')) {
         const url = val.split(']:')[1]?.trim();
-        if (url) { photos.push(url); return `<div class="addon-item"><span class="addon-label">${a.field}:</span> <a href="${url}" target="_blank">View</a></div>`; }
+        if (url) {
+          photos.push(url);
+          return `<div class="addon-item"><span class="addon-label">${label}:</span> <a href="${url}" target="_blank" style="color:#3b82f6;">View Photo 📷</a></div>`;
+        }
+        return `<div class="addon-item"><span class="addon-label">${label}:</span> Photo uploaded</div>`;
       }
-      return `<div class="addon-item"><span class="addon-label">${a.field}:</span> ${val}</div>`;
+
+      return `<div class="addon-item"><span class="addon-label">${label}:</span> ${val}</div>`;
     }).join('');
 
     if (photos.length > 0) {
       document.getElementById('photos-section').style.display = 'block';
-      document.getElementById('photos').innerHTML = photos.map(url => `<div class="photo-item"><img src="${url}" onclick="window.open('${url}')"></div>`).join('');
+      document.getElementById('photos').innerHTML = photos.map(url => `<div class="photo-item"><img src="${url}" onclick="window.open('${url}')" onerror="this.style.display='none'"></div>`).join('');
     }
   }
 
