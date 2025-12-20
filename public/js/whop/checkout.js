@@ -38,131 +38,6 @@
     return `$${n.toFixed(2)}`;
   }
 
-  function getTotalDueInfo(overlay) {
-    const root = overlay?.querySelector?.('.whop-container');
-    if (!root) return null;
-
-    const needle = 'total due today';
-    const moneyRe = /\$\s*[0-9][0-9.,]*/;
-
-    // 1) Find the smallest element that contains the label text (price may be in a sibling).
-    let labelEl = null;
-    let labelText = '';
-
-    const nodes = root.querySelectorAll('div, span, p, strong, b, label');
-    for (const el of nodes) {
-      const raw = (el.textContent || '').trim();
-      if (!raw) continue;
-      const low = raw.toLowerCase();
-      if (!low.includes(needle)) continue;
-
-      // Prefer the most specific (shortest) match so we don't grab huge containers.
-      if (!labelEl || raw.length < labelText.length) {
-        labelEl = el;
-        labelText = raw;
-      }
-    }
-
-    if (!labelEl) return null;
-
-    // 2) Walk up from the label to find the smallest container that also contains a money value.
-    let row = null;
-    let rowText = '';
-    let cur = labelEl;
-    let steps = 0;
-
-    while (cur && steps < 8) {
-      const raw = (cur.textContent || '').trim();
-      const low = raw.toLowerCase();
-      if (low.includes(needle) && moneyRe.test(raw)) {
-        if (!row || raw.length < rowText.length) {
-          row = cur;
-          rowText = raw;
-        }
-      }
-      cur = cur.parentElement;
-      steps += 1;
-    }
-
-    // If none of the ancestors contain both, fall back to the label's parent container.
-    row = row || labelEl.parentElement || labelEl;
-
-    // 3) Extract the price from the smallest descendant inside the chosen row.
-    let priceText = null;
-    let bestMoneyEl = null;
-    let bestMoneyText = '';
-
-    const moneyNodes = row.querySelectorAll('div, span, p, strong, b, label');
-    for (const el of moneyNodes) {
-      const raw = (el.textContent || '').trim();
-      if (!moneyRe.test(raw)) continue;
-
-      // Prefer a short node that looks like a single price.
-      if (!bestMoneyEl || raw.length < bestMoneyText.length) {
-        bestMoneyEl = el;
-        bestMoneyText = raw;
-      }
-    }
-
-    if (bestMoneyText) {
-      const match = bestMoneyText.match(moneyRe);
-      priceText = match ? match[0].replace(/\s+/g, '') : null;
-    }
-
-    return { row, labelEl, priceEl: bestMoneyEl, priceText };
-  }
-
-  function setPlaceOrderLabel(overlay, amount) {
-    const btn = overlay?.querySelector?.('.whop-place-order');
-    if (!btn) return;
-
-    // Prefer the real total shown inside Whop UI (updates when addons change).
-    const info = getTotalDueInfo(overlay);
-    const uiPrice = info?.priceText || '';
-    // Whop/Stripe sometimes shows $0.00 briefly while calculating.
-    // Treat that as "not ready" so we can fall back to the real amount.
-    const uiReady = uiPrice && uiPrice !== '$0.00';
-
-    // Fallback to passed amount only if UI total not available yet.
-    const fallback = formatUSD(amount);
-    const price = uiReady ? uiPrice : fallback;
-
-    btn.dataset.originalLabel = 'Place Order';
-    btn.textContent = price ? `Place Order · ${price}` : 'Place Order';
-  }
-
-  function syncTotalDueRow(overlay, amount) {
-    const info = getTotalDueInfo(overlay);
-    if (!info?.row) return false;
-
-    const target = info.priceEl || info.row;
-    const fallback = formatUSD(amount);
-    if (!fallback) return false;
-
-    // If we have a dedicated price element, replace only the $xx.xx substring.
-    if (info.priceEl) {
-      const raw = (info.priceEl.textContent || '').trim();
-      if (!raw) return false;
-
-      const moneyRe = /\$\s*[0-9][0-9.,]*/;
-      const updated = raw.replace(moneyRe, fallback);
-      if (updated !== raw) info.priceEl.textContent = updated;
-      else info.priceEl.textContent = fallback;
-
-      return true;
-    }
-
-    // Otherwise, replace the first money value in the row's text.
-    const rawRow = (target.textContent || '').trim();
-    const moneyRe = /\$\s*[0-9][0-9.,]*/;
-    if (moneyRe.test(rawRow)) {
-      target.textContent = rawRow.replace(moneyRe, fallback);
-      return true;
-    }
-
-    return false;
-  }
-
   function parseMap(str) {
     const map = {};
     if (!str || typeof str !== 'string') return map;
@@ -203,16 +78,24 @@
       overlay.innerHTML = `
         <div class="whop-backdrop"></div>
         <div class="whop-modal">
-          <div class="whop-header">
-            <svg class="whop-lock-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+          <button class="whop-close" type="button">×</button>
+          <div class="whop-price-header">
+            <div class="whop-price-header-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 2a4 4 0 00-4 4v2H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V10a2 2 0 00-2-2h-1V6a4 4 0 00-4-4zm-2 6V6a2 2 0 114 0v2H8z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="whop-price-header-text">
+              <span class="whop-price-title">Secure Checkout</span>
+              <span class="whop-price-amount"></span>
+            </div>
+          </div>
+          <div class="whop-container"></div>
+          <div class="whop-powered-by">
+            <svg class="whop-stripe-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M10 2a4 4 0 00-4 4v2H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2V10a2 2 0 00-2-2h-1V6a4 4 0 00-4-4zm-2 6V6a2 2 0 114 0v2H8z" clip-rule="evenodd" />
             </svg>
-            <span>Powered by <b>Stripe</b></span>
-          </div>
-          <button class="whop-close" type="button">×</button>
-          <div class="whop-container"></div>
-          <div class="whop-sticky-footer">
-            <button class="whop-place-order" type="button">Place Order</button>
+            <span>Secured by <b>Stripe</b></span>
           </div>
         </div>
       `;
@@ -220,44 +103,16 @@
       const close = () => { overlay.style.display = 'none'; };
       overlay.querySelector('.whop-close').addEventListener('click', close);
       overlay.querySelector('.whop-backdrop').addEventListener('click', close);
-
-      // Sticky Place Order button: disable + show Processing... to prevent double clicks
-      const placeBtn = overlay.querySelector('.whop-place-order');
-      if (placeBtn) {
-        let isProcessing = false;
-        placeBtn.addEventListener('click', () => {
-          if (isProcessing) return;
-          isProcessing = true;
-
-          const original = placeBtn.dataset.originalLabel || 'Place Order';
-          placeBtn.disabled = true;
-          placeBtn.textContent = 'Processing...';
-          placeBtn.setAttribute('aria-busy', 'true');
-
-          try {
-            if (window.wco && typeof window.wco.submit === 'function') {
-              window.wco.submit('whop-embedded-checkout');
-            } else {
-              const embedRoot = document.getElementById('whop-embedded-checkout');
-              const btn = embedRoot ? embedRoot.querySelector('button') : null;
-              if (btn) btn.click();
-            }
-          } catch (e) {
-            console.error('Failed to submit checkout:', e);
-          }
-
-          // Safety reset (if modal stays open due to validation errors, etc.)
-          setTimeout(() => {
-            isProcessing = false;
-            placeBtn.disabled = false;
-            // restore label with latest amount
-            setPlaceOrderLabel(overlay, lastAmount);
-            placeBtn.removeAttribute('aria-busy');
-          }, 15000);
-        });
-      }
     }
     return overlay;
+  }
+
+  function updatePriceHeader(overlay, amount) {
+    const priceEl = overlay?.querySelector?.('.whop-price-amount');
+    if (priceEl) {
+      const formatted = formatUSD(amount);
+      priceEl.textContent = formatted ? `for ${formatted}` : '';
+    }
   }
 
   /**
@@ -363,8 +218,8 @@
     const overlay = ensureOverlay();
     console.log('🟢 Overlay element:', overlay ? 'Created' : 'Failed');
 
-    // Always show total price next to "Place Order".
-    setPlaceOrderLabel(overlay, lastAmount);
+    // Update the price header with current total
+    updatePriceHeader(overlay, lastAmount);
 
     const globals = window.whopSettings || {};
     console.log('🟢 Global Whop Settings:', globals);
@@ -409,8 +264,8 @@
     console.log('🟢 Email attribute:', emailAttribute);
 
     // Construct the embed HTML with email attribute
-    // Hide Whop's internal submit button (we use our own sticky Place Order button)
-    const embed = `<div id="whop-embedded-checkout" data-whop-checkout-plan-id="${selectedPlan}" data-whop-checkout-theme="${theme}" ${emailAttribute} data-whop-checkout-hide-submit-button="true" data-whop-checkout-metadata='${metadataStr}' data-whop-checkout-on-complete="whopCheckoutComplete"></div>`;
+    // Use Whop's native submit button for best reliability
+    const embed = `<div id="whop-embedded-checkout" data-whop-checkout-plan-id="${selectedPlan}" data-whop-checkout-theme="${theme}" ${emailAttribute} data-whop-checkout-metadata='${metadataStr}' data-whop-checkout-on-complete="whopCheckoutComplete"></div>`;
     
     console.log('🟢 Embed HTML:', embed);
 
@@ -436,20 +291,19 @@
       await loadWhopScript();
       console.log('✅ Whop script loaded successfully!');
 
-      // The embed renders async. Hide the "Total due today" row and rely on our sticky
-      // button to show the total price.
+      // The embed renders async. Update price header when ready.
       let tries = 0;
       const interval = setInterval(() => {
         tries += 1;
 
-        // Keep updating the button label from the live Whop UI total.
-        setPlaceOrderLabel(overlay, lastAmount);
+        // Keep updating the price header
+        updatePriceHeader(overlay, lastAmount);
 
-        const synced = syncTotalDueRow(overlay, lastAmount);
-        const btn = overlay?.querySelector?.('.whop-place-order');
-        const hasPrice = btn && /\$\s*[0-9]/.test(btn.textContent || '');
+        // Check if Whop embed has loaded
+        const embedRoot = document.getElementById('whop-embedded-checkout');
+        const hasContent = embedRoot && embedRoot.children.length > 0;
 
-        if ((synced && hasPrice) || tries > 40) {
+        if (hasContent || tries > 40) {
           clearInterval(interval);
         }
       }, 150);
