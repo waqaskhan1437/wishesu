@@ -245,7 +245,8 @@
       // Always use embedded popup with email prefill
       if (typeof window.whopCheckout === 'function') {
         console.log('🔵 Opening Whop embedded checkout modal with email prefill...');
-        
+        console.log('🔵 Passing addons to whopCheckout:', selectedAddons);
+
         // Show email prefill status
         if (data.email_prefilled) {
           btn.textContent = '✅ Email Auto-filled! Opening checkout...';
@@ -253,12 +254,19 @@
             btn.textContent = originalText;
           }, 2000);
         }
-        
+
         window.whopCheckout({
           planId: data.plan_id,
           email: data.email || email,
-          metadata: data.metadata,
-          productId: data.product_id,
+          // IMPORTANT: Pass selectedAddons directly, not data.metadata
+          // data.metadata comes from backend and may not have all addons
+          metadata: {
+            ...data.metadata,
+            addons: selectedAddons,
+            product_id: window.productData.id,
+            productId: window.productData.id
+          },
+          productId: data.product_id || window.productData.id,
           // Pass the latest calculated total so the embedded modal can display
           // the correct price next to our sticky "Place Order" button.
           amount: window.currentTotal,
