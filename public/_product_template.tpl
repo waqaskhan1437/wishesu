@@ -19,10 +19,10 @@
 
   <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
 
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="/css/style.css">
 
   <!-- Additional styles for the Whop checkout modal -->
-  <link rel="stylesheet" href="css/whop.css">
+  <link rel="stylesheet" href="/css/whop.css">
   
   <style>
     @keyframes spin {
@@ -65,20 +65,20 @@
 
   <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
 
-  <script src="js/api.js"></script>
-  <script src="js/universal-player.js"></script>
-  <script src="js/instant-upload.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/universal-player.js"></script>
+  <script src="/js/instant-upload.js"></script>
   <!-- Whop checkout integration -->
-  <script src="js/whop/checkout.js"></script>
+  <script src="/js/whop/checkout.js"></script>
   <!-- Reviews widget -->
-  <script src="js/reviews-widget.js"></script>
+  <script src="/js/reviews-widget.js"></script>
   <!-- load product modules in dependency order -->
-  <script src="js/product/addon-ui.js"></script>
-  <script src="js/product/seo-utils.js"></script>
-  <script src="js/product/layout-main.js"></script>
-  <script src="js/product/layout-extra.js"></script>
-  <script src="js/product/checkout.js"></script>
-  <script src="js/product/main.js"></script>
-  <script src="js/chat-widget.js"></script>
+  <script src="/js/product/addon-ui.js"></script>
+  <script src="/js/product/seo-utils.js"></script>
+  <script src="/js/product/layout-main.js"></script>
+  <script src="/js/product/layout-extra.js"></script>
+  <script src="/js/product/checkout.js"></script>
+  <script src="/js/product/main.js"></script>
+  <script src="/js/chat-widget.js"></script>
 </body>
 </html>
