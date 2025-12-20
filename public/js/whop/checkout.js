@@ -9,6 +9,24 @@
 
 ;(function(){
   let scriptPromise = null;
+  /**
+   * Load the Whop checkout loader script.
+   * (Fix for: loadWhopScript is not defined)
+   */
+  function loadWhopScript() {
+    if (window.Whop) return Promise.resolve();
+    if (scriptPromise) return scriptPromise;
+
+    scriptPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://js.whop.com/static/checkout/loader.js';
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Failed to load Whop checkout'));
+      document.head.appendChild(s);
+    });
+    return scriptPromise;
+  }
   // Yeh variable order ki details store karega taake completion par save kar saken
   let pendingOrderData = null;
 
