@@ -154,7 +154,7 @@ export async function createPlanCheckout(env, body, origin) {
     : basePrice;
 
   if (isNaN(priceValue) || priceValue < 0) {
-    return json({ error: 'Invalid price for product' }, 400);
+    return json({ error: 'Invalid price' }, 400);
   }
 
   // Get Whop product ID
@@ -192,7 +192,7 @@ export async function createPlanCheckout(env, body, origin) {
 
   const currency = env.WHOP_CURRENCY || 'usd';
 
-  // Create one-time plan
+  // Create one-time plan with unlimited purchases allowed
   const planBody = {
     company_id: companyId,
     product_id: finalProdId,
@@ -200,8 +200,11 @@ export async function createPlanCheckout(env, body, origin) {
     release_method: 'buy_now',
     currency: currency,
     initial_price: priceValue,
+    renewal_price: 0,
     title: `${product.title || 'One‑time purchase'} - $${priceValue}`,
     stock: 999999,
+    unlimited_stock: true,
+    allow_multiple_purchases: true,
     internal_notes: `Auto-generated for product ${product.id} - ${new Date().toISOString()}`
   };
 
