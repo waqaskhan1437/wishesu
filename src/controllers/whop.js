@@ -193,6 +193,8 @@ export async function createPlanCheckout(env, body, origin) {
   const currency = env.WHOP_CURRENCY || 'usd';
 
   // Create one-time plan with unlimited purchases allowed
+  // one_per_user: false = same user can buy multiple times
+  // allow_multiple_quantity: true = can buy multiple in one checkout
   const planBody = {
     company_id: companyId,
     product_id: finalProdId,
@@ -203,8 +205,8 @@ export async function createPlanCheckout(env, body, origin) {
     renewal_price: 0,
     title: `${product.title || 'One‑time purchase'} - $${priceValue}`,
     stock: 999999,
-    unlimited_stock: true,
-    allow_multiple_purchases: true,
+    one_per_user: false,
+    allow_multiple_quantity: true,
     internal_notes: `Auto-generated for product ${product.id} - ${new Date().toISOString()}`
   };
 
