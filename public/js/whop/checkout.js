@@ -45,29 +45,71 @@
     const needle = 'total due today';
     const moneyRe = /\$\s*[0-9][0-9.,]*/;
 
-    let bestEl = null;
-    let bestText = '';
+    // 1) Find the smallest element that contains the label text (price may be in a sibling).
+    let labelEl = null;
+    let labelText = '';
 
     const nodes = root.querySelectorAll('div, span, p, strong, b, label');
     for (const el of nodes) {
       const raw = (el.textContent || '').trim();
+      if (!raw) continue;
       const low = raw.toLowerCase();
       if (!low.includes(needle)) continue;
-      if (!moneyRe.test(raw)) continue;
 
-      // Prefer the smallest/most-specific element to avoid hiding large containers.
-      if (!bestEl || raw.length < bestText.length) {
-        bestEl = el;
-        bestText = raw;
+      // Prefer the most specific (shortest) match so we don't grab huge containers.
+      if (!labelEl || raw.length < labelText.length) {
+        labelEl = el;
+        labelText = raw;
       }
     }
 
-    if (!bestEl) return null;
+    if (!labelEl) return null;
 
-    const match = bestText.match(moneyRe);
-    const priceText = match ? match[0].replace(/\s+/g, '') : null;
+    // 2) Walk up from the label to find the smallest container that also contains a money value.
+    let row = null;
+    let rowText = '';
+    let cur = labelEl;
+    let steps = 0;
 
-    return { row: bestEl, priceText };
+    while (cur && steps < 8) {
+      const raw = (cur.textContent || '').trim();
+      const low = raw.toLowerCase();
+      if (low.includes(needle) && moneyRe.test(raw)) {
+        if (!row || raw.length < rowText.length) {
+          row = cur;
+          rowText = raw;
+        }
+      }
+      cur = cur.parentElement;
+      steps += 1;
+    }
+
+    // If none of the ancestors contain both, fall back to the label's parent container.
+    row = row || labelEl.parentElement || labelEl;
+
+    // 3) Extract the price from the smallest descendant inside the chosen row.
+    let priceText = null;
+    let bestMoneyEl = null;
+    let bestMoneyText = '';
+
+    const moneyNodes = row.querySelectorAll('div, span, p, strong, b, label');
+    for (const el of moneyNodes) {
+      const raw = (el.textContent || '').trim();
+      if (!moneyRe.test(raw)) continue;
+
+      // Prefer a short node that looks like a single price.
+      if (!bestMoneyEl || raw.length < bestMoneyText.length) {
+        bestMoneyEl = el;
+        bestMoneyText = raw;
+      }
+    }
+
+    if (bestMoneyText) {
+      const match = bestMoneyText.match(moneyRe);
+      priceText = match ? match[0].replace(/\s+/g, '') : null;
+    }
+
+    return { row, labelEl, priceEl: bestMoneyEl, priceText };
   }
 
   function setPlaceOrderLabel(overlay, amount) {
@@ -89,13 +131,36 @@
     btn.textContent = price ? `Place Order · ${price}` : 'Place Order';
   }
 
-  function hideTotalDueRow(overlay) {
+  function syncTotalDueRow(overlay, amount) {
     const info = getTotalDueInfo(overlay);
     if (!info?.row) return false;
 
-    const row = info.row.closest('div') || info.row;
-    row.style.display = 'none';
-    return true;
+    const target = info.priceEl || info.row;
+    const fallback = formatUSD(amount);
+    if (!fallback) return false;
+
+    // If we have a dedicated price element, replace only the $xx.xx substring.
+    if (info.priceEl) {
+      const raw = (info.priceEl.textContent || '').trim();
+      if (!raw) return false;
+
+      const moneyRe = /\$\s*[0-9][0-9.,]*/;
+      const updated = raw.replace(moneyRe, fallback);
+      if (updated !== raw) info.priceEl.textContent = updated;
+      else info.priceEl.textContent = fallback;
+
+      return true;
+    }
+
+    // Otherwise, replace the first money value in the row's text.
+    const rawRow = (target.textContent || '').trim();
+    const moneyRe = /\$\s*[0-9][0-9.,]*/;
+    if (moneyRe.test(rawRow)) {
+      target.textContent = rawRow.replace(moneyRe, fallback);
+      return true;
+    }
+
+    return false;
   }
 
   function parseMap(str) {
@@ -404,11 +469,11 @@
         // Keep updating the button label from the live Whop UI total.
         setPlaceOrderLabel(overlay, lastAmount);
 
-        const hidden = hideTotalDueRow(overlay);
+        const synced = syncTotalDueRow(overlay, lastAmount);
         const btn = overlay?.querySelector?.('.whop-place-order');
         const hasPrice = btn && /\$\s*[0-9]/.test(btn.textContent || '');
 
-        if ((hidden && hasPrice) || tries > 40) {
+        if ((synced && hasPrice) || tries > 40) {
           clearInterval(interval);
         }
       }, 150);
