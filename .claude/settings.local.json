@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx wrangler deploy)"
+      "Bash(npx wrangler deploy)",
+      "Bash(node -e:*)",
+      "Bash(cat:*)"
     ]
   }
 }

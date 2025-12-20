@@ -240,8 +240,9 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'POST' && (path === '/api/order/create' || path === '/submit-order')) {
     const body = await req.json();
-    // Check if this is a manual order (has email) or regular order
-    if (body.email && body.productId) {
+    // Only use createManualOrder if explicitly marked as manual order from admin
+    // Regular checkout orders have email+productId but should use createOrder
+    if (body.manualOrder === true) {
       return createManualOrder(env, body);
     }
     return createOrder(env, body);

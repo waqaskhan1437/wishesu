@@ -65,7 +65,8 @@ export async function createManualOrder(env, body) {
   const encryptedData = JSON.stringify({
     email: body.email,
     amount: body.amount || 0,
-    addons: body.notes ? [{ field: 'Admin Notes', value: body.notes }] : [],
+    // Use body.addons if provided, otherwise fall back to notes
+    addons: body.addons || (body.notes ? [{ field: 'Admin Notes', value: body.notes }] : []),
     manualOrder: true
   });
   
