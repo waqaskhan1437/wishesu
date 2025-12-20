@@ -428,14 +428,17 @@ export async function routeApiRequest(req, env, url, path, method) {
       let imported = 0;
       for (const p of products) {
         if (!p.title) continue;
+        // Handle both addons_json and addons field names for compatibility
+        const addonsData = p.addons_json || p.addons || '[]';
         await env.DB.prepare(`
-          INSERT OR REPLACE INTO products (id, title, slug, description, normal_price, sale_price, thumbnail_url, video_url, gallery_images, addons, status, sort_order, whop_plan, whop_price_map, normal_delivery_text, instant_delivery, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO products (id, title, slug, description, normal_price, sale_price, thumbnail_url, video_url, gallery_images, addons_json, status, sort_order, whop_plan, whop_price_map, whop_product_id, normal_delivery_text, instant_delivery, seo_title, seo_description, seo_keywords, seo_canonical)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           p.id || null, p.title, p.slug || '', p.description || '', p.normal_price || 0, p.sale_price || null,
-          p.thumbnail_url || '', p.video_url || '', p.gallery_images || '[]', p.addons || '[]',
-          p.status || 'active', p.sort_order || 0, p.whop_plan || '', p.whop_price_map || '',
-          p.normal_delivery_text || '', p.instant_delivery || 0, p.created_at || Date.now()
+          p.thumbnail_url || '', p.video_url || '', p.gallery_images || '[]', addonsData,
+          p.status || 'active', p.sort_order || 0, p.whop_plan || '', p.whop_price_map || '', p.whop_product_id || '',
+          p.normal_delivery_text || '', p.instant_delivery || 0,
+          p.seo_title || '', p.seo_description || '', p.seo_keywords || '', p.seo_canonical || ''
         ).run();
         imported++;
       }
