@@ -282,39 +282,13 @@
             return;
         }
 
-        // Get uploaded files
-        const uploadedFiles = window.getUploadedFiles ? window.getUploadedFiles() : {};
-        console.log('📁 Uploaded files:', uploadedFiles);
-
-        // Get addons from pending order data
+        // Get addons from pending order data (already includes photo URLs from checkout.js)
         const addons = pendingOrderData?.metadata?.addons || [];
-
-        // Filter out file upload placeholders and replace with actual URLs
-        const nonFileAddons = addons.filter(a => {
-            // Remove any addon that's a file input (will be replaced with actual URL)
-            return !uploadedFiles.hasOwnProperty(a.field);
-        });
-
-        console.log('🔧 Filtered addons (removed file placeholders):', nonFileAddons.length);
-
-        // Add uploaded file URLs to addons in proper format
-        Object.keys(uploadedFiles).forEach(inputId => {
-            const fileUrl = uploadedFiles[inputId];
-            if (fileUrl) {
-                // Format: [PHOTO LINK]: url (this is what buyer-order.js expects)
-                nonFileAddons.push({
-                    field: inputId,
-                    value: `[PHOTO LINK]: ${fileUrl}`
-                });
-                console.log(`📸 Added photo link: ${inputId} -> ${fileUrl}`);
-            }
-        });
-
-        console.log('📦 Final addons count:', nonFileAddons.length);
+        console.log('📦 Addons from metadata:', addons.length, addons);
 
         // Calculate delivery time based on selected delivery option
         let deliveryTime = 2880; // Default: 48 hours (2 days);
-        const deliveryAddon = nonFileAddons.find(a => a.field === 'delivery-time');
+        const deliveryAddon = addons.find(a => a.field === 'delivery-time');
         if (deliveryAddon) {
             const deliveryValue = (deliveryAddon.value || '').toString();
             const v = deliveryValue.toLowerCase();
@@ -335,7 +309,7 @@
             productId: pendingOrderData?.metadata?.product_id || pendingOrderData?.metadata?.productId || pendingOrderData?.productId || 1,
             amount: pendingOrderData?.amount || 0,
             email: pendingOrderData?.email || '',
-            addons: nonFileAddons, // Includes uploaded file URLs without duplicates
+            addons: addons, // Already includes photo URLs from checkout.js
             deliveryTime: deliveryTime
         };
 

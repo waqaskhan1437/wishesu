@@ -108,96 +108,50 @@
       </span>
     `;
     
-    // 1. Gather Data & Find Files
+    // 1. Check if files are still uploading
+    if (window.isUploadInProgress && window.isUploadInProgress()) {
+      alert('Please wait for file uploads to complete.');
+      btn.disabled = false;
+      btn.textContent = originalText;
+      return;
+    }
+
+    // 2. Gather form data (text fields, selects, radios, checkboxes)
     const formEl = document.getElementById('addons-form');
     const selectedAddons = [];
-    const fileUploads = []; 
-    
+
     if (formEl) {
       const formData = new FormData(formEl);
       for (const pair of formData.entries()) {
         const key = pair[0];
         const val = pair[1];
-        
+
+        // Skip file inputs - they are handled by instant-upload.js
         if (val instanceof File) {
-          if (val.size > 0) fileUploads.push({ key: key, file: val });
-        } else if (val) {
+          continue;
+        }
+
+        if (val) {
           selectedAddons.push({ field: key, value: val });
         }
       }
     }
 
-    // 2. Upload Files to R2 TEMP Storage (FAST - CloudFlare CDN)
-    if (fileUploads.length > 0) {
-      btn.disabled = true;
-      
-      try {
-        const sessionId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        const totalFiles = fileUploads.length;
-        let uploadedCount = 0;
+    // 3. Get uploaded files from instant-upload.js
+    const uploadedFiles = window.getUploadedFiles ? window.getUploadedFiles() : {};
+    console.log('📁 Files from instant-upload:', uploadedFiles);
 
-        // PARALLEL UPLOAD for maximum speed (batch of 3 at a time)
-        const batchSize = 3;
-        for (let i = 0; i < fileUploads.length; i += batchSize) {
-          const batch = fileUploads.slice(i, i + batchSize);
-          
-          const batchPromises = batch.map(async (item) => {
-            const safeName = item.file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-            const uploadUrl = `/api/upload/temp-file?sessionId=${sessionId}&filename=${encodeURIComponent(safeName)}`;
-            
-            const res = await fetch(uploadUrl, {
-              method: 'POST',
-              body: item.file
-            });
-            
-            if (!res.ok) {
-              const errData = await res.json().catch(() => ({}));
-              throw new Error(errData.error || errData.details || 'Upload failed: ' + res.status);
-            }
-            
-            const data = await res.json();
-            uploadedCount++;
-            btn.textContent = `Uploading (${uploadedCount}/${totalFiles})... ⏳`;
-            
-            if (data.success && data.tempUrl) {
-              return { 
-                field: item.key, 
-                tempUrl: data.tempUrl,
-                filename: safeName
-              };
-            } else {
-              throw new Error(data.error || 'Unknown upload error');
-            }
-          });
-
-          await Promise.all(batchPromises).then(results => {
-            results.forEach(result => {
-              selectedAddons.push({ 
-                field: result.field, 
-                value: `[TEMP_FILE]: ${result.tempUrl}`,
-                filename: result.filename
-              });
-            });
-          });
-        }
-
-        // Store session ID for background processing
+    // Add uploaded file URLs to addons
+    Object.keys(uploadedFiles).forEach(inputId => {
+      const fileUrl = uploadedFiles[inputId];
+      if (fileUrl) {
         selectedAddons.push({
-          field: '_temp_session',
-          value: sessionId
+          field: inputId,
+          value: `[PHOTO LINK]: ${fileUrl}`
         });
-
-        btn.textContent = 'Upload Complete ✓';
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-      } catch (err) {
-        console.error('Upload error:', err);
-        alert('Upload Error: ' + err.message + '\n\nPlease check your internet connection and try again.');
-        btn.disabled = false;
-        btn.textContent = originalText;
-        return;
+        console.log(`📸 Added photo: ${inputId} -> ${fileUrl}`);
       }
-    }
+    });
 
     // 3. Whop Dynamic Checkout - Auto Plan Creation
     btn.innerHTML = `
