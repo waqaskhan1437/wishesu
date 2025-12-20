@@ -29,6 +29,22 @@ export function getDebugInfo(env) {
 }
 
 /**
+ * Get Archive.org credentials for direct browser upload
+ * Zero CPU - just returns credentials, browser uploads directly
+ */
+export function getArchiveCredentials(env) {
+  if (!env.ARCHIVE_ACCESS_KEY || !env.ARCHIVE_SECRET_KEY) {
+    return json({ error: 'Archive.org credentials not configured' }, 500);
+  }
+
+  return json({
+    success: true,
+    accessKey: env.ARCHIVE_ACCESS_KEY,
+    secretKey: env.ARCHIVE_SECRET_KEY
+  });
+}
+
+/**
  * Purge Cloudflare cache manually
  */
 export async function purgeCache(env) {

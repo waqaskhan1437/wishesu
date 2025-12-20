@@ -1,240 +1,198 @@
 /*
-  * FIXED: Instant File Upload with Direct R2 Upload (ZERO-CPU)
-  * Works with dynamically created file inputs
+  * Instant File Upload - Direct to Archive.org
+  * Zero Worker CPU - Browser uploads directly to Archive.org
   */
 
 (function() {
-  console.log('🚀 INSTANT UPLOAD SCRIPT LOADED (ZERO-CPU MODE)');
-  
   const uploadQueue = new Map();
-  let isProcessing = false;
+  let activeUploads = 0;
 
-  // Initialize IMMEDIATELY
   initFileUploads();
 
+  // Disable/Enable checkout button during upload
+  function setCheckoutButtonState(disabled) {
+    const btn = document.getElementById('checkout-btn');
+    if (btn) {
+      btn.disabled = disabled;
+      btn.style.opacity = disabled ? '0.5' : '1';
+      btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+    }
+  }
+
   function initFileUploads() {
-    console.log('📁 Initializing instant file uploads...');
-    
-    // Method 1: Direct event listener on document
     document.addEventListener('change', handleFileChange, true);
-    
-    // Method 2: MutationObserver for dynamic inputs
+
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === 1) { // Element node
-            // Check if added node is file input
-            if (node.tagName === 'INPUT' && node.type === 'file') {
-              console.log('📕 New file input detected:', node.id || 'no-id');
-            }
-            // Check if added node contains file inputs
-            const fileInputs = node.querySelectorAll ? node.querySelectorAll('input[type="file"]') : [];
-            fileInputs.forEach(input => {
-              console.log('📕 New file input detected in container:', input.id || 'no-id');
-            });
+          if (node.nodeType === 1) {
+            // Watch for new file inputs
           }
         });
       });
     });
-    
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-    
-    console.log('✅ File upload system initialized');
-    console.log('✅ Event listener attached');
-    console.log('✅ Mutation observer watching for new inputs');
+
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   function handleFileChange(e) {
-    if (e.target && e.target.type === 'file') {
-      console.log('📷 FILE CHANGE EVENT DETECTED!');
-      console.log('   Input ID:', e.target.id || 'NO ID');
-      console.log('   Files count:', e.target.files.length);
-      
-      if (e.target.files.length > 0) {
-        const file = e.target.files[0];
-        console.log('   File name:', file.name);
-        console.log('   File size:', file.size, 'bytes');
-        console.log('   File type:', file.type);
+    if (e.target && e.target.type === 'file' && e.target.files.length > 0) {
+      const file = e.target.files[0];
 
-        // Validate file size (max 500MB for video, 10MB for files)
-        const isVideo = file.name.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|m4v|flv|wmv)$/);
-        const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
-        const maxSizeLabel = isVideo ? '500MB' : '10MB';
-        
-        if (file.size > maxSize) {
-          const sizeMB = (file.size / 1024 / 1024).toFixed(2);
-          console.error('❌ File too large:', sizeMB, 'MB (max', maxSizeLabel, ')');
-          alert(`File too large: ${sizeMB}MB\n\nMaximum file size is ${maxSizeLabel}.\n\nPlease choose a smaller file.`);
-          e.target.value = ''; // Clear the input
-          return;
-        }
+      // Validate file size
+      const isVideo = file.name.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|m4v|flv|wmv)$/);
+      const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
+      const maxSizeLabel = isVideo ? '500MB' : '10MB';
 
-        let inputId = e.target.id;
-        if (!inputId) {
-          inputId = 'file_' + Date.now();
-          e.target.id = inputId;
-          console.log('   ⚠️ Generated ID:', inputId);
-        }
-        
-        // Show preview immediately
-        showPreview(e.target, file);
-        
-        // Start direct upload
-        uploadFileDirectly(inputId, file);
+      if (file.size > maxSize) {
+        const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+        alert(`File too large: ${sizeMB}MB\n\nMaximum size: ${maxSizeLabel}`);
+        e.target.value = '';
+        return;
       }
+
+      let inputId = e.target.id || ('file_' + Date.now());
+      e.target.id = inputId;
+
+      showPreview(e.target, file);
+      uploadToArchive(inputId, file);
     }
   }
 
   function showPreview(input, file) {
-    console.log('🖼️ SHOWING PREVIEW');
-    console.log('   File:', file.name);
-    console.log('   Input:', input.id);
-
     try {
-      // Find or create preview container
       let preview = input.nextElementSibling;
       if (!preview || !preview.classList.contains('file-preview')) {
-        console.log('   Creating new preview container...');
         preview = document.createElement('div');
         preview.className = 'file-preview';
         preview.style.cssText = 'margin-top: 10px;';
-        
-        // Insert after input
-        if (input.nextSibling) {
-          input.parentNode.insertBefore(preview, input.nextSibling);
-        } else {
-          input.parentNode.appendChild(preview);
-        }
-        console.log('   ✅ Preview container created');
-      } else {
-        console.log('   Using existing preview container');
+        input.parentNode.insertBefore(preview, input.nextSibling);
       }
 
-      // Show loading state
       preview.innerHTML = `
-        <div style="padding: 15px; background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px;">
+        <div style="padding: 12px; background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="spinner" style="width: 20px; height: 20px; border: 3px solid #3b82f6; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+            <div class="spinner" style="width: 18px; height: 18px; border: 2px solid #3b82f6; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
             <div>
-              <strong style="color: #1e40af;">🚀 Uploading directly to storage...</strong>
-              <div style="font-size: 0.85em; color: #6b7280; margin-top: 3px;">${file.name} (${(file.size / 1024).toFixed(1)} KB)</div>
+              <strong style="color: #1e40af;">Uploading...</strong>
+              <div style="font-size: 0.85em; color: #6b7280; margin-top: 2px;">${file.name}</div>
             </div>
           </div>
         </div>
       `;
 
-      // Show thumbnail for images
       if (file.type.startsWith('image/')) {
-        console.log('   Creating image thumbnail...');
         const reader = new FileReader();
         reader.onload = function(e) {
-          const imgPreview = document.createElement('img');
-          imgPreview.src = e.target.result;
-          imgPreview.style.cssText = 'width: 100px; height: 100px; object-fit: cover; border-radius: 8px; margin-top: 10px; border: 2px solid #3b82f6;';
-          preview.appendChild(imgPreview);
-          console.log('   ✅ Thumbnail added');
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          img.style.cssText = 'width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-top: 8px; border: 2px solid #3b82f6;';
+          preview.appendChild(img);
         };
         reader.readAsDataURL(file);
       }
     } catch (err) {
-      console.error('❌ Preview error:', err);
+      console.error('Preview error:', err);
     }
   }
 
-  async function uploadFileDirectly(inputId, file) {
-    console.log('🚀 STARTING R2 UPLOAD');
-    console.log('   Input ID:', inputId);
-    console.log('   File:', file.name);
+  async function uploadToArchive(inputId, file) {
+    activeUploads++;
+    setCheckoutButtonState(true);
 
     try {
-      // Generate unique sessionId for upload
-      const sessionId = 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      const filename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      // Step 1: Get upload credentials from worker (lightweight - no file data)
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substr(2, 9);
+      const itemId = `wishesu_${timestamp}_${randomStr}`;
+      const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
 
-      console.log('☁️ Using R2 Upload via Worker');
-      console.log('   Session ID:', sessionId);
-      console.log('   Filename:', filename);
-
-      // Upload directly to R2 via worker endpoint
-      console.log('☁️ Uploading to R2...');
-      const uploadUrl = `/api/upload/temp-file?sessionId=${encodeURIComponent(sessionId)}&filename=${encodeURIComponent(filename)}`;
-
-      const uploadResponse = await fetch(uploadUrl, {
+      const credResponse = await fetch('/api/upload/archive-credentials', {
         method: 'POST',
-        body: file,
-        headers: {
-          'Content-Type': file.type || 'application/octet-stream'
-        }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId, filename: safeFilename })
       });
 
-      console.log('☁️ Upload status:', uploadResponse.status);
+      if (!credResponse.ok) {
+        throw new Error('Failed to get upload credentials');
+      }
+
+      const creds = await credResponse.json();
+      if (!creds.success) {
+        throw new Error(creds.error || 'Failed to get credentials');
+      }
+
+      // Step 2: Upload DIRECTLY to Archive.org from browser (Zero Worker CPU)
+      const archiveUrl = `https://s3.us.archive.org/${itemId}/${safeFilename}`;
+
+      const uploadResponse = await fetch(archiveUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `LOW ${creds.accessKey}:${creds.secretKey}`,
+          'Content-Type': file.type || 'application/octet-stream',
+          'x-archive-auto-make-bucket': '1',
+          'x-archive-meta-mediatype': file.type.startsWith('video/') ? 'movies' : (file.type.startsWith('image/') ? 'image' : 'data'),
+          'x-archive-meta-collection': file.type.startsWith('video/') ? 'opensource_movies' : 'opensource',
+          'x-archive-meta-title': file.name,
+          'x-archive-meta-description': 'Uploaded via WishesU'
+        },
+        body: file
+      });
 
       if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json().catch(() => ({}));
-        console.error('❌ Upload failed:', errorData);
-        throw new Error(errorData.error || `Upload failed: ${uploadResponse.status}`);
+        const errorText = await uploadResponse.text().catch(() => '');
+        throw new Error(`Archive.org upload failed: ${uploadResponse.status} ${errorText}`);
       }
 
-      const uploadData = await uploadResponse.json();
-      console.log('✅ Upload response:', uploadData);
+      // Success - build final URL
+      const finalUrl = `https://archive.org/download/${itemId}/${safeFilename}`;
 
-      if (!uploadData.success) {
-        throw new Error(uploadData.error || 'Upload failed');
-      }
-
-      // Build the final URL for accessing the file
-      const finalUrl = `/api/r2/file?key=${encodeURIComponent(uploadData.tempUrl.replace('r2://', ''))}`;
-
-      // Store upload results
       uploadQueue.set(inputId, {
-        sessionId: sessionId,
         fileName: file.name,
         status: 'uploaded',
         url: finalUrl,
-        tempUrl: uploadData.tempUrl,
-        uploadMethod: 'r2-worker'
+        itemId: itemId
       });
 
       updatePreviewSuccess(inputId, file);
-      console.log('✅ UPLOAD COMPLETE!');
-      console.log('   Final URL:', finalUrl);
-      console.log('   Temp URL:', uploadData.tempUrl);
 
     } catch (err) {
-      console.error('❌ UPLOAD FAILED:', err);
+      console.error('Upload failed:', err);
       uploadQueue.set(inputId, { status: 'failed', error: err.message });
       updatePreviewError(inputId, file, err.message);
+    } finally {
+      activeUploads--;
+      if (activeUploads <= 0) {
+        activeUploads = 0;
+        setCheckoutButtonState(false);
+      }
     }
   }
 
   function updatePreviewSuccess(inputId, file) {
-    console.log('✅ Updating preview to SUCCESS');
     const input = document.getElementById(inputId);
     const preview = input?.nextElementSibling;
-    
+
     if (preview && preview.classList.contains('file-preview')) {
       preview.innerHTML = `
-        <div style="padding: 15px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 8px;">
+        <div style="padding: 12px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 8px;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="color: #10b981; font-size: 24px;">✅</div>
+            <div style="color: #10b981; font-size: 20px;">✓</div>
             <div>
-              <strong style="color: #065f46;">☁️ Uploaded Successfully! (Zero-CPU)</strong>
-              <div style="font-size: 0.85em; color: #6b7280; margin-top: 3px;">${file.name}</div>
+              <strong style="color: #065f46;">Uploaded</strong>
+              <div style="font-size: 0.85em; color: #6b7280; margin-top: 2px;">${file.name}</div>
             </div>
           </div>
         </div>
       `;
-      
+
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = function(e) {
-          const imgPreview = document.createElement('img');
-          imgPreview.src = e.target.result;
-          imgPreview.style.cssText = 'width: 100px; height: 100px; object-fit: cover; border-radius: 8px; margin-top: 10px; border: 2px solid #10b981;';
-          preview.appendChild(imgPreview);
+          const img = document.createElement('img');
+          img.src = e.target.result;
+          img.style.cssText = 'width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin-top: 8px; border: 2px solid #10b981;';
+          preview.appendChild(img);
         };
         reader.readAsDataURL(file);
       }
@@ -242,18 +200,17 @@
   }
 
   function updatePreviewError(inputId, file, errorMsg) {
-    console.log('❌ Updating preview to ERROR');
     const input = document.getElementById(inputId);
     const preview = input?.nextElementSibling;
-    
+
     if (preview && preview.classList.contains('file-preview')) {
       preview.innerHTML = `
-        <div style="padding: 15px; background: #fef2f2; border: 2px solid #ef4444; border-radius: 8px;">
+        <div style="padding: 12px; background: #fef2f2; border: 2px solid #ef4444; border-radius: 8px;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="color: #ef4444; font-size: 24px;">❌</div>
+            <div style="color: #ef4444; font-size: 20px;">✕</div>
             <div>
               <strong style="color: #991b1b;">Upload Failed</strong>
-              <div style="font-size: 0.85em; color: #6b7280; margin-top: 3px;">${errorMsg || 'Please try again'}</div>
+              <div style="font-size: 0.85em; color: #6b7280; margin-top: 2px;">${errorMsg || 'Please try again'}</div>
             </div>
           </div>
         </div>
@@ -263,46 +220,35 @@
 
   // Public API
   window.getUploadedFiles = function() {
-    console.log('📁 Getting uploaded files:', uploadQueue.size);
     const files = {};
     uploadQueue.forEach((data, inputId) => {
       if (data.status === 'uploaded' && data.url) {
-        // Return final URL instead of tempId for proper display
         files[inputId] = data.url;
-        console.log(`   ${inputId}: ${data.url}`);
       }
     });
-    console.log('   Total uploaded files:', Object.keys(files).length);
     return files;
   };
 
   window.areAllFilesUploaded = function() {
     let allUploaded = true;
     uploadQueue.forEach((data) => {
-      if (data.status !== 'uploaded') {
-        allUploaded = false;
-      }
+      if (data.status !== 'uploaded') allUploaded = false;
     });
-    console.log('   All files uploaded?', allUploaded);
     return allUploaded;
   };
 
-  // CSS for spinner
+  window.isUploadInProgress = function() {
+    return activeUploads > 0;
+  };
+
+  // CSS
   const style = document.createElement('style');
   style.textContent = `
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    .file-preview {
-      animation: fadeIn 0.3s ease-in;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .file-preview { animation: fadeIn 0.3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   `;
   document.head.appendChild(style);
 
-  console.log('✅ INSTANT UPLOAD READY (ZERO-CPU MODE)');
-  window.uploadQueue = uploadQueue; // For debugging
+  window.uploadQueue = uploadQueue;
 })();

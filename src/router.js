@@ -82,7 +82,8 @@ import {
   saveWhopSettings,
   getR2File,
   uploadEncryptedFile,
-  uploadTempFile
+  uploadTempFile,
+  getArchiveCredentials
 } from './controllers/admin.js';
 
 /**
@@ -115,6 +116,11 @@ export async function routeApiRequest(req, env, url, path, method) {
   // ----- FILE UPLOAD ROUTES (no DB required) -----
   if (method === 'POST' && path === '/api/upload/temp-file') {
     return uploadTempFile(env, req, url);
+  }
+
+  // Archive.org credentials for direct browser upload (Zero CPU)
+  if (method === 'POST' && path === '/api/upload/archive-credentials') {
+    return getArchiveCredentials(env);
   }
 
   // ----- ALL OTHER API ROUTES REQUIRE DB -----
