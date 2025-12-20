@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2024-01-01"
 
 [assets]
-directory = "./wishesu-main/public"
+directory = "./public"
 # Expose the static asset directory as the `ASSETS` binding.  With a Worker
 # script present, Cloudflare still serves matching files automatically
 # †679589428825689†L551-L555; however, binding the directory allows our worker to
