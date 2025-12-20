@@ -192,6 +192,21 @@ export async function createPlanCheckout(env, body, origin) {
 
   const currency = env.WHOP_CURRENCY || 'usd';
 
+  // First, update Product to allow multiple purchases
+  try {
+    await fetch(`https://api.whop.com/api/v2/products/${finalProdId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ one_per_user: false })
+    });
+    console.log('✅ Product updated: one_per_user = false');
+  } catch (e) {
+    console.log('Product update skipped:', e.message);
+  }
+
   // Create one-time plan with unlimited purchases allowed
   // one_per_user: false = same user can buy multiple times
   // allow_multiple_quantity: true = can buy multiple in one checkout

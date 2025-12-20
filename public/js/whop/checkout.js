@@ -261,11 +261,14 @@
     // Prepare email attribute for the embed
     const email = pendingOrderData.email || '';
     const emailAttribute = email ? `data-whop-checkout-email="${email}"` : '';
+    // If email is prefilled, disable email field to skip OTP for returning users
+    const disableEmailAttribute = email ? 'data-whop-checkout-disable-email="true"' : '';
     console.log('🟢 Email attribute:', emailAttribute);
+    console.log('🟢 Disable email:', disableEmailAttribute);
 
     // Construct the embed HTML with email attribute
     // Use Whop's native submit button for best reliability
-    const embed = `<div id="whop-embedded-checkout" data-whop-checkout-plan-id="${selectedPlan}" data-whop-checkout-theme="${theme}" ${emailAttribute} data-whop-checkout-metadata='${metadataStr}' data-whop-checkout-on-complete="whopCheckoutComplete"></div>`;
+    const embed = `<div id="whop-embedded-checkout" data-whop-checkout-plan-id="${selectedPlan}" data-whop-checkout-theme="${theme}" ${emailAttribute} ${disableEmailAttribute} data-whop-checkout-metadata='${metadataStr}' data-whop-checkout-on-complete="whopCheckoutComplete"></div>`;
     
     console.log('🟢 Embed HTML:', embed);
 
