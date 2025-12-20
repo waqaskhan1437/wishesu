@@ -123,12 +123,13 @@ export async function getWhopSettings(env) {
   const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
   if (row && row.value) {
     try {
-      return json(JSON.parse(row.value));
+      const settings = JSON.parse(row.value);
+      return json({ settings });
     } catch (e) {
-      return json({});
+      return json({ settings: {} });
     }
   }
-  return json({});
+  return json({ settings: {} });
 }
 
 /**
