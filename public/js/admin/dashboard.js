@@ -451,6 +451,13 @@
         <label style="display: block; margin-bottom: 5px; font-weight: 600;">Price Map:</label>
         <textarea id="price-map" rows="5" placeholder="60|plan_60" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;"></textarea>
       </div>
+      <div style="margin: 20px 0; padding: 15px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="enable-minimal-checkout" style="width: 18px; height: 18px; cursor: pointer;">
+          <span style="font-weight: 600;">Enable Minimal Checkout (Apple Pay / Custom Buttons)</span>
+        </label>
+        <small style="color: #6b7280; display: block; margin-top: 8px; margin-left: 28px;">When enabled, shows Apple Pay and Card payment buttons instead of the standard checkout button.</small>
+      </div>
       <div style="margin: 20px 0; padding: 15px; background: #f9fafb; border-radius: 8px;">
         <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center;">
           <button class="btn" id="whop-test-api" style="background: #3b82f6; color: white;">Test API</button>
@@ -975,6 +982,9 @@
         if (defaultProductEl) defaultProductEl.value = data.settings.default_product_id || '';
         if (priceMapEl) priceMapEl.value = data.settings.price_map || '';
         if (googleUrlEl) googleUrlEl.value = data.settings.google_webapp_url || '';
+
+        const minimalCheckoutEl = document.getElementById('enable-minimal-checkout');
+        if (minimalCheckoutEl) minimalCheckoutEl.checked = !!data.settings.enable_minimal_checkout;
       }
     } catch (err) { console.error('Settings error:', err); }
   }
@@ -986,6 +996,7 @@
     const defaultProduct = document.getElementById('default-product') ? document.getElementById('default-product').value.trim() : '';
     const priceMap = document.getElementById('price-map').value.trim();
     const googleUrl = document.getElementById('google-webapp-url') ? document.getElementById('google-webapp-url').value.trim() : '';
+    const enableMinimalCheckout = document.getElementById('enable-minimal-checkout') ? document.getElementById('enable-minimal-checkout').checked : false;
 
     try {
       const payload = {
@@ -993,7 +1004,8 @@
         webhook_secret: webhookSecret,
         default_plan: defaultPlan,
         price_map: priceMap,
-        google_webapp_url: googleUrl
+        google_webapp_url: googleUrl,
+        enable_minimal_checkout: enableMinimalCheckout
       };
       if (defaultProduct) payload.default_product_id = defaultProduct;
       const res = await fetch('/api/settings/whop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });

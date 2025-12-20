@@ -415,16 +415,52 @@
     stickyFooter.style.marginTop = '2rem';
     stickyFooter.style.paddingTop = '1rem';
     stickyFooter.style.borderTop = '1px solid #e5e5e5';
-    
-    const checkoutBtn = document.createElement('button');
-    checkoutBtn.id = 'checkout-btn';
-    checkoutBtn.className = 'btn-buy';
-    checkoutBtn.textContent = 'Checkout - $' + window.currentTotal.toLocaleString();
-    checkoutBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      if (typeof handleCheckout === 'function') handleCheckout();
-    });
-    stickyFooter.appendChild(checkoutBtn);
+
+    // Check if Minimal Checkout is enabled
+    const useMinimal = window.whopSettings && window.whopSettings.enable_minimal_checkout;
+
+    if (useMinimal) {
+      // Minimal Checkout: Apple Pay + Card buttons side by side
+      const btnContainer = document.createElement('div');
+      btnContainer.style.cssText = 'display: flex; gap: 12px; flex-wrap: wrap;';
+
+      // Apple Pay Button
+      const applePayBtn = document.createElement('button');
+      applePayBtn.id = 'apple-pay-btn';
+      applePayBtn.className = 'btn-buy';
+      applePayBtn.style.cssText = 'flex: 1; min-width: 140px; background: #000; color: #fff;';
+      applePayBtn.innerHTML = ' Pay';
+      applePayBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (typeof handleCheckout === 'function') handleCheckout();
+      });
+
+      // Card Button
+      const cardBtn = document.createElement('button');
+      cardBtn.id = 'checkout-btn';
+      cardBtn.className = 'btn-buy';
+      cardBtn.style.cssText = 'flex: 1; min-width: 140px; background: #2563eb; color: #fff;';
+      cardBtn.textContent = 'Pay with Card 💳';
+      cardBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (typeof handleCheckout === 'function') handleCheckout();
+      });
+
+      btnContainer.appendChild(applePayBtn);
+      btnContainer.appendChild(cardBtn);
+      stickyFooter.appendChild(btnContainer);
+    } else {
+      // Standard Checkout Button
+      const checkoutBtn = document.createElement('button');
+      checkoutBtn.id = 'checkout-btn';
+      checkoutBtn.className = 'btn-buy';
+      checkoutBtn.textContent = 'Checkout - $' + window.currentTotal.toLocaleString();
+      checkoutBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (typeof handleCheckout === 'function') handleCheckout();
+      });
+      stickyFooter.appendChild(checkoutBtn);
+    }
     panel.appendChild(stickyFooter);
     
     rightCol.appendChild(panel);
