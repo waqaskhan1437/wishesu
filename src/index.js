@@ -65,9 +65,16 @@ export default {
       // Handle both /admin and /admin/ and all admin sub-routes
       if ((path === '/admin' || path.startsWith('/admin/')) && !path.startsWith('/api/')) {
         // Special handling for standalone pages that remain separate
-        if (path.endsWith('/page-builder.html') || 
-            path.endsWith('/landing-builder.html') ||
-            path.endsWith('/product-form.html')) {
+        // Check both with and without .html extension
+        const isProductForm = path.endsWith('/product-form.html') || path.endsWith('/product-form');
+        const isPageBuilder = path.endsWith('/page-builder.html') || path.endsWith('/page-builder');
+        const isLandingBuilder = path.endsWith('/landing-builder.html') || path.endsWith('/landing-builder');
+
+        if (isProductForm || isPageBuilder || isLandingBuilder) {
+          // Redirect to .html version if missing extension
+          if (!path.endsWith('.html')) {
+            return Response.redirect(`${url.origin}${path}.html${url.search}`, 301);
+          }
           // Let them fall through to asset serving
         } else {
           // Serve the main dashboard.html for all other admin routes

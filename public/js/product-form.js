@@ -4,18 +4,29 @@
  */
 
 ;(async function initProductForm(){
+  console.log('🔵 Product Form JS Loaded');
   const params = new URLSearchParams(location.search);
   const productId = params.get('id');
+  console.log('🔵 Product ID from URL:', productId);
+
   const form = document.getElementById('product-form');
-  
-  if(!form) return;
-  
+  console.log('🔵 Form element found:', !!form);
+
+  if(!form) {
+    console.error('🔴 Form not found! Exiting...');
+    return;
+  }
+
   setupGalleryField(form);
 
   if (productId) {
+    console.log('🔵 Loading product data for ID:', productId);
     try {
-      const { product } = await getProduct(productId);
+      const response = await getProduct(productId);
+      console.log('🔵 API Response:', response);
+      const { product } = response;
       if (product) {
+        console.log('🔵 Product loaded:', product.title);
         fillBaseFields(form, product);
         if (typeof populateSeoForm === 'function') populateSeoForm(form, product);
 
@@ -23,10 +34,14 @@
         if (hidden) {
           const addons = Array.isArray(product.addons) ? product.addons : [];
           hidden.value = JSON.stringify(addons);
+          console.log('🔵 Addons loaded:', addons.length);
         }
+      } else {
+        console.error('🔴 Product not found in response');
       }
     } catch (err) {
-      console.error('Failed to load product', err);
+      console.error('🔴 Failed to load product:', err);
+      alert('Failed to load product: ' + err.message);
     }
 
     if (typeof initAddonsBuilder === 'function') initAddonsBuilder(form);
