@@ -471,7 +471,7 @@ export function testWebhook() {
 
 /**
  * Cleanup expired checkout sessions
- * OPTIMIZED: Parallel API calls with batching
+ * Archive plans so users cannot repurchase (handles "already purchased" error)
  */
 export async function cleanupExpired(env) {
   const apiKey = await getWhopApiKey(env);
@@ -491,39 +491,59 @@ export async function cleanupExpired(env) {
 
     const checkouts = expiredCheckouts.results || [];
     if (checkouts.length === 0) {
-      return json({ success: true, deleted: 0, failed: 0, message: 'No expired checkouts' });
+      return json({ success: true, archived: 0, failed: 0, message: 'No expired checkouts' });
     }
 
     // Process in parallel batches of 5 to avoid rate limiting
     const batchSize = 5;
-    let deleted = 0;
+    let archived = 0;
     let failed = 0;
 
     for (let i = 0; i < checkouts.length; i += batchSize) {
       const batch = checkouts.slice(i, i + batchSize);
 
       const results = await Promise.allSettled(batch.map(async (checkout) => {
-        const headers = { 'Authorization': `Bearer ${apiKey}` };
+        const headers = {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        };
 
-        // Delete session and plan in parallel
-        const [sessionResp, planResp] = await Promise.allSettled([
-          fetch(`https://api.whop.com/api/v2/checkout_sessions/${checkout.checkout_id}`, {
-            method: 'DELETE', headers
-          }),
-          checkout.plan_id
-            ? fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
-                method: 'DELETE', headers
-              })
-            : Promise.resolve({ ok: true })
-        ]);
+        let success = false;
 
-        const sessionOk = sessionResp.status === 'fulfilled' &&
-          (sessionResp.value.ok || sessionResp.value.status === 404);
+        // Archive plan (hide it so users cannot buy again)
+        if (checkout.plan_id) {
+          try {
+            // Try to archive by setting visibility to hidden
+            const archiveResp = await fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ visibility: 'hidden' })
+            });
 
-        if (sessionOk) {
+            if (archiveResp.ok) {
+              success = true;
+              console.log('✅ Plan archived (hidden):', checkout.plan_id);
+            } else {
+              // Fallback: try DELETE
+              const deleteResp = await fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${apiKey}` }
+              });
+              success = deleteResp.ok || deleteResp.status === 404;
+              if (success) console.log('✅ Plan deleted:', checkout.plan_id);
+            }
+          } catch (e) {
+            console.error('Plan archive failed:', checkout.plan_id, e.message);
+          }
+        } else {
+          success = true;
+        }
+
+        // Update database
+        if (success) {
           await env.DB.prepare(`
             UPDATE checkout_sessions
-            SET status = 'expired', completed_at = datetime('now')
+            SET status = 'archived', completed_at = datetime('now')
             WHERE checkout_id = ?
           `).bind(checkout.checkout_id).run();
           return { success: true, id: checkout.checkout_id };
@@ -532,16 +552,16 @@ export async function cleanupExpired(env) {
       }));
 
       results.forEach(r => {
-        if (r.status === 'fulfilled' && r.value.success) deleted++;
+        if (r.status === 'fulfilled' && r.value.success) archived++;
         else failed++;
       });
     }
 
     return json({
       success: true,
-      deleted,
+      archived,
       failed,
-      message: `Cleaned up ${deleted} expired checkouts`
+      message: `Archived ${archived} plans - users cannot repurchase these`
     });
   } catch (e) {
     console.error('Cleanup error:', e);
