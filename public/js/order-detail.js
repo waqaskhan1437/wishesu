@@ -128,12 +128,9 @@
   }
 
   function startCountdown(minutes, createdAt) {
-    // Stop any existing timer
     if (countdownTimer) {
       countdownTimer.stop();
     }
-
-    // Create and start new timer
     countdownTimer = new CountdownTimer('countdown-display', minutes, createdAt, {
       serverTimeOffset: window.timerOffset || 0
     });
@@ -144,17 +141,13 @@
     document.getElementById('countdown-section').style.display = 'none';
     document.getElementById('video-player-section').style.display = 'block';
 
-    // Initialize Universal Video Player
     const playerContainer = document.getElementById('universal-video-player');
     if (playerContainer) {
-      // Clear any existing content
       playerContainer.innerHTML = '';
-      // Set a consistent height for iframes/videos
       playerContainer.style.width = '100%';
       playerContainer.style.height = '400px';
 
       if (window.UniversalPlayer && order.delivered_video_url) {
-        // Parse video metadata if available
         let videoMetadata = null;
         if (order.delivered_video_metadata) {
           try {
@@ -163,11 +156,8 @@
             console.warn('Failed to parse video metadata:', e);
           }
         }
-
-        // Render with enhanced support for Archive.org videos
         window.UniversalPlayer.render('universal-video-player', order.delivered_video_url, videoMetadata);
       } else if (order.delivered_video_url) {
-        // Fallback: show a direct video element/link
         playerContainer.innerHTML = `
           <video controls preload="metadata" style="width: 100%; height: 400px; background: #000;">
             <source src="${order.delivered_video_url}" type="video/mp4">
@@ -179,18 +169,15 @@
       }
     }
 
-    // Show action buttons
     const downloadBtn = document.getElementById('download-btn');
     const revisionBtn = document.getElementById('revision-btn');
     const approveBtn = document.getElementById('approve-btn');
 
     if (downloadBtn) {
       downloadBtn.style.display = 'inline-flex';
-
       if (window.UniversalPlayer && order.delivered_video_url) {
         const detected = window.UniversalPlayer.detect(order.delivered_video_url);
         const openOnlyTypes = ['youtube', 'vimeo', 'bunny-embed'];
-
         if (openOnlyTypes.includes(detected.type)) {
           downloadBtn.textContent = '🔗 Open Video';
           downloadBtn.href = order.delivered_video_url;
@@ -207,12 +194,9 @@
       }
     }
 
-    // Show buttons for buyers by default
     if (!isAdmin) {
       if (revisionBtn) revisionBtn.style.display = 'inline-flex';
       if (approveBtn) approveBtn.style.display = 'inline-flex';
-
-      // Check if review already exists for this order (async, don't block)
       setTimeout(async () => {
         try {
           const reviewRes = await fetch('/api/reviews');
@@ -220,7 +204,6 @@
           if (reviewData.reviews && Array.isArray(reviewData.reviews)) {
             const hasReview = reviewData.reviews.some(r => r.order_id === order.order_id);
             if (hasReview) {
-              // Hide approve button and review section if review already submitted
               if (approveBtn) approveBtn.style.display = 'none';
               if (revisionBtn) revisionBtn.style.display = 'none';
               document.getElementById('review-section').style.display = 'none';
@@ -228,7 +211,6 @@
           }
         } catch (e) {
           console.warn('Could not check review status:', e);
-          // On error, keep buttons visible (fail safe)
         }
       }, 100);
     } else {
@@ -240,6 +222,7 @@
     document.getElementById('status-message').innerHTML = '<h3>✅ Video Ready!</h3><p>Your video has been delivered and is ready to watch</p>';
   }
 
+  // --- UPDATED: DIRECT CLIENT-SIDE UPLOAD TO ARCHIVE.ORG ---
   async function submitDelivery() {
     const url = document.getElementById('delivery-url').value.trim();
     const file = document.getElementById('delivery-file').files[0];
@@ -252,85 +235,96 @@
     }
 
     let videoUrl = url;
+    
+    // UI Helpers
+    const btn = document.getElementById('submit-delivery-btn');
+    const progressDiv = document.getElementById('upload-progress');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+
+    const resetUI = (msg) => {
+      alert(msg);
+      btn.innerHTML = '✅ Submit Delivery';
+      btn.disabled = false;
+      progressDiv.style.display = 'none';
+    };
+
     if (file) {
-      // Validate file size on frontend
-      const maxSize = 500 * 1024 * 1024; // 500MB
+      const maxSize = 1000 * 1024 * 1024; // 1GB Limit
       if (file.size > maxSize) {
-        alert(`File too large! Maximum size is 500MB for videos. Your file is ${(file.size / 1024 / 1024).toFixed(1)}MB.`);
+        alert(`File too large! Max size 1GB. Yours: ${(file.size/1024/1024).toFixed(1)}MB`);
         return;
       }
 
-      const btn = document.getElementById('submit-delivery-btn');
-      const progressDiv = document.getElementById('upload-progress');
-      const progressBar = document.getElementById('progress-bar');
-      const progressText = document.getElementById('progress-text');
-      
-      btn.innerHTML = `
-        <span style="display: inline-flex; align-items: center; gap: 8px;">
-          <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite;"></span>
-          Uploading Video...
-        </span>
-      `;
       btn.disabled = true;
+      btn.innerHTML = '⏳ Initializing Upload...';
       progressDiv.style.display = 'block';
-      
+      progressBar.style.width = '0%';
+      progressText.textContent = 'Getting credentials...';
+
       try {
-        const itemId = 'delivery_' + orderId + '_' + Date.now();
-        const filename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const uploadUrl = `/api/upload/customer-file?itemId=${itemId}&filename=${encodeURIComponent(filename)}&originalFilename=${encodeURIComponent(file.name)}&orderId=${encodeURIComponent(orderId)}`;
-        
-        // Create XMLHttpRequest for progress tracking
+        // 1. Get Archive.org Credentials
+        const credRes = await fetch('/api/upload/archive-credentials', { method: 'POST' });
+        const creds = await credRes.json();
+        if (!creds.success) throw new Error('Authentication failed. Check admin settings.');
+
+        // 2. Prepare Direct Upload
+        const timestamp = Date.now();
+        const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        // Unique Bucket Name
+        const cleanOrderId = orderId.replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
+const itemId = `delivery_${cleanOrderId}_${timestamp}`;
+        const archiveUrl = `https://s3.us.archive.org/${itemId}/${safeFilename}`;
+
+        // 3. Upload directly using XHR
         const xhr = new XMLHttpRequest();
         
-        // Track upload progress
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
-            const percentComplete = (e.loaded / e.total) * 100;
-            progressBar.style.width = percentComplete + '%';
-            progressText.textContent = `Uploading... ${Math.round(percentComplete)}% (${(e.loaded / 1024 / 1024).toFixed(1)}MB / ${(e.total / 1024 / 1024).toFixed(1)}MB)`;
+            const pct = Math.round((e.loaded / e.total) * 100);
+            progressBar.style.width = pct + '%';
+            
+            if (pct >= 99) {
+              progressText.textContent = '⏳ Processing... (Do not close tab)';
+              progressText.style.color = '#2563eb';
+              progressBar.style.background = '#f59e0b'; // Orange
+            } else {
+              progressText.textContent = `Uploading... ${pct}%`;
+            }
           }
         });
-        
-        // Handle completion
+
         xhr.addEventListener('load', () => {
           if (xhr.status === 200) {
-            const data = JSON.parse(xhr.responseText);
-            if (data.url) {
-              videoUrl = data.url;
-              progressText.textContent = '✅ Upload complete!';
-              progressBar.style.background = '#10b981';
-              // Continue with delivery submission
-              submitDeliveryWithUrl(videoUrl, thumb, subtitlesUrl, data);
-            } else {
-              throw new Error(data.error || 'Upload failed');
-            }
+            // Success
+            const finalUrl = `https://archive.org/download/${itemId}/${safeFilename}`;
+            const embedUrl = `https://archive.org/details/${itemId}`;
+            
+            progressText.textContent = '✅ Upload Complete!';
+            progressBar.style.background = '#10b981';
+            
+            // Proceed to save to DB
+            submitDeliveryWithUrl(finalUrl, thumb, subtitlesUrl, { embedUrl, itemId });
           } else {
-            const errorData = JSON.parse(xhr.responseText);
-            throw new Error(errorData.error || 'Upload failed');
+            resetUI(`Upload Failed: Server returned ${xhr.status}`);
           }
         });
+
+        xhr.addEventListener('error', () => resetUI('Network Error during upload'));
         
-        // Handle errors
-        xhr.addEventListener('error', () => {
-          throw new Error('Network error during upload');
-        });
-        
-        // Start upload
-        xhr.open('POST', uploadUrl);
+        xhr.open('PUT', archiveUrl);
+        xhr.setRequestHeader('Authorization', `LOW ${creds.accessKey}:${creds.secretKey}`);
+        xhr.setRequestHeader('Content-Type', file.type || 'video/mp4');
+        xhr.setRequestHeader('x-archive-auto-make-bucket', '1');
+        xhr.setRequestHeader('x-archive-meta-mediatype', 'movies');
+        xhr.setRequestHeader('x-archive-meta-title', `Order ${orderId} Delivery`);
         xhr.send(file);
-        
-        // Don't continue with delivery submission here - it will be called from xhr.load
-        return;
-        
+
       } catch (err) {
-        alert('Upload failed: ' + err.message);
-        btn.textContent = '✅ Submit Delivery';
-        btn.disabled = false;
-        progressDiv.style.display = 'none';
-        return;
+        resetUI('Error: ' + err.message);
       }
     } else {
-      // No file upload, proceed directly
+      // Direct URL flow
       submitDeliveryWithUrl(videoUrl, thumb, subtitlesUrl);
     }
   }
@@ -339,27 +333,18 @@
     const btn = document.getElementById('submit-delivery-btn');
     const progressDiv = document.getElementById('upload-progress');
     
+    btn.innerHTML = '💾 Saving to Database...';
+    btn.disabled = true;
+
     try {
-      // Update button for delivery submission
-      btn.innerHTML = `
-        <span style="display: inline-flex; align-items: center; gap: 8px;">
-          <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite;"></span>
-          Submitting Delivery...
-        </span>
-      `;
-      
-      // Include additional metadata for Archive.org uploads
       const deliveryData = { 
         orderId, 
         videoUrl, 
         thumbnailUrl: thumb 
       };
 
-      if (subtitlesUrl) {
-        deliveryData.subtitlesUrl = subtitlesUrl;
-      }
+      if (subtitlesUrl) deliveryData.subtitlesUrl = subtitlesUrl;
       
-      // Add archive.org specific data if available
       if (uploadData && uploadData.embedUrl) {
         deliveryData.embedUrl = uploadData.embedUrl;
         deliveryData.itemId = uploadData.itemId;
@@ -370,19 +355,26 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(deliveryData)
       });
+      
       const data = await res.json();
       if (res.ok && data.success) {
         btn.innerHTML = '✅ Delivered Successfully!';
-        // Remove auto-reload, just reload the order data
+        alert('Order delivered successfully!');
+        // Reload order data without page refresh
+        loadOrder();
+        // Hide upload UI after a moment
         setTimeout(() => {
-          loadOrder();
-        }, 1500);
-      } else throw new Error(data.error || 'Failed');
+          if(progressDiv) progressDiv.style.display = 'none';
+          btn.innerHTML = '✅ Submit Delivery';
+          btn.disabled = false;
+        }, 2000);
+      } else {
+        throw new Error(data.error || 'Failed to save delivery');
+      }
     } catch (err) {
-      alert('Error: ' + err.message);
+      alert('Error saving delivery: ' + err.message);
       btn.textContent = '✅ Submit Delivery';
       btn.disabled = false;
-      progressDiv.style.display = 'none';
     }
   }
 
