@@ -70,7 +70,7 @@
           margin: 0 auto;
         ">
           ${products.map(p => this.renderCard(p, { showReviews, showDelivery })).join('')}
-        </div>
+        </a>
       `;
 
       // Schema now injected server-side for better SEO and to prevent duplicates
@@ -115,22 +115,22 @@
         <div class="product-prices">
           ${hasDiscount ? `<span class="original-price">$${originalPrice}</span>` : ''}
           <span class="sale-price">$${salePrice}</span>
-        </div>
+        </a>
       `;
       const reviewHtml = `
         <div class="product-reviews">
           ${stars}
           <span class="review-count">(${review_count || 0})</span>
-        </div>
+        </a>
       `;
       const deliveryHtml = `
         <div class="product-delivery">
           <span class="delivery-icon">${deliveryIcon}</span>
           <span class="delivery-text">${deliveryText}</span>
-        </div>
+        </a>
       `;
       return `
-        <div class="product-card" data-product-id="${id}" onclick="window.location.href='${productUrl}'">
+        <a class="product-card" data-product-id="${id}" href="${productUrl}">
           <!-- Thumbnail -->
           <div class="product-thumbnail">
             <img src="${thumbnail_url || '/placeholder.jpg'}" alt="${title}">
@@ -152,11 +152,11 @@
             ${showDelivery ? deliveryHtml : ''}
 
             <!-- Book Now Button -->
-            <button class="book-now-btn" onclick="event.stopPropagation(); window.location.href='${productUrl}'">
+            <span class="book-now-btn">
               Book Now
-            </button>
+            </span>
           </div>
-        </div>
+        </a>
       `;
     },
 
@@ -223,6 +223,8 @@
           cursor: pointer;
           display: flex;
           flex-direction: column;
+          text-decoration: none;
+          color: inherit;
         }
 
         .product-card:hover {
@@ -359,6 +361,8 @@
         }
 
         .book-now-btn {
+          display: block;
+          text-align: center;
           width: 100%;
           padding: 12px;
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

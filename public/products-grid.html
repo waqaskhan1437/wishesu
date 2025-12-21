@@ -8,7 +8,7 @@
   <script type="application/ld+json" id="collection-schema">{}</script>
   <style>
     .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; padding: 20px; }
-    .product-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.3s, box-shadow 0.3s; cursor: pointer; }
+    .product-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.3s, box-shadow 0.3s; cursor: pointer;  text-decoration: none; color: inherit; display: block; }
     .product-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
     .product-thumbnail { width: 100%; aspect-ratio: 16/9; background: #f3f4f6; position: relative; overflow: hidden; }
     .product-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
@@ -58,7 +58,7 @@
       const deliveryTime = product.instant_delivery ? 'Instant' : (product.normal_delivery_text || '60 min');
       
       return `
-        <div class="product-card" onclick="window.location.href='/product?id=${product.id}'">
+        <a class="product-card" href="/product?id=${product.id}">
           <div class="product-thumbnail">
             ${product.thumbnail_url ? 
               `<img src="${product.thumbnail_url}" alt="${product.title}">` : 
@@ -83,17 +83,12 @@
               </div>
               <div class="delivery-time">⚡ ${deliveryTime}</div>
             </div>
-            <button class="buy-btn" onclick="event.stopPropagation(); buyNow(${product.id})">Buy Now</button>
+            <span class="buy-btn">Book Now</span>
           </div>
-        </div>
+        </a>
       `;
     }
-
-    function buyNow(productId) {
-      window.location.href = '/product?id=' + productId;
-    }
-
-    loadProducts();
+loadProducts();
   </script>
 </body>
 </html>
