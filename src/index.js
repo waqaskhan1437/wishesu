@@ -170,7 +170,11 @@ export default {
         try {
           if (env.DB) {
             await initDB(env);
-            const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
+            const row = await env.DB.prepare(
+              `SELECT content FROM pages
+               WHERE slug = ?
+               AND (status = 'published' OR status = 'active' OR status IS NULL OR status = '')`
+            ).bind(slug).first();
             if (row && row.content) {
               return new Response(row.content, {
                 headers: { 'Content-Type': 'text/html; charset=utf-8' }

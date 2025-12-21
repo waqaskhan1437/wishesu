@@ -10,8 +10,11 @@ import { toISO8601 } from '../utils/formatting.js';
  */
 export async function getPages(env) {
   const r = await env.DB.prepare(
-    'SELECT id, slug, title, meta_description, created_at, updated_at FROM pages WHERE status = ? ORDER BY id DESC'
-  ).bind('published').all();
+    `SELECT id, slug, title, meta_description, created_at, updated_at
+     FROM pages
+     WHERE status = 'published' OR status = 'active' OR status IS NULL OR status = ''
+     ORDER BY id DESC`
+  ).all();
   
   const pages = (r.results || []).map(page => {
     if (page.created_at) page.created_at = toISO8601(page.created_at);
@@ -27,6 +30,11 @@ export async function getPages(env) {
  * Maps to: { name, url, size, uploaded, id, status }
  */
 export async function getPagesList(env) {
+  try {
+    await env.DB.prepare(
+      `UPDATE pages SET status = 'published' WHERE status IS NULL OR status = ''`
+    ).run();
+  } catch (_) {}
   const r = await env.DB.prepare(
     'SELECT id, slug, title, content, status, created_at, updated_at FROM pages ORDER BY id DESC'
   ).all();
@@ -57,7 +65,7 @@ export async function getPagesList(env) {
       url: `/${page.slug}.html`,
       size: sizeStr,
       uploaded: uploaded,
-      status: page.status || 'draft'
+      status: page.status || 'published'
     };
   });
 
