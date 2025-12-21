@@ -1141,8 +1141,7 @@
           return;
         }
         const seoDesc = descInput ? descInput.value.trim() : '';
-        const fullHTML = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>${seoTitle}</title>\n  <meta name="description" content="${seoDesc.replace(/"/g, '&quot;')}">\n</head>\n<body>\n${html}\n<script src="/js/force-download.js"></script>
-</body>\n</html>`;
+        const fullHTML = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>${seoTitle}</title>\n  <meta name="description" content="${seoDesc.replace(/"/g, '&quot;')}">\n</head>\n<body>\n${html}\n</body>\n</html>`;
         try {
           const res = await fetch('/api/pages/save', {
             method: 'POST',
@@ -1176,8 +1175,7 @@
         // Use the enhanced generator for final output
         const html = generateOutputHtml();
         const previewWindow = window.open('', 'preview', 'width=1200,height=800');
-        previewWindow.document.write(`<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head><body>${html}<script src="/js/force-download.js"></script>
-</body></html>`);
+        previewWindow.document.write(`<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head><body>${html}</body></html>`);
         previewWindow.document.close();
       });
       // Load an existing page from the API and populate the canvas
@@ -1282,6 +1280,5 @@
       }
     }
   </script>
-<script src="/js/force-download.js"></script>
 </body>
 </html>

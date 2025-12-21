@@ -272,8 +272,7 @@
         const timestamp = Date.now();
         const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         // Unique Bucket Name
-        const cleanOrderId = orderId.replace(/[^a-zA-Z0-9]/g,'').toLowerCase();
-const itemId = `delivery_${cleanOrderId}_${timestamp}`;
+        const itemId = `delivery_${orderId.replace(/[^a-zA-Z0-9]/g,'')}_${timestamp}`;
         const archiveUrl = `https://s3.us.archive.org/${itemId}/${safeFilename}`;
 
         // 3. Upload directly using XHR
