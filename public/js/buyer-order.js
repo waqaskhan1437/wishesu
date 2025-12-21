@@ -47,7 +47,7 @@
     reviewSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
   document.getElementById('revision-btn')?.addEventListener('click', requestRevision);
-  document.querySelectorAll('.tip-btn').forEach(b => b.addEventListener('click', function() { processTip(this.dataset.amount); }));
+  document.querySelectorAll('.tip-btn').forEach(b => b.addEventListener('click', function(e) { e.preventDefault(); processTip(this.dataset.amount, this); }));
 
   async function loadOrder() {
     try {
@@ -356,10 +356,92 @@
     }
   }
 
-  function processTip(amount) {
-    if (!window.whopCheckout) { alert('Payment not available'); return; }
-    window.whopCheckout({ amount: parseFloat(amount), email: orderData.email || '', metadata: { type: 'tip', orderId: orderData.order_id }, productPlan: orderData.whop_plan || '', productPriceMap: orderData.whop_price_map || '' });
+  async function processTip(amount, btnEl) {
+  const amt = parseFloat(amount);
+  if (!amt || amt <= 0) return;
+
+  // Prevent double-click / multiple checkout opens
+  if (btnEl && btnEl.dataset.processing === '1') return;
+  if (btnEl) {
+    btnEl.dataset.processing = '1';
+    btnEl.classList.add('is-processing');
+    btnEl.disabled = true;
+    const oldText = btnEl.textContent;
+    btnEl.dataset.oldText = oldText;
+    btnEl.textContent = '⏳ Preparing...';
   }
+
+  try {
+    if (!orderData || !orderData.product_id) {
+      throw new Error('Order product not found');
+    }
+    const email = (orderData.email || '').trim();
+
+    // Create a dynamic Whop plan checkout for this tip amount (no redirect)
+    const resp = await fetch('/api/whop/create-plan-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_id: orderData.product_id,
+        amount: amt,
+        email: email,
+        metadata: {
+          type: 'tip',
+          order_id: orderId,
+          tip_amount: amt
+        }
+      })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error((data && (data.error || data.message)) || 'Payment not available');
+    }
+    if (!data || !data.plan_id) {
+      throw new Error('Whop plan not returned');
+    }
+
+    // Store minimal context for the embedded checkout handler
+    try {
+      localStorage.setItem('pendingOrderData', JSON.stringify({
+        email: email,
+        amount: amt,
+        productId: data.product_id || orderData.product_id,
+        orderId: orderId,
+        type: 'tip',
+        timestamp: Date.now()
+      }));
+    } catch (e) {}
+
+    if (!window.whopCheckout) {
+      throw new Error('Payment not available');
+    }
+
+    window.whopCheckout({
+      planId: data.plan_id,
+      email: email,
+      productId: data.product_id || orderData.product_id,
+      amount: amt,
+      metadata: {
+        ...(data.metadata || {}),
+        type: 'tip',
+        order_id: orderId,
+        tip_amount: amt
+      }
+    });
+  } catch (err) {
+    console.error('Tip checkout error:', err);
+    alert(err.message || 'Payment not available');
+  } finally {
+    if (btnEl) {
+      btnEl.dataset.processing = '0';
+      btnEl.classList.remove('is-processing');
+      btnEl.disabled = false;
+      const oldText = btnEl.dataset.oldText;
+      if (oldText) btnEl.textContent = oldText;
+    }
+  }
+}
 
   function updateStars(rating) {
     document.querySelectorAll('.rating-stars span').forEach((s, i) => s.classList.toggle('active', i < rating));
