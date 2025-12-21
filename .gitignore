@@ -1,0 +1,8 @@
+# Node dependencies
+node_modules/
+
+# Wrangler local development files
+.wrangler/
+
+# Log files
+server.log

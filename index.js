@@ -124,14 +124,14 @@ export default {
         }
 
         const assetResp = await env.ASSETS.fetch(assetReq);
-        
+
         const contentType = assetResp.headers.get('content-type') || '';
         const isHTML = contentType.includes('text/html') || assetPath === '/_product_template.tpl';
         const isSuccess = assetResp.status === 200;
-        
+
         // Caching: Only cache HTML pages, never admin routes
         const shouldCache = isHTML && isSuccess && !path.startsWith('/admin') && !path.includes('/admin/');
-        const cacheKey = new Request(req.url, { 
+        const cacheKey = new Request(req.url, {
           method: 'GET',
           headers: { 'Accept': 'text/html' }
         });
@@ -145,9 +145,9 @@ export default {
               const headers = new Headers(cachedResponse.headers);
               headers.set('X-Cache', 'HIT');
               headers.set('X-Worker-Version', VERSION);
-              return new Response(cachedResponse.body, { 
-                status: cachedResponse.status, 
-                headers 
+              return new Response(cachedResponse.body, {
+                status: cachedResponse.status,
+                headers
               });
             }
             console.log('Cache MISS for:', req.url);
@@ -156,47 +156,47 @@ export default {
             // Continue with normal processing if cache fails
           }
         }
-        
+
         if (isHTML && isSuccess) {
           try {
             const baseUrl = url.origin;
             let html = await assetResp.text();
-            
+
             // Product detail page - inject individual product schema
             if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
               const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
               if (productId && env.DB) {
                 await initDB(env);
                 const product = await env.DB.prepare(`
-                  SELECT p.*, 
-                    COUNT(r.id) as review_count, 
+                  SELECT p.*,
+                    COUNT(r.id) as review_count,
                     AVG(r.rating) as rating_average
                   FROM products p
                   LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
                   WHERE p.id = ?
                   GROUP BY p.id
                 `).bind(Number(productId)).first();
-                
+
                 if (product) {
                   // Fetch reviews for schema
                   const reviewsResult = await env.DB.prepare(
                     'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC LIMIT 5'
                   ).bind(Number(productId), 'approved').all();
-                  
+
                   const reviews = reviewsResult.results || [];
                   const schemaJson = generateProductSchema(product, baseUrl, reviews);
                   html = injectSchemaIntoHTML(html, 'product-schema', schemaJson);
                 }
               }
             }
-            
+
             // Collection page - inject product list schema
             if (assetPath === '/index.html' || assetPath === '/' || assetPath === '/products.html') {
               if (env.DB) {
                 await initDB(env);
                 const productsResult = await env.DB.prepare(`
-                  SELECT p.*, 
-                    COUNT(r.id) as review_count, 
+                  SELECT p.*,
+                    COUNT(r.id) as review_count,
                     AVG(r.rating) as rating_average
                   FROM products p
                   LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
@@ -204,7 +204,7 @@ export default {
                   GROUP BY p.id
                   ORDER BY p.sort_order ASC, p.id DESC
                 `).all();
-                
+
                 const products = productsResult.results || [];
                 if (products.length > 0) {
                   const schemaJson = generateCollectionSchema(products, baseUrl);
@@ -212,14 +212,14 @@ export default {
                 }
               }
             }
-            
+
             const headers = new Headers();
             headers.set('Content-Type', 'text/html; charset=utf-8');
             headers.set('X-Worker-Version', VERSION);
             headers.set('X-Cache', 'MISS');
-            
+
             const response = new Response(html, { status: 200, headers });
-            
+
             // Cache the response for non-admin pages (5 minutes TTL)
             if (shouldCache) {
               try {
@@ -232,7 +232,7 @@ export default {
                     'X-Cache-Created': new Date().toISOString()
                   }
                 });
-                
+
                 // Store in cache asynchronously
                 ctx.waitUntil(caches.default.put(cacheKey, cacheResponse));
                 console.log('Cached response for:', req.url);
@@ -241,19 +241,19 @@ export default {
                 // Continue even if caching fails
               }
             }
-            
+
             return response;
           } catch (e) {
             console.error('Schema injection error:', e);
           }
         }
-        
+
         // For non-HTML or failed schema injection, just pass through with version header
         const headers = new Headers(assetResp.headers);
         headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         headers.set('Pragma', 'no-cache');
         headers.set('X-Worker-Version', VERSION);
-        
+
         return new Response(assetResp.body, { status: assetResp.status, headers });
       }
 
@@ -270,7 +270,7 @@ export default {
   // Scheduled handler for cron jobs
   async scheduled(event, env, ctx) {
     console.log('Cron job started:', event.cron);
-    
+
     try {
       if (env.DB) {
         await initDB(env);
