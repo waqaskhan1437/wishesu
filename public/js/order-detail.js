@@ -190,7 +190,15 @@
           downloadBtn.setAttribute('download', '');
         }
       } else if (order.delivered_video_url) {
-        downloadBtn.href = order.delivered_video_url;
+        // IMPORTANT:
+        // Many browsers ignore the `download` attribute for cross-origin video URLs
+        // and will open a new tab/player instead. Always route downloads through
+        // our same-origin `/download/:orderId` endpoint which sets
+        // Content-Disposition: attachment.
+        downloadBtn.textContent = '⬇️ Download Video';
+        downloadBtn.href = `/download/${order.order_id}`;
+        downloadBtn.removeAttribute('target');
+        downloadBtn.setAttribute('download', '');
       }
     }
 

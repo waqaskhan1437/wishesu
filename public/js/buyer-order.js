@@ -203,34 +203,39 @@
       const detected = window.UniversalVideoPlayer.detect(url);
       const openOnlyTypes = ['youtube', 'vimeo', 'bunny-embed'];
 
-      if (openOnlyTypes.includes(detected.type)) {
-        // External video - open in new tab
+      // IMPORTANT:
+      // Browsers often ignore the `download` attribute for cross-origin video URLs
+      // and will open a new tab/player instead. To guarantee download, route
+      // through our same-origin `/download/:orderId` endpoint which sets
+      // Content-Disposition: attachment.
+      const ensureDownload = () => {
+        downloadBtn.textContent = '⬇️ Download';
+        downloadBtn.href = `/download/${orderId}`;
+        downloadBtn.removeAttribute('target');
+        downloadBtn.setAttribute('download', '');
+      };
+
+      const ensureOpen = () => {
         downloadBtn.textContent = '🔗 Open Video';
         downloadBtn.href = url;
         downloadBtn.target = '_blank';
         downloadBtn.removeAttribute('download');
+      };
+
+      if (openOnlyTypes.includes(detected.type)) {
+        // External video - open in new tab
+        ensureOpen();
       } else if (detected.type === 'archive') {
-        // Archive.org - use direct download URL
-        const itemId = window.UniversalVideoPlayer.extractArchiveId(url);
-        if (itemId && url.includes('/download/')) {
-          // Direct download link
-          downloadBtn.textContent = '⬇️ Download';
-          downloadBtn.href = url;
-          downloadBtn.target = '_blank';
-          downloadBtn.removeAttribute('download');
+        // Archive.org - if it's a details page we can only open it.
+        // If it's downloadable, use our secure download proxy.
+        if (url.includes('/download/')) {
+          ensureDownload();
         } else {
-          // Archive details page - open it
-          downloadBtn.textContent = '🔗 Open Video';
-          downloadBtn.href = url;
-          downloadBtn.target = '_blank';
-          downloadBtn.removeAttribute('download');
+          ensureOpen();
         }
       } else {
-        // Direct video URL - download directly
-        downloadBtn.textContent = '⬇️ Download';
-        downloadBtn.href = url;
-        downloadBtn.target = '_blank';
-        downloadBtn.removeAttribute('download');
+        // Any direct video URL - download via proxy to force save-as
+        ensureDownload();
       }
     }
   }
