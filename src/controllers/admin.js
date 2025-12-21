@@ -3,6 +3,7 @@
  */
 
 import { json } from '../utils/response.js';
+import { normalizeEmail } from '../utils/customers.js';
 import { CORS } from '../config/cors.js';
 import { VERSION } from '../config/constants.js';
 import { getMimeTypeFromFilename, resolveContentType } from '../utils/upload-helper.js';
@@ -169,6 +170,45 @@ export async function saveDefaultPages(env, body) {
   await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
     .bind('default_pages', JSON.stringify(defaults))
     .run();
+  return json({ success: true });
+}
+
+/**
+ * List customers with activity counts
+ */
+export async function listUsers(env) {
+  const rows = await env.DB.prepare(
+    `SELECT c.email, c.name, c.blocked_forum, c.blocked_blog, c.blocked_orders, c.created_at,
+      (SELECT COUNT(*) FROM orders o WHERE o.customer_email = c.email) as orders_count,
+      (SELECT COUNT(*) FROM blog_posts b WHERE b.author_email = c.email) as blog_count,
+      (SELECT COUNT(*) FROM forum_topics t WHERE t.author_email = c.email) as forum_topics_count,
+      (SELECT COUNT(*) FROM forum_replies r WHERE r.author_email = c.email) as forum_replies_count
+     FROM customers c
+     ORDER BY c.created_at DESC`
+  ).all();
+  return json({ success: true, users: rows.results || [] });
+}
+
+/**
+ * Update customer block flags
+ */
+export async function updateUserBlocks(env, body) {
+  const email = normalizeEmail(body.email);
+  if (!email) return json({ success: false, error: 'email required' }, 400);
+
+  const blockedForum = body.blocked_forum ? 1 : 0;
+  const blockedBlog = body.blocked_blog ? 1 : 0;
+  const blockedOrders = body.blocked_orders ? 1 : 0;
+
+  await env.DB.prepare(
+    `INSERT INTO customers (email, blocked_forum, blocked_blog, blocked_orders)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(email) DO UPDATE SET
+       blocked_forum = excluded.blocked_forum,
+       blocked_blog = excluded.blocked_blog,
+       blocked_orders = excluded.blocked_orders`
+  ).bind(email, blockedForum, blockedBlog, blockedOrders).run();
+
   return json({ success: true });
 }
 

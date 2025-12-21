@@ -85,7 +85,9 @@ import {
   getR2File,
   uploadEncryptedFile,
   uploadTempFile,
-  getArchiveCredentials
+  getArchiveCredentials,
+  listUsers,
+  updateUserBlocks
 } from './controllers/admin.js';
 
 // Blog
@@ -94,8 +96,19 @@ import {
   getBlogPost,
   saveBlogPost,
   deleteBlogPost,
-  setBlogStatus
+  setBlogStatus,
+  submitBlogPost
 } from './controllers/blog.js';
+
+// Forum
+import {
+  submitForumTopic,
+  submitForumReply,
+  listForumTopics,
+  listForumReplies,
+  setForumTopicStatus,
+  setForumReplyStatus
+} from './controllers/forum.js';
 
 /**
  * Route API requests to appropriate handlers
@@ -195,6 +208,15 @@ export async function routeApiRequest(req, env, url, path, method) {
     return saveDefaultPages(env, body);
   }
 
+  // ----- USERS (ADMIN) -----
+  if (method === 'GET' && path === '/api/admin/users/list') {
+    return listUsers(env);
+  }
+  if (method === 'POST' && path === '/api/admin/users/block') {
+    const body = await req.json().catch(() => ({}));
+    return updateUserBlocks(env, body);
+  }
+
   // ----- BLOG (ADMIN APIs) -----
   if (method === 'GET' && path === '/api/blog/list') {
     return listBlogPosts(env);
@@ -214,6 +236,59 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'DELETE' && path === '/api/blog/delete') {
     const slug = url.searchParams.get('slug');
     return deleteBlogPost(env, slug);
+  }
+  if (method === 'POST' && path === '/api/blog/submit') {
+    let body = {};
+    try { body = await req.json(); } catch (_) {}
+    if (!body || Object.keys(body).length === 0) {
+      try {
+        const fd = await req.formData();
+        body = Object.fromEntries(fd.entries());
+      } catch (_) {}
+    }
+    return submitBlogPost(env, body);
+  }
+
+  // ----- FORUM (PUBLIC) -----
+  if (method === 'POST' && path === '/api/forum/topic/submit') {
+    let body = {};
+    try { body = await req.json(); } catch (_) {}
+    if (!body || Object.keys(body).length === 0) {
+      try {
+        const fd = await req.formData();
+        body = Object.fromEntries(fd.entries());
+      } catch (_) {}
+    }
+    return submitForumTopic(env, body);
+  }
+  if (method === 'POST' && path === '/api/forum/reply/submit') {
+    let body = {};
+    try { body = await req.json(); } catch (_) {}
+    if (!body || Object.keys(body).length === 0) {
+      try {
+        const fd = await req.formData();
+        body = Object.fromEntries(fd.entries());
+      } catch (_) {}
+    }
+    return submitForumReply(env, body);
+  }
+
+  // ----- FORUM (ADMIN) -----
+  if (method === 'GET' && path === '/api/admin/forum/topics') {
+    const status = url.searchParams.get('status');
+    return listForumTopics(env, status);
+  }
+  if (method === 'GET' && path === '/api/admin/forum/replies') {
+    const status = url.searchParams.get('status');
+    return listForumReplies(env, status);
+  }
+  if (method === 'POST' && path === '/api/admin/forum/topic/status') {
+    const body = await req.json().catch(() => ({}));
+    return setForumTopicStatus(env, body);
+  }
+  if (method === 'POST' && path === '/api/admin/forum/reply/status') {
+    const body = await req.json().catch(() => ({}));
+    return setForumReplyStatus(env, body);
   }
 
   

@@ -12,6 +12,8 @@
     'reviews',
     'chats',
     'blog',
+    'forum',
+    'users',
     'settings',
     'pages',
     'components'
@@ -114,6 +116,8 @@
       case 'reviews': await loadReviews(panel); break;
       case 'chats': await loadChats(panel); break;
       case 'blog': await loadBlog(panel); break;
+      case 'forum': await loadForum(panel); break;
+      case 'users': await loadUsers(panel); break;
       case 'settings': loadSettings(panel); break;
       case 'pages':
         // Load the landing pages manager directly inside the dashboard.  In
@@ -2869,12 +2873,16 @@
             </div>
           </div>
           <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-              <input type="checkbox" id="blog-draft" />
-              <span style="font-weight:600;">Draft</span>
-            </label>
-            <span id="blog-status" style="color:#6b7280;font-size:0.9em;"></span>
+            <label style="font-weight:600;">Status</label>
+            <select id="blog-status-select" style="padding:8px;border:1px solid #d1d5db;border-radius:8px;">
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            <span id="blog-status-msg" style="color:#6b7280;font-size:0.9em;"></span>
           </div>
+          <p id="blog-author" style="color:#6b7280;font-size:0.9em;margin-top:8px;"></p>
           <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <label style="display:block;font-weight:600;margin-bottom:6px;">HTML</label>
@@ -2905,12 +2913,13 @@
       newBtn: panel.querySelector('#blog-new'),
       title: panel.querySelector('#blog-title'),
       slug: panel.querySelector('#blog-slug'),
-      draft: panel.querySelector('#blog-draft'),
+      statusSelect: panel.querySelector('#blog-status-select'),
       html: panel.querySelector('#blog-html'),
       css: panel.querySelector('#blog-css'),
       save: panel.querySelector('#blog-save'),
       del: panel.querySelector('#blog-delete'),
-      status: panel.querySelector('#blog-status'),
+      status: panel.querySelector('#blog-status-msg'),
+      author: panel.querySelector('#blog-author'),
       preview: panel.querySelector('#blog-preview'),
       previewWrap: panel.querySelector('#blog-preview-wrap'),
       previewFrame: panel.querySelector('#blog-preview-frame'),
@@ -2942,14 +2951,21 @@
         return;
       }
       els.list.innerHTML = posts.map(p => {
-        const badge = p.status === 'draft' ? '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:999px;font-size:12px;">Draft</span>' :
-          '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:999px;font-size:12px;">Published</span>';
+        let badge = '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:999px;font-size:12px;">Published</span>';
+        if (p.status === 'draft') {
+          badge = '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:999px;font-size:12px;">Draft</span>';
+        } else if (p.status === 'pending') {
+          badge = '<span style="background:#fde68a;color:#92400e;padding:2px 6px;border-radius:999px;font-size:12px;">Pending</span>';
+        } else if (p.status === 'rejected') {
+          badge = '<span style="background:#e5e7eb;color:#374151;padding:2px 6px;border-radius:999px;font-size:12px;">Rejected</span>';
+        }
+        const author = p.author_name || p.author_email ? `By ${(p.author_name || p.author_email || '').replace(/</g,'&lt;')}` : 'Admin';
         return `<div data-slug="${p.slug}" style="border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;cursor:pointer;">
           <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
             <div style="font-weight:700;color:#111827;">${(p.title||p.slug).replace(/</g,'&lt;')}</div>
             ${badge}
           </div>
-          <div style="color:#6b7280;font-size:12px;margin-top:4px;">/${p.slug}</div>
+          <div style="color:#6b7280;font-size:12px;margin-top:4px;">/${p.slug} • ${author}</div>
         </div>`;
       }).join('');
 
@@ -2973,7 +2989,13 @@
       currentSlug = p.slug;
       els.title.value = p.title || '';
       els.slug.value = p.slug || '';
-      els.draft.checked = (p.status === 'draft');
+      const statusVal = (p.status || 'published').toLowerCase();
+      els.statusSelect.value = ['published','draft','pending','rejected'].includes(statusVal) ? statusVal : 'published';
+      if (p.author_name || p.author_email) {
+        els.author.textContent = `Author: ${p.author_name || p.author_email}`;
+      } else {
+        els.author.textContent = 'Author: Admin';
+      }
       els.html.value = p.html || '';
       els.css.value = p.css || '';
       els.previewWrap.style.display = 'none';
@@ -2985,7 +3007,7 @@
       const payload = {
         title: els.title.value.trim(),
         slug: els.slug.value.trim(),
-        status: els.draft.checked ? 'draft' : 'published',
+        status: els.statusSelect.value,
         html: els.html.value,
         css: els.css.value,
       };
@@ -3017,7 +3039,8 @@
         currentSlug = '';
         els.title.value = '';
         els.slug.value = '';
-        els.draft.checked = false;
+        els.statusSelect.value = 'published';
+        els.author.textContent = '';
         els.html.value = '';
         els.css.value = '';
         els.previewWrap.style.display = 'none';
@@ -3032,7 +3055,8 @@
       currentSlug = '';
       els.title.value = '';
       els.slug.value = '';
-      els.draft.checked = false;
+      els.statusSelect.value = 'published';
+      els.author.textContent = 'Author: Admin';
       els.html.value = '<h1>New post</h1>\n<p>Write your content here.</p>';
       els.css.value = 'h1{margin-top:0}';
       els.previewWrap.style.display = 'none';
@@ -3055,11 +3079,210 @@
     });
 
     ['input','change','keyup'].forEach(evt => {
-      [els.title, els.slug, els.html, els.css, els.draft].forEach(el => {
+      [els.title, els.slug, els.html, els.css, els.statusSelect].forEach(el => {
         el.addEventListener(evt, () => setDirtyStatus('Unsaved changes'));
       });
     });
 
     await refreshList();
+  }
+
+  // ----- FORUM MODERATION -----
+  async function loadForum(panel) {
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+        <h2 style="margin:0;font-size:1.5em;color:#1f2937;">Forum Moderation</h2>
+        <a class="btn" style="background:#111827;color:#fff;" href="/forum" target="_blank">View Forum</a>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="table-container">
+          <h3 style="padding:20px;margin:0;">Pending Topics</h3>
+          <table>
+            <thead><tr><th>Title</th><th>Author</th><th>Date</th><th>Action</th></tr></thead>
+            <tbody id="forum-topics-tbody"><tr><td colspan="4" style="text-align:center;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="table-container">
+          <h3 style="padding:20px;margin:0;">Pending Replies</h3>
+          <table>
+            <thead><tr><th>Reply</th><th>Author</th><th>Topic</th><th>Action</th></tr></thead>
+            <tbody id="forum-replies-tbody"><tr><td colspan="4" style="text-align:center;">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <style>
+        @media (max-width: 980px){
+          #forum-topics-tbody, #forum-replies-tbody { font-size: 0.9em; }
+        }
+        @media (max-width: 840px){
+          .content > .main-panel > div { grid-template-columns:1fr !important; }
+        }
+      </style>
+    `;
+
+    const topicsBody = panel.querySelector('#forum-topics-tbody');
+    const repliesBody = panel.querySelector('#forum-replies-tbody');
+
+    async function updateTopicStatus(id, status) {
+      await fetch('/api/admin/forum/topic/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status })
+      });
+      await refreshTopics();
+    }
+
+    async function updateReplyStatus(id, status) {
+      await fetch('/api/admin/forum/reply/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status })
+      });
+      await refreshReplies();
+    }
+
+    async function refreshTopics() {
+      topicsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+      const res = await fetch('/api/admin/forum/topics?status=pending');
+      const data = await res.json();
+      const topics = data.topics || [];
+      if (topics.length === 0) {
+        topicsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6b7280;">No pending topics.</td></tr>';
+        return;
+      }
+      topicsBody.innerHTML = topics.map(t => `
+        <tr>
+          <td><strong>${(t.title || t.slug || '').replace(/</g,'&lt;')}</strong><div style="color:#6b7280;font-size:12px;">/${t.slug}</div></td>
+          <td>${(t.author_name || t.author_email || 'Unknown').replace(/</g,'&lt;')}</td>
+          <td>${formatDate(t.created_at)}</td>
+          <td>
+            <button class="btn btn-primary" data-approve-topic="${t.id}">Approve</button>
+            <button class="btn" style="background:#6b7280;color:#fff;" data-reject-topic="${t.id}">Reject</button>
+          </td>
+        </tr>
+      `).join('');
+
+      topicsBody.querySelectorAll('[data-approve-topic]').forEach(btn => {
+        btn.addEventListener('click', () => updateTopicStatus(btn.dataset.approveTopic, 'approved'));
+      });
+      topicsBody.querySelectorAll('[data-reject-topic]').forEach(btn => {
+        btn.addEventListener('click', () => updateTopicStatus(btn.dataset.rejectTopic, 'rejected'));
+      });
+    }
+
+    async function refreshReplies() {
+      repliesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+      const res = await fetch('/api/admin/forum/replies?status=pending');
+      const data = await res.json();
+      const replies = data.replies || [];
+      if (replies.length === 0) {
+        repliesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6b7280;">No pending replies.</td></tr>';
+        return;
+      }
+      repliesBody.innerHTML = replies.map(r => `
+        <tr>
+          <td>${(r.body || '').slice(0, 80).replace(/</g,'&lt;')}${(r.body || '').length > 80 ? '...' : ''}</td>
+          <td>${(r.author_name || r.author_email || 'Unknown').replace(/</g,'&lt;')}</td>
+          <td><a href="/forum/${encodeURIComponent(r.topic_slug || '')}" target="_blank">${(r.topic_title || r.topic_slug || '').replace(/</g,'&lt;')}</a></td>
+          <td>
+            <button class="btn btn-primary" data-approve-reply="${r.id}">Approve</button>
+            <button class="btn" style="background:#6b7280;color:#fff;" data-reject-reply="${r.id}">Reject</button>
+          </td>
+        </tr>
+      `).join('');
+
+      repliesBody.querySelectorAll('[data-approve-reply]').forEach(btn => {
+        btn.addEventListener('click', () => updateReplyStatus(btn.dataset.approveReply, 'approved'));
+      });
+      repliesBody.querySelectorAll('[data-reject-reply]').forEach(btn => {
+        btn.addEventListener('click', () => updateReplyStatus(btn.dataset.rejectReply, 'rejected'));
+      });
+    }
+
+    await Promise.all([refreshTopics(), refreshReplies()]);
+  }
+
+  // ----- USERS -----
+  async function loadUsers(panel) {
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+        <h2 style="margin:0;font-size:1.5em;color:#1f2937;">Users</h2>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Name</th>
+              <th>Orders</th>
+              <th>Blog</th>
+              <th>Forum Topics</th>
+              <th>Forum Replies</th>
+              <th>Block Forum</th>
+              <th>Block Blog</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody"><tr><td colspan="9" style="text-align:center;">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    `;
+
+    const tbody = panel.querySelector('#users-tbody');
+
+    async function saveBlock(email, forumBlocked, blogBlocked) {
+      await fetch('/api/admin/users/block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          blocked_forum: forumBlocked,
+          blocked_blog: blogBlocked
+        })
+      });
+    }
+
+    async function refreshUsers() {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Loading...</td></tr>';
+      const res = await fetch('/api/admin/users/list');
+      const data = await res.json();
+      const users = data.users || [];
+      if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#6b7280;">No users yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td>${(u.email || '').replace(/</g,'&lt;')}</td>
+          <td>${(u.name || '').replace(/</g,'&lt;')}</td>
+          <td>${u.orders_count || 0}</td>
+          <td>${u.blog_count || 0}</td>
+          <td>${u.forum_topics_count || 0}</td>
+          <td>${u.forum_replies_count || 0}</td>
+          <td style="text-align:center;">
+            <input type="checkbox" data-block-forum="${u.email}" ${u.blocked_forum ? 'checked' : ''} />
+          </td>
+          <td style="text-align:center;">
+            <input type="checkbox" data-block-blog="${u.email}" ${u.blocked_blog ? 'checked' : ''} />
+          </td>
+          <td>
+            <button class="btn btn-primary" data-save-user="${u.email}">Save</button>
+          </td>
+        </tr>
+      `).join('');
+
+      tbody.querySelectorAll('[data-save-user]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const email = btn.dataset.saveUser;
+          const forumBox = tbody.querySelector(`[data-block-forum="${email}"]`);
+          const blogBox = tbody.querySelector(`[data-block-blog="${email}"]`);
+          await saveBlock(email, forumBox?.checked, blogBox?.checked);
+          btn.textContent = 'Saved';
+          setTimeout(() => { btn.textContent = 'Save'; }, 1000);
+        });
+      });
+    }
+
+    await refreshUsers();
   }
 })();

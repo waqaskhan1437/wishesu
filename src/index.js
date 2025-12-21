@@ -10,7 +10,8 @@ import { routeApiRequest } from './router.js';
 import { handleProductRouting } from './controllers/products.js';
 import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
-import { renderBlogArchive, renderBlogPost } from './controllers/blog.js';
+import { renderBlogArchive, renderBlogPost, renderBlogSubmit } from './controllers/blog.js';
+import { renderForumArchive, renderForumTopic } from './controllers/forum.js';
 import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 
@@ -57,6 +58,12 @@ export default {
       };
 
       // Public blog route (admin configurable)
+      if ((method === 'GET' || method === 'HEAD') && (path === '/blog/submit' || path === '/blog/submit/')) {
+        if (env.DB) {
+          await initDB(env);
+          return renderBlogSubmit();
+        }
+      }
       if ((method === 'GET' || method === 'HEAD') && (path === '/blog' || path === '/blog/')) {
         const defaults = await getDefaultPages();
         // If admin configured a custom blog landing page, serve it.
@@ -75,6 +82,21 @@ export default {
         if (env.DB) {
           await initDB(env);
           return renderBlogPost(env, slug);
+        }
+      }
+
+      // Public forum routes
+      if ((method === 'GET' || method === 'HEAD') && (path === '/forum' || path === '/forum/')) {
+        if (env.DB) {
+          await initDB(env);
+          return renderForumArchive(env, url.origin);
+        }
+      }
+      if ((method === 'GET' || method === 'HEAD') && path.startsWith('/forum/')) {
+        const slug = path.split('/').filter(Boolean)[1];
+        if (env.DB) {
+          await initDB(env);
+          return renderForumTopic(env, slug);
         }
       }
 

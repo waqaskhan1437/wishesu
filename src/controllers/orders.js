@@ -3,6 +3,7 @@
  */
 
 import { json } from '../utils/response.js';
+import { normalizeEmail, upsertCustomer } from '../utils/customers.js';
 import { toISO8601 } from '../utils/formatting.js';
 import { getGoogleScriptUrl } from '../config/secrets.js';
 
@@ -15,11 +16,11 @@ export { getLatestOrderForEmail } from '../utils/order-helpers.js';
 export async function getOrders(env) {
   const r = await env.DB.prepare('SELECT * FROM orders ORDER BY id DESC').all();
   const orders = (r.results || []).map(row => {
-    let email = '', amount = null, addons = [];
+    let email = row.customer_email || '', amount = null, addons = [];
     try {
       if (row.encrypted_data && row.encrypted_data[0] === '{') {
         const d = JSON.parse(row.encrypted_data);
-        email = d.email || '';
+        email = email || d.email || '';
         amount = d.amount;
         addons = d.addons || [];
       }
@@ -35,7 +36,7 @@ export async function getOrders(env) {
  * Create order (from checkout)
  */
 export async function createOrder(env, body) {
-  if (!body.productId) return json({ error: 'productId required' }, 400);
+  if (!body.productId || !body.email) return json({ error: 'productId and email required' }, 400);
   
   const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   const data = JSON.stringify({
@@ -45,9 +46,20 @@ export async function createOrder(env, body) {
     addons: body.addons || []
   });
   
+  const email = normalizeEmail(body.email);
   await env.DB.prepare(
-    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
-  ).bind(orderId, Number(body.productId), data, 'PAID', Number(body.deliveryTime) || 60).run();
+    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, customer_email, customer_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
+    orderId,
+    Number(body.productId),
+    data,
+    'PAID',
+    Number(body.deliveryTime) || 60,
+    email,
+    String(body.name || '').trim() || null
+  ).run();
+
+  await upsertCustomer(env, email, body.name);
   
   return json({ success: true, orderId });
 }
@@ -70,15 +82,20 @@ export async function createManualOrder(env, body) {
     manualOrder: true
   });
   
+  const email = normalizeEmail(body.email);
   await env.DB.prepare(
-    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, customer_email, customer_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     orderId,
     Number(body.productId),
     encryptedData,
     body.status || 'paid',
-    Number(body.deliveryTime) || 60
+    Number(body.deliveryTime) || 60,
+    email,
+    String(body.name || '').trim() || null
   ).run();
+
+  await upsertCustomer(env, email, body.name);
   
   return json({ success: true, orderId });
 }
