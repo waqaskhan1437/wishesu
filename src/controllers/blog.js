@@ -232,7 +232,7 @@ export async function renderBlogSubmit() {
         <input id="blog-title" type="text" placeholder="Post title" />
         <label style="margin-top:10px">Body</label>
         <textarea id="blog-body" placeholder="Write your post..."></textarea>
-        <button class="btn" id="blog-submit" style="margin-top:12px">Submit for approval</button>
+        <button class="btn" id="blog-submit" type="button" style="margin-top:12px">Submit for approval</button>
         <div class="note">Every submission needs admin approval. Only one pending submission is allowed per email.</div>
         <div class="msg" id="blog-msg"></div>
       </div>
@@ -258,6 +258,8 @@ export async function renderBlogSubmit() {
           if (!data.success) throw new Error(data.error || 'Failed to submit');
           msg.style.color = '#047857';
           msg.textContent = 'Submitted! Waiting for admin approval.';
+          document.getElementById('blog-title').value = '';
+          document.getElementById('blog-body').value = '';
         } catch (e) {
           msg.style.color = '#b91c1c';
           msg.textContent = e.message || 'Failed to submit';

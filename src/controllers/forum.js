@@ -152,7 +152,7 @@ export async function setForumReplyStatus(env, body) {
 
 export async function renderForumArchive(env) {
   const rows = await env.DB.prepare(
-    `SELECT t.id, t.slug, t.title, t.author_name, t.created_at,
+    `SELECT t.id, t.slug, t.title, t.body, t.author_name, t.created_at,
       (SELECT COUNT(*) FROM forum_replies r WHERE r.topic_id = t.id AND r.status = 'approved') as reply_count
      FROM forum_topics t
      WHERE t.status = 'approved'
@@ -163,9 +163,12 @@ export async function renderForumArchive(env) {
   const items = topics.map(t => {
     const d = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
     const replies = Number(t.reply_count || 0);
+    const excerpt = escapeHtml(String(t.body || '')).slice(0, 260);
     return `<a class="topic" href="/forum/${encodeURIComponent(t.slug)}">
       <div class="title">${escapeHtml(t.title || t.slug)}</div>
       <div class="meta">By ${escapeHtml(t.author_name || 'Anonymous')} • ${escapeHtml(d)} • ${replies} replies</div>
+      <div class="desc">${excerpt || ''}</div>
+      <div class="read-more">Read more →</div>
     </a>`;
   }).join('');
 
@@ -185,6 +188,8 @@ export async function renderForumArchive(env) {
       .topic:hover{border-color:#cbd5e1}
       .title{font-weight:700;color:#111827}
       .meta{color:#6b7280;font-size:13px;margin-top:6px}
+      .desc{color:#374151;margin-top:10px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+      .read-more{color:#111827;font-weight:600;margin-top:10px}
       .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px}
       label{display:block;font-weight:600;margin-bottom:6px}
       input, textarea{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-family:inherit}
@@ -209,7 +214,7 @@ export async function renderForumArchive(env) {
         <input id="forum-title" type="text" placeholder="Topic title" />
         <label style="margin-top:10px">Body</label>
         <textarea id="forum-body" placeholder="Write your discussion..."></textarea>
-        <button class="btn" id="forum-submit" style="margin-top:12px">Submit for approval</button>
+        <button class="btn" id="forum-submit" type="button" style="margin-top:12px">Submit for approval</button>
         <div class="note">Every post needs admin approval. Only one pending submission is allowed per email.</div>
         <div class="msg" id="forum-msg"></div>
       </div>
@@ -235,6 +240,8 @@ export async function renderForumArchive(env) {
           if (!data.success) throw new Error(data.error || 'Failed to submit');
           msg.style.color = '#047857';
           msg.textContent = 'Submitted! Waiting for admin approval.';
+          document.getElementById('forum-title').value = '';
+          document.getElementById('forum-body').value = '';
         } catch (e) {
           msg.style.color = '#b91c1c';
           msg.textContent = e.message || 'Failed to submit';
@@ -319,7 +326,7 @@ export async function renderForumTopic(env, slug) {
         <input id="reply-email" type="email" placeholder="you@example.com" />
         <label style="margin-top:10px">Body</label>
         <textarea id="reply-body" placeholder="Write your reply..."></textarea>
-        <button class="btn" id="reply-submit" style="margin-top:12px">Submit for approval</button>
+        <button class="btn" id="reply-submit" type="button" style="margin-top:12px">Submit for approval</button>
         <div class="msg" id="reply-msg"></div>
       </div>
     </div>
@@ -344,6 +351,7 @@ export async function renderForumTopic(env, slug) {
           if (!data.success) throw new Error(data.error || 'Failed to submit');
           msg.style.color = '#047857';
           msg.textContent = 'Reply submitted for approval.';
+          document.getElementById('reply-body').value = '';
         } catch (e) {
           msg.style.color = '#b91c1c';
           msg.textContent = e.message || 'Failed to submit';

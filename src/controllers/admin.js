@@ -178,13 +178,28 @@ export async function saveDefaultPages(env, body) {
  */
 export async function listUsers(env) {
   const rows = await env.DB.prepare(
-    `SELECT c.email, c.name, c.blocked_forum, c.blocked_blog, c.blocked_orders, c.created_at,
-      (SELECT COUNT(*) FROM orders o WHERE o.customer_email = c.email) as orders_count,
-      (SELECT COUNT(*) FROM blog_posts b WHERE b.author_email = c.email) as blog_count,
-      (SELECT COUNT(*) FROM forum_topics t WHERE t.author_email = c.email) as forum_topics_count,
-      (SELECT COUNT(*) FROM forum_replies r WHERE r.author_email = c.email) as forum_replies_count
-     FROM customers c
-     ORDER BY c.created_at DESC`
+    `WITH emails AS (
+        SELECT customer_email AS email FROM orders WHERE customer_email IS NOT NULL AND customer_email != ''
+        UNION
+        SELECT author_email AS email FROM blog_posts WHERE author_email IS NOT NULL AND author_email != ''
+        UNION
+        SELECT author_email AS email FROM forum_topics WHERE author_email IS NOT NULL AND author_email != ''
+        UNION
+        SELECT author_email AS email FROM forum_replies WHERE author_email IS NOT NULL AND author_email != ''
+      )
+      SELECT e.email,
+        c.name,
+        COALESCE(c.blocked_forum, 0) AS blocked_forum,
+        COALESCE(c.blocked_blog, 0) AS blocked_blog,
+        COALESCE(c.blocked_orders, 0) AS blocked_orders,
+        c.created_at,
+        (SELECT COUNT(*) FROM orders o WHERE o.customer_email = e.email) as orders_count,
+        (SELECT COUNT(*) FROM blog_posts b WHERE b.author_email = e.email) as blog_count,
+        (SELECT COUNT(*) FROM forum_topics t WHERE t.author_email = e.email) as forum_topics_count,
+        (SELECT COUNT(*) FROM forum_replies r WHERE r.author_email = e.email) as forum_replies_count
+      FROM emails e
+      LEFT JOIN customers c ON c.email = e.email
+      ORDER BY c.created_at DESC NULLS LAST, e.email ASC`
   ).all();
   return json({ success: true, users: rows.results || [] });
 }
