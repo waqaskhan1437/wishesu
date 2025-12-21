@@ -70,7 +70,7 @@
           margin: 0 auto;
         ">
           ${products.map(p => this.renderCard(p, { showReviews, showDelivery })).join('')}
-        </a>
+        </div>
       `;
 
       // Schema now injected server-side for better SEO and to prevent duplicates
@@ -115,19 +115,19 @@
         <div class="product-prices">
           ${hasDiscount ? `<span class="original-price">$${originalPrice}</span>` : ''}
           <span class="sale-price">$${salePrice}</span>
-        </a>
+        </div>
       `;
       const reviewHtml = `
         <div class="product-reviews">
           ${stars}
           <span class="review-count">(${review_count || 0})</span>
-        </a>
+        </div>
       `;
       const deliveryHtml = `
         <div class="product-delivery">
           <span class="delivery-icon">${deliveryIcon}</span>
           <span class="delivery-text">${deliveryText}</span>
-        </a>
+        </div>
       `;
       return `
         <a class="product-card" data-product-id="${id}" href="${productUrl}">
