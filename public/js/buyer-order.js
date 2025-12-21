@@ -125,6 +125,14 @@
     displayRequirements(o.addons || []);
 
     if (o.status === 'delivered' && o.delivered_video_url) {
+      // Buyer-facing delivery message
+      const statusEl = document.getElementById('status-message');
+      if (statusEl) {
+        statusEl.className = 'status-message status-delivered';
+        statusEl.style.display = 'block';
+        statusEl.innerHTML = '<h3 style="margin:0;">✅ Video Ready!</h3><p style="margin:8px 0 0;">Your video has been delivered and is ready to watch</p>';
+      }
+
       let videoMetadata = null;
       if (o.delivered_video_metadata) {
         try {
@@ -148,6 +156,8 @@
         }
       }
     } else {
+      const statusEl = document.getElementById('status-message');
+      if (statusEl) statusEl.style.display = 'none';
       startCountdown(o.delivery_time_minutes || 60, o.created_at);
     }
   }

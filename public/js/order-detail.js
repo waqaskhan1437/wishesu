@@ -288,8 +288,16 @@
       if (approveBtn) approveBtn.style.display = 'none';
     }
 
-    document.getElementById('status-message').className = 'status-message status-delivered';
-    document.getElementById('status-message').innerHTML = '<h3>✅ Video Ready!</h3><p>Your video has been delivered and is ready to watch</p>';
+    // Buyer-facing delivery message should not appear on admin views.
+    const statusEl = document.getElementById('status-message');
+    if (statusEl) {
+      statusEl.className = 'status-message status-delivered';
+      if (!isAdmin) {
+        statusEl.innerHTML = '<h3>✅ Video Ready!</h3><p>Your video has been delivered and is ready to watch</p>';
+      } else {
+        statusEl.innerHTML = '<h3>Delivered</h3><p>Video has been delivered to the buyer.</p>';
+      }
+    }
   }
 
   // --- UPDATED: DIRECT CLIENT-SIDE UPLOAD TO ARCHIVE.ORG ---
