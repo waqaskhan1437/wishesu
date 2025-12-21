@@ -487,14 +487,17 @@
         <div>
           <label style="display:block; margin-bottom: 5px; font-weight: 600;">Home Page</label>
           <select id="default-home" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;"></select>
+          <a id="default-home-link" href="#" target="_blank" style="display:inline-block;margin-top:6px;color:#2563eb;text-decoration:none;font-size:0.9em;">Open selected page</a>
         </div>
         <div>
           <label style="display:block; margin-bottom: 5px; font-weight: 600;">Products Page</label>
           <select id="default-products" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;"></select>
+          <a id="default-products-link" href="#" target="_blank" style="display:inline-block;margin-top:6px;color:#2563eb;text-decoration:none;font-size:0.9em;">Open selected page</a>
         </div>
         <div>
           <label style="display:block; margin-bottom: 5px; font-weight: 600;">Blog Page</label>
           <select id="default-blog" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;"></select>
+          <a id="default-blog-link" href="#" target="_blank" style="display:inline-block;margin-top:6px;color:#2563eb;text-decoration:none;font-size:0.9em;">Open selected page</a>
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:26px;">
@@ -822,6 +825,9 @@
     const homeSel = document.getElementById('default-home');
     const prodSel = document.getElementById('default-products');
     const blogSel = document.getElementById('default-blog');
+    const homeLink = document.getElementById('default-home-link');
+    const prodLink = document.getElementById('default-products-link');
+    const blogLink = document.getElementById('default-blog-link');
     const statusEl = document.getElementById('default-pages-status');
     const saveBtn = document.getElementById('save-default-pages');
     if (!homeSel || !prodSel || !blogSel || !saveBtn) return;
@@ -864,6 +870,13 @@
       select.innerHTML = uniq.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
     }
 
+    function updateLink(select, link) {
+      if (!select || !link) return;
+      const value = select.value || '';
+      link.href = value || '#';
+      link.style.visibility = value ? 'visible' : 'hidden';
+    }
+
     // Home: prefer home built-in first
     fill(homeSel, { label: 'Home (Built-in)', value: '/index.html' });
     // Products: prefer products built-in first
@@ -880,6 +893,13 @@
       if (d.productsPath) prodSel.value = d.productsPath;
       if (d.blogPath) blogSel.value = d.blogPath;
     } catch (_) {}
+
+    updateLink(homeSel, homeLink);
+    updateLink(prodSel, prodLink);
+    updateLink(blogSel, blogLink);
+    homeSel.addEventListener('change', () => updateLink(homeSel, homeLink));
+    prodSel.addEventListener('change', () => updateLink(prodSel, prodLink));
+    blogSel.addEventListener('change', () => updateLink(blogSel, blogLink));
 
     saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;
