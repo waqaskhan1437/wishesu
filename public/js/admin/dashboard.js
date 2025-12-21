@@ -11,6 +11,7 @@
     'products',
     'reviews',
     'chats',
+    'blog',
     'settings',
     'pages',
     'components'
@@ -112,6 +113,7 @@
       case 'products': await loadProducts(panel); break;
       case 'reviews': await loadReviews(panel); break;
       case 'chats': await loadChats(panel); break;
+      case 'blog': await loadBlog(panel); break;
       case 'settings': loadSettings(panel); break;
       case 'pages':
         // Load the landing pages manager directly inside the dashboard.  In
@@ -474,7 +476,31 @@
 
   function loadSettings(panel) {
     const webhookUrl = window.location.origin + '/api/whop/webhook';
-    panel.innerHTML = `<div style="background: white; padding: 30px; border-radius: 12px;"><h3>Whop Settings</h3>
+    panel.innerHTML = `<div style="background: white; padding: 30px; border-radius: 12px;">
+      <h3>Default Pages</h3>
+      <p style="color:#6b7280;margin:8px 0 18px;">Choose which page opens for Home, Products and Blog.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:18px;">
+        <div>
+          <label style="display:block; margin-bottom: 5px; font-weight: 600;">Home Page</label>
+          <select id="default-home" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;"></select>
+        </div>
+        <div>
+          <label style="display:block; margin-bottom: 5px; font-weight: 600;">Products Page</label>
+          <select id="default-products" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;"></select>
+        </div>
+        <div>
+          <label style="display:block; margin-bottom: 5px; font-weight: 600;">Blog Page</label>
+          <select id="default-blog" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;"></select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:26px;">
+        <button class="btn btn-primary" id="save-default-pages">Save Default Pages</button>
+        <span id="default-pages-status" style="color:#6b7280;font-size:0.9em;"></span>
+      </div>
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;" />
+
+      <h3>Whop Settings</h3>
       <div style="margin: 20px 0;">
         <label style="display: block; margin-bottom: 5px; font-weight: 600;">API Key:</label>
         <input type="text" id="whop-api-key" placeholder="whop_sk_..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
@@ -630,7 +656,9 @@
       </div>
     </div>`;
 
+    setupDefaultPagesSettings();
     loadWhopSettings();
+    setupDefaultPagesUI();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
     
@@ -783,6 +811,94 @@
       } catch (err) {
         statusSpan.textContent = '❌ Webhook test failed: ' + err.message;
         statusSpan.style.color = '#ef4444';
+      }
+    });
+  }
+
+  async function setupDefaultPagesUI() {
+    const homeSel = document.getElementById('default-home');
+    const prodSel = document.getElementById('default-products');
+    const blogSel = document.getElementById('default-blog');
+    const statusEl = document.getElementById('default-pages-status');
+    const saveBtn = document.getElementById('save-default-pages');
+    if (!homeSel || !prodSel || !blogSel || !saveBtn) return;
+
+    const BUILT_IN = [
+      { label: 'Home (Built-in)', value: '/index.html' },
+      { label: 'Products Grid (Built-in)', value: '/products-grid.html' },
+      { label: 'Blog Archive (Built-in)', value: '/blog' }
+    ];
+
+    function setStatus(msg) { if (statusEl) statusEl.textContent = msg || ''; }
+
+    // Load pages for dropdown options
+    let pages = [];
+    try {
+      const res = await fetch('/api/pages/list');
+      const data = await res.json();
+      pages = (data.pages || []).filter(p => p.status !== 'draft');
+    } catch (_) {}
+
+    const pageOptions = pages.map(p => ({
+      label: `Landing Page: ${p.name}`,
+      value: p.url
+    }));
+
+    function fill(select, extraFirstOption) {
+      const opts = [];
+      if (extraFirstOption) opts.push(extraFirstOption);
+      // Add built-ins
+      BUILT_IN.forEach(o => opts.push(o));
+      // Add landing pages
+      pageOptions.forEach(o => opts.push(o));
+      // Remove duplicates by value
+      const seen = new Set();
+      const uniq = opts.filter(o => {
+        if (seen.has(o.value)) return false;
+        seen.add(o.value);
+        return true;
+      });
+      select.innerHTML = uniq.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    }
+
+    // Home: prefer home built-in first
+    fill(homeSel, { label: 'Home (Built-in)', value: '/index.html' });
+    // Products: prefer products built-in first
+    fill(prodSel, { label: 'Products Grid (Built-in)', value: '/products-grid.html' });
+    // Blog: prefer archive built-in first
+    fill(blogSel, { label: 'Blog Archive (Built-in)', value: '/blog' });
+
+    // Load current defaults
+    try {
+      const res = await fetch('/api/settings/default-pages');
+      const data = await res.json();
+      const d = data.defaults || {};
+      if (d.homePath) homeSel.value = d.homePath;
+      if (d.productsPath) prodSel.value = d.productsPath;
+      if (d.blogPath) blogSel.value = d.blogPath;
+    } catch (_) {}
+
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      setStatus('Saving...');
+      try {
+        const payload = {
+          homePath: homeSel.value,
+          productsPath: prodSel.value,
+          blogPath: blogSel.value
+        };
+        const res = await fetch('/api/settings/default-pages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const out = await res.json();
+        if (!out.success) throw new Error(out.error || 'Failed');
+        setStatus('✅ Saved. Refresh the public pages to see changes.');
+      } catch (e) {
+        setStatus('❌ ' + e.message);
+      } finally {
+        saveBtn.disabled = false;
       }
     });
   }
@@ -2719,5 +2835,231 @@
     obs.observe(document.body, { childList: true, subtree: true });
 
     await refreshSessions(true);
+  }
+
+  // ----- BLOG MANAGER (HTML + CSS editor) -----
+  async function loadBlog(panel) {
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+        <h2 style="margin:0;font-size:1.5em;color:#1f2937;">📝 Blog Posts</h2>
+        <button id="blog-new" class="btn btn-primary">+ New Post</button>
+      </div>
+      <div id="blog-layout" style="display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start;">
+        <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+          <div style="font-weight:700;margin-bottom:10px;">Posts</div>
+          <div id="blog-list" style="display:flex;flex-direction:column;gap:10px;color:#6b7280;">Loading...</div>
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="font-weight:700;">Editor (HTML + CSS)</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button id="blog-preview" class="btn" style="background:#6b7280;color:#fff;">Preview</button>
+              <button id="blog-save" class="btn btn-primary">Save</button>
+              <button id="blog-delete" class="btn" style="background:#ef4444;color:#fff;">Delete</button>
+            </div>
+          </div>
+          <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-weight:600;margin-bottom:6px;">Title</label>
+              <input id="blog-title" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;" placeholder="Post title" />
+            </div>
+            <div>
+              <label style="display:block;font-weight:600;margin-bottom:6px;">Slug (URL)</label>
+              <input id="blog-slug" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;" placeholder="my-post" />
+            </div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="blog-draft" />
+              <span style="font-weight:600;">Draft</span>
+            </label>
+            <span id="blog-status" style="color:#6b7280;font-size:0.9em;"></span>
+          </div>
+          <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-weight:600;margin-bottom:6px;">HTML</label>
+              <textarea id="blog-html" rows="18" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"></textarea>
+            </div>
+            <div>
+              <label style="display:block;font-weight:600;margin-bottom:6px;">CSS</label>
+              <textarea id="blog-css" rows="18" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;"></textarea>
+            </div>
+          </div>
+          <div id="blog-preview-wrap" style="display:none;margin-top:12px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+            <iframe id="blog-preview-frame" style="width:100%;height:520px;border:0;"></iframe>
+          </div>
+          <p style="color:#6b7280;font-size:0.9em;margin-top:12px;">Public archive: <a href="/blog" target="_blank">/blog</a> • Post URL: <span id="blog-url">—</span></p>
+        </div>
+      </div>
+      <style>
+        @media (max-width: 980px){
+          #blog-layout{grid-template-columns:1fr;}
+        }
+      </style>
+    `;
+
+    let currentSlug = '';
+
+    const els = {
+      list: panel.querySelector('#blog-list'),
+      newBtn: panel.querySelector('#blog-new'),
+      title: panel.querySelector('#blog-title'),
+      slug: panel.querySelector('#blog-slug'),
+      draft: panel.querySelector('#blog-draft'),
+      html: panel.querySelector('#blog-html'),
+      css: panel.querySelector('#blog-css'),
+      save: panel.querySelector('#blog-save'),
+      del: panel.querySelector('#blog-delete'),
+      status: panel.querySelector('#blog-status'),
+      preview: panel.querySelector('#blog-preview'),
+      previewWrap: panel.querySelector('#blog-preview-wrap'),
+      previewFrame: panel.querySelector('#blog-preview-frame'),
+      url: panel.querySelector('#blog-url'),
+    };
+
+    function setDirtyStatus(msg){ els.status.textContent = msg || ''; }
+
+    function updatePublicUrl(){
+      if (!currentSlug) { els.url.textContent = '—'; return; }
+      els.url.textContent = window.location.origin + '/blog/' + currentSlug;
+    }
+
+    function makePreviewDoc(){
+      const t = els.title.value || 'Blog';
+      const h = els.html.value || '';
+      const c = els.css.value || '';
+      return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />`+
+        `<title>${t.replace(/</g,'&lt;')}</title><style>${c}</style></head><body>${h}</body></html>`;
+    }
+
+    async function refreshList(selectSlug){
+      els.list.textContent = 'Loading...';
+      const res = await fetch('/api/blog/list');
+      const data = await res.json();
+      const posts = (data.posts || []);
+      if (posts.length === 0) {
+        els.list.innerHTML = '<div style="color:#6b7280;">No posts yet.</div>';
+        return;
+      }
+      els.list.innerHTML = posts.map(p => {
+        const badge = p.status === 'draft' ? '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:999px;font-size:12px;">Draft</span>' :
+          '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:999px;font-size:12px;">Published</span>';
+        return `<div data-slug="${p.slug}" style="border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
+            <div style="font-weight:700;color:#111827;">${(p.title||p.slug).replace(/</g,'&lt;')}</div>
+            ${badge}
+          </div>
+          <div style="color:#6b7280;font-size:12px;margin-top:4px;">/${p.slug}</div>
+        </div>`;
+      }).join('');
+
+      els.list.querySelectorAll('[data-slug]').forEach(card => {
+        card.addEventListener('click', () => loadPost(card.dataset.slug));
+      });
+
+      if (selectSlug) {
+        await loadPost(selectSlug);
+      }
+    }
+
+    async function loadPost(slug){
+      const res = await fetch('/api/blog/get?slug=' + encodeURIComponent(slug));
+      const data = await res.json();
+      if (!data.success) {
+        alert('Failed to load post');
+        return;
+      }
+      const p = data.post;
+      currentSlug = p.slug;
+      els.title.value = p.title || '';
+      els.slug.value = p.slug || '';
+      els.draft.checked = (p.status === 'draft');
+      els.html.value = p.html || '';
+      els.css.value = p.css || '';
+      els.previewWrap.style.display = 'none';
+      updatePublicUrl();
+      setDirtyStatus('');
+    }
+
+    async function saveCurrent(){
+      const payload = {
+        title: els.title.value.trim(),
+        slug: els.slug.value.trim(),
+        status: els.draft.checked ? 'draft' : 'published',
+        html: els.html.value,
+        css: els.css.value,
+      };
+      els.save.disabled = true;
+      els.save.textContent = 'Saving...';
+      try {
+        const res = await fetch('/api/blog/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Save failed');
+        currentSlug = data.slug;
+        els.slug.value = currentSlug;
+        updatePublicUrl();
+        setDirtyStatus('✅ Saved');
+        await refreshList(currentSlug);
+      } catch (e){
+        alert('❌ ' + e.message);
+      } finally {
+        els.save.disabled = false;
+        els.save.textContent = 'Save';
+      }
+    }
+
+    async function deleteCurrent(){
+      if (!currentSlug) return alert('Select a post first');
+      if (!confirm('Delete this blog post?')) return;
+      const res = await fetch('/api/blog/delete?slug=' + encodeURIComponent(currentSlug), { method:'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        currentSlug = '';
+        els.title.value = '';
+        els.slug.value = '';
+        els.draft.checked = false;
+        els.html.value = '';
+        els.css.value = '';
+        els.previewWrap.style.display = 'none';
+        updatePublicUrl();
+        await refreshList();
+      } else {
+        alert('❌ Failed to delete');
+      }
+    }
+
+    els.newBtn.addEventListener('click', () => {
+      currentSlug = '';
+      els.title.value = '';
+      els.slug.value = '';
+      els.draft.checked = false;
+      els.html.value = '<h1>New post</h1>\n<p>Write your content here.</p>';
+      els.css.value = 'h1{margin-top:0}';
+      els.previewWrap.style.display = 'none';
+      updatePublicUrl();
+      setDirtyStatus('New post');
+    });
+    els.save.addEventListener('click', saveCurrent);
+    els.del.addEventListener('click', deleteCurrent);
+    els.preview.addEventListener('click', () => {
+      const isOpen = els.previewWrap.style.display !== 'none';
+      if (isOpen) {
+        els.previewWrap.style.display = 'none';
+        els.preview.textContent = 'Preview';
+        return;
+      }
+      els.previewWrap.style.display = 'block';
+      els.preview.textContent = 'Hide Preview';
+      const doc = makePreviewDoc();
+      els.previewFrame.srcdoc = doc;
+    });
+
+    ['input','change','keyup'].forEach(evt => {
+      [els.title, els.slug, els.html, els.css, els.draft].forEach(el => {
+        el.addEventListener(evt, () => setDirtyStatus('Unsaved changes'));
+      });
+    });
+
+    await refreshList();
   }
 })();

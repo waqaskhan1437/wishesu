@@ -10,6 +10,7 @@ import { routeApiRequest } from './router.js';
 import { handleProductRouting } from './controllers/products.js';
 import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
+import { renderBlogArchive, renderBlogPost } from './controllers/blog.js';
 import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 
@@ -35,6 +36,61 @@ export default {
     }
 
     try {
+      // Helper: read default public pages from settings
+      const getDefaultPages = async () => {
+        if (!env.DB) return { homePath: '/index.html', productsPath: '/products-grid.html', blogPath: '/blog' };
+        await initDB(env);
+        const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('default_pages').first();
+        if (row && row.value) {
+          try {
+            const v = JSON.parse(row.value);
+            return {
+              homePath: v.homePath || '/index.html',
+              productsPath: v.productsPath || '/products-grid.html',
+              blogPath: v.blogPath || '/blog'
+            };
+          } catch (_) {
+            // ignore
+          }
+        }
+        return { homePath: '/index.html', productsPath: '/products-grid.html', blogPath: '/blog' };
+      };
+
+      // Public blog route (admin configurable)
+      if ((method === 'GET' || method === 'HEAD') && (path === '/blog' || path === '/blog/')) {
+        const defaults = await getDefaultPages();
+        // If admin configured a custom blog landing page, serve it.
+        if (defaults.blogPath && defaults.blogPath !== '/blog') {
+          const to = new URL(req.url);
+          to.pathname = defaults.blogPath;
+          return env.ASSETS ? env.ASSETS.fetch(new Request(to.toString(), req)) : fetch(to.toString(), req);
+        }
+        if (env.DB) {
+          await initDB(env);
+          return renderBlogArchive(env, url.origin);
+        }
+      }
+      if ((method === 'GET' || method === 'HEAD') && path.startsWith('/blog/')) {
+        const slug = path.split('/').filter(Boolean)[1];
+        if (env.DB) {
+          await initDB(env);
+          return renderBlogPost(env, slug);
+        }
+      }
+
+      // Default page mapping (admin configurable)
+      if ((method === 'GET' || method === 'HEAD') && (path === '/' || path === '/index.html' || path === '/products' || path === '/products/' || path === '/products.html')) {
+        const defaults = await getDefaultPages();
+        let target = null;
+        if (path === '/' || path === '/index.html') target = defaults.homePath;
+        else target = defaults.productsPath;
+        if (target && target !== path) {
+          const to = new URL(req.url);
+          to.pathname = target;
+          // Preserve query
+          return env.ASSETS ? env.ASSETS.fetch(new Request(to.toString(), req)) : fetch(to.toString(), req);
+        }
+      }
       // Private asset: never serve the raw product template directly
       if ((method === 'GET' || method === 'HEAD') && (path === '/_product_template.tpl' || path === '/_product_template' || path === '/_product_template.html')) {
         return new Response('Not found', { status: 404 });

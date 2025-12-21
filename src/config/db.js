@@ -75,6 +75,20 @@ export async function initDB(env) {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `),
+
+      // Blog posts (HTML + CSS only)
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS blog_posts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          slug TEXT UNIQUE,
+          title TEXT,
+          html TEXT,
+          css TEXT,
+          status TEXT DEFAULT 'published',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `),
       // Checkout sessions table
       env.DB.prepare(`
         CREATE TABLE IF NOT EXISTS checkout_sessions (

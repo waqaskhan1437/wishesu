@@ -142,6 +142,37 @@ export async function saveWhopSettings(env, body) {
 }
 
 /**
+ * Get default public pages (home/products/blog)
+ */
+export async function getDefaultPages(env) {
+  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('default_pages').first();
+  if (row && row.value) {
+    try {
+      return json({ success: true, defaults: JSON.parse(row.value) });
+    } catch (_) {
+      return json({ success: true, defaults: {} });
+    }
+  }
+  return json({ success: true, defaults: {} });
+}
+
+/**
+ * Save default public pages (home/products/blog)
+ * Body: { homePath, productsPath, blogPath }
+ */
+export async function saveDefaultPages(env, body) {
+  const defaults = {
+    homePath: String(body.homePath || '/index.html'),
+    productsPath: String(body.productsPath || '/products-grid.html'),
+    blogPath: String(body.blogPath || '/blog')
+  };
+  await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+    .bind('default_pages', JSON.stringify(defaults))
+    .run();
+  return json({ success: true });
+}
+
+/**
  * Upload temp file to R2
  */
 export async function uploadTempFile(env, req, url) {

@@ -80,11 +80,22 @@ import {
   purgeCache,
   getWhopSettings,
   saveWhopSettings,
+  getDefaultPages,
+  saveDefaultPages,
   getR2File,
   uploadEncryptedFile,
   uploadTempFile,
   getArchiveCredentials
 } from './controllers/admin.js';
+
+// Blog
+import {
+  listBlogPosts,
+  getBlogPost,
+  saveBlogPost,
+  deleteBlogPost,
+  setBlogStatus
+} from './controllers/blog.js';
 
 /**
  * Route API requests to appropriate handlers
@@ -174,6 +185,38 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/purge-cache') {
     return purgeCache(env);
   }
+
+  // ----- DEFAULT PAGES SETTINGS -----
+  if (method === 'GET' && path === '/api/settings/default-pages') {
+    return getDefaultPages(env);
+  }
+  if (method === 'POST' && path === '/api/settings/default-pages') {
+    const body = await req.json().catch(() => ({}));
+    return saveDefaultPages(env, body);
+  }
+
+  // ----- BLOG (ADMIN APIs) -----
+  if (method === 'GET' && path === '/api/blog/list') {
+    return listBlogPosts(env);
+  }
+  if (method === 'GET' && path === '/api/blog/get') {
+    const slug = url.searchParams.get('slug');
+    return getBlogPost(env, slug);
+  }
+  if (method === 'POST' && path === '/api/blog/save') {
+    const body = await req.json().catch(() => ({}));
+    return saveBlogPost(env, body);
+  }
+  if (method === 'POST' && path === '/api/blog/status') {
+    const body = await req.json().catch(() => ({}));
+    return setBlogStatus(env, body);
+  }
+  if (method === 'DELETE' && path === '/api/blog/delete') {
+    const slug = url.searchParams.get('slug');
+    return deleteBlogPost(env, slug);
+  }
+
+  
 
   // ----- PRODUCTS -----
   if (method === 'GET' && path === '/api/products') {
