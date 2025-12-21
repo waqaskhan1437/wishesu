@@ -69,7 +69,7 @@ export default {
             path.endsWith('/landing-builder.html') ||
             path.endsWith('/product-form.html')) {
           // Let them fall through to asset serving
-        } else {
+        } else if (path.startsWith('/admin')) {
           // Serve the main dashboard.html for all other admin routes
           // This includes: /admin, /admin/, /admin/dashboard.html, /admin/orders.html, etc.
           if (env.ASSETS) {
