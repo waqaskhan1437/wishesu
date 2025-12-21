@@ -53,9 +53,16 @@
     .product-price { color: #3b82f6; font-weight: bold; font-size: 1.2em; }
     .product-meta { display: flex; gap: 10px; margin-top: 10px; font-size: 0.9em; color: #6b7280; }
     
-    /* Mobile Responsive Design */
+    /* Responsive Design */
+    /* On tablets/phones we keep the right panel, but stack it under the main panel
+       instead of hiding it (so admin can still see details/quick actions). */
     @media (max-width: 1024px) {
-      .right-panel { display: none; }
+      .content { flex-direction: column; }
+      .right-panel {
+        width: 100%;
+        max-height: none;
+        overflow: visible;
+      }
     }
     
     @media (max-width: 768px) {
