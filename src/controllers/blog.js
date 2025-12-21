@@ -5,6 +5,8 @@
 import { json } from '../utils/response.js';
 import { isCustomerBlocked, normalizeEmail, upsertCustomer } from '../utils/customers.js';
 
+let blogColumnsChecked = false;
+
 function slugify(input) {
   return String(input || '')
     .toLowerCase()
@@ -36,6 +38,7 @@ export async function getBlogPost(env, slug) {
 }
 
 export async function saveBlogPost(env, body) {
+  await ensureBlogColumns(env);
   const title = String(body.title || '').trim();
   const html = String(body.html || '');
   const css = String(body.css || '');
@@ -94,6 +97,7 @@ export async function setBlogStatus(env, body) {
 }
 
 export async function submitBlogPost(env, body) {
+  await ensureBlogColumns(env);
   const name = String(body.name || '').trim();
   const email = normalizeEmail(body.email);
   const title = String(body.title || '').trim();
@@ -323,4 +327,15 @@ function normalizeStatus(value) {
     return v;
   }
   return 'published';
+}
+
+async function ensureBlogColumns(env) {
+  if (blogColumnsChecked) return;
+  try {
+    await env.DB.prepare('ALTER TABLE blog_posts ADD COLUMN author_name TEXT').run();
+  } catch (_) {}
+  try {
+    await env.DB.prepare('ALTER TABLE blog_posts ADD COLUMN author_email TEXT').run();
+  } catch (_) {}
+  blogColumnsChecked = true;
 }
