@@ -7,6 +7,21 @@
 
   if (!orderId) { showError('Order ID not found'); return; }
 
+
+  async function loadWhopSettingsForPage() {
+    try {
+      if (typeof window.getWhopSettings === 'function') {
+        const whopResp = await window.getWhopSettings();
+        window.whopSettings = whopResp && whopResp.settings ? whopResp.settings : (window.whopSettings || {});
+      }
+    } catch (e) {
+      console.warn('Whop settings load failed:', e);
+      window.whopSettings = window.whopSettings || {};
+    }
+  }
+
+  loadWhopSettingsForPage();
+
   // Fetch server time and load order
   fetchServerTimeOffset().then(offset => {
     window.timerOffset = offset;
