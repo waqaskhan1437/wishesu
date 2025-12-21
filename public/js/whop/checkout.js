@@ -127,6 +127,21 @@
     console.log('📦 Saved addons backup:', savedAddons);
     
     const overlay = document.getElementById('whop-overlay');
+
+    // For tips we do not save an order or redirect anywhere.
+    // Whop already shows completion in the embed UI (tick/complete state).
+    const isTip = (pendingOrderData && (pendingOrderData.type === 'tip' || pendingOrderData?.metadata?.type === 'tip'));
+    if (isTip) {
+      try {
+        // Keep the overlay open briefly so the user can see Whop's completion state,
+        // then allow them to close it themselves.
+        if (overlay) {
+          const closeBtn = overlay.querySelector('.whop-close');
+          if (closeBtn) closeBtn.style.display = '';
+        }
+      } catch (e) {}
+      return;
+    }
     
     // User ko batayen ke order save ho raha hai
     if (overlay) {
