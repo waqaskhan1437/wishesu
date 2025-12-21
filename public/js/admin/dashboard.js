@@ -660,7 +660,6 @@
       </div>
     </div>`;
 
-    setupDefaultPagesSettings();
     loadWhopSettings();
     setupDefaultPagesUI();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
