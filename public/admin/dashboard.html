@@ -128,7 +128,11 @@
       if ('caches' in window) {
         caches.keys().then(names => names.forEach(name => caches.delete(name)));
       }
-      window.location.href = window.location.pathname + '?_=' + Date.now();
+      // Preserve the current tab (hash) and any existing query params.
+      const base = window.location.pathname;
+      const search = new URLSearchParams(window.location.search);
+      search.set('_', Date.now());
+      window.location.href = base + '?' + search.toString() + window.location.hash;
     }
   </script>
   <script src="/js/admin/dashboard.js"></script>

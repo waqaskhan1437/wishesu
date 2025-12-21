@@ -3,6 +3,40 @@
   let orders = [], products = [], reviews = [];
   const VERSION = Date.now(); // Cache buster
 
+  // Persist the selected view so refresh/back keeps the same tab.
+  const VIEW_KEY = 'admin.activeView';
+  const ALLOWED_VIEWS = new Set([
+    'dashboard',
+    'orders',
+    'products',
+    'reviews',
+    'chats',
+    'settings',
+    'pages',
+    'components'
+  ]);
+
+  function getInitialView() {
+    const hash = (window.location.hash || '').replace('#', '').trim();
+    if (hash && ALLOWED_VIEWS.has(hash)) return hash;
+    const stored = (sessionStorage.getItem(VIEW_KEY) || '').trim();
+    if (stored && ALLOWED_VIEWS.has(stored)) return stored;
+    return 'dashboard';
+  }
+
+  function persistView(view) {
+    try { sessionStorage.setItem(VIEW_KEY, view); } catch (_) {}
+    // Keep the tab in the URL so refresh/back restore it.
+    try { history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${view}`); } catch (_) {}
+  }
+
+  function setActiveMenu(view) {
+    const menuItems = document.querySelectorAll('.menu-item');
+    menuItems.forEach(m => m.classList.remove('active'));
+    const active = document.querySelector(`.menu-item[data-view="${view}"]`);
+    if (active) active.classList.add('active');
+  }
+
   // Initialize when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
@@ -36,21 +70,41 @@
       menuItems.forEach(item => {
         item.addEventListener('click', function(e) {
           e.preventDefault();
-          menuItems.forEach(m => m.classList.remove('active'));
-          this.classList.add('active');
           currentView = this.dataset.view;
+          setActiveMenu(currentView);
+          persistView(currentView);
           loadView(currentView);
         });
       });
-      loadView('dashboard');
+
+      // Restore tab on refresh/back.
+      currentView = getInitialView();
+      setActiveMenu(currentView);
+      persistView(currentView);
+      loadView(currentView);
+
+      // If user uses back/forward and hash changes, update the view.
+      window.addEventListener('hashchange', () => {
+        const next = getInitialView();
+        if (next !== currentView) {
+          currentView = next;
+          setActiveMenu(currentView);
+          persistView(currentView);
+          loadView(currentView);
+        }
+      });
     } catch (err) {
       console.error('Init error:', err);
     }
   }
 
   async function loadView(view) {
+    if (!ALLOWED_VIEWS.has(view)) view = 'dashboard';
     document.getElementById('page-title').textContent = view.charAt(0).toUpperCase() + view.slice(1);
     const panel = document.getElementById('main-panel');
+
+    // Keep URL/storage in sync even when loadView is called programmatically.
+    persistView(view);
     
     switch(view) {
       case 'dashboard': await loadDashboard(panel); break;
