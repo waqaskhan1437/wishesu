@@ -126,6 +126,25 @@ export default {
           }
         }
 
+        // Cache non-HTML static assets (js/css/images/fonts) to reduce internal subrequests
+        // and improve performance. Admin HTML is still served with no-store.
+        const isGetLike = (method === 'GET' || method === 'HEAD');
+        const isAssetPath = /\.(js|css|png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|eot|map)$/.test(assetPath);
+        if (isGetLike && isAssetPath) {
+          try {
+            const assetCacheKey = new Request(assetReq.url, { method: 'GET' });
+            const cachedAsset = await caches.default.match(assetCacheKey);
+            if (cachedAsset) {
+              const headers = new Headers(cachedAsset.headers);
+              headers.set('X-Cache', 'HIT');
+              headers.set('X-Worker-Version', VERSION);
+              return new Response(cachedAsset.body, { status: cachedAsset.status, headers });
+            }
+          } catch (e) {
+            // ignore cache errors and continue
+          }
+        }
+
         const assetResp = await env.ASSETS.fetch(assetReq);
         
         const contentType = assetResp.headers.get('content-type') || '';
@@ -251,14 +270,38 @@ export default {
           }
         }
         
-        // For non-HTML or failed schema injection, just pass through with version header
-        const headers = new Headers(assetResp.headers);
-        headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-        headers.set('Pragma', 'no-cache');
-        headers.set('X-Worker-Version', VERSION);
-        
-        return new Response(assetResp.body, { status: assetResp.status, headers });
-      }
+        // For non-HTML or failed schema injection, pass through with version header.
+// Cache static assets (js/css/images/fonts) to reduce repeated internal ASSETS subrequests.
+        const passthroughHeaders = new Headers(assetResp.headers);
+        passthroughHeaders.set('X-Worker-Version', VERSION);
+
+        const canCacheAsset = isGetLike && isAssetPath && assetResp.status === 200;
+        if (canCacheAsset) {
+          // If the upstream didn't provide caching headers, set a sensible default.
+          if (!passthroughHeaders.get('Cache-Control')) {
+            passthroughHeaders.set('Cache-Control', 'public, max-age=86400'); // 1 day
+          }
+          passthroughHeaders.set('X-Cache', 'MISS');
+
+          try {
+            const assetCacheKey = new Request(assetReq.url, { method: 'GET' });
+            const cacheCopy = new Response(assetResp.clone().body, {
+              status: assetResp.status,
+              headers: passthroughHeaders
+            });
+            ctx.waitUntil(caches.default.put(assetCacheKey, cacheCopy));
+          } catch (e) {
+            // ignore cache put errors
+          }
+
+          return new Response(assetResp.body, { status: assetResp.status, headers: passthroughHeaders });
+        }
+
+        // Default for everything else: don't store
+        passthroughHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        passthroughHeaders.set('Pragma', 'no-cache');
+        return new Response(assetResp.body, { status: assetResp.status, headers: passthroughHeaders });
+}
 
       return new Response('Not found', { status: 404 });
     } catch (e) {
