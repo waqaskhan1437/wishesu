@@ -258,15 +258,5 @@ class AdminApp {
   }
 }
 
-// Initialize app when DOM is ready
-let app = null;
-
-ready(() => {
-  app = new AdminApp();
-  app.init();
-});
-
-// Export for global access if needed
-window.AdminApp = app;
-
+// Export the class
 export default AdminApp;

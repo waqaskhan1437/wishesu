@@ -239,8 +239,8 @@
        these imports in the head ensures they are available before
        the builder logic executes. -->
        <!-- Schema now injected server-side - removed collection-schema.js -->
-       <script src="js/product-cards.js"></script>
-       <script src="js/reviews-widget.js"></script>
+       <script src="js/product-cards.js?v=100"></script>
+       <script src="js/reviews-widget.js?v=100"></script>
 </head>
 <body>
   <div class="top-bar">
@@ -719,10 +719,10 @@
       if (embeds.length) {
         if (includes.product) {
           // Schema now injected server-side - removed collection-schema.js
-          parts.push('<script src="js/product-cards.js">' + END_SCRIPT);
+          parts.push('<script src="js/product-cards.js?v=100">' + END_SCRIPT);
         }
-        if (includes.reviews) parts.push('<script src="js/reviews-widget.js">' + END_SCRIPT);
-        if (includes.pages) parts.push('<script src="js/page-list-widget.js">' + END_SCRIPT);
+        if (includes.reviews) parts.push('<script src="js/reviews-widget.js?v=100">' + END_SCRIPT);
+        if (includes.pages) parts.push('<script src="js/page-list-widget.js?v=100">' + END_SCRIPT);
         let callBlock = '<script>\n';
         embeds.forEach(info => {
           if (info.type === 'product') {
@@ -784,7 +784,7 @@
       const embedCode =
         `<div id="${id}"></div>\n` +
         '<!-- Schema now injected server-side -->\n' +
-        '<script src="js/product-cards.js">' + END_SCRIPT + '\n' +
+        '<script src="js/product-cards.js?v=100">' + END_SCRIPT + '\n' +
         '<script>\n  ProductCards.render(\'' + id + '\', ' + JSON.stringify(options) + ');\n' + END_SCRIPT;
       pre.textContent = embedCode;
       wrapper.appendChild(pre);
@@ -838,7 +838,7 @@
       // appear literally in the script source.
       const embedCode =
         `<div id="${id}"></div>\n` +
-        '<script src="js/reviews-widget.js">' + END_SCRIPT + '\n' +
+        '<script src="js/reviews-widget.js?v=100">' + END_SCRIPT + '\n' +
         '<script>\n  ReviewsWidget.render(\'' + id + '\', ' + JSON.stringify(options) + ');\n' + END_SCRIPT;
       pre.textContent = embedCode;
       wrapper.appendChild(pre);
@@ -879,7 +879,7 @@
       pre.style.borderRadius = '6px';
       const embedCode =
         `<div id="${id}"></div>\n` +
-        '<script src="js/page-list-widget.js">' + END_SCRIPT + '\n' +
+        '<script src="js/page-list-widget.js?v=100">' + END_SCRIPT + '\n' +
         `<script>\n  PageListWidget.render('${id}', ${JSON.stringify(options)});\n` + END_SCRIPT;
       pre.textContent = embedCode;
       wrapper.appendChild(pre);
@@ -1269,7 +1269,7 @@
     });
   </script>
   <!-- Load page list widget so it is available when building pages -->
-  <script src="js/page-list-widget.js"></script>
+  <script src="js/page-list-widget.js?v=100"></script>
   <script>
     // Navigation function for admin dashboard
     function loadView(view) {
