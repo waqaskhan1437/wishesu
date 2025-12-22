@@ -51,9 +51,9 @@
   </div>
 
   <!-- Load centralized delivery time utility first -->
-  <script src="/src/utils/delivery-time.js?v=21"></script>
+  <script src="/src/utils/delivery-time.js?v=100"></script>
   <!-- Load the reusable product cards component -->
-  <script src="js/product-cards.js?v=21"></script>
+  <script src="js/product-cards.js?v=100"></script>
   <script>
     // Default Product Page: Show ALL products WITH "Book Now" button
     (async function() {
@@ -82,7 +82,44 @@
       }
     })();
   </script>
-  <script src="js/chat-widget.js?v=21"></script>
+  <script src="js/chat-widget.js?v=100"></script>
+
+  <!-- Service Worker for Cache Management -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('✅ Service Worker registered:', registration.scope);
+
+            // Check for updates every 5 minutes
+            setInterval(() => {
+              registration.update();
+            }, 5 * 60 * 1000);
+
+            // Listen for new service worker
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New version available, reload page
+                  console.log('🔄 New version available, reloading...');
+                  window.location.reload();
+                }
+              });
+            });
+          })
+          .catch(error => {
+            console.log('❌ Service Worker registration failed:', error);
+          });
+      });
+
+      // Handle controller change
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('🔄 Service Worker controller changed');
+      });
+    }
+  </script>
 </body>
 </html>
 

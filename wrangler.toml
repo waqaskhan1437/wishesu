@@ -38,4 +38,4 @@ crons = ["0 2 * * *"]
 # attached to static asset responses via the X-Worker-Version header.  It can
 # help confirm that you are receiving the latest build.
 [vars]
-VERSION = "21"
+VERSION = "100"
