@@ -159,39 +159,11 @@
       `;
     },
 
-    // Get delivery text based on time
-    getDeliveryText: function(deliveryText) {
-      if (!deliveryText) return 'Instant Delivery in 60 Minutes';
-
-      const text = deliveryText.toLowerCase();
-      const minutes = parseInt(text.match(/\d+/)?.[0] || 60);
-
-      if (text.includes('instant') || minutes <= 60) {
-        return `⚡ Instant Delivery in ${minutes} Minutes`;
-      } else if (text.includes('24 hours') || text.includes('1 day')) {
-        return '🚀 24 Hours Express Delivery';
-      } else if (text.includes('2 days')) {
-        return '📦 2 Days Delivery';
-      } else if (text.includes('3 days')) {
-        return '📦 3 Days Delivery';
-      } else {
-        return deliveryText;
-      }
-    },
-
-    // Get delivery icon
-    getDeliveryIcon: function(deliveryText) {
-      const text = (deliveryText || '').toLowerCase();
-      if (text.includes('instant') || text.includes('60')) return '⚡';
-      if (text.includes('24') || text.includes('1 day')) return '🚀';
-      return '📦';
-    },
-
     getDeliveryText: function(deliveryText) {
       if (!deliveryText) return 'Instant Delivery In 60 Minutes';
 
       const text = String(deliveryText).toLowerCase();
-      const minutesMatch = text.match(/\\d+/);
+      const minutesMatch = text.match(/\d+/);
       const minutes = minutesMatch ? parseInt(minutesMatch[0], 10) : null;
 
       if (text.includes('instant') || minutes === 60 || minutes === 1) {
@@ -211,9 +183,9 @@
 
     getDeliveryIcon: function(deliveryText) {
       const text = (deliveryText || '').toLowerCase();
-      if (text.includes('instant') || text.includes('60') || text.includes('1 day')) return '⚡';
-      if (text.includes('24') || text.includes('express')) return '⏱';
-      return '⏳';
+      if (text.includes('instant') || text.includes('60') || text.includes('1 day')) return 'FAST';
+      if (text.includes('24') || text.includes('express')) return '24H';
+      return 'STD';
     },
 
     formatRatingText: function(rating, count) {
@@ -444,3 +416,4 @@
 
   console.log('✅ Product Cards System Ready');
 })();
+

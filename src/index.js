@@ -263,10 +263,8 @@ export default {
         if (path === '/' || path === '/index.html') target = defaults.homePath;
         else target = defaults.productsPath;
         if (target && target !== path) {
-          const to = new URL(req.url);
-          to.pathname = target;
-          // Preserve query
-          return env.ASSETS ? env.ASSETS.fetch(new Request(to.toString(), req)) : fetch(to.toString(), req);
+          path = target;
+          url.pathname = target;
         }
       }
       // Private asset: never serve the raw product template directly

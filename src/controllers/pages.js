@@ -2,8 +2,33 @@
  * Pages controller - Dynamic page management
  */
 
+import { initDB } from '../config/db.js';
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
+
+const BUILTIN_PAGES = [
+  { slug: 'index', title: 'Home', path: '/index.html' },
+  { slug: 'products-grid', title: 'Products', path: '/products-grid.html' }
+];
+
+async function seedBuiltInPages(env) {
+  if (!env?.DB || !env?.ASSETS) return;
+  await initDB(env);
+  for (const page of BUILTIN_PAGES) {
+    const existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(page.slug).first();
+    if (existing) continue;
+    let html = '';
+    try {
+      const req = new Request(`https://assets.local${page.path}`);
+      const resp = await env.ASSETS.fetch(req);
+      if (resp.ok) html = await resp.text();
+    } catch (_) {}
+    if (!html) continue;
+    await env.DB.prepare(
+      'INSERT INTO pages (slug, title, content, status) VALUES (?, ?, ?, ?)'
+    ).bind(page.slug, page.title, html, 'published').run();
+  }
+}
 
 /**
  * Get active pages (public)
@@ -30,6 +55,7 @@ export async function getPages(env) {
  * Maps to: { name, url, size, uploaded, id, status }
  */
 export async function getPagesList(env) {
+  await seedBuiltInPages(env);
   try {
     await env.DB.prepare(
       `UPDATE pages SET status = 'published' WHERE status IS NULL OR status = ''`
@@ -204,6 +230,7 @@ export async function duplicatePage(env, body) {
  */
 export async function loadPageBuilder(env, name) {
   if (!name) return json({ error: 'name required' }, 400);
+  await seedBuiltInPages(env);
   
   const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ?').bind(name).first();
   if (!row) return json({ content: '' });

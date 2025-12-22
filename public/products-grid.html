@@ -50,45 +50,7 @@
       container.innerHTML = products.map(p => createProductCard(p)).join('');
     }
 
-    function createProductCard(product) {
-      const price = product.sale_price || product.normal_price || 0;
-      const hasDiscount = product.sale_price && product.normal_price > product.sale_price;
-      const rating = product.rating_average || 0;
-      const reviewCount = product.review_count || 0;
-      const deliveryTime = product.instant_delivery ? 'Instant' : (product.normal_delivery_text || '60 min');
-      
-      return `
-        <a class="product-card" href="/product?id=${product.id}">
-          <div class="product-thumbnail">
-            ${product.thumbnail_url ? 
-              `<img src="${product.thumbnail_url}" alt="${product.title}">` : 
-              `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2em;">🎬</div>`
-            }
-            ${product.video_url ? '<div class="play-overlay">▶</div>' : ''}
-          </div>
-          <div class="product-info">
-            <div class="product-title">${product.title || 'Product'}</div>
-            <div class="product-price-row">
-              <div>
-                <span class="product-price">$${price}</span>
-                ${hasDiscount ? `<span class="product-sale">$${product.normal_price}</span>` : ''}
-              </div>
-            </div>
-            <div class="product-meta">
-              <div class="product-reviews">
-                ${reviewCount > 0 ? `
-                  <span class="stars">${'★'.repeat(Math.floor(rating))}${'☆'.repeat(5-Math.floor(rating))}</span>
-                  <span>(${reviewCount})</span>
-                ` : '<span style="color: #9ca3af;">No reviews yet</span>'}
-              </div>
-              <div class="delivery-time">⚡ ${deliveryTime}</div>
-            </div>
-            <span class="buy-btn">Book Now</span>
-          </div>
-        </a>
-      `;
-    }
-    function getDeliveryLabelOverride(product) {
+    function getDeliveryLabel(product) {
       const raw = (product.normal_delivery_text || '').toString();
       const text = raw.toLowerCase();
       const minutesMatch = text.match(/\d+/);
@@ -109,21 +71,21 @@
       return raw || 'Instant Delivery In 60 Minutes';
     }
 
-    createProductCard = function(product) {
+    function createProductCard(product) {
       const price = product.sale_price || product.normal_price || 0;
       const hasDiscount = product.sale_price && product.normal_price > product.sale_price;
       const rating = Number.isFinite(Number(product.rating_average)) ? Number(product.rating_average) : 5;
       const reviewCount = Number.isFinite(Number(product.review_count)) ? Number(product.review_count) : 0;
-      const deliveryLabel = getDeliveryLabelOverride(product);
-
+      const deliveryLabel = getDeliveryLabel(product);
+      
       return `
         <a class="product-card" href="/product?id=${product.id}">
           <div class="product-thumbnail">
             ${product.thumbnail_url ? 
               `<img src="${product.thumbnail_url}" alt="${product.title}">` : 
-              `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2em;">dYZª</div>`
+              `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2em;">dYZ�</div>`
             }
-            ${product.video_url ? '<div class="play-overlay">ƒ-</div>' : ''}
+            ${product.video_url ? '<div class="play-overlay">PLAY</div>' : ''}
           </div>
           <div class="product-info">
             <div class="product-title">${product.title || 'Product'}</div>
@@ -145,7 +107,10 @@
       `;
     }
 
-loadProducts();
+    loadProducts();
   </script>
 </body>
 </html>
+
+
+
