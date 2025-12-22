@@ -21,7 +21,7 @@ async function notifyOrderCreated(env, order) {
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
     if (!googleScriptUrl) return;
-    await fetch(googleScriptUrl, {
+  await fetch(googleScriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -62,7 +62,7 @@ export async function getOrders(env) {
 /**
  * Create order (from checkout)
  */
-export async function createOrder(env, body) {
+export async function createOrder(env, body, origin) {
   await ensureOrderColumns(env);
   if (!body.productId || !body.email) return json({ error: 'productId and email required' }, 400);
   
@@ -89,6 +89,8 @@ export async function createOrder(env, body) {
   ).run();
 
   await upsertCustomer(env, email, body.name);
+  const base = String(origin || '').trim();
+  const orderUrl = base ? `${base}/buyer-order.html?id=${encodeURIComponent(orderId)}` : null;
   await notifyOrderCreated(env, {
     order_id: orderId,
     product_id: Number(body.productId),
@@ -96,7 +98,9 @@ export async function createOrder(env, body) {
     name: String(body.name || '').trim() || null,
     amount: body.amount || null,
     status: 'PAID',
-    assigned_team: String(body.assigned_team || '').trim() || null
+    assigned_team: String(body.assigned_team || '').trim() || null,
+    origin: base || null,
+    order_url: orderUrl
   });
   
   return json({ success: true, orderId });
@@ -105,7 +109,7 @@ export async function createOrder(env, body) {
 /**
  * Create manual order (admin)
  */
-export async function createManualOrder(env, body) {
+export async function createManualOrder(env, body, origin) {
   await ensureOrderColumns(env);
   if (!body.productId || !body.email) {
     return json({ error: 'productId and email required' }, 400);
@@ -136,6 +140,8 @@ export async function createManualOrder(env, body) {
   ).run();
 
   await upsertCustomer(env, email, body.name);
+  const base = String(origin || '').trim();
+  const orderUrl = base ? `${base}/buyer-order.html?id=${encodeURIComponent(orderId)}` : null;
   await notifyOrderCreated(env, {
     order_id: orderId,
     product_id: Number(body.productId),
@@ -144,7 +150,9 @@ export async function createManualOrder(env, body) {
     amount: body.amount || null,
     status: body.status || 'paid',
     assigned_team: String(body.assigned_team || '').trim() || null,
-    manual: true
+    manual: true,
+    origin: base || null,
+    order_url: orderUrl
   });
   
   return json({ success: true, orderId });

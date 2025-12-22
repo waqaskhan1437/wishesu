@@ -366,7 +366,7 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'POST' && path === '/api/whop/webhook') {
     const body = await req.json();
-    return handleWebhook(env, body);
+    return handleWebhook(env, body, url.origin);
   }
 
   if (method === 'GET' && path === '/api/whop/test-api') {
@@ -387,9 +387,9 @@ export async function routeApiRequest(req, env, url, path, method) {
     // Only use createManualOrder if explicitly marked as manual order from admin
     // Regular checkout orders have email+productId but should use createOrder
     if (body.manualOrder === true) {
-      return createManualOrder(env, body);
+      return createManualOrder(env, body, url.origin);
     }
-    return createOrder(env, body);
+    return createOrder(env, body, url.origin);
   }
 
   if (method === 'GET' && path.startsWith('/api/order/buyer/')) {
