@@ -316,25 +316,7 @@ function setupGalleryField(form){
     }
   });
 }
-
-// Use centralized delivery time utility
-function parseDeliveryDays(value){
-  if (!window.DeliveryTimeUtils) {
-    console.error('DeliveryTimeUtils not loaded');
-    return '';
-  }
-  return window.DeliveryTimeUtils.parseDeliveryDays(value);
-}
-
-function formatDeliveryLabel(days, instant){
-  if (!window.DeliveryTimeUtils) {
-    console.error('DeliveryTimeUtils not loaded');
-    return '2 Days Delivery';
-  }
-  return window.DeliveryTimeUtils.getDeliveryText(instant, days);
-}
 function collectBase(form){
-  const days = parseDeliveryDays(form.normal_delivery_text.value);
   return {
     title: form.title.value.trim(),
     slug: form.slug.value.trim(),
@@ -342,7 +324,7 @@ function collectBase(form){
     normal_price: parseFloat(form.normal_price.value) || 0,
     sale_price: form.sale_price.value ? parseFloat(form.sale_price.value) : null,
     instant_delivery: form.instant_delivery.checked ? 1 : 0,
-    normal_delivery_text: days,
+    normal_delivery_text: form.normal_delivery_text.value.trim(),
     whop_plan: form.whop_plan ? form.whop_plan.value.trim() : '',
     whop_price_map: form.whop_price_map ? form.whop_price_map.value.trim() : ''
   };
@@ -375,7 +357,7 @@ function fillBaseFields(form, product){
   form.normal_price.value = product.normal_price || '';
   form.sale_price.value = product.sale_price || '';
   form.instant_delivery.checked = !!product.instant_delivery;
-  form.normal_delivery_text.value = parseDeliveryDays(product.normal_delivery_text || '');
+  form.normal_delivery_text.value = product.normal_delivery_text || '';
   if(product.thumbnail_url) form.thumbnail_url.value = product.thumbnail_url;
   if(product.video_url) form.video_url.value = product.video_url;
   if (form.whop_plan && product.whop_plan) form.whop_plan.value = product.whop_plan;
@@ -445,7 +427,7 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     if (instant) {
       normalDeliveryTextInput.value = '';
     } else {
-      normalDeliveryTextInput.value = parseDeliveryDays(text || label);
+      normalDeliveryTextInput.value = text || label;
     }
     syncing = false;
   };
@@ -468,15 +450,14 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     if (!rows.length) return;
 
     const wantInstant = !!instantDeliveryInput.checked;
-    const wantDays = parseDeliveryDays(normalDeliveryTextInput.value);
+    const wantText = (normalDeliveryTextInput.value || '').trim().toLowerCase();
 
     const getRowMeta = (row) => {
       const hasDelivery = !!row.querySelector('.addon-opt-delivery')?.checked;
       const rowInstant = !!row.querySelector('.addon-opt-delivery-instant')?.checked;
       const rowText = (row.querySelector('.addon-opt-delivery-text')?.value || '').trim().toLowerCase();
       const rowLabel = (row.querySelector('.addon-opt-label')?.value || '').trim().toLowerCase();
-      const rowDays = parseDeliveryDays(rowText || rowLabel);
-      return { hasDelivery, rowInstant, rowText, rowLabel, rowDays };
+      return { hasDelivery, rowInstant, rowText, rowLabel };
     };
 
     let targetRow = null;
@@ -489,13 +470,13 @@ function initDeliveryTimeAddonSync(form, opts = {}){
       });
     } else {
       targetRow = rows.find(r => {
-        const { hasDelivery, rowInstant, rowDays, rowLabel } = getRowMeta(r);
+        const { hasDelivery, rowInstant, rowText, rowLabel } = getRowMeta(r);
         if (hasDelivery) {
           if (rowInstant) return false;
-          if (wantDays) return rowDays === wantDays;
+          if (wantText) return rowText === wantText || rowLabel === wantText;
           return true;
         }
-        if (wantDays) return rowDays === wantDays;
+        if (wantText) return rowLabel === wantText;
         return !(rowLabel.includes('instant') || rowLabel.includes('60'));
       });
     }
@@ -542,13 +523,13 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     const text = dataset.deliveryText || '';
     
     instantDeliveryInput.checked = instant;
-    normalDeliveryTextInput.value = instant ? '' : parseDeliveryDays(text);
+    normalDeliveryTextInput.value = instant ? '' : text;
     
     syncing = false;
     
     // Update delivery badge on product page
     if (typeof window.updateDeliveryBadge === 'function') {
-      const badgeText = formatDeliveryLabel(parseDeliveryDays(text), instant);
+      const badgeText = instant ? 'Instant Delivery In 60 Minutes' : (text || '2 Days Delivery');
       window.updateDeliveryBadge(badgeText);
     }
   };

@@ -322,46 +322,31 @@
     const badgeRow = document.createElement('div');
     badgeRow.className = 'badges-row';
 
-    // STRICT: Use centralized delivery time utility with proper data
-    const computeDeliveryBadge = (instant, deliveryDays) => {
-      if (!window.DeliveryTimeUtils) {
-        console.error('DeliveryTimeUtils not loaded');
-        return { icon: '🚚', text: '2 Days Delivery' };
+    const computeDeliveryBadge = (label) => {
+      const raw = (label || '').toString();
+      const v = raw.toLowerCase();
+
+      if (v.includes('instant') || v.includes('60') || v.includes('1 hour')) {
+        return { icon: '⚡', text: raw || 'Instant Delivery In 60 Minutes' };
       }
-      // Get formatted text using strict logic
-      const text = window.DeliveryTimeUtils.getDeliveryText(instant, deliveryDays);
-      const icon = window.DeliveryTimeUtils.getDeliveryIcon(text);
-      return { icon, text };
+      if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) {
+        return { icon: '🚀', text: raw || '24 Hours Express Delivery' };
+      }
+      if (v.includes('48') || v.includes('2 day')) {
+        return { icon: '📦', text: raw || '2 Days Delivery' };
+      }
+      if (v.includes('3 day') || v.includes('72')) {
+        return { icon: '📅', text: raw || '3 Days Delivery' };
+      }
+      return { icon: '🚚', text: raw || '2 Days Delivery' };
     };
 
-    const setDeliveryBadge = (instant, deliveryDays) => {
-      const { icon, text } = computeDeliveryBadge(instant, deliveryDays);
+    const setDeliveryBadge = (label) => {
+      const { icon, text } = computeDeliveryBadge(label);
       const iconEl = badgeRow.querySelector('#delivery-badge-icon');
       const textEl = badgeRow.querySelector('#delivery-badge-text');
       if (iconEl) iconEl.textContent = icon;
       if (textEl) textEl.textContent = text;
-    };
-
-    // Wrapper for updateDeliveryBadge that accepts text and converts to proper format
-    const updateDeliveryBadgeFromText = (displayText) => {
-      // When addon changes, displayText is the formatted text like "Instant Delivery In 60 Minutes"
-      // We need to reverse-engineer instant and days from it
-      const text = (displayText || '').toString().toLowerCase();
-      let instant = 0;
-      let days = 2;
-
-      if (text.includes('instant') || text.includes('60')) {
-        instant = 1;
-        days = null;
-      } else if (text.includes('24') || text.includes('1 day')) {
-        days = 1;
-      } else if (text.includes('2 day')) {
-        days = 2;
-      } else if (text.includes('3 day')) {
-        days = 3;
-      }
-
-      setDeliveryBadge(instant, days);
     };
 
     badgeRow.innerHTML = `
@@ -371,27 +356,23 @@
       </div>
     `;
 
-    // PRIORITY SYSTEM: Addon > Product Basic Info
-    let initialInstant = 0;
-    let initialDays = 2;
-
-    // First Priority: Check if delivery-time addon exists
+    let initialDeliveryLabel = '';
     const deliveryField = (addonGroups || []).find(g => g && g.id === 'delivery-time' && (g.type === 'radio' || g.type === 'select') && Array.isArray(g.options));
     if (deliveryField) {
-      // Get default option from addon
-      const defaultOpt = deliveryField.options.find(o => o && o.default) || deliveryField.options[0];
-      if (defaultOpt && defaultOpt.delivery) {
-        initialInstant = defaultOpt.delivery.instant ? 1 : 0;
-        initialDays = defaultOpt.delivery.text || 2;
-      }
-    } else {
-      // Second Priority: Use product basic info
-      initialInstant = product.instant_delivery || 0;
-      initialDays = product.normal_delivery_text || 2;
+      initialDeliveryLabel = deliveryField.options.find(o => o && o.default)?.label || deliveryField.options[0]?.label || '';
     }
 
-    setDeliveryBadge(initialInstant, initialDays);
-    window.updateDeliveryBadge = updateDeliveryBadgeFromText;
+    if (!initialDeliveryLabel) {
+      const normText = (product.normal_delivery_text || '').toLowerCase();
+      if (product.instant_delivery) initialDeliveryLabel = 'Instant Delivery In 60 Minutes';
+      else if (normText.includes('1 day') || normText.includes('24 hour')) initialDeliveryLabel = '24 Hours Express Delivery';
+      else if (normText.includes('48') || normText.includes('2 day')) initialDeliveryLabel = '2 Days Delivery';
+      else if (normText.includes('3 day') || normText.includes('72')) initialDeliveryLabel = '3 Days Delivery';
+      else initialDeliveryLabel = product.normal_delivery_text || '2 Days Delivery';
+    }
+
+    setDeliveryBadge(initialDeliveryLabel);
+    window.updateDeliveryBadge = setDeliveryBadge;
 
     const priceBadge = document.createElement('div');
     priceBadge.className = 'badge-box badge-price';
@@ -491,4 +472,3 @@
   }
   window.renderProductMain = renderProductMain;
 })();
-

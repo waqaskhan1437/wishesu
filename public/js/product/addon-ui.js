@@ -4,16 +4,6 @@
  */
 
 ;(function(){
-  // STRICT: Use centralized delivery time utility with addon delivery data
-  function mapDeliveryLabel(deliveryText, isInstant) {
-    if (!window.DeliveryTimeUtils) {
-      console.error('DeliveryTimeUtils not loaded');
-      return '2 Days Delivery';
-    }
-    // STRICT: Pass instant flag and deliveryText (which should be days like "1", "2", "3")
-    return window.DeliveryTimeUtils.getDeliveryText(isInstant, deliveryText);
-  }
-
   function renderAddonField(field) {
     const container = document.createElement('div');
     container.className = 'addon-group';
@@ -48,11 +38,8 @@
       
       field.options.forEach(opt => {
         const o = document.createElement('option');
-        const isDelivery = field.id === 'delivery-time';
-        const deliveryInstant = !!opt.delivery?.instant;
-        const displayLabel = isDelivery ? mapDeliveryLabel(opt.delivery?.text || opt.label, deliveryInstant) : opt.label;
         o.value = opt.label;
-        o.text = displayLabel + (opt.price > 0 ? ` (+$${opt.price})` : '');
+        o.text = opt.label + (opt.price > 0 ? ` (+$${opt.price})` : '');
         if (opt.default) o.selected = true;
         setDataset(o, opt);
         input.add(o);
@@ -86,9 +73,6 @@
         const inp = document.createElement('input');
         inp.type = isRadio ? 'radio' : 'checkbox';
         inp.name = field.id + (isRadio ? '' : '[]');
-        const isDelivery = field.id === 'delivery-time';
-        const deliveryInstant = !!opt.delivery?.instant;
-        const displayLabel = isDelivery ? mapDeliveryLabel(opt.delivery?.text || opt.label, deliveryInstant) : opt.label;
         inp.value = opt.label;
         inp.className = isRadio ? 'addon-radio' : 'addon-checkbox';
         if (opt.default) inp.checked = true;
@@ -105,7 +89,8 @@
             renderExtras(extras, inp.dataset, field.id);
 
             if (field.id === 'delivery-time' && inp.checked && typeof window.updateDeliveryBadge === 'function') {
-              window.updateDeliveryBadge(displayLabel);
+              const selectedLabel = opt.label;
+              window.updateDeliveryBadge(selectedLabel);
             }
           } else {
             l.classList.toggle('selected', inp.checked);
@@ -113,7 +98,7 @@
           }
         };
 
-        l.append(inp, document.createTextNode(' ' + displayLabel));
+        l.append(inp, document.createTextNode(' ' + opt.label));
         if (opt.price > 0) {
           const p = document.createElement('span');
           p.className = 'opt-price';

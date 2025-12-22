@@ -3,7 +3,7 @@
  */
 
 import { json } from '../utils/response.js';
-import { getWhopApiKey, getGoogleScriptUrl } from '../config/secrets.js';
+import { getWhopApiKey } from '../config/secrets.js';
 
 /**
  * Create checkout session using existing plan
@@ -352,24 +352,7 @@ export async function createPlanCheckout(env, body, origin) {
 /**
  * Handle Whop webhook
  */
-async function notifyOrderCreated(env, order) {
-  try {
-    const googleScriptUrl = await getGoogleScriptUrl(env);
-    if (!googleScriptUrl) return;
-    await fetch(googleScriptUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event: 'order.created',
-        order
-      })
-    }).catch(err => console.error('Failed to send order.created webhook:', err));
-  } catch (err) {
-    console.error('Error triggering order.created webhook:', err);
-  }
-}
-
-export async function handleWebhook(env, webhookData, origin) {
+export async function handleWebhook(env, webhookData) {
   try {
     const eventType = webhookData.type;
     
@@ -466,19 +449,6 @@ export async function handleWebhook(env, webhookData, origin) {
           ).bind(orderId, Number(metadata.product_id), encryptedData, 'completed').run();
 
           console.log('Order created with addons:', orderId, 'Addons count:', (metadata.addons || []).length);
-
-          const base = String(origin || '').trim();
-          const orderUrl = base ? `${base}/buyer-order.html?id=${encodeURIComponent(orderId)}` : null;
-          await notifyOrderCreated(env, {
-            order_id: orderId,
-            product_id: Number(metadata.product_id),
-            email: metadata.email || webhookData.data?.email || webhookData.data?.user?.email || '',
-            name: null,
-            amount: metadata.amount || webhookData.data?.final_amount || 0,
-            status: 'completed',
-            origin: base || null,
-            order_url: orderUrl
-          });
         } catch (e) {
           console.error('Failed to create order:', e);
         }

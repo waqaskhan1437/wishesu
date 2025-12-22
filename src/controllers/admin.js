@@ -3,7 +3,6 @@
  */
 
 import { json } from '../utils/response.js';
-import { normalizeEmail } from '../utils/customers.js';
 import { CORS } from '../config/cors.js';
 import { VERSION } from '../config/constants.js';
 import { getMimeTypeFromFilename, resolveContentType } from '../utils/upload-helper.js';
@@ -143,63 +142,6 @@ export async function saveWhopSettings(env, body) {
 }
 
 /**
- * Get analytics settings (GTM)
- */
-export async function getAnalyticsSettings(env) {
-  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('analytics').first();
-  if (row && row.value) {
-    try {
-      const settings = JSON.parse(row.value);
-      return json({ settings });
-    } catch (_) {
-      return json({ settings: {} });
-    }
-  }
-  return json({ settings: {} });
-}
-
-/**
- * Save analytics settings (GTM)
- */
-export async function saveAnalyticsSettings(env, body) {
-  const settings = {
-    gtm_id: String(body.gtm_id || '').trim()
-  };
-  await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
-    .bind('analytics', JSON.stringify(settings))
-    .run();
-  return json({ success: true });
-}
-
-/**
- * Get external control webhook settings
- */
-export async function getControlWebhookSettings(env) {
-  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('control_webhook').first();
-  if (row && row.value) {
-    try {
-      const settings = JSON.parse(row.value);
-      return json({ settings });
-    } catch (_) {
-      return json({ settings: { enabled: false, secret: '' } });
-    }
-  }
-  return json({ settings: { enabled: false, secret: '' } });
-}
-
-/**
- * Save external control webhook settings
- */
-export async function saveControlWebhookSettings(env, body) {
-  const settings = {
-    enabled: !!body.enabled,
-    secret: String(body.secret || '').trim()
-  };
-  await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('control_webhook', JSON.stringify(settings)).run();
-  return json({ success: true });
-}
-
-/**
  * Get default public pages (home/products/blog)
  */
 export async function getDefaultPages(env) {
@@ -227,60 +169,6 @@ export async function saveDefaultPages(env, body) {
   await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
     .bind('default_pages', JSON.stringify(defaults))
     .run();
-  return json({ success: true });
-}
-
-/**
- * List customers with activity counts
- */
-export async function listUsers(env) {
-  const rows = await env.DB.prepare(
-    `WITH emails AS (
-        SELECT customer_email AS email FROM orders WHERE customer_email IS NOT NULL AND customer_email != ''
-        UNION
-        SELECT author_email AS email FROM blog_posts WHERE author_email IS NOT NULL AND author_email != ''
-        UNION
-        SELECT author_email AS email FROM forum_topics WHERE author_email IS NOT NULL AND author_email != ''
-        UNION
-        SELECT author_email AS email FROM forum_replies WHERE author_email IS NOT NULL AND author_email != ''
-      )
-      SELECT e.email,
-        c.name,
-        COALESCE(c.blocked_forum, 0) AS blocked_forum,
-        COALESCE(c.blocked_blog, 0) AS blocked_blog,
-        COALESCE(c.blocked_orders, 0) AS blocked_orders,
-        c.created_at,
-        (SELECT COUNT(*) FROM orders o WHERE o.customer_email = e.email) as orders_count,
-        (SELECT COUNT(*) FROM blog_posts b WHERE b.author_email = e.email) as blog_count,
-        (SELECT COUNT(*) FROM forum_topics t WHERE t.author_email = e.email) as forum_topics_count,
-        (SELECT COUNT(*) FROM forum_replies r WHERE r.author_email = e.email) as forum_replies_count
-      FROM emails e
-      LEFT JOIN customers c ON c.email = e.email
-      ORDER BY c.created_at DESC NULLS LAST, e.email ASC`
-  ).all();
-  return json({ success: true, users: rows.results || [] });
-}
-
-/**
- * Update customer block flags
- */
-export async function updateUserBlocks(env, body) {
-  const email = normalizeEmail(body.email);
-  if (!email) return json({ success: false, error: 'email required' }, 400);
-
-  const blockedForum = body.blocked_forum ? 1 : 0;
-  const blockedBlog = body.blocked_blog ? 1 : 0;
-  const blockedOrders = body.blocked_orders ? 1 : 0;
-
-  await env.DB.prepare(
-    `INSERT INTO customers (email, blocked_forum, blocked_blog, blocked_orders)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET
-       blocked_forum = excluded.blocked_forum,
-       blocked_blog = excluded.blocked_blog,
-       blocked_orders = excluded.blocked_orders`
-  ).bind(email, blockedForum, blockedBlog, blockedOrders).run();
-
   return json({ success: true });
 }
 
@@ -566,37 +454,6 @@ export async function uploadEncryptedFile(env, req, url) {
   });
   
   return json({ success: true, r2Key: key });
-}
-
-/**
- * Reset data tables (keeps schema and code intact)
- */
-export async function resetData(env) {
-  const tables = [
-    'products',
-    'orders',
-    'reviews',
-    'pages',
-    'blog_posts',
-    'forum_replies',
-    'forum_topics',
-    'chat_messages',
-    'chat_sessions',
-    'checkout_sessions',
-    'settings',
-    'customers',
-    'pending_checkouts'
-  ];
-
-  for (const t of tables) {
-    try {
-      await env.DB.prepare(`DELETE FROM ${t}`).run();
-    } catch (_) {
-      // ignore missing tables
-    }
-  }
-
-  return json({ success: true });
 }
 
 /**

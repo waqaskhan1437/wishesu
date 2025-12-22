@@ -12,8 +12,6 @@
     'reviews',
     'chats',
     'blog',
-    'forum',
-    'users',
     'settings',
     'pages',
     'components'
@@ -116,8 +114,6 @@
       case 'reviews': await loadReviews(panel); break;
       case 'chats': await loadChats(panel); break;
       case 'blog': await loadBlog(panel); break;
-      case 'forum': await loadForum(panel); break;
-      case 'users': await loadUsers(panel); break;
       case 'settings': loadSettings(panel); break;
       case 'pages':
         // Load the landing pages manager directly inside the dashboard.  In
@@ -487,17 +483,14 @@
         <div>
           <label style="display:block; margin-bottom: 5px; font-weight: 600;">Home Page</label>
           <select id="default-home" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;"></select>
-          <a id="default-home-link" href="#" target="_blank" style="display:inline-block;margin-top:6px;color:#2563eb;text-decoration:none;font-size:0.9em;">Open selected page</a>
         </div>
         <div>
           <label style="display:block; margin-bottom: 5px; font-weight: 600;">Products Page</label>
           <select id="default-products" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;"></select>
-          <a id="default-products-link" href="#" target="_blank" style="display:inline-block;margin-top:6px;color:#2563eb;text-decoration:none;font-size:0.9em;">Open selected page</a>
         </div>
         <div>
           <label style="display:block; margin-bottom: 5px; font-weight: 600;">Blog Page</label>
           <select id="default-blog" style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px;"></select>
-          <a id="default-blog-link" href="#" target="_blank" style="display:inline-block;margin-top:6px;color:#2563eb;text-decoration:none;font-size:0.9em;">Open selected page</a>
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:26px;">
@@ -581,49 +574,11 @@
     </div>
 
     <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
-      <h3>Analytics & Tracking</h3>
-      <p style="color: #6b7280; margin-bottom: 20px;">Manage Google Tag Manager without code deployments.</p>
-      <div style="margin: 20px 0;">
-        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Google Tag Manager ID</label>
-        <input type="text" id="analytics-gtm-id" placeholder="GTM-XXXXXXX" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
-        <small style="color: #6b7280;">Example: GTM-XXXXXXX</small>
-      </div>
-      <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-        <button class="btn btn-primary" id="save-analytics-btn">Save Analytics</button>
-        <span id="analytics-status" style="font-size: 0.9rem; color: #6b7280;"></span>
-      </div>
-    </div>
-
-    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
-      <h3>External Control Webhook</h3>
-      <p style="color: #6b7280; margin-bottom: 20px;">Allow Google Script to control orders, approvals, and assignments.</p>
-      <div style="margin: 20px 0;">
-        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Webhook Secret</label>
-        <input type="text" id="control-webhook-secret" placeholder="secret_token" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
-        <small style="color: #6b7280;">Use this secret in Google Script header: <code>x-control-secret</code> or <code>Authorization: Bearer</code></small>
-      </div>
-      <div style="margin: 10px 0; padding: 12px; background: #f9fafb; border-radius: 8px;">
-        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-          <input type="checkbox" id="control-webhook-enabled" style="width: 18px; height: 18px; cursor: pointer;">
-          <span style="font-weight: 600;">Enable Control Webhook</span>
-        </label>
-      </div>
-      <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-        <button class="btn btn-primary" id="save-control-webhook-btn">Save Webhook Settings</button>
-        <span id="control-webhook-status" style="font-size: 0.9rem; color: #6b7280;"></span>
-      </div>
-      <div style="margin-top: 10px; font-size: 0.85rem; color: #6b7280;">
-        Endpoint: <code>/api/admin/control-webhook</code>
-      </div>
-    </div>
-
-    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
       <h3>System Maintenance</h3>
       <p style="color: #6b7280; margin-bottom: 20px;">Manage temporary files and pending checkouts.</p>
       <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
         <button class="btn" style="background: #f59e0b; color: white;" id="clear-temp-files-btn">Clear Temp Files</button>
         <button class="btn" style="background: #f59e0b; color: white;" id="clear-pending-checkouts-btn">Clear Pending Checkouts</button>
-        <button class="btn" style="background: #ef4444; color: white;" id="reset-data-btn">Reset All Data</button>
         <span id="maintenance-status" style="margin-left: 10px; font-size: 0.9rem; color: #6b7280;"></span>
       </div>
       <div style="margin-top: 15px; padding: 10px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
@@ -701,14 +656,11 @@
       </div>
     </div>`;
 
+    setupDefaultPagesSettings();
     loadWhopSettings();
-    loadAnalyticsSettings();
     setupDefaultPagesUI();
-    loadControlWebhookSettings();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
-    document.getElementById('save-analytics-btn').addEventListener('click', saveAnalyticsSettings);
-    document.getElementById('save-control-webhook-btn').addEventListener('click', saveControlWebhookSettings);
     
     // Export/Import handlers
     setupExportImportHandlers();
@@ -802,31 +754,6 @@
       }
     });
 
-    document.getElementById('reset-data-btn').addEventListener('click', async () => {
-      const first = confirm('Reset ALL data? This will delete products, pages, orders, reviews, blog, forum, settings, and users.');
-      if (!first) return;
-      const text = prompt('Type RESET to confirm this action:');
-      if (text !== 'RESET') return;
-
-      const statusSpan = document.getElementById('maintenance-status');
-      statusSpan.textContent = 'Resetting data...';
-      statusSpan.style.color = '#6b7280';
-
-      try {
-        const res = await apiFetch('/api/admin/reset-data', { method: 'POST' });
-        if (res && res.success) {
-          statusSpan.textContent = '✅ Data reset complete. Refresh the admin to reload.';
-          statusSpan.style.color = '#10b981';
-        } else {
-          statusSpan.textContent = '❌ Reset failed: ' + (res.error || 'Unknown error');
-          statusSpan.style.color = '#ef4444';
-        }
-      } catch (err) {
-        statusSpan.textContent = '❌ Error: ' + err.message;
-        statusSpan.style.color = '#ef4444';
-      }
-    });
-
     // Copy webhook URL button
     document.getElementById('copy-webhook-url').addEventListener('click', () => {
       const webhookUrlEl = document.getElementById('whop-webhook-url');
@@ -892,9 +819,6 @@
     const homeSel = document.getElementById('default-home');
     const prodSel = document.getElementById('default-products');
     const blogSel = document.getElementById('default-blog');
-    const homeLink = document.getElementById('default-home-link');
-    const prodLink = document.getElementById('default-products-link');
-    const blogLink = document.getElementById('default-blog-link');
     const statusEl = document.getElementById('default-pages-status');
     const saveBtn = document.getElementById('save-default-pages');
     if (!homeSel || !prodSel || !blogSel || !saveBtn) return;
@@ -937,13 +861,6 @@
       select.innerHTML = uniq.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
     }
 
-    function updateLink(select, link) {
-      if (!select || !link) return;
-      const value = select.value || '';
-      link.href = value || '#';
-      link.style.visibility = value ? 'visible' : 'hidden';
-    }
-
     // Home: prefer home built-in first
     fill(homeSel, { label: 'Home (Built-in)', value: '/index.html' });
     // Products: prefer products built-in first
@@ -960,13 +877,6 @@
       if (d.productsPath) prodSel.value = d.productsPath;
       if (d.blogPath) blogSel.value = d.blogPath;
     } catch (_) {}
-
-    updateLink(homeSel, homeLink);
-    updateLink(prodSel, prodLink);
-    updateLink(blogSel, blogLink);
-    homeSel.addEventListener('change', () => updateLink(homeSel, homeLink));
-    prodSel.addEventListener('change', () => updateLink(prodSel, prodLink));
-    blogSel.addEventListener('change', () => updateLink(blogSel, blogLink));
 
     saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;
@@ -1247,113 +1157,6 @@
         if (minimalCheckoutEl) minimalCheckoutEl.checked = !!data.settings.enable_minimal_checkout;
       }
     } catch (err) { console.error('Settings error:', err); }
-  }
-
-  async function loadAnalyticsSettings() {
-    const input = document.getElementById('analytics-gtm-id');
-    const statusEl = document.getElementById('analytics-status');
-    if (!input) return;
-    try {
-      const res = await apiFetch('/api/settings/analytics');
-      const settings = res.settings || {};
-      input.value = settings.gtm_id || '';
-      if (statusEl) statusEl.textContent = '';
-    } catch (err) {
-      if (statusEl) {
-        statusEl.textContent = 'Failed to load analytics';
-        statusEl.style.color = '#ef4444';
-      }
-    }
-  }
-
-  async function saveAnalyticsSettings() {
-    const input = document.getElementById('analytics-gtm-id');
-    const statusEl = document.getElementById('analytics-status');
-    if (!input) return;
-
-    const gtmId = input.value.trim();
-    if (gtmId && !/^GTM-[A-Z0-9]+$/i.test(gtmId)) {
-      statusEl.textContent = 'Invalid GTM ID';
-      statusEl.style.color = '#ef4444';
-      return;
-    }
-
-    try {
-      statusEl.textContent = 'Saving...';
-      statusEl.style.color = '#6b7280';
-      const res = await apiFetch('/api/settings/analytics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gtm_id: gtmId })
-      });
-      if (res && res.success) {
-        statusEl.textContent = '✅ Saved';
-        statusEl.style.color = '#10b981';
-      } else {
-        statusEl.textContent = '❌ Save failed';
-        statusEl.style.color = '#ef4444';
-      }
-    } catch (err) {
-      statusEl.textContent = '❌ Error: ' + err.message;
-      statusEl.style.color = '#ef4444';
-    }
-  }
-
-  async function loadControlWebhookSettings() {
-    const secretEl = document.getElementById('control-webhook-secret');
-    const enabledEl = document.getElementById('control-webhook-enabled');
-    const statusEl = document.getElementById('control-webhook-status');
-    if (!secretEl || !enabledEl) return;
-    try {
-      const res = await apiFetch('/api/settings/control-webhook');
-      const settings = res.settings || {};
-      secretEl.value = settings.secret || '';
-      enabledEl.checked = !!settings.enabled;
-      if (statusEl) statusEl.textContent = '';
-    } catch (err) {
-      if (statusEl) {
-        statusEl.textContent = 'Failed to load webhook settings';
-        statusEl.style.color = '#ef4444';
-      }
-    }
-  }
-
-  async function saveControlWebhookSettings() {
-    const secretEl = document.getElementById('control-webhook-secret');
-    const enabledEl = document.getElementById('control-webhook-enabled');
-    const statusEl = document.getElementById('control-webhook-status');
-    if (!secretEl || !enabledEl) return;
-
-    const payload = {
-      secret: secretEl.value.trim(),
-      enabled: enabledEl.checked
-    };
-
-    if (!payload.secret) {
-      statusEl.textContent = 'Secret required before enabling';
-      statusEl.style.color = '#ef4444';
-      return;
-    }
-
-    try {
-      statusEl.textContent = 'Saving...';
-      statusEl.style.color = '#6b7280';
-      const res = await apiFetch('/api/settings/control-webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res && res.success) {
-        statusEl.textContent = '✅ Saved';
-        statusEl.style.color = '#10b981';
-      } else {
-        statusEl.textContent = '❌ Save failed';
-        statusEl.style.color = '#ef4444';
-      }
-    } catch (err) {
-      statusEl.textContent = '❌ Error: ' + err.message;
-      statusEl.style.color = '#ef4444';
-    }
   }
 
   async function saveWhopSettings() {
@@ -3066,16 +2869,12 @@
             </div>
           </div>
           <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-            <label style="font-weight:600;">Status</label>
-            <select id="blog-status-select" style="padding:8px;border:1px solid #d1d5db;border-radius:8px;">
-              <option value="published">Published</option>
-              <option value="draft">Draft</option>
-              <option value="pending">Pending</option>
-              <option value="rejected">Rejected</option>
-            </select>
-            <span id="blog-status-msg" style="color:#6b7280;font-size:0.9em;"></span>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="blog-draft" />
+              <span style="font-weight:600;">Draft</span>
+            </label>
+            <span id="blog-status" style="color:#6b7280;font-size:0.9em;"></span>
           </div>
-          <p id="blog-author" style="color:#6b7280;font-size:0.9em;margin-top:8px;"></p>
           <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <label style="display:block;font-weight:600;margin-bottom:6px;">HTML</label>
@@ -3106,13 +2905,12 @@
       newBtn: panel.querySelector('#blog-new'),
       title: panel.querySelector('#blog-title'),
       slug: panel.querySelector('#blog-slug'),
-      statusSelect: panel.querySelector('#blog-status-select'),
+      draft: panel.querySelector('#blog-draft'),
       html: panel.querySelector('#blog-html'),
       css: panel.querySelector('#blog-css'),
       save: panel.querySelector('#blog-save'),
       del: panel.querySelector('#blog-delete'),
-      status: panel.querySelector('#blog-status-msg'),
-      author: panel.querySelector('#blog-author'),
+      status: panel.querySelector('#blog-status'),
       preview: panel.querySelector('#blog-preview'),
       previewWrap: panel.querySelector('#blog-preview-wrap'),
       previewFrame: panel.querySelector('#blog-preview-frame'),
@@ -3144,21 +2942,14 @@
         return;
       }
       els.list.innerHTML = posts.map(p => {
-        let badge = '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:999px;font-size:12px;">Published</span>';
-        if (p.status === 'draft') {
-          badge = '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:999px;font-size:12px;">Draft</span>';
-        } else if (p.status === 'pending') {
-          badge = '<span style="background:#fde68a;color:#92400e;padding:2px 6px;border-radius:999px;font-size:12px;">Pending</span>';
-        } else if (p.status === 'rejected') {
-          badge = '<span style="background:#e5e7eb;color:#374151;padding:2px 6px;border-radius:999px;font-size:12px;">Rejected</span>';
-        }
-        const author = p.author_name || p.author_email ? `By ${(p.author_name || p.author_email || '').replace(/</g,'&lt;')}` : 'Admin';
+        const badge = p.status === 'draft' ? '<span style="background:#fee2e2;color:#991b1b;padding:2px 6px;border-radius:999px;font-size:12px;">Draft</span>' :
+          '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:999px;font-size:12px;">Published</span>';
         return `<div data-slug="${p.slug}" style="border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;cursor:pointer;">
           <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
             <div style="font-weight:700;color:#111827;">${(p.title||p.slug).replace(/</g,'&lt;')}</div>
             ${badge}
           </div>
-          <div style="color:#6b7280;font-size:12px;margin-top:4px;">/${p.slug} • ${author}</div>
+          <div style="color:#6b7280;font-size:12px;margin-top:4px;">/${p.slug}</div>
         </div>`;
       }).join('');
 
@@ -3182,13 +2973,7 @@
       currentSlug = p.slug;
       els.title.value = p.title || '';
       els.slug.value = p.slug || '';
-      const statusVal = (p.status || 'published').toLowerCase();
-      els.statusSelect.value = ['published','draft','pending','rejected'].includes(statusVal) ? statusVal : 'published';
-      if (p.author_name || p.author_email) {
-        els.author.textContent = `Author: ${p.author_name || p.author_email}`;
-      } else {
-        els.author.textContent = 'Author: Admin';
-      }
+      els.draft.checked = (p.status === 'draft');
       els.html.value = p.html || '';
       els.css.value = p.css || '';
       els.previewWrap.style.display = 'none';
@@ -3200,7 +2985,7 @@
       const payload = {
         title: els.title.value.trim(),
         slug: els.slug.value.trim(),
-        status: els.statusSelect.value,
+        status: els.draft.checked ? 'draft' : 'published',
         html: els.html.value,
         css: els.css.value,
       };
@@ -3232,8 +3017,7 @@
         currentSlug = '';
         els.title.value = '';
         els.slug.value = '';
-        els.statusSelect.value = 'published';
-        els.author.textContent = '';
+        els.draft.checked = false;
         els.html.value = '';
         els.css.value = '';
         els.previewWrap.style.display = 'none';
@@ -3248,8 +3032,7 @@
       currentSlug = '';
       els.title.value = '';
       els.slug.value = '';
-      els.statusSelect.value = 'published';
-      els.author.textContent = 'Author: Admin';
+      els.draft.checked = false;
       els.html.value = '<h1>New post</h1>\n<p>Write your content here.</p>';
       els.css.value = 'h1{margin-top:0}';
       els.previewWrap.style.display = 'none';
@@ -3272,298 +3055,11 @@
     });
 
     ['input','change','keyup'].forEach(evt => {
-      [els.title, els.slug, els.html, els.css, els.statusSelect].forEach(el => {
+      [els.title, els.slug, els.html, els.css, els.draft].forEach(el => {
         el.addEventListener(evt, () => setDirtyStatus('Unsaved changes'));
       });
     });
 
     await refreshList();
-  }
-
-  // ----- FORUM MODERATION -----
-  async function loadForum(panel) {
-    panel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
-        <h2 style="margin:0;font-size:1.5em;color:#1f2937;">Forum Moderation</h2>
-        <a class="btn" style="background:#111827;color:#fff;" href="/forum" target="_blank">View Forum</a>
-      </div>
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
-        <label style="font-weight:600;">Topics</label>
-        <select id="forum-topics-status" style="padding:8px;border:1px solid #d1d5db;border-radius:8px;">
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-        </select>
-        <label style="font-weight:600;">Replies</label>
-        <select id="forum-replies-status" style="padding:8px;border:1px solid #d1d5db;border-radius:8px;">
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-        </select>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-        <div class="table-container">
-          <h3 style="padding:20px;margin:0;">Topics</h3>
-          <table>
-            <thead><tr><th>Title</th><th>Author</th><th>Date</th><th>Action</th></tr></thead>
-            <tbody id="forum-topics-tbody"><tr><td colspan="4" style="text-align:center;">Loading...</td></tr></tbody>
-          </table>
-        </div>
-        <div class="table-container">
-          <h3 style="padding:20px;margin:0;">Replies</h3>
-          <table>
-            <thead><tr><th>Reply</th><th>Author</th><th>Topic</th><th>Action</th></tr></thead>
-            <tbody id="forum-replies-tbody"><tr><td colspan="4" style="text-align:center;">Loading...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-      <style>
-        @media (max-width: 980px){
-          #forum-topics-tbody, #forum-replies-tbody { font-size: 0.9em; }
-        }
-        @media (max-width: 840px){
-          .content > .main-panel > div { grid-template-columns:1fr !important; }
-        }
-      </style>
-    `;
-
-    const topicsBody = panel.querySelector('#forum-topics-tbody');
-    const repliesBody = panel.querySelector('#forum-replies-tbody');
-    const topicsStatus = panel.querySelector('#forum-topics-status');
-    const repliesStatus = panel.querySelector('#forum-replies-status');
-
-    async function updateTopicStatus(id, status) {
-      await fetch('/api/admin/forum/topic/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status })
-      });
-      await refreshTopics();
-    }
-
-    async function updateReplyStatus(id, status) {
-      await fetch('/api/admin/forum/reply/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status })
-      });
-      await refreshReplies();
-    }
-
-    async function editTopic(topic) {
-      const title = prompt('Edit title', topic.title || '');
-      if (!title) return;
-      const body = prompt('Edit body', topic.body || '');
-      if (!body) return;
-      await fetch('/api/admin/forum/topic/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: topic.id, title, body })
-      });
-      await refreshTopics();
-    }
-
-    async function editReply(reply) {
-      const body = prompt('Edit reply', reply.body || '');
-      if (!body) return;
-      await fetch('/api/admin/forum/reply/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: reply.id, body })
-      });
-      await refreshReplies();
-    }
-
-    async function deleteTopic(id) {
-      if (!confirm('Delete this topic and all replies?')) return;
-      await fetch('/api/admin/forum/topic/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
-      });
-      await refreshTopics();
-    }
-
-    async function deleteReply(id) {
-      if (!confirm('Delete this reply?')) return;
-      await fetch('/api/admin/forum/reply/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id })
-      });
-      await refreshReplies();
-    }
-
-    async function refreshTopics() {
-      topicsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
-      const res = await fetch('/api/admin/forum/topics?status=' + encodeURIComponent(topicsStatus.value));
-      const data = await res.json();
-      const topics = data.topics || [];
-      if (topics.length === 0) {
-        topicsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6b7280;">No topics.</td></tr>';
-        return;
-      }
-      topicsBody.innerHTML = topics.map(t => `
-        <tr>
-          <td><strong>${(t.title || t.slug || '').replace(/</g,'&lt;')}</strong><div style="color:#6b7280;font-size:12px;">/${t.slug}</div></td>
-          <td>${(t.author_name || t.author_email || 'Unknown').replace(/</g,'&lt;')}</td>
-          <td>${formatDate(t.created_at)}</td>
-          <td>
-            <button class="btn btn-primary" data-approve-topic="${t.id}">Approve</button>
-            <button class="btn" style="background:#6b7280;color:#fff;" data-reject-topic="${t.id}">Reject</button>
-            <button class="btn" style="background:#111827;color:#fff;" data-pending-topic="${t.id}">Unapprove</button>
-            <button class="btn" style="background:#0f172a;color:#fff;" data-edit-topic="${t.id}">Edit</button>
-            <button class="btn" style="background:#dc2626;color:#fff;" data-delete-topic="${t.id}">Delete</button>
-          </td>
-        </tr>
-      `).join('');
-
-      topicsBody.querySelectorAll('[data-approve-topic]').forEach(btn => {
-        btn.addEventListener('click', () => updateTopicStatus(btn.dataset.approveTopic, 'approved'));
-      });
-      topicsBody.querySelectorAll('[data-reject-topic]').forEach(btn => {
-        btn.addEventListener('click', () => updateTopicStatus(btn.dataset.rejectTopic, 'rejected'));
-      });
-      topicsBody.querySelectorAll('[data-pending-topic]').forEach(btn => {
-        btn.addEventListener('click', () => updateTopicStatus(btn.dataset.pendingTopic, 'pending'));
-      });
-      topicsBody.querySelectorAll('[data-edit-topic]').forEach(btn => {
-        const t = topics.find(x => String(x.id) === String(btn.dataset.editTopic));
-        btn.addEventListener('click', () => editTopic(t));
-      });
-      topicsBody.querySelectorAll('[data-delete-topic]').forEach(btn => {
-        btn.addEventListener('click', () => deleteTopic(btn.dataset.deleteTopic));
-      });
-    }
-
-    async function refreshReplies() {
-      repliesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
-      const res = await fetch('/api/admin/forum/replies?status=' + encodeURIComponent(repliesStatus.value));
-      const data = await res.json();
-      const replies = data.replies || [];
-      if (replies.length === 0) {
-        repliesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6b7280;">No replies.</td></tr>';
-        return;
-      }
-      repliesBody.innerHTML = replies.map(r => `
-        <tr>
-          <td>${(r.body || '').slice(0, 80).replace(/</g,'&lt;')}${(r.body || '').length > 80 ? '...' : ''}</td>
-          <td>${(r.author_name || r.author_email || 'Unknown').replace(/</g,'&lt;')}</td>
-          <td><a href="/forum/${encodeURIComponent(r.topic_slug || '')}" target="_blank">${(r.topic_title || r.topic_slug || '').replace(/</g,'&lt;')}</a></td>
-          <td>
-            <button class="btn btn-primary" data-approve-reply="${r.id}">Approve</button>
-            <button class="btn" style="background:#6b7280;color:#fff;" data-reject-reply="${r.id}">Reject</button>
-            <button class="btn" style="background:#111827;color:#fff;" data-pending-reply="${r.id}">Unapprove</button>
-            <button class="btn" style="background:#0f172a;color:#fff;" data-edit-reply="${r.id}">Edit</button>
-            <button class="btn" style="background:#dc2626;color:#fff;" data-delete-reply="${r.id}">Delete</button>
-          </td>
-        </tr>
-      `).join('');
-
-      repliesBody.querySelectorAll('[data-approve-reply]').forEach(btn => {
-        btn.addEventListener('click', () => updateReplyStatus(btn.dataset.approveReply, 'approved'));
-      });
-      repliesBody.querySelectorAll('[data-reject-reply]').forEach(btn => {
-        btn.addEventListener('click', () => updateReplyStatus(btn.dataset.rejectReply, 'rejected'));
-      });
-      repliesBody.querySelectorAll('[data-pending-reply]').forEach(btn => {
-        btn.addEventListener('click', () => updateReplyStatus(btn.dataset.pendingReply, 'pending'));
-      });
-      repliesBody.querySelectorAll('[data-edit-reply]').forEach(btn => {
-        const r = replies.find(x => String(x.id) === String(btn.dataset.editReply));
-        btn.addEventListener('click', () => editReply(r));
-      });
-      repliesBody.querySelectorAll('[data-delete-reply]').forEach(btn => {
-        btn.addEventListener('click', () => deleteReply(btn.dataset.deleteReply));
-      });
-    }
-
-    topicsStatus.addEventListener('change', refreshTopics);
-    repliesStatus.addEventListener('change', refreshReplies);
-    await Promise.all([refreshTopics(), refreshReplies()]);
-  }
-
-  // ----- USERS -----
-  async function loadUsers(panel) {
-    panel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
-        <h2 style="margin:0;font-size:1.5em;color:#1f2937;">Users</h2>
-      </div>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Name</th>
-              <th>Orders</th>
-              <th>Blog</th>
-              <th>Forum Topics</th>
-              <th>Forum Replies</th>
-              <th>Block Forum</th>
-              <th>Block Blog</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="users-tbody"><tr><td colspan="9" style="text-align:center;">Loading...</td></tr></tbody>
-        </table>
-      </div>
-    `;
-
-    const tbody = panel.querySelector('#users-tbody');
-
-    async function saveBlock(email, forumBlocked, blogBlocked) {
-      await fetch('/api/admin/users/block', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          blocked_forum: forumBlocked,
-          blocked_blog: blogBlocked
-        })
-      });
-    }
-
-    async function refreshUsers() {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Loading...</td></tr>';
-      const res = await fetch('/api/admin/users/list');
-      const data = await res.json();
-      const users = data.users || [];
-      if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#6b7280;">No users yet.</td></tr>';
-        return;
-      }
-      tbody.innerHTML = users.map(u => `
-        <tr>
-          <td>${(u.email || '').replace(/</g,'&lt;')}</td>
-          <td>${(u.name || '').replace(/</g,'&lt;')}</td>
-          <td>${u.orders_count || 0}</td>
-          <td>${u.blog_count || 0}</td>
-          <td>${u.forum_topics_count || 0}</td>
-          <td>${u.forum_replies_count || 0}</td>
-          <td style="text-align:center;">
-            <input type="checkbox" data-block-forum="${u.email}" ${u.blocked_forum ? 'checked' : ''} />
-          </td>
-          <td style="text-align:center;">
-            <input type="checkbox" data-block-blog="${u.email}" ${u.blocked_blog ? 'checked' : ''} />
-          </td>
-          <td>
-            <button class="btn btn-primary" data-save-user="${u.email}">Save</button>
-          </td>
-        </tr>
-      `).join('');
-
-      tbody.querySelectorAll('[data-save-user]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const email = btn.dataset.saveUser;
-          const forumBox = tbody.querySelector(`[data-block-forum="${email}"]`);
-          const blogBox = tbody.querySelector(`[data-block-blog="${email}"]`);
-          await saveBlock(email, forumBox?.checked, blogBox?.checked);
-          btn.textContent = 'Saved';
-          setTimeout(() => { btn.textContent = 'Save'; }, 1000);
-        });
-      });
-    }
-
-    await refreshUsers();
   }
 })();

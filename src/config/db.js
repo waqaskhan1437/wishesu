@@ -49,8 +49,7 @@ export async function initDB(env) {
           delivered_at DATETIME,
           delivery_time_minutes INTEGER DEFAULT 60,
           revision_count INTEGER DEFAULT 0,
-          revision_requested INTEGER DEFAULT 0,
-          assigned_team TEXT
+          revision_requested INTEGER DEFAULT 0
         )
       `),
       // Reviews table
@@ -85,49 +84,9 @@ export async function initDB(env) {
           title TEXT,
           html TEXT,
           css TEXT,
-          author_name TEXT,
-          author_email TEXT,
           status TEXT DEFAULT 'published',
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `),
-      // Customers table (users by email)
-      env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS customers (
-          email TEXT PRIMARY KEY,
-          name TEXT,
-          blocked_forum INTEGER DEFAULT 0,
-          blocked_blog INTEGER DEFAULT 0,
-          blocked_orders INTEGER DEFAULT 0,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `),
-      // Forum topics (public submissions)
-      env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS forum_topics (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          slug TEXT UNIQUE,
-          title TEXT,
-          body TEXT,
-          author_name TEXT,
-          author_email TEXT,
-          status TEXT DEFAULT 'pending',
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `),
-      // Forum replies (public submissions)
-      env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS forum_replies (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          topic_id INTEGER NOT NULL,
-          body TEXT,
-          author_name TEXT,
-          author_email TEXT,
-          status TEXT DEFAULT 'pending',
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (topic_id) REFERENCES forum_topics(id)
         )
       `),
       // Checkout sessions table
@@ -167,14 +126,6 @@ export async function initDB(env) {
           FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
         )
       `),
-      // Admin auth rate limit table
-      env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS admin_login_attempts (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ip TEXT NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `),
       // Index for chat messages
       env.DB.prepare(`
         CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_id
@@ -202,17 +153,12 @@ async function runMigrations(env) {
   const migrations = [
     { table: 'products', column: 'gallery_images', type: 'TEXT' },
     { table: 'orders', column: 'delivered_video_metadata', type: 'TEXT' },
-    { table: 'orders', column: 'assigned_team', type: 'TEXT' },
-    { table: 'orders', column: 'customer_email', type: 'TEXT' },
-    { table: 'orders', column: 'customer_name', type: 'TEXT' },
     { table: 'reviews', column: 'delivered_video_url', type: 'TEXT' },
     { table: 'reviews', column: 'delivered_thumbnail_url', type: 'TEXT' },
     { table: 'chat_sessions', column: 'blocked', type: 'INTEGER DEFAULT 0' },
     { table: 'chat_sessions', column: 'last_message_content', type: 'TEXT' },
     { table: 'chat_sessions', column: 'last_message_at', type: 'DATETIME' },
-    { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' },
-    { table: 'blog_posts', column: 'author_name', type: 'TEXT' },
-    { table: 'blog_posts', column: 'author_email', type: 'TEXT' }
+    { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' }
   ];
 
   for (const m of migrations) {

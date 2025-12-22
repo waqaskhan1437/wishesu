@@ -2,44 +2,16 @@
  * Pages controller - Dynamic page management
  */
 
-import { initDB } from '../config/db.js';
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
-
-const BUILTIN_PAGES = [
-  { slug: 'index', title: 'Home', path: '/index.html' },
-  { slug: 'products-grid', title: 'Products', path: '/products-grid.html' }
-];
-
-async function seedBuiltInPages(env) {
-  if (!env?.DB || !env?.ASSETS) return;
-  await initDB(env);
-  for (const page of BUILTIN_PAGES) {
-    const existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(page.slug).first();
-    if (existing) continue;
-    let html = '';
-    try {
-      const req = new Request(`https://assets.local${page.path}`);
-      const resp = await env.ASSETS.fetch(req);
-      if (resp.ok) html = await resp.text();
-    } catch (_) {}
-    if (!html) continue;
-    await env.DB.prepare(
-      'INSERT INTO pages (slug, title, content, status) VALUES (?, ?, ?, ?)'
-    ).bind(page.slug, page.title, html, 'published').run();
-  }
-}
 
 /**
  * Get active pages (public)
  */
 export async function getPages(env) {
   const r = await env.DB.prepare(
-    `SELECT id, slug, title, meta_description, created_at, updated_at
-     FROM pages
-     WHERE status = 'published' OR status = 'active' OR status IS NULL OR status = ''
-     ORDER BY id DESC`
-  ).all();
+    'SELECT id, slug, title, meta_description, created_at, updated_at FROM pages WHERE status = ? ORDER BY id DESC'
+  ).bind('published').all();
   
   const pages = (r.results || []).map(page => {
     if (page.created_at) page.created_at = toISO8601(page.created_at);
@@ -55,12 +27,6 @@ export async function getPages(env) {
  * Maps to: { name, url, size, uploaded, id, status }
  */
 export async function getPagesList(env) {
-  await seedBuiltInPages(env);
-  try {
-    await env.DB.prepare(
-      `UPDATE pages SET status = 'published' WHERE status IS NULL OR status = ''`
-    ).run();
-  } catch (_) {}
   const r = await env.DB.prepare(
     'SELECT id, slug, title, content, status, created_at, updated_at FROM pages ORDER BY id DESC'
   ).all();
@@ -91,7 +57,7 @@ export async function getPagesList(env) {
       url: `/${page.slug}.html`,
       size: sizeStr,
       uploaded: uploaded,
-      status: page.status || 'published'
+      status: page.status || 'draft'
     };
   });
 
@@ -230,7 +196,6 @@ export async function duplicatePage(env, body) {
  */
 export async function loadPageBuilder(env, name) {
   if (!name) return json({ error: 'name required' }, 400);
-  await seedBuiltInPages(env);
   
   const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ?').bind(name).first();
   if (!row) return json({ content: '' });

@@ -208,18 +208,15 @@
         let deliveryTime = 2880; // Default: 48 hours (2 days);
         const deliveryAddon = addons.find(a => a.field === 'delivery-time');
         if (deliveryAddon) {
-            const deliveryValue = (deliveryAddon.value || '').toString().toLowerCase();
+            const deliveryValue = (deliveryAddon.value || '').toString();
+            const v = deliveryValue.toLowerCase();
 
-            if (deliveryValue.includes('instant') || deliveryValue.includes('60')) {
+            if (v.includes('instant') || v.includes('60 min') || v.includes('60')) {
                 deliveryTime = 60; // 60 minutes
-            } else if (deliveryValue.includes('24') || deliveryValue.includes('express') || deliveryValue.includes('1 day') || deliveryValue.includes('24 hour')) {
+            } else if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) {
                 deliveryTime = 1440; // 24 hours
-            } else {
-                const match = deliveryValue.match(/\d+/);
-                const days = match ? parseInt(match[0], 10) : 0;
-                if (Number.isFinite(days) && days > 0) {
-                    deliveryTime = days * 1440;
-                }
+            } else if (v.includes('standard') || v.includes('48') || v.includes('2 day') || v.includes('2 days')) {
+                deliveryTime = 2880; // 48 hours (2 days)
             }
         }
         console.log('⏰ Delivery time:', deliveryTime, 'minutes');

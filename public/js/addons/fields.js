@@ -106,7 +106,7 @@
       '  </div>',
       '  <div class="form-grid-2 opt-delivery-config" style="display:none">',
       '    <div class="form-field"><label><input type="checkbox" class="addon-opt-delivery-instant"> Instant Delivery</label></div>',
-      '    <div class="form-field"><label>Delivery Days<input type="number" min="1" step="1" class="addon-opt-delivery-text" placeholder="e.g. 2"></label></div>',
+      '    <div class="form-field"><label>Delivery Text<input type="text" class="addon-opt-delivery-text" placeholder="e.g. 24 Hours Delivery"></label></div>',
       '  </div>',
       '</div>'
     ].join('');

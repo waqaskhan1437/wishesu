@@ -33,45 +33,37 @@ export function generateOfferObject(product, baseUrl) {
     }
   };
 
-  // Provide shipping details + return policy to satisfy rich result requirements.
-  offer.shippingDetails = {
-    "@type": "OfferShippingDetails",
-    "shippingDestination": [
-      { "@type": "DefinedRegion", "addressCountry": "US" },
-      { "@type": "DefinedRegion", "addressCountry": "GB" },
-      { "@type": "DefinedRegion", "addressCountry": "CA" },
-      { "@type": "DefinedRegion", "addressCountry": "AU" },
-      { "@type": "DefinedRegion", "addressCountry": "DE" },
-      { "@type": "DefinedRegion", "addressCountry": "FR" }
-    ],
-    "shippingRate": {
-      "@type": "MonetaryAmount",
-      "currency": "USD",
-      "value": "0"
-    },
-    "deliveryTime": {
-      "@type": "ShippingDeliveryTime",
-      "handlingTime": {
-        "@type": "QuantitativeValue",
-        "minValue": 0,
-        "maxValue": isDigital ? 0 : 1,
-        "unitCode": "DAY"
+  // Only add shipping details for physical products (non-digital)
+  if (!isDigital) {
+    offer.shippingDetails = {
+      "@type": "OfferShippingDetails",
+      "shippingDestination": [
+        { "@type": "DefinedRegion", "addressCountry": "US" },
+        { "@type": "DefinedRegion", "addressCountry": "GB" },
+        { "@type": "DefinedRegion", "addressCountry": "CA" },
+        { "@type": "DefinedRegion", "addressCountry": "AU" },
+        { "@type": "DefinedRegion", "addressCountry": "DE" },
+        { "@type": "DefinedRegion", "addressCountry": "FR" }
+      ],
+      "shippingRate": {
+        "@type": "MonetaryAmount",
+        "currency": "USD",
+        "value": "0"
       },
-      "transitTime": {
-        "@type": "QuantitativeValue",
-        "minValue": isDigital ? 0 : 1,
-        "maxValue": isDigital ? 0 : 3,
-        "unitCode": "DAY"
+      "deliveryTime": {
+        "@type": "ShippingDeliveryTime",
+        "handlingTime": { "@type": "QuantitativeValue", "minValue": 0, "maxValue": 1, "unitCode": "DAY" },
+        "transitTime": { "@type": "QuantitativeValue", "minValue": 1, "maxValue": 3, "unitCode": "DAY" }
       }
-    }
-  };
-
-  offer.hasMerchantReturnPolicy = {
-    "@type": "MerchantReturnPolicy",
-    "applicableCountry": "US",
-    "returnPolicyCategory": "MerchantReturnNotPermitted",
-    "merchantReturnDays": 0
-  };
+    };
+    
+    offer.hasMerchantReturnPolicy = {
+      "@type": "MerchantReturnPolicy",
+      "applicableCountry": "US",
+      "returnPolicyCategory": "MerchantReturnNotPermitted",
+      "merchantReturnDays": 0
+    };
+  }
 
   return offer;
 }
@@ -85,19 +77,16 @@ export function generateOfferObject(product, baseUrl) {
  */
 export function generateProductSchema(product, baseUrl, reviews = []) {
   const sku = product.slug ? `WV-${product.id}-${product.slug.toUpperCase().replace(/-/g, '')}` : `WV-${product.id}`;
-  const canonicalUrl = `${baseUrl}${canonicalProductPath(product)}`;
-  const media = normalizeProductMedia(product, baseUrl, canonicalUrl);
 
   const schema = {
     "@context": "https://schema.org/",
     "@type": "Product",
-    "@id": canonicalUrl,
+    "@id": `${baseUrl}${canonicalProductPath(product)}`,
     "name": product.title,
     "description": product.seo_description || product.description || product.title,
     "sku": sku,
     "mpn": sku,
-    "image": media.images,
-    "video": media.videos,
+    "image": product.thumbnail_url ? [product.thumbnail_url] : [],
     "brand": {
       "@type": "Brand",
       "name": "WishVideo",
@@ -156,19 +145,16 @@ export function generateCollectionSchema(products, baseUrl) {
   }
 
   const itemListElement = products.map((product, index) => {
-    const canonicalUrl = `${baseUrl}${canonicalProductPath(product)}`;
-    const media = normalizeProductMedia(product, baseUrl, canonicalUrl);
     const item = {
       "@type": "ListItem",
       "position": index + 1,
-      "url": canonicalUrl,
+      "url": `${baseUrl}${canonicalProductPath(product)}`,
       "item": {
         "@type": "Product",
-        "@id": canonicalUrl,
+        "@id": `${baseUrl}${canonicalProductPath(product)}`,
         "name": product.title,
         "description": product.seo_description || product.description || product.title,
-        "image": media.images,
-        "video": media.videos,
+        "image": product.thumbnail_url ? [product.thumbnail_url] : [],
         "offers": generateOfferObject(product, baseUrl)
       }
     };
@@ -209,55 +195,4 @@ export function injectSchemaIntoHTML(html, schemaId, schemaJson) {
   const placeholder = `<script type="application/ld+json" id="${schemaId}">{}</script>`;
   const replacement = `<script type="application/ld+json" id="${schemaId}">${schemaJson}</script>`;
   return html.replace(placeholder, replacement);
-}
-
-function normalizeUrl(url, baseUrl) {
-  const raw = String(url || '').trim();
-  if (!raw) return '';
-  if (/^https?:\/\//i.test(raw)) return raw;
-  if (raw.startsWith('/')) return `${baseUrl}${raw}`;
-  return `${baseUrl}/${raw}`;
-}
-
-function normalizeProductMedia(product, baseUrl, canonicalUrl) {
-  const images = [];
-  const videos = [];
-
-  const thumb = normalizeUrl(product.thumbnail_url, baseUrl);
-  if (thumb) images.push(thumb);
-
-  const galleryRaw = String(product.gallery_images || '').trim();
-  if (galleryRaw) {
-    try {
-      const list = JSON.parse(galleryRaw);
-      if (Array.isArray(list)) {
-        list.forEach(src => {
-          const u = normalizeUrl(src, baseUrl);
-          if (u && !images.includes(u)) images.push(u);
-        });
-      }
-    } catch (_) {
-      galleryRaw.split(',').map(s => s.trim()).forEach(src => {
-        const u = normalizeUrl(src, baseUrl);
-        if (u && !images.includes(u)) images.push(u);
-      });
-    }
-  }
-
-  const videoUrl = normalizeUrl(product.video_url, baseUrl);
-  if (videoUrl) {
-    videos.push({
-      "@type": "VideoObject",
-      "name": product.title || 'Product video',
-      "description": product.seo_description || product.description || product.title || '',
-      "thumbnailUrl": thumb ? [thumb] : [],
-      "contentUrl": videoUrl,
-      "url": canonicalUrl
-    });
-  }
-
-  return {
-    images,
-    videos
-  };
 }

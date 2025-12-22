@@ -3,36 +3,8 @@
  */
 
 import { json } from '../utils/response.js';
-import { normalizeEmail, upsertCustomer } from '../utils/customers.js';
 import { toISO8601 } from '../utils/formatting.js';
 import { getGoogleScriptUrl } from '../config/secrets.js';
-
-let ordersColumnsChecked = false;
-
-async function ensureOrderColumns(env) {
-  if (ordersColumnsChecked) return;
-  try {
-    await env.DB.prepare('ALTER TABLE orders ADD COLUMN assigned_team TEXT').run();
-  } catch (_) {}
-  ordersColumnsChecked = true;
-}
-
-async function notifyOrderCreated(env, order) {
-  try {
-    const googleScriptUrl = await getGoogleScriptUrl(env);
-    if (!googleScriptUrl) return;
-  await fetch(googleScriptUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event: 'order.created',
-        order
-      })
-    }).catch(err => console.error('Failed to send order.created webhook:', err));
-  } catch (err) {
-    console.error('Error triggering order.created webhook:', err);
-  }
-}
 
 // Re-export from shared utility for backwards compatibility
 export { getLatestOrderForEmail } from '../utils/order-helpers.js';
@@ -43,11 +15,11 @@ export { getLatestOrderForEmail } from '../utils/order-helpers.js';
 export async function getOrders(env) {
   const r = await env.DB.prepare('SELECT * FROM orders ORDER BY id DESC').all();
   const orders = (r.results || []).map(row => {
-    let email = row.customer_email || '', amount = null, addons = [];
+    let email = '', amount = null, addons = [];
     try {
       if (row.encrypted_data && row.encrypted_data[0] === '{') {
         const d = JSON.parse(row.encrypted_data);
-        email = email || d.email || '';
+        email = d.email || '';
         amount = d.amount;
         addons = d.addons || [];
       }
@@ -62,9 +34,8 @@ export async function getOrders(env) {
 /**
  * Create order (from checkout)
  */
-export async function createOrder(env, body, origin) {
-  await ensureOrderColumns(env);
-  if (!body.productId || !body.email) return json({ error: 'productId and email required' }, 400);
+export async function createOrder(env, body) {
+  if (!body.productId) return json({ error: 'productId required' }, 400);
   
   const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   const data = JSON.stringify({
@@ -74,34 +45,9 @@ export async function createOrder(env, body, origin) {
     addons: body.addons || []
   });
   
-  const email = normalizeEmail(body.email);
   await env.DB.prepare(
-    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, customer_email, customer_name, assigned_team) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    orderId,
-    Number(body.productId),
-    data,
-    'PAID',
-    Number(body.deliveryTime) || 60,
-    email,
-    String(body.name || '').trim() || null,
-    String(body.assigned_team || '').trim() || null
-  ).run();
-
-  await upsertCustomer(env, email, body.name);
-  const base = String(origin || '').trim();
-  const orderUrl = base ? `${base}/buyer-order.html?id=${encodeURIComponent(orderId)}` : null;
-  await notifyOrderCreated(env, {
-    order_id: orderId,
-    product_id: Number(body.productId),
-    email,
-    name: String(body.name || '').trim() || null,
-    amount: body.amount || null,
-    status: 'PAID',
-    assigned_team: String(body.assigned_team || '').trim() || null,
-    origin: base || null,
-    order_url: orderUrl
-  });
+    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
+  ).bind(orderId, Number(body.productId), data, 'PAID', Number(body.deliveryTime) || 60).run();
   
   return json({ success: true, orderId });
 }
@@ -109,8 +55,7 @@ export async function createOrder(env, body, origin) {
 /**
  * Create manual order (admin)
  */
-export async function createManualOrder(env, body, origin) {
-  await ensureOrderColumns(env);
+export async function createManualOrder(env, body) {
   if (!body.productId || !body.email) {
     return json({ error: 'productId and email required' }, 400);
   }
@@ -125,35 +70,15 @@ export async function createManualOrder(env, body, origin) {
     manualOrder: true
   });
   
-  const email = normalizeEmail(body.email);
   await env.DB.prepare(
-    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, customer_email, customer_name, assigned_team) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
   ).bind(
     orderId,
     Number(body.productId),
     encryptedData,
     body.status || 'paid',
-    Number(body.deliveryTime) || 60,
-    email,
-    String(body.name || '').trim() || null,
-    String(body.assigned_team || '').trim() || null
+    Number(body.deliveryTime) || 60
   ).run();
-
-  await upsertCustomer(env, email, body.name);
-  const base = String(origin || '').trim();
-  const orderUrl = base ? `${base}/buyer-order.html?id=${encodeURIComponent(orderId)}` : null;
-  await notifyOrderCreated(env, {
-    order_id: orderId,
-    product_id: Number(body.productId),
-    email,
-    name: String(body.name || '').trim() || null,
-    amount: body.amount || null,
-    status: body.status || 'paid',
-    assigned_team: String(body.assigned_team || '').trim() || null,
-    manual: true,
-    origin: base || null,
-    order_url: orderUrl
-  });
   
   return json({ success: true, orderId });
 }

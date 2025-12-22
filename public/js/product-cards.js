@@ -90,7 +90,6 @@
         normal_price,
         sale_price,
         normal_delivery_text,
-        instant_delivery,
         average_rating,
         review_count
       } = product;
@@ -104,13 +103,13 @@
       const hasDiscount = salePrice < originalPrice;
       const discount = hasDiscount ? Math.round((1 - salePrice / originalPrice) * 100) : 0;
 
-      // Delivery text - STRICT: Pass instant_delivery and normal_delivery_text directly
-      const deliveryText = this.getDeliveryText(instant_delivery, normal_delivery_text);
-      const deliveryIcon = this.getDeliveryIcon(deliveryText);
+      // Delivery text
+      const deliveryText = this.getDeliveryText(normal_delivery_text);
+      const deliveryIcon = this.getDeliveryIcon(normal_delivery_text);
 
-      // Rating text
+      // Rating stars
       const rating = parseFloat(average_rating || 5);
-      const ratingText = this.formatRatingText(rating, review_count);
+      const stars = this.renderStars(rating);
 
       const priceHtml = `
         <div class="product-prices">
@@ -120,12 +119,13 @@
       `;
       const reviewHtml = `
         <div class="product-reviews">
-          <span class="rating-text">${ratingText}</span>
+          ${stars}
+          <span class="review-count">(${review_count || 0})</span>
         </div>
       `;
       const deliveryHtml = `
         <div class="product-delivery">
-          ${deliveryIcon ? `<span class="delivery-icon">${deliveryIcon}</span>` : ''}
+          <span class="delivery-icon">${deliveryIcon}</span>
           <span class="delivery-text">${deliveryText}</span>
         </div>
       `;
@@ -160,25 +160,32 @@
       `;
     },
 
-    getDeliveryText: function(instant, deliveryDays) {
-      // STRICT: Use centralized utility with correct parameters
-      if (!window.DeliveryTimeUtils) {
-        console.error('DeliveryTimeUtils not loaded');
-        return '2 Days Delivery';
+    // Get delivery text based on time
+    getDeliveryText: function(deliveryText) {
+      if (!deliveryText) return 'Instant Delivery in 60 Minutes';
+
+      const text = deliveryText.toLowerCase();
+      const minutes = parseInt(text.match(/\d+/)?.[0] || 60);
+
+      if (text.includes('instant') || minutes <= 60) {
+        return `⚡ Instant Delivery in ${minutes} Minutes`;
+      } else if (text.includes('24 hours') || text.includes('1 day')) {
+        return '🚀 24 Hours Express Delivery';
+      } else if (text.includes('2 days')) {
+        return '📦 2 Days Delivery';
+      } else if (text.includes('3 days')) {
+        return '📦 3 Days Delivery';
+      } else {
+        return deliveryText;
       }
-      // Directly pass instant and deliveryDays to utility
-      return window.DeliveryTimeUtils.getDeliveryText(instant, deliveryDays);
     },
 
+    // Get delivery icon
     getDeliveryIcon: function(deliveryText) {
-      if (!window.DeliveryTimeUtils) return '';
-      return window.DeliveryTimeUtils.getDeliveryIcon(deliveryText);
-    },
-
-    formatRatingText: function(rating, count) {
-      const safeRating = Number.isFinite(rating) ? rating : 5;
-      const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
-      return `*${safeRating.toFixed(1)}(${safeCount})`;
+      const text = (deliveryText || '').toLowerCase();
+      if (text.includes('instant') || text.includes('60')) return '⚡';
+      if (text.includes('24') || text.includes('1 day')) return '🚀';
+      return '📦';
     },
 
     // Render rating stars
@@ -307,11 +314,6 @@
           display: flex;
           align-items: center;
           gap: 4px;
-          color: #111827;
-          font-weight: 600;
-        }
-        .rating-text {
-          letter-spacing: 0.2px;
         }
 
         .rating-stars {
@@ -403,4 +405,3 @@
 
   console.log('✅ Product Cards System Ready');
 })();
-

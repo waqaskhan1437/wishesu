@@ -188,9 +188,6 @@
               // Create video thumbnail container - use video itself as thumbnail source
               const thumbContainer = document.createElement('div');
               thumbContainer.style.cssText = 'position:relative; width:260px; height:146px; flex-shrink:0; cursor:pointer; border-radius:10px; overflow:hidden; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition:transform 0.2s, box-shadow 0.2s; background:#000;';
-              thumbContainer.setAttribute('role', 'button');
-              thumbContainer.setAttribute('tabindex', '0');
-              thumbContainer.setAttribute('aria-label', 'Watch review video');
 
               // Use HTML5 video element to show actual video frame as thumbnail
               // Browser will automatically show a frame from the video
@@ -199,8 +196,6 @@
               videoThumb.preload = 'metadata'; // Load just enough to show first frame
               videoThumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
               videoThumb.muted = true; // Muted so it doesn't autoplay with sound
-              videoThumb.setAttribute('aria-hidden', 'true');
-              videoThumb.setAttribute('tabindex', '-1');
               
               thumbContainer.appendChild(videoThumb);
               
@@ -214,7 +209,6 @@
               const playIcon = document.createElement('div');
               playIcon.innerHTML = '▶';
               playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.75); color:white; width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; padding-left:3px; transition:background 0.2s;';
-              playIcon.setAttribute('aria-hidden', 'true');
               thumbContainer.appendChild(playIcon);
 
               const btn = document.createElement('button');
@@ -250,12 +244,6 @@
               });
 
               thumbContainer.addEventListener('click', onWatch);
-              thumbContainer.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onWatch();
-                }
-              });
               btn.addEventListener('click', onWatch);
 
               portfolioRow.appendChild(thumbContainer);
@@ -272,11 +260,9 @@
               pag.style.cssText = 'display:flex;justify-content:center;gap:12px;margin-top:30px;padding:20px 0;';
               
               const prev = document.createElement('button');
-              prev.type = 'button';
-              prev.textContent = 'Prev';
-              prev.setAttribute('aria-label', 'Previous reviews page');
+              prev.textContent = '← Prev';
               prev.disabled = currentPage === 1;
-              prev.style.cssText = `padding:10px 20px;background:${currentPage===1?'#94a3b8':'#0f172a'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===1?'not-allowed':'pointer'};font-weight:600`;
+              prev.style.cssText = `padding:10px 20px;background:${currentPage===1?'#999':'#667eea'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===1?'not-allowed':'pointer'};font-weight:600`;
               if (currentPage > 1) prev.onclick = () => { renderPage(currentPage - 1); container.scrollIntoView({behavior:'smooth'}); };
               pag.appendChild(prev);
               
@@ -286,11 +272,9 @@
               pag.appendChild(info);
               
               const next = document.createElement('button');
-              next.type = 'button';
-              next.textContent = 'Next';
-              next.setAttribute('aria-label', 'Next reviews page');
+              next.textContent = 'Next →';
               next.disabled = currentPage === totalPages;
-              next.style.cssText = `padding:10px 20px;background:${currentPage===totalPages?'#94a3b8':'#0f172a'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===totalPages?'not-allowed':'pointer'};font-weight:600`;
+              next.style.cssText = `padding:10px 20px;background:${currentPage===totalPages?'#999':'#667eea'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===totalPages?'not-allowed':'pointer'};font-weight:600`;
               if (currentPage < totalPages) next.onclick = () => { renderPage(currentPage + 1); container.scrollIntoView({behavior:'smooth'}); };
               pag.appendChild(next);
               
@@ -313,9 +297,6 @@
             if (window.productThumbnailsSlider) {
               const galleryThumb = document.createElement('div');
               galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s; background:#000;';
-              galleryThumb.setAttribute('role', 'button');
-              galleryThumb.setAttribute('tabindex', '0');
-              galleryThumb.setAttribute('aria-label', 'View review video');
 
               // Use actual video as thumbnail source - browser shows video frame automatically
               const videoThumb = document.createElement('video');
@@ -323,8 +304,6 @@
               videoThumb.preload = 'metadata'; // Load just first frame
               videoThumb.muted = true;
               videoThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
-              videoThumb.setAttribute('aria-hidden', 'true');
-              videoThumb.setAttribute('tabindex', '-1');
               galleryThumb.appendChild(videoThumb);
 
               // Add review badge to gallery thumbnail
@@ -336,7 +315,6 @@
               playIcon.className = 'thumb-play-btn';
               playIcon.innerHTML = '▶';
               playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px; opacity:1 !important; z-index:100;';
-              playIcon.setAttribute('aria-hidden', 'true');
 
               galleryThumb.appendChild(videoThumb);
               galleryThumb.appendChild(badge);
@@ -356,12 +334,6 @@
 	              // Fallback to product thumbnail if review poster is missing to avoid black screen.
 	              setPlayerSource(portfolioVideoUrl, review.thumbnail_url || product.thumbnail_url);
               };
-              galleryThumb.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  galleryThumb.click();
-                }
-              });
 
               // Hover effect
               galleryThumb.onmouseenter = () => {
@@ -434,5 +406,3 @@
   window.renderProductDescription = renderProductDescription;
   window.initializePlayer = initializePlayer;
 })();
-
-

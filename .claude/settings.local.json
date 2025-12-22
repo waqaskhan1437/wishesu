@@ -3,8 +3,7 @@
     "allow": [
       "Bash(npx wrangler deploy)",
       "Bash(node -e:*)",
-      "Bash(cat:*)",
-      "WebFetch(domain:wishesu1.waqaskhan1437.workers.dev)"
+      "Bash(cat:*)"
     ]
   }
 }

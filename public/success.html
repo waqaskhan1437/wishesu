@@ -196,12 +196,8 @@
         if (deliveryAddon) {
           const v = (deliveryAddon.value || '').toLowerCase();
           if (v.includes('instant') || v.includes('60')) deliveryTime = 60;
-          else if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) deliveryTime = 1440;
-          else {
-            const match = v.match(/\d+/);
-            const days = match ? parseInt(match[0], 10) : 0;
-            if (Number.isFinite(days) && days > 0) deliveryTime = days * 1440;
-          }
+          else if (v.includes('24') || v.includes('express')) deliveryTime = 1440;
+          else if (v.includes('48') || v.includes('2 day')) deliveryTime = 2880;
         }
 
         const payload = {
