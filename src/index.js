@@ -40,9 +40,32 @@ export default {
       return false;
     };
 
-    const checkAdminAuth = () => {
+    const getClientIp = () => {
+      return req.headers.get('cf-connecting-ip') ||
+        req.headers.get('x-forwarded-for') ||
+        req.headers.get('x-real-ip') ||
+        'unknown';
+    };
+
+    const isSameOrigin = () => {
+      const origin = req.headers.get('origin') || '';
+      const referer = req.headers.get('referer') || '';
+      const host = req.headers.get('host') || '';
+      const ok = (value) => {
+        if (!value) return false;
+        try {
+          const u = new URL(value);
+          return u.host === host;
+        } catch (_) {
+          return false;
+        }
+      };
+      return ok(origin) || ok(referer);
+    };
+
+    const checkAdminAuth = async () => {
       const pass = (env.ADMIN_PASSWORD || '').toString().trim();
-      if (!pass) return true;
+      if (!pass) return false;
       const user = (env.ADMIN_USER || '').toString().trim();
       const header = req.headers.get('authorization') || '';
       if (!header.toLowerCase().startsWith('basic ')) return false;
@@ -53,6 +76,37 @@ export default {
       const p = parts.join(':') || '';
       if (user && u !== user) return false;
       return p === pass;
+    };
+
+    const shouldRateLimit = (p) => {
+      return p.startsWith('/admin') || p.startsWith('/api/admin/');
+    };
+
+    const isRateLimited = async () => {
+      if (!env.DB) return false;
+      try {
+        await initDB(env);
+        const ip = getClientIp();
+        const row = await env.DB.prepare(
+          `SELECT COUNT(*) as c
+           FROM admin_login_attempts
+           WHERE ip = ? AND datetime(created_at) > datetime('now', '-10 minutes')`
+        ).bind(ip).first();
+        return Number(row?.c || 0) >= 10;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const recordFailedAttempt = async () => {
+      if (!env.DB) return;
+      try {
+        await initDB(env);
+        const ip = getClientIp();
+        await env.DB.prepare(
+          `INSERT INTO admin_login_attempts (ip) VALUES (?)`
+        ).bind(ip).run();
+      } catch (_) {}
     };
 
     // Auto-purge cache on version change (only for admin/webhook routes)
@@ -67,11 +121,30 @@ export default {
     }
 
     try {
-      if (requiresAdminAuth(path, method) && !checkAdminAuth()) {
-        return new Response('Authentication required', {
+      if (path === '/admin/logout') {
+        return new Response('Logged out', {
           status: 401,
           headers: { 'WWW-Authenticate': 'Basic realm="Admin"' }
         });
+      }
+
+      if (requiresAdminAuth(path, method)) {
+        if (shouldRateLimit(path) && await isRateLimited()) {
+          return new Response('Too many login attempts. Try again later.', { status: 429 });
+        }
+
+        const ok = await checkAdminAuth();
+        if (!ok) {
+          await recordFailedAttempt();
+          return new Response('Authentication required', {
+            status: 401,
+            headers: { 'WWW-Authenticate': 'Basic realm="Admin"' }
+          });
+        }
+
+        if (!['GET','HEAD','OPTIONS'].includes(method) && !isSameOrigin()) {
+          return new Response('CSRF blocked', { status: 403 });
+        }
       }
       // Helper: read default public pages from settings
       const getDefaultPages = async () => {

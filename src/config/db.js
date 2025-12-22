@@ -167,6 +167,14 @@ export async function initDB(env) {
           FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
         )
       `),
+      // Admin auth rate limit table
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS admin_login_attempts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ip TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `),
       // Index for chat messages
       env.DB.prepare(`
         CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_id
