@@ -25,6 +25,36 @@ export default {
     }
     const method = req.method;
 
+    const requiresAdminAuth = (p, m) => {
+      if (p.startsWith('/admin')) return true;
+      if (p.startsWith('/api/admin/')) return true;
+      if (p === '/api/purge-cache') return true;
+      if (p === '/api/blog/list' || p === '/api/blog/get' || p === '/api/blog/save' || p === '/api/blog/status' || p === '/api/blog/delete') return true;
+      if (p === '/api/page/save' || p === '/api/page/delete') return true;
+      if (p === '/api/pages/save' || p === '/api/pages/delete' || p === '/api/pages/status' || p === '/api/pages/duplicate' || p === '/api/pages/load') return true;
+      if (p === '/api/product/save' || p === '/api/product/delete') return true;
+      if (p === '/api/products/status' || p === '/api/products/duplicate') return true;
+      if (p === '/api/orders' || p === '/api/order/update' || p === '/api/order/delete' || p === '/api/order/deliver' || p === '/api/order/revision' || p === '/api/order/portfolio' || p === '/api/order/archive-link' || p === '/api/order/upload-encrypted-file') return true;
+      if (p === '/api/reviews/update' || p === '/api/reviews/delete') return true;
+      if (p === '/api/settings/default-pages' || p === '/api/settings/whop' || p === '/api/settings/analytics' || p === '/api/settings/control-webhook') return true;
+      return false;
+    };
+
+    const checkAdminAuth = () => {
+      const pass = (env.ADMIN_PASSWORD || '').toString().trim();
+      if (!pass) return true;
+      const user = (env.ADMIN_USER || '').toString().trim();
+      const header = req.headers.get('authorization') || '';
+      if (!header.toLowerCase().startsWith('basic ')) return false;
+      let decoded = '';
+      try { decoded = atob(header.slice(6)); } catch (_) { return false; }
+      const parts = decoded.split(':');
+      const u = parts.shift() || '';
+      const p = parts.join(':') || '';
+      if (user && u !== user) return false;
+      return p === pass;
+    };
+
     // Auto-purge cache on version change (only for admin/webhook routes)
     const shouldPurgeCache = path.startsWith('/admin') || path.startsWith('/api/admin/') || path.startsWith('/api/whop/webhook');
     if (shouldPurgeCache) {
@@ -37,6 +67,12 @@ export default {
     }
 
     try {
+      if (requiresAdminAuth(path, method) && !checkAdminAuth()) {
+        return new Response('Authentication required', {
+          status: 401,
+          headers: { 'WWW-Authenticate': 'Basic realm="Admin"' }
+        });
+      }
       // Helper: read default public pages from settings
       const getDefaultPages = async () => {
         if (!env.DB) return { homePath: '/index.html', productsPath: '/products-grid.html', blogPath: '/blog' };

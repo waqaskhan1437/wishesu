@@ -161,6 +161,15 @@
       search.set('_', Date.now());
       window.location.href = base + '?' + search.toString() + window.location.hash;
     }
+
+    function logoutAdmin() {
+      // Invalidate Basic Auth by navigating with empty credentials.
+      try {
+        window.location.href = '//' + window.location.host + '/admin/logout';
+      } catch (e) {
+        window.location.href = '/admin/logout';
+      }
+    }
   </script>
   <script src="/js/admin/dashboard.js"></script>
 
@@ -198,4 +207,5 @@
   </script>
 </body>
 </html>
+
 
