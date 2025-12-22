@@ -1,94 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Products</title>
-  <!-- Structured Data for Product Collection -->
-  <script type="application/ld+json" id="collection-schema">{}</script>
   <style>
-    .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; padding: 20px; }
-    .product-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.3s, box-shadow 0.3s; cursor: pointer;  text-decoration: none; color: inherit; display: block; }
-    .product-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
-    .product-thumbnail { width: 100%; aspect-ratio: 16/9; background: #f3f4f6; position: relative; overflow: hidden; }
-    .product-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
-    .product-thumbnail video { width: 100%; height: 100%; object-fit: cover; }
-    .play-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60px; height: 60px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; }
-    .product-info { padding: 20px; }
-    .product-title { font-size: 1.1em; font-weight: 600; color: #111827; margin-bottom: 10px; }
-    .product-price-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .product-price { font-size: 1.3em; font-weight: bold; color: #3b82f6; }
-    .product-sale { text-decoration: line-through; color: #9ca3af; font-size: 0.9em; margin-left: 8px; }
-    .product-meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; color: #6b7280; margin-bottom: 15px; }
-    .product-reviews { display: flex; align-items: center; gap: 5px; }
-    .stars { color: #fbbf24; }
-    .delivery-time { background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
-    .buy-btn { width: 100%; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 1em; cursor: pointer; transition: all 0.2s; }
-    .buy-btn:hover { background: #2563eb; transform: translateY(-2px); }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: #f8fafc; }
+    .page-wrap { padding: 24px 18px; }
+    h1 { margin: 0 0 18px 0; font-size: 1.6rem; color: #111827; text-align: center; }
   </style>
 </head>
 <body>
-  <div class="products-grid" id="products-container"></div>
-  
-  <!-- Schema now injected server-side - removed collection-schema.js -->
+  <div class="page-wrap">
+    <h1>Products</h1>
+    <div id="products-container"></div>
+  </div>
+
+  <script src="/js/product-cards.js"></script>
   <script>
-    async function loadProducts() {
-      try {
-        const res = await fetch('/api/products');
-        const data = await res.json();
-        if (data.products) {
-          displayProducts(data.products);
-          // Schema now injected server-side for better SEO
-        }
-      } catch (err) {
-        console.error('Failed to load products:', err);
-      }
-    }
-
-    function displayProducts(products) {
-      const container = document.getElementById('products-container');
-      container.innerHTML = products.map(p => createProductCard(p)).join('');
-    }
-
-    function createProductCard(product) {
-      const price = product.sale_price || product.normal_price || 0;
-      const hasDiscount = product.sale_price && product.normal_price > product.sale_price;
-      const rating = product.rating_average || 0;
-      const reviewCount = product.review_count || 0;
-      const deliveryTime = product.instant_delivery ? 'Instant' : (product.normal_delivery_text || '60 min');
-      
-      return `
-        <a class="product-card" href="/product?id=${product.id}">
-          <div class="product-thumbnail">
-            ${product.thumbnail_url ? 
-              `<img src="${product.thumbnail_url}" alt="${product.title}">` : 
-              `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2em;">🎬</div>`
-            }
-            ${product.video_url ? '<div class="play-overlay">▶</div>' : ''}
-          </div>
-          <div class="product-info">
-            <div class="product-title">${product.title || 'Product'}</div>
-            <div class="product-price-row">
-              <div>
-                <span class="product-price">$${price}</span>
-                ${hasDiscount ? `<span class="product-sale">$${product.normal_price}</span>` : ''}
-              </div>
-            </div>
-            <div class="product-meta">
-              <div class="product-reviews">
-                ${reviewCount > 0 ? `
-                  <span class="stars">${'★'.repeat(Math.floor(rating))}${'☆'.repeat(5-Math.floor(rating))}</span>
-                  <span>(${reviewCount})</span>
-                ` : '<span style="color: #9ca3af;">No reviews yet</span>'}
-              </div>
-              <div class="delivery-time">⚡ ${deliveryTime}</div>
-            </div>
-            <span class="buy-btn">Book Now</span>
-          </div>
-        </a>
-      `;
-    }
-loadProducts();
+    // Universal cards: single design everywhere
+    ProductCards.render('products-container', {
+      filter: 'all',
+      limit: 999,
+      columns: 3,
+      showReviews: true,
+      showDelivery: true
+    });
   </script>
 </body>
 </html>
