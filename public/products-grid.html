@@ -4,113 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Products</title>
-  <!-- Structured Data for Product Collection -->
+  <link rel="stylesheet" href="css/style.css">
   <script type="application/ld+json" id="collection-schema">{}</script>
   <style>
-    .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; padding: 20px; }
-    .product-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: transform 0.3s, box-shadow 0.3s; cursor: pointer;  text-decoration: none; color: inherit; display: block; }
-    .product-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
-    .product-thumbnail { width: 100%; aspect-ratio: 16/9; background: #f3f4f6; position: relative; overflow: hidden; }
-    .product-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
-    .product-thumbnail video { width: 100%; height: 100%; object-fit: cover; }
-    .play-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 60px; height: 60px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; }
-    .product-info { padding: 20px; }
-    .product-title { font-size: 1.1em; font-weight: 600; color: #111827; margin-bottom: 10px; }
-    .product-price-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .product-price { font-size: 1.3em; font-weight: bold; color: #3b82f6; }
-    .product-sale { text-decoration: line-through; color: #9ca3af; font-size: 0.9em; margin-left: 8px; }
-    .product-meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; color: #6b7280; margin-bottom: 15px; }
-    .product-reviews { display: flex; align-items: center; gap: 5px; }
-    .stars { color: #fbbf24; }
-    .delivery-time { background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
-    .buy-btn { width: 100%; padding: 12px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 1em; cursor: pointer; transition: all 0.2s; }
-    .buy-btn:hover { background: #2563eb; transform: translateY(-2px); }
+    body { margin: 0; background: #f5f5f5; }
+    .page-wrap { padding: 30px 20px; }
+    .page-title { font-size: 2rem; margin: 0 0 20px; color: #111827; }
   </style>
 </head>
 <body>
-  <div class="products-grid" id="products-container"></div>
-  
-  <!-- Schema now injected server-side - removed collection-schema.js -->
+  <div class="page-wrap">
+    <h1 class="page-title">Products</h1>
+    <div id="product-list"></div>
+  </div>
+
+  <script src="js/product-cards.js?v=20"></script>
   <script>
-    async function loadProducts() {
-      try {
-        const res = await fetch('/api/products');
-        const data = await res.json();
-        if (data.products) {
-          displayProducts(data.products);
-          // Schema now injected server-side for better SEO
-        }
-      } catch (err) {
-        console.error('Failed to load products:', err);
-      }
-    }
-
-    function displayProducts(products) {
-      const container = document.getElementById('products-container');
-      container.innerHTML = products.map(p => createProductCard(p)).join('');
-    }
-
-    function getDeliveryLabel(product) {
-      const raw = (product.normal_delivery_text || '').toString();
-      const text = raw.toLowerCase();
-      const minutesMatch = text.match(/\d+/);
-      const minutes = minutesMatch ? parseInt(minutesMatch[0], 10) : null;
-
-      if (product.instant_delivery || text.includes('instant') || minutes === 60 || minutes === 1) {
-        return 'Instant Delivery In 60 Minutes';
-      }
-      if (text.includes('24') || text.includes('1 day') || text.includes('24 hours') || text.includes('express')) {
-        return '24 Hours Express Delivery';
-      }
-      if (text.includes('48') || text.includes('2 day') || text.includes('2 days')) {
-        return '2 Days Delivery';
-      }
-      if (text.includes('3 day') || text.includes('3 days') || text.includes('72')) {
-        return '3 Days Delivery';
-      }
-      return raw || 'Instant Delivery In 60 Minutes';
-    }
-
-    function createProductCard(product) {
-      const price = product.sale_price || product.normal_price || 0;
-      const hasDiscount = product.sale_price && product.normal_price > product.sale_price;
-      const rating = Number.isFinite(Number(product.rating_average)) ? Number(product.rating_average) : 5;
-      const reviewCount = Number.isFinite(Number(product.review_count)) ? Number(product.review_count) : 0;
-      const deliveryLabel = getDeliveryLabel(product);
-      
-      return `
-        <a class="product-card" href="/product?id=${product.id}">
-          <div class="product-thumbnail">
-            ${product.thumbnail_url ? 
-              `<img src="${product.thumbnail_url}" alt="${product.title}">` : 
-              `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2em;">dYZª</div>`
-            }
-            ${product.video_url ? '<div class="play-overlay">PLAY</div>' : ''}
-          </div>
-          <div class="product-info">
-            <div class="product-title">${product.title || 'Product'}</div>
-            <div class="product-price-row">
-              <div>
-                <span class="product-price">$${price}</span>
-                ${hasDiscount ? `<span class="product-sale">$${product.normal_price}</span>` : ''}
-              </div>
-            </div>
-            <div class="product-meta">
-              <div class="product-reviews">
-                <span>*${rating.toFixed(1)}(${reviewCount})</span>
-              </div>
-              <div class="delivery-time">${deliveryLabel}</div>
-            </div>
-            <span class="buy-btn">Book Now</span>
-          </div>
-        </a>
-      `;
-    }
-
-    loadProducts();
+    // Use the shared ProductCards renderer so design stays consistent
+    ProductCards.render('product-list', { filter: 'all', columns: 3, limit: 12 });
   </script>
 </body>
 </html>
-
-
-

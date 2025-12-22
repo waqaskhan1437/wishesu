@@ -185,7 +185,7 @@
       const text = (deliveryText || '').toLowerCase();
       if (text.includes('instant') || text.includes('60') || text.includes('1 day')) return 'FAST';
       if (text.includes('24') || text.includes('express')) return '24H';
-      return 'STD';
+      return '';
     },
 
     formatRatingText: function(rating, count) {
