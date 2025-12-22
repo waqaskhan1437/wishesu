@@ -10,7 +10,10 @@
       "WebFetch(domain:www.qodo.ai)",
       "WebFetch(domain:dev.to)",
       "WebFetch(domain:colorwhistle.com)",
-      "WebFetch(domain:blog.pixelfreestudio.com)"
+      "WebFetch(domain:blog.pixelfreestudio.com)",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(dir:*)"
     ]
   }
 }

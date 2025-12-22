@@ -5,8 +5,10 @@
  */
 
 import { createElement } from '../../utils/dom-helper.js';
-import { formatDate } from '../../utils/date-utils.js';
 import eventBus from '../../core/event-bus.js';
+import { createHeader, updateSortIndicators } from './modules/table-header.js';
+import { createPagination, updatePagination } from './modules/table-pagination.js';
+import { renderRows } from './modules/table-renderer.js';
 
 export class DataTable {
   constructor(options = {}) {
@@ -66,18 +68,28 @@ export class DataTable {
     });
 
     // Create thead
-    const thead = this._createHeader();
+    const thead = createHeader(
+      this.options.columns,
+      this.options.sortable,
+      this.options.actions,
+      (key) => this._sort(key)
+    );
     this.table.appendChild(thead);
 
     // Create tbody
     this.tbody = createElement('tbody');
-    this.table.appendChild(tbody);
+    this.table.appendChild(this.tbody);
 
     wrapper.appendChild(this.table);
 
     // Create pagination if enabled
     if (this.options.pagination) {
-      const pagination = this._createPagination();
+      const pagination = createPagination(
+        this.options.currentPage,
+        this.filteredData.length,
+        this.options.pageSize,
+        (page) => this._changePage(page)
+      );
       wrapper.appendChild(pagination);
     }
 
@@ -87,48 +99,6 @@ export class DataTable {
     this._renderRows();
 
     return this;
-  }
-
-  /**
-   * Create table header
-   */
-  _createHeader() {
-    const thead = createElement('thead');
-    const tr = createElement('tr');
-
-    this.options.columns.forEach(column => {
-      const th = createElement('th', {
-        textContent: column.label,
-        dataset: { key: column.key }
-      });
-
-      if (this.options.sortable && column.sortable !== false) {
-        th.classList.add('sortable');
-        th.addEventListener('click', () => this._sort(column.key));
-      }
-
-      if (column.width) {
-        th.style.width = column.width;
-      }
-
-      if (column.className) {
-        th.classList.add(column.className);
-      }
-
-      tr.appendChild(th);
-    });
-
-    // Actions column
-    if (this.options.actions) {
-      const th = createElement('th', {
-        textContent: 'Actions',
-        className: 'actions-column'
-      });
-      tr.appendChild(th);
-    }
-
-    thead.appendChild(tr);
-    return thead;
   }
 
   /**
@@ -157,166 +127,18 @@ export class DataTable {
    * Render table rows
    */
   _renderRows() {
-    // Clear tbody
-    this.tbody.innerHTML = '';
-
-    // Get data for current page
-    const startIndex = this.options.pagination
-      ? (this.options.currentPage - 1) * this.options.pageSize
-      : 0;
-
-    const endIndex = this.options.pagination
-      ? startIndex + this.options.pageSize
-      : this.filteredData.length;
-
-    const pageData = this.filteredData.slice(startIndex, endIndex);
-
-    // Check if empty
-    if (pageData.length === 0) {
-      const tr = createElement('tr');
-      const td = createElement('td', {
-        colspan: this.options.columns.length + (this.options.actions ? 1 : 0),
-        className: 'text-center empty-message',
-        textContent: this.options.emptyMessage
-      });
-      tr.appendChild(td);
-      this.tbody.appendChild(tr);
-      return;
-    }
-
-    // Render rows
-    pageData.forEach((row, index) => {
-      const tr = this._createRow(row, startIndex + index);
-      this.tbody.appendChild(tr);
-    });
-  }
-
-  /**
-   * Create table row
-   */
-  _createRow(rowData, index) {
-    const tr = createElement('tr', {
-      dataset: { index }
-    });
-
-    // Apply row class
-    if (this.options.rowClass) {
-      const className = typeof this.options.rowClass === 'function'
-        ? this.options.rowClass(rowData, index)
-        : this.options.rowClass;
-      if (className) tr.classList.add(className);
-    }
-
-    // Add click handler
-    if (this.options.rowClick) {
-      tr.style.cursor = 'pointer';
-      tr.addEventListener('click', () => {
-        this.options.rowClick(rowData, index);
-      });
-    }
-
-    // Create cells
-    this.options.columns.forEach(column => {
-      const td = createElement('td', {
-        dataset: { key: column.key }
-      });
-
-      let value = rowData[column.key];
-
-      // Apply formatter
-      if (column.formatter) {
-        value = column.formatter(value, rowData, index);
-      }
-
-      // Set cell content
-      if (typeof value === 'string' || typeof value === 'number') {
-        td.textContent = value;
-      } else if (value instanceof Node) {
-        td.appendChild(value);
-      } else if (value !== null && value !== undefined) {
-        td.textContent = String(value);
-      }
-
-      if (column.className) {
-        td.classList.add(column.className);
-      }
-
-      tr.appendChild(td);
-    });
-
-    // Add actions cell
-    if (this.options.actions) {
-      const td = createElement('td', {
-        className: 'actions-cell'
-      });
-
-      const actions = typeof this.options.actions === 'function'
-        ? this.options.actions(rowData, index)
-        : this.options.actions;
-
-      if (Array.isArray(actions)) {
-        actions.forEach(action => {
-          const btn = createElement('button', {
-            className: action.className || 'btn btn-sm',
-            textContent: action.label,
-            title: action.title || action.label
-          });
-
-          if (action.icon) {
-            btn.innerHTML = `<i class="${action.icon}"></i> ${action.label}`;
-          }
-
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            action.onClick(rowData, index);
-          });
-
-          td.appendChild(btn);
-        });
-      }
-
-      tr.appendChild(td);
-    }
-
-    return tr;
-  }
-
-  /**
-   * Create pagination
-   */
-  _createPagination() {
-    const pagination = createElement('div', {
-      className: 'table-pagination'
-    });
-
-    const totalPages = Math.ceil(this.filteredData.length / this.options.pageSize);
-
-    // Previous button
-    const prevBtn = createElement('button', {
-      className: 'btn btn-sm',
-      textContent: 'Previous',
-      disabled: this.options.currentPage === 1
-    });
-    prevBtn.addEventListener('click', () => this._changePage(this.options.currentPage - 1));
-    pagination.appendChild(prevBtn);
-
-    // Page info
-    const pageInfo = createElement('span', {
-      className: 'page-info',
-      textContent: `Page ${this.options.currentPage} of ${totalPages}`
-    });
-    pagination.appendChild(pageInfo);
-
-    // Next button
-    const nextBtn = createElement('button', {
-      className: 'btn btn-sm',
-      textContent: 'Next',
-      disabled: this.options.currentPage === totalPages
-    });
-    nextBtn.addEventListener('click', () => this._changePage(this.options.currentPage + 1));
-    pagination.appendChild(nextBtn);
-
-    return pagination;
+    renderRows(
+      this.tbody,
+      this.filteredData,
+      this.options.currentPage,
+      this.options.pageSize,
+      this.options.pagination,
+      this.options.columns,
+      this.options.actions,
+      this.options.rowClass,
+      this.options.rowClick,
+      this.options.emptyMessage
+    );
   }
 
   /**
@@ -345,12 +167,7 @@ export class DataTable {
     });
 
     // Update UI
-    this.table.querySelectorAll('th.sortable').forEach(th => {
-      th.classList.remove('sort-asc', 'sort-desc');
-      if (th.dataset.key === columnKey) {
-        th.classList.add(`sort-${this.sortDirection}`);
-      }
-    });
+    updateSortIndicators(this.table, columnKey, this.sortDirection);
 
     this._renderRows();
     eventBus.emitSync('table:sort', { column: columnKey, direction: this.sortDirection });
@@ -374,7 +191,13 @@ export class DataTable {
     this._renderRows();
 
     if (this.options.pagination) {
-      this._updatePagination();
+      updatePagination(
+        this.container,
+        this.options.currentPage,
+        this.filteredData.length,
+        this.options.pageSize,
+        (page) => this._changePage(page)
+      );
     }
 
     eventBus.emitSync('table:filter', { query });
@@ -390,21 +213,15 @@ export class DataTable {
 
     this.options.currentPage = page;
     this._renderRows();
-    this._updatePagination();
+    updatePagination(
+      this.container,
+      this.options.currentPage,
+      this.filteredData.length,
+      this.options.pageSize,
+      (page) => this._changePage(page)
+    );
 
     eventBus.emitSync('table:page-change', { page });
-  }
-
-  /**
-   * Update pagination UI
-   */
-  _updatePagination() {
-    const pagination = this.container.querySelector('.table-pagination');
-    if (!pagination) return;
-
-    pagination.innerHTML = '';
-    const newPagination = this._createPagination();
-    pagination.parentNode.replaceChild(newPagination, pagination);
   }
 
   /**
@@ -417,7 +234,13 @@ export class DataTable {
     this._renderRows();
 
     if (this.options.pagination) {
-      this._updatePagination();
+      updatePagination(
+        this.container,
+        this.options.currentPage,
+        this.filteredData.length,
+        this.options.pageSize,
+        (page) => this._changePage(page)
+      );
     }
   }
 

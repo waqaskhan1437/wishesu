@@ -171,7 +171,22 @@
       }
     }
   </script>
-  <script src="/js/admin/dashboard.js?v=100"></script>
+
+  <!-- Load modular admin app with ES6 modules -->
+  <script type="module">
+    import AdminApp from '/js/admin/app.js?v=100';
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        const app = new AdminApp();
+        app.init();
+      });
+    } else {
+      const app = new AdminApp();
+      app.init();
+    }
+  </script>
 
   <!--
     Immediately invoke a version check against the /api/debug endpoint.  If the

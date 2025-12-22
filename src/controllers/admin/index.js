@@ -33,5 +33,22 @@ export {
 // User Management
 export { listUsers, updateUserBlocks } from './users.js';
 
-// Data Reset (if exists, add later)
-// export { resetData } from './data-reset.js';
+// Data Management & Downloads
+export { resetData, handleSecureDownload } from './data-management.js';
+
+// Import/Export
+export {
+  exportFull,
+  exportProducts,
+  exportPages,
+  exportForGoogleSheets,
+  importProducts,
+  importPages
+} from './import-export.js';
+
+// Maintenance
+export {
+  testGoogleSync,
+  clearTempFiles,
+  clearPendingCheckouts
+} from './maintenance.js';

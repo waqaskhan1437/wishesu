@@ -7,74 +7,74 @@ import { json } from './utils/response.js';
 import { initDB } from './config/db.js';
 
 // Products
-import { 
-  getProducts, 
-  getProductsList, 
-  getProduct, 
-  saveProduct, 
-  deleteProduct, 
-  updateProductStatus, 
+import {
+  getProducts,
+  getProductsList,
+  getProduct,
+  saveProduct,
+  deleteProduct,
+  updateProductStatus,
   duplicateProduct
 } from './controllers/products.js';
 
 // Orders
-import { 
-  getOrders, 
-  createOrder, 
+import {
+  getOrders,
+  createOrder,
   createManualOrder,
-  getBuyerOrder, 
-  deleteOrder, 
-  updateOrder, 
-  deliverOrder, 
-  requestRevision, 
-  updatePortfolio, 
-  updateArchiveLink 
+  getBuyerOrder,
+  deleteOrder,
+  updateOrder,
+  deliverOrder,
+  requestRevision,
+  updatePortfolio,
+  updateArchiveLink
 } from './controllers/orders.js';
 
 // Reviews
-import { 
-  getReviews, 
-  getProductReviews, 
-  addReview, 
-  updateReview, 
-  deleteReview 
+import {
+  getReviews,
+  getProductReviews,
+  addReview,
+  updateReview,
+  deleteReview
 } from './controllers/reviews.js';
 
 // Chat
-import { 
-  startChat, 
-  syncChat, 
-  sendMessage, 
-  blockSession, 
-  deleteSession, 
-  getSessions 
+import {
+  startChat,
+  syncChat,
+  sendMessage,
+  blockSession,
+  deleteSession,
+  getSessions
 } from './controllers/chat.js';
 
-// Whop
-import { 
-  createCheckout, 
-  createPlanCheckout, 
-  handleWebhook, 
-  testApi as testWhopApi, 
-  testWebhook as testWhopWebhook, 
-  cleanupExpired 
-} from './controllers/whop.js';
+// Whop - Now using modular whop controllers
+import {
+  createCheckout,
+  createPlanCheckout,
+  handleWebhook,
+  testApi as testWhopApi,
+  testWebhook as testWhopWebhook,
+  cleanupExpired
+} from './controllers/whop/index.js';
 
 // Pages
-import { 
-  getPages, 
-  getPagesList, 
-  getPage, 
-  savePage, 
-  savePageBuilder, 
-  deletePage, 
-  deletePageBySlug, 
-  updatePageStatus, 
-  duplicatePage, 
-  loadPageBuilder 
+import {
+  getPages,
+  getPagesList,
+  getPage,
+  savePage,
+  savePageBuilder,
+  deletePage,
+  deletePageBySlug,
+  updatePageStatus,
+  duplicatePage,
+  loadPageBuilder
 } from './controllers/pages.js';
 
-// Admin
+// Admin - Now using modular admin controllers
 import {
   getDebugInfo,
   purgeCache,
@@ -92,8 +92,17 @@ import {
   getArchiveCredentials,
   listUsers,
   updateUserBlocks,
-  resetData
-} from './controllers/admin.js';
+  resetData,
+  exportFull,
+  exportProducts,
+  exportPages,
+  exportForGoogleSheets,
+  importProducts,
+  importPages,
+  testGoogleSync,
+  clearTempFiles,
+  clearPendingCheckouts
+} from './controllers/admin/index.js';
 
 // Blog
 import {
@@ -168,7 +177,7 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (!env.DB) {
     return json({ error: 'Database not configured' }, 500);
   }
-  
+
   // Initialize DB once for all subsequent routes (optimization)
   await initDB(env);
 
@@ -337,7 +346,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return deleteForumReply(env, body);
   }
 
-  
+
 
   // ----- PRODUCTS -----
   if (method === 'GET' && path === '/api/products') {
@@ -543,154 +552,37 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   // ----- ADMIN EXPORT/IMPORT ENDPOINTS -----
   if (method === 'GET' && path === '/api/admin/export/full') {
-    try {
-      const products = await env.DB.prepare('SELECT * FROM products').all();
-      const pages = await env.DB.prepare('SELECT * FROM pages').all();
-      const reviews = await env.DB.prepare('SELECT * FROM reviews').all();
-      const orders = await env.DB.prepare('SELECT * FROM orders').all();
-      const settings = await env.DB.prepare('SELECT * FROM settings').all();
-      return json({
-        success: true,
-        data: {
-          products: products.results || [],
-          pages: pages.results || [],
-          reviews: reviews.results || [],
-          orders: orders.results || [],
-          settings: settings.results || [],
-          exportedAt: new Date().toISOString()
-        }
-      });
-    } catch (err) {
-      return json({ error: err.message }, 500);
-    }
+    return exportFull(env);
   }
 
   if (method === 'GET' && path === '/api/admin/export/products') {
-    try {
-      const products = await env.DB.prepare('SELECT * FROM products').all();
-      return json({ success: true, data: products.results || [] });
-    } catch (err) {
-      return json({ error: err.message }, 500);
-    }
+    return exportProducts(env);
   }
 
   if (method === 'GET' && path === '/api/admin/export/pages') {
-    try {
-      const pages = await env.DB.prepare('SELECT * FROM pages').all();
-      return json({ success: true, data: pages.results || [] });
-    } catch (err) {
-      return json({ error: err.message }, 500);
-    }
+    return exportPages(env);
   }
 
   if (method === 'POST' && path === '/api/admin/import/products') {
-    try {
-      const body = await req.json();
-      const products = body.products || body;
-      if (!Array.isArray(products)) {
-        return json({ error: 'Invalid data format' }, 400);
-      }
-      let imported = 0;
-      for (const p of products) {
-        if (!p.title) continue;
-        // Handle both addons_json and addons field names for compatibility
-        const addonsData = p.addons_json || p.addons || '[]';
-        await env.DB.prepare(`
-          INSERT OR REPLACE INTO products (id, title, slug, description, normal_price, sale_price, thumbnail_url, video_url, gallery_images, addons_json, status, sort_order, whop_plan, whop_price_map, whop_product_id, normal_delivery_text, instant_delivery, seo_title, seo_description, seo_keywords, seo_canonical)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          p.id || null, p.title, p.slug || '', p.description || '', p.normal_price || 0, p.sale_price || null,
-          p.thumbnail_url || '', p.video_url || '', p.gallery_images || '[]', addonsData,
-          p.status || 'active', p.sort_order || 0, p.whop_plan || '', p.whop_price_map || '', p.whop_product_id || '',
-          p.normal_delivery_text || '', p.instant_delivery || 0,
-          p.seo_title || '', p.seo_description || '', p.seo_keywords || '', p.seo_canonical || ''
-        ).run();
-        imported++;
-      }
-      return json({ success: true, imported });
-    } catch (err) {
-      return json({ error: err.message }, 500);
-    }
+    return importProducts(env, req);
   }
 
   if (method === 'POST' && path === '/api/admin/import/pages') {
-    try {
-      const body = await req.json();
-      const pages = body.pages || body;
-      if (!Array.isArray(pages)) {
-        return json({ error: 'Invalid data format' }, 400);
-      }
-      let imported = 0;
-      for (const p of pages) {
-        if (!p.slug && !p.name) continue;
-        await env.DB.prepare(`
-          INSERT OR REPLACE INTO pages (id, name, slug, content, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(
-          p.id || null, p.name || p.slug, p.slug || p.name, p.content || '', p.status || 'active', p.created_at || Date.now()
-        ).run();
-        imported++;
-      }
-      return json({ success: true, imported });
-    } catch (err) {
-      return json({ error: err.message }, 500);
-    }
+    return importPages(env, req);
   }
 
   // ----- ADMIN MAINTENANCE ENDPOINTS -----
   if (method === 'POST' && path === '/api/admin/test-google-sync') {
     const body = await req.json().catch(() => ({}));
-    const googleUrl = body.googleUrl;
-    if (!googleUrl) {
-      return json({ error: 'Google Web App URL required' }, 400);
-    }
-    try {
-      // Test by sending a simple ping to the Google Apps Script
-      const testRes = await fetch(googleUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'ping', timestamp: Date.now() })
-      });
-      if (testRes.ok) {
-        return json({ success: true, message: 'Google Sync test successful' });
-      } else {
-        return json({ error: 'Google Apps Script returned error: ' + testRes.status });
-      }
-    } catch (err) {
-      return json({ error: 'Failed to connect: ' + err.message });
-    }
+    return testGoogleSync(env, body);
   }
 
   if (method === 'POST' && path === '/api/admin/clear-temp-files') {
-    try {
-      if (!env.R2_BUCKET) {
-        return json({ success: true, count: 0, message: 'R2 not configured' });
-      }
-      // List and delete temp files (files starting with 'temp/')
-      const listed = await env.R2_BUCKET.list({ prefix: 'temp/', limit: 100 });
-      let count = 0;
-      for (const obj of listed.objects || []) {
-        await env.R2_BUCKET.delete(obj.key);
-        count++;
-      }
-      return json({ success: true, count });
-    } catch (err) {
-      return json({ error: err.message }, 500);
-    }
+    return clearTempFiles(env);
   }
 
   if (method === 'POST' && path === '/api/admin/clear-pending-checkouts') {
-    try {
-      // Delete pending checkouts older than 24 hours
-      const cutoff = Date.now() - (24 * 60 * 60 * 1000);
-      const result = await env.DB.prepare(
-        'DELETE FROM pending_checkouts WHERE created_at < ?'
-      ).bind(cutoff).run();
-      return json({ success: true, count: result.changes || 0 });
-    } catch (err) {
-      // Table might not exist, that's okay
-      return json({ success: true, count: 0, message: 'No pending checkouts table or already empty' });
-    }
+    return clearPendingCheckouts(env);
   }
 
   if (method === 'POST' && path === '/api/admin/reset-data') {
@@ -703,22 +595,7 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'GET' && path === '/api/admin/export-data') {
-    try {
-      // Export all data for Google Sheets integration
-      const products = await env.DB.prepare('SELECT * FROM products').all();
-      const orders = await env.DB.prepare('SELECT * FROM orders').all();
-      const reviews = await env.DB.prepare('SELECT * FROM reviews').all();
-      return json({
-        success: true,
-        data: {
-          products: products.results || [],
-          orders: orders.results || [],
-          reviews: reviews.results || []
-        }
-      });
-    } catch (err) {
-      return json({ error: err.message }, 500);
-    }
+    return exportForGoogleSheets(env);
   }
 
   // API endpoint not found
