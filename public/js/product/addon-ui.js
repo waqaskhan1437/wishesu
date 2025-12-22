@@ -4,6 +4,16 @@
  */
 
 ;(function(){
+  // STRICT: Use centralized delivery time utility with addon delivery data
+  function mapDeliveryLabel(deliveryText, isInstant) {
+    if (!window.DeliveryTimeUtils) {
+      console.error('DeliveryTimeUtils not loaded');
+      return '2 Days Delivery';
+    }
+    // STRICT: Pass instant flag and deliveryText (which should be days like "1", "2", "3")
+    return window.DeliveryTimeUtils.getDeliveryText(isInstant, deliveryText);
+  }
+
   function renderAddonField(field) {
     const container = document.createElement('div');
     container.className = 'addon-group';
@@ -38,8 +48,11 @@
       
       field.options.forEach(opt => {
         const o = document.createElement('option');
+        const isDelivery = field.id === 'delivery-time';
+        const deliveryInstant = !!opt.delivery?.instant;
+        const displayLabel = isDelivery ? mapDeliveryLabel(opt.delivery?.text || opt.label, deliveryInstant) : opt.label;
         o.value = opt.label;
-        o.text = opt.label + (opt.price > 0 ? ` (+$${opt.price})` : '');
+        o.text = displayLabel + (opt.price > 0 ? ` (+$${opt.price})` : '');
         if (opt.default) o.selected = true;
         setDataset(o, opt);
         input.add(o);
@@ -47,6 +60,14 @@
 
       input.onchange = () => {
         if (window.updateTotal) window.updateTotal();
+
+        if (field.id === 'delivery-time' && typeof window.updateDeliveryBadge === 'function') {
+          const selectedOpt = input.selectedOptions[0];
+          if (selectedOpt) {
+            const selectedLabel = selectedOpt.text.replace(/\s*\(\+\$[\d.]+\)\s*$/, '').trim();
+            window.updateDeliveryBadge(selectedLabel);
+          }
+        }
 
         renderExtras(extras, input.selectedOptions[0]?.dataset || {}, field.id);
       };
@@ -65,6 +86,9 @@
         const inp = document.createElement('input');
         inp.type = isRadio ? 'radio' : 'checkbox';
         inp.name = field.id + (isRadio ? '' : '[]');
+        const isDelivery = field.id === 'delivery-time';
+        const deliveryInstant = !!opt.delivery?.instant;
+        const displayLabel = isDelivery ? mapDeliveryLabel(opt.delivery?.text || opt.label, deliveryInstant) : opt.label;
         inp.value = opt.label;
         inp.className = isRadio ? 'addon-radio' : 'addon-checkbox';
         if (opt.default) inp.checked = true;
@@ -79,13 +103,17 @@
             input.querySelectorAll('.addon-option-card').forEach(c => c.classList.remove('selected'));
             if (inp.checked) l.classList.add('selected');
             renderExtras(extras, inp.dataset, field.id);
+
+            if (field.id === 'delivery-time' && inp.checked && typeof window.updateDeliveryBadge === 'function') {
+              window.updateDeliveryBadge(displayLabel);
+            }
           } else {
             l.classList.toggle('selected', inp.checked);
             renderExtras(subExtras, inp.checked ? inp.dataset : {}, field.id + '_' + idx);
           }
         };
 
-        l.append(inp, document.createTextNode(' ' + opt.label));
+        l.append(inp, document.createTextNode(' ' + displayLabel));
         if (opt.price > 0) {
           const p = document.createElement('span');
           p.className = 'opt-price';

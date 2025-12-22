@@ -204,40 +204,27 @@
 
         console.log('📦 Final Addons array:', addons.length, 'items:', addons);
 
-        // Calculate delivery time (FORM-DRIVEN): use values saved from admin product form
-        let deliveryTime = 2880; // Default: 48 hours (2 days)
+        // Calculate delivery time based on selected delivery option
+        let deliveryTime = 2880; // Default: 48 hours (2 days);
+        const deliveryAddon = addons.find(a => a.field === 'delivery-time');
+        if (deliveryAddon) {
+            const deliveryValue = (deliveryAddon.value || '').toString().toLowerCase();
 
-        const meta = pendingOrderData?.metadata || {};
-        const instantFromForm = meta.instant_delivery || meta.instantDelivery || 0;
-        const daysRaw = meta.normal_delivery_text ?? meta.delivery_days ?? meta.deliveryDays ?? '';
-        const daysFromForm = Number(daysRaw) || 0;
-
-        if (instantFromForm) {
-            deliveryTime = 60; // 60 minutes
-        } else if (Number.isFinite(daysFromForm) && daysFromForm > 0) {
-            deliveryTime = daysFromForm * 1440; // days -> minutes
-        } else {
-            // Legacy fallback: infer from selected delivery-time addon (older checkouts)
-            const deliveryAddon = addons.find(a => a.field === 'delivery-time');
-            if (deliveryAddon) {
-                const deliveryValue = (deliveryAddon.value || '').toString().toLowerCase();
-
-                if (deliveryValue.includes('instant') || deliveryValue.includes('60')) {
-                    deliveryTime = 60;
-                } else if (deliveryValue.includes('24') || deliveryValue.includes('1 day') || deliveryValue.includes('24 hour')) {
-                    deliveryTime = 1440;
-                } else {
-                    const match = deliveryValue.match(/\d+/);
-                    const days = match ? parseInt(match[0], 10) : 0;
-                    if (Number.isFinite(days) && days > 0) {
-                        deliveryTime = days * 1440;
-                    }
+            if (deliveryValue.includes('instant') || deliveryValue.includes('60')) {
+                deliveryTime = 60; // 60 minutes
+            } else if (deliveryValue.includes('24') || deliveryValue.includes('express') || deliveryValue.includes('1 day') || deliveryValue.includes('24 hour')) {
+                deliveryTime = 1440; // 24 hours
+            } else {
+                const match = deliveryValue.match(/\d+/);
+                const days = match ? parseInt(match[0], 10) : 0;
+                if (Number.isFinite(days) && days > 0) {
+                    deliveryTime = days * 1440;
                 }
             }
         }
         console.log('⏰ Delivery time:', deliveryTime, 'minutes');
 
-                // Data prepare karein
+        // Data prepare karein
         const payload = {
             // Check metadata.product_id (from backend), metadata.productId, or root productId
             productId: pendingOrderData?.metadata?.product_id || pendingOrderData?.metadata?.productId || pendingOrderData?.productId || 1,

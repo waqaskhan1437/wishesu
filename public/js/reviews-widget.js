@@ -97,20 +97,22 @@
       const productDisplayName = product_name || product_title;
 
       const stars = this.renderStars(rating);
-      const date = new Date(created_at).toLocaleDateString();
+      const dateObj = created_at ? new Date(created_at) : new Date();
+      const dateLabel = dateObj.toLocaleDateString();
+      const dateIso = isNaN(dateObj.getTime()) ? new Date().toISOString().split('T')[0] : dateObj.toISOString().split('T')[0];
       const initials = reviewerName.charAt(0).toUpperCase();
 
       return `
         <div class="review-card">
           <div class="review-header">
             ${showAvatar ? `
-              <div class="review-avatar">${initials}</div>
+              <div class="review-avatar" aria-hidden="true">${initials}</div>
             ` : ''}
             <div class="review-header-info">
               <div class="review-author">${reviewerName}</div>
               <div class="review-meta">
                 ${stars}
-                <span class="review-date">${date}</span>
+                <time class="review-date" datetime="${dateIso}">${dateLabel}</time>
               </div>
             </div>
           </div>
@@ -131,13 +133,14 @@
 
       for (let i = 0; i < 5; i++) {
         if (i < fullStars) {
-          stars += '<span class="star star-full">★</span>';
+          stars += '<span class="star star-full" aria-hidden="true">★</span>';
         } else {
-          stars += '<span class="star star-empty">☆</span>';
+          stars += '<span class="star star-empty" aria-hidden="true">☆</span>';
         }
       }
 
-      return `<div class="rating-stars">${stars}</div>`;
+      const label = `Rated ${rating || 0} out of 5`;
+      return `<div class="rating-stars" role="img" aria-label="${label}">${stars}</div>`;
     },
 
     // Add CSS styles
@@ -215,7 +218,7 @@
 
         .review-date {
           font-size: 0.85rem;
-          color: #9ca3af;
+          color: #6b7280;
         }
 
         .review-product {

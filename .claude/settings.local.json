@@ -3,7 +3,14 @@
     "allow": [
       "Bash(npx wrangler deploy)",
       "Bash(node -e:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "WebFetch(domain:wishesu1.waqaskhan1437.workers.dev)",
+      "Bash(find:*)",
+      "WebSearch",
+      "WebFetch(domain:www.qodo.ai)",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:colorwhistle.com)",
+      "WebFetch(domain:blog.pixelfreestudio.com)"
     ]
   }
 }

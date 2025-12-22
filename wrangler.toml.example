@@ -23,7 +23,6 @@ bucket_name = "your-bucket-name"
 
 # 🔑 Environment Variables
 [vars]
-DISABLE_CACHE = "0"
 VERSION = "1.0.0"
 
 # 🔐 Secrets (Set these with wrangler secret put)

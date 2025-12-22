@@ -7,18 +7,28 @@
   <link rel="stylesheet" href="css/style.css">
   <!-- Structured Data for Product Collection -->
   <script type="application/ld+json" id="collection-schema">{}</script>
+  <style>
+    body { margin: 0; background: #f5f5f5; }
+    .page-wrap { padding: 30px 20px; }
+    .page-title { font-size: 2rem; margin: 0 0 20px; color: #111827; }
+  </style>
 </head>
 <body>
-  <main>
-    <h1>Products</h1>
+  <div class="page-wrap">
+    <h1 class="page-title">Products</h1>
     <div id="product-list"></div>
-  </main>
-  <script src="js/api.js"></script>
-  <!-- Load the reusable product cards component before products.js so that
-       ProductCards is available for rendering the homepage grid. -->
-  <!-- Schema now injected server-side - removed collection-schema.js -->
-  <script src="js/product-cards.js"></script>
-  <script src="js/products.js"></script>
-  <script src="js/chat-widget.js"></script>
+  </div>
+
+  <script src="js/api.js?v=21"></script>
+  <!-- Load centralized delivery time utility first -->
+  <script src="/src/utils/delivery-time.js?v=21"></script>
+  <!-- Load the reusable product cards component -->
+  <script src="js/product-cards.js?v=21"></script>
+  <script>
+    // Use the shared ProductCards renderer so design stays consistent
+    ProductCards.render('product-list', { filter: 'all', columns: 3, limit: 9 });
+  </script>
+  <script src="js/chat-widget.js?v=21"></script>
 </body>
 </html>
+

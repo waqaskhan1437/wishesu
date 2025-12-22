@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Product Cards Rendering</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { margin: 20px; background: #f5f5f5; }
+    .test-section { margin: 40px 0; padding: 20px; background: white; border-radius: 8px; }
+    .test-section h2 { color: #1f2937; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Product Cards Rendering Test</h1>
+
+  <div class="test-section">
+    <h2>Test 1: Single Render (Using ProductCards.render)</h2>
+    <div id="test-1"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>Test 2: Check for Duplicates</h2>
+    <div id="test-2"></div>
+  </div>
+
+  <script src="/src/utils/delivery-time.js?v=21"></script>
+  <script src="js/product-cards.js?v=21"></script>
+
+  <script>
+    // Test 1: Render once
+    console.log('=== Test 1: Rendering products ===');
+    ProductCards.render('test-1', { filter: 'all', columns: 3, limit: 6 });
+
+    // Test 2: Check container after 2 seconds
+    setTimeout(() => {
+      console.log('=== Test 2: Checking for duplicates ===');
+      const container = document.getElementById('test-1');
+      const grids = container.querySelectorAll('.product-cards-grid');
+      const cards = container.querySelectorAll('.product-card');
+
+      console.log('Number of grids found:', grids.length);
+      console.log('Number of cards found:', cards.length);
+
+      const test2Container = document.getElementById('test-2');
+      test2Container.innerHTML = `
+        <p><strong>Grids found:</strong> ${grids.length} (should be 1)</p>
+        <p><strong>Cards found:</strong> ${cards.length} (should be 6 or less)</p>
+        <p><strong>Status:</strong> ${grids.length === 1 ? '✅ No duplicates' : '❌ Multiple grids detected!'}</p>
+      `;
+
+      if (grids.length > 1) {
+        console.error('DUPLICATE RENDERING DETECTED!');
+        grids.forEach((grid, idx) => {
+          console.log(`Grid ${idx + 1}:`, grid);
+        });
+      }
+    }, 2000);
+
+    // Test 3: Check utility
+    setTimeout(() => {
+      console.log('=== Test 3: Checking delivery utility ===');
+      if (window.DeliveryTimeUtils) {
+        console.log('✅ DeliveryTimeUtils loaded');
+        console.log('Instant:', window.DeliveryTimeUtils.getDeliveryText(1, null));
+        console.log('1 Day:', window.DeliveryTimeUtils.getDeliveryText(0, 1));
+        console.log('2 Days:', window.DeliveryTimeUtils.getDeliveryText(0, 2));
+        console.log('3 Days:', window.DeliveryTimeUtils.getDeliveryText(0, 3));
+      } else {
+        console.error('❌ DeliveryTimeUtils NOT loaded');
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

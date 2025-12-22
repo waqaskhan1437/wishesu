@@ -29,17 +29,6 @@ Configure these bindings in your Cloudflare Workers dashboard:
 wrangler deploy
 ```
 
-## Cache toggle (testing)
-
-When you're testing and want to avoid stale HTML/JS/CSS:
-
-- **Global (recommended):** set `DISABLE_CACHE = "1"` under `[vars]` (or in the Cloudflare dashboard), then deploy.
-- **Per-request (no deploy):**
-  - Add `?nocache=1` (or `?_nocache=1`) to any URL, **or**
-  - Send request header `X-Bypass-Cache: 1`
-
-When cache is bypassed, responses include `X-Cache: BYPASS` and `X-Cache-Disabled: 1`.
-
 The worker will automatically initialize database tables on first run.
 
 ### Database Schema

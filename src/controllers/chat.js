@@ -6,6 +6,7 @@ import { json } from '../utils/response.js';
 import { escapeHtml, normalizeQuickAction } from '../utils/formatting.js';
 import { enforceUserRateLimit } from '../utils/validation.js';
 import { getLatestOrderForEmail } from '../utils/order-helpers.js';
+import { getGoogleScriptUrl } from '../config/secrets.js';
 
 /**
  * Start a new chat session or reuse existing one
@@ -115,6 +116,23 @@ export async function sendMessage(env, body, reqUrl) {
   const trimmed = rawContent.trim();
   if (!trimmed) return json({ error: 'content is required' }, 400);
 
+  // De-dupe rapid duplicate sends (client retries or double events)
+  try {
+    const last = await env.DB.prepare(
+      `SELECT id, role, content, created_at
+       FROM chat_messages
+       WHERE session_id = ?
+       ORDER BY id DESC
+       LIMIT 1`
+    ).bind(sessionId).first();
+    if (last && String(last.role) === role && String(last.content) === escapeHtml(trimmed)) {
+      const lastTs = new Date(last.created_at).getTime();
+      if (!Number.isNaN(lastTs) && (Date.now() - lastTs) < 10000) {
+        return json({ success: true, messageId: last.id, deduped: true });
+      }
+    }
+  } catch (_) {}
+
   // 500 char limit (backend)
   if (trimmed.length > 500) return json({ error: 'Message too long (max 500 characters)' }, 400);
 
@@ -158,17 +176,14 @@ export async function sendMessage(env, body, reqUrl) {
   // Trigger email alert webhook on first customer message
   if (isFirstUserMessage) {
     try {
-      const setting = await env.DB.prepare(
-        `SELECT value FROM settings WHERE key = ?`
-      ).bind('GOOGLE_SCRIPT_URL').first();
-
-      const scriptUrl = String(setting?.value || '').trim();
+      const scriptUrl = await getGoogleScriptUrl(env);
 
       if (scriptUrl) {
         const session = await env.DB.prepare(
           `SELECT id, name, email, created_at FROM chat_sessions WHERE id = ?`
         ).bind(sessionId).first();
 
+        const origin = reqUrl ? new URL(reqUrl).origin : null;
         await fetch(scriptUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -178,7 +193,8 @@ export async function sendMessage(env, body, reqUrl) {
             name: session?.name || null,
             email: session?.email || null,
             created_at: session?.created_at || null,
-            message: trimmed
+            message: trimmed,
+            origin
           })
         });
       }

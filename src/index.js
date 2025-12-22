@@ -10,7 +10,8 @@ import { routeApiRequest } from './router.js';
 import { handleProductRouting } from './controllers/products.js';
 import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
-import { renderBlogArchive, renderBlogPost } from './controllers/blog.js';
+import { renderBlogArchive, renderBlogPost, renderBlogSubmit } from './controllers/blog.js';
+import { renderForumArchive, renderForumTopic } from './controllers/forum.js';
 import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 
@@ -24,27 +25,89 @@ export default {
     }
     const method = req.method;
 
-// Cache toggle:
-// - Set DISABLE_CACHE=1 in your Worker environment to disable all caching (testing mode)
-// - Or add ?nocache=1 / ?_nocache=1 to any URL, or send header X-Bypass-Cache: 1 to bypass cache per request
-const reqCacheControl = (req.headers.get('cache-control') || '').toLowerCase();
-const cacheBypassParam = url.searchParams.get('nocache') === '1' || url.searchParams.get('_nocache') === '1';
-const cacheDisabled =
-  String(env?.DISABLE_CACHE || '') === '1' ||
-  cacheBypassParam ||
-  req.headers.get('x-bypass-cache') === '1' ||
-  reqCacheControl.includes('no-store') ||
-  reqCacheControl.includes('no-cache');
+    const requiresAdminAuth = (p, m) => {
+      if (p.startsWith('/admin')) return true;
+      if (p.startsWith('/api/admin/')) return true;
+      if (p === '/api/purge-cache') return true;
+      if (p === '/api/blog/list' || p === '/api/blog/get' || p === '/api/blog/save' || p === '/api/blog/status' || p === '/api/blog/delete') return true;
+      if (p === '/api/page/save' || p === '/api/page/delete') return true;
+      if (p === '/api/pages/save' || p === '/api/pages/delete' || p === '/api/pages/status' || p === '/api/pages/duplicate' || p === '/api/pages/load') return true;
+      if (p === '/api/product/save' || p === '/api/product/delete') return true;
+      if (p === '/api/products/status' || p === '/api/products/duplicate') return true;
+      if (p === '/api/orders' || p === '/api/order/update' || p === '/api/order/delete' || p === '/api/order/deliver' || p === '/api/order/revision' || p === '/api/order/portfolio' || p === '/api/order/archive-link' || p === '/api/order/upload-encrypted-file') return true;
+      if (p === '/api/reviews/update' || p === '/api/reviews/delete') return true;
+      if (p === '/api/settings/default-pages' || p === '/api/settings/whop' || p === '/api/settings/analytics' || p === '/api/settings/control-webhook') return true;
+      return false;
+    };
 
-const withNoStore = (resp) => {
-  if (!cacheDisabled || !resp) return resp;
-  const headers = new Headers(resp.headers);
-  headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  headers.set('Pragma', 'no-cache');
-  headers.set('X-Cache', headers.get('X-Cache') || 'BYPASS');
-  headers.set('X-Cache-Disabled', '1');
-  return new Response(resp.body, { status: resp.status, headers });
-};
+    const getClientIp = () => {
+      return req.headers.get('cf-connecting-ip') ||
+        req.headers.get('x-forwarded-for') ||
+        req.headers.get('x-real-ip') ||
+        'unknown';
+    };
+
+    const isSameOrigin = () => {
+      const origin = req.headers.get('origin') || '';
+      const referer = req.headers.get('referer') || '';
+      const host = req.headers.get('host') || '';
+      const ok = (value) => {
+        if (!value) return false;
+        try {
+          const u = new URL(value);
+          return u.host === host;
+        } catch (_) {
+          return false;
+        }
+      };
+      return ok(origin) || ok(referer);
+    };
+
+    const checkAdminAuth = async () => {
+      const pass = (env.ADMIN_PASSWORD || '').toString().trim();
+      if (!pass) return false;
+      const user = (env.ADMIN_USER || '').toString().trim();
+      const header = req.headers.get('authorization') || '';
+      if (!header.toLowerCase().startsWith('basic ')) return false;
+      let decoded = '';
+      try { decoded = atob(header.slice(6)); } catch (_) { return false; }
+      const parts = decoded.split(':');
+      const u = parts.shift() || '';
+      const p = parts.join(':') || '';
+      if (user && u !== user) return false;
+      return p === pass;
+    };
+
+    const shouldRateLimit = (p) => {
+      return p.startsWith('/admin') || p.startsWith('/api/admin/');
+    };
+
+    const isRateLimited = async () => {
+      if (!env.DB) return false;
+      try {
+        await initDB(env);
+        const ip = getClientIp();
+        const row = await env.DB.prepare(
+          `SELECT COUNT(*) as c
+           FROM admin_login_attempts
+           WHERE ip = ? AND datetime(created_at) > datetime('now', '-10 minutes')`
+        ).bind(ip).first();
+        return Number(row?.c || 0) >= 10;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const recordFailedAttempt = async () => {
+      if (!env.DB) return;
+      try {
+        await initDB(env);
+        const ip = getClientIp();
+        await env.DB.prepare(
+          `INSERT INTO admin_login_attempts (ip) VALUES (?)`
+        ).bind(ip).run();
+      } catch (_) {}
+    };
 
     // Auto-purge cache on version change (only for admin/webhook routes)
     const shouldPurgeCache = path.startsWith('/admin') || path.startsWith('/api/admin/') || path.startsWith('/api/whop/webhook');
@@ -58,6 +121,31 @@ const withNoStore = (resp) => {
     }
 
     try {
+      if (path === '/admin/logout') {
+        return new Response('Logged out', {
+          status: 401,
+          headers: { 'WWW-Authenticate': 'Basic realm="Admin"' }
+        });
+      }
+
+      if (requiresAdminAuth(path, method)) {
+        if (shouldRateLimit(path) && await isRateLimited()) {
+          return new Response('Too many login attempts. Try again later.', { status: 429 });
+        }
+
+        const ok = await checkAdminAuth();
+        if (!ok) {
+          await recordFailedAttempt();
+          return new Response('Authentication required', {
+            status: 401,
+            headers: { 'WWW-Authenticate': 'Basic realm="Admin"' }
+          });
+        }
+
+        if (!['GET','HEAD','OPTIONS'].includes(method) && !isSameOrigin()) {
+          return new Response('CSRF blocked', { status: 403 });
+        }
+      }
       // Helper: read default public pages from settings
       const getDefaultPages = async () => {
         if (!env.DB) return { homePath: '/index.html', productsPath: '/products-grid.html', blogPath: '/blog' };
@@ -78,7 +166,44 @@ const withNoStore = (resp) => {
         return { homePath: '/index.html', productsPath: '/products-grid.html', blogPath: '/blog' };
       };
 
+      const getGtmId = async () => {
+        if (!env.DB) return '';
+        await initDB(env);
+        const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('analytics').first();
+        if (row && row.value) {
+          try {
+            const v = JSON.parse(row.value);
+            const id = String(v.gtm_id || '').trim();
+            return /^GTM-[A-Z0-9]+$/i.test(id) ? id : '';
+          } catch (_) {
+            return '';
+          }
+        }
+        return '';
+      };
+
+      const injectGtm = (html, gtmId) => {
+        if (!gtmId) return html;
+        if (html.includes('googletagmanager.com/gtm.js')) return html;
+        const headSnippet = `\n<!-- Google Tag Manager -->\n<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtmId}');</script>\n<!-- End Google Tag Manager -->\n`;
+        const bodySnippet = `\n<!-- Google Tag Manager (noscript) -->\n<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=${gtmId}" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>\n<!-- End Google Tag Manager (noscript) -->\n`;
+        let out = html;
+        out = out.includes('</head>') ? out.replace('</head>', headSnippet + '</head>') : headSnippet + out;
+        out = out.includes('</body>') ? out.replace('</body>', bodySnippet + '</body>') : out + bodySnippet;
+        return out;
+      };
+
       // Public blog route (admin configurable)
+      if ((method === 'GET' || method === 'HEAD') && (path === '/blog/submit' || path === '/blog/submit/')) {
+        if (env.DB) {
+          await initDB(env);
+          const gtmId = await getGtmId();
+          const resp = await renderBlogSubmit();
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
+        }
+      }
       if ((method === 'GET' || method === 'HEAD') && (path === '/blog' || path === '/blog/')) {
         const defaults = await getDefaultPages();
         // If admin configured a custom blog landing page, serve it.
@@ -89,14 +214,45 @@ const withNoStore = (resp) => {
         }
         if (env.DB) {
           await initDB(env);
-          return withNoStore(await renderBlogArchive(env, url.origin));
+          const gtmId = await getGtmId();
+          const resp = await renderBlogArchive(env, url.origin);
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
         }
       }
       if ((method === 'GET' || method === 'HEAD') && path.startsWith('/blog/')) {
         const slug = path.split('/').filter(Boolean)[1];
         if (env.DB) {
           await initDB(env);
-          return withNoStore(await renderBlogPost(env, slug));
+          const gtmId = await getGtmId();
+          const resp = await renderBlogPost(env, slug);
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
+        }
+      }
+
+      // Public forum routes
+      if ((method === 'GET' || method === 'HEAD') && (path === '/forum' || path === '/forum/')) {
+        if (env.DB) {
+          await initDB(env);
+          const gtmId = await getGtmId();
+          const resp = await renderForumArchive(env, url.origin);
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
+        }
+      }
+      if ((method === 'GET' || method === 'HEAD') && path.startsWith('/forum/')) {
+        const slug = path.split('/').filter(Boolean)[1];
+        if (env.DB) {
+          await initDB(env);
+          const gtmId = await getGtmId();
+          const resp = await renderForumTopic(env, slug);
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
         }
       }
 
@@ -107,10 +263,8 @@ const withNoStore = (resp) => {
         if (path === '/' || path === '/index.html') target = defaults.homePath;
         else target = defaults.productsPath;
         if (target && target !== path) {
-          const to = new URL(req.url);
-          to.pathname = target;
-          // Preserve query
-          return env.ASSETS ? env.ASSETS.fetch(new Request(to.toString(), req)) : fetch(to.toString(), req);
+          path = target;
+          url.pathname = target;
         }
       }
       // Private asset: never serve the raw product template directly
@@ -130,13 +284,13 @@ const withNoStore = (resp) => {
       // ----- API ROUTES -----
       if (path.startsWith('/api/') || path === '/submit-order') {
         const apiResponse = await routeApiRequest(req, env, url, path, method);
-        if (apiResponse) return withNoStore(apiResponse);
+        if (apiResponse) return apiResponse;
       }
 
       // ----- SECURE DOWNLOAD -----
       if (path.startsWith('/download/')) {
         const orderId = path.split('/').pop();
-        return withNoStore(await handleSecureDownload(env, orderId, url.origin));
+        return handleSecureDownload(env, orderId, url.origin);
       }
 
       // ----- ADMIN SPA ROUTING -----
@@ -159,10 +313,6 @@ const withNoStore = (resp) => {
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
             headers.set('X-Worker-Version', VERSION);
-            if (cacheDisabled) {
-              headers.set('X-Cache', 'BYPASS');
-              headers.set('X-Cache-Disabled', '1');
-            }
             return new Response(assetResp.body, { status: assetResp.status, headers });
           }
         }
@@ -174,17 +324,17 @@ const withNoStore = (resp) => {
         try {
           if (env.DB) {
             await initDB(env);
-            const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
+            const row = await env.DB.prepare(
+              `SELECT content FROM pages
+               WHERE slug = ?
+               AND (status = 'published' OR status = 'active' OR status IS NULL OR status = '')`
+            ).bind(slug).first();
             if (row && row.content) {
-const dynHeaders = new Headers({ 'Content-Type': 'text/html; charset=utf-8' });
-dynHeaders.set('X-Worker-Version', VERSION);
-if (cacheDisabled) {
-  dynHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  dynHeaders.set('Pragma', 'no-cache');
-  dynHeaders.set('X-Cache', 'BYPASS');
-  dynHeaders.set('X-Cache-Disabled', '1');
-}
-return new Response(row.content, { headers: dynHeaders });
+              const gtmId = await getGtmId();
+              const html = injectGtm(row.content, gtmId);
+              return new Response(html, {
+                headers: { 'Content-Type': 'text/html; charset=utf-8' }
+              });
             }
           }
         } catch (e) {
@@ -218,7 +368,7 @@ return new Response(row.content, { headers: dynHeaders });
         // and improve performance. Admin HTML is still served with no-store.
         const isGetLike = (method === 'GET' || method === 'HEAD');
         const isAssetPath = /\.(js|css|png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|eot|map)$/.test(assetPath);
-        if (!cacheDisabled && isGetLike && isAssetPath) {
+        if (isGetLike && isAssetPath) {
           try {
             const assetCacheKey = new Request(assetReq.url, { method: 'GET' });
             const cachedAsset = await caches.default.match(assetCacheKey);
@@ -240,7 +390,7 @@ return new Response(row.content, { headers: dynHeaders });
         const isSuccess = assetResp.status === 200;
         
         // Caching: Only cache HTML pages, never admin routes
-        const shouldCache = isHTML && isSuccess && !path.startsWith('/admin') && !path.includes('/admin/') && !cacheDisabled;
+        const shouldCache = isHTML && isSuccess && !path.startsWith('/admin') && !path.includes('/admin/');
         const cacheKey = new Request(req.url, { 
           method: 'GET',
           headers: { 'Accept': 'text/html' }
@@ -271,6 +421,7 @@ return new Response(row.content, { headers: dynHeaders });
           try {
             const baseUrl = url.origin;
             let html = await assetResp.text();
+            const gtmId = await getGtmId();
             
             // Product detail page - inject individual product schema
             if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
@@ -323,15 +474,12 @@ return new Response(row.content, { headers: dynHeaders });
               }
             }
             
+            html = injectGtm(html, gtmId);
+
             const headers = new Headers();
             headers.set('Content-Type', 'text/html; charset=utf-8');
             headers.set('X-Worker-Version', VERSION);
-            headers.set('X-Cache', cacheDisabled ? 'BYPASS' : 'MISS');
-            if (cacheDisabled) {
-              headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-              headers.set('Pragma', 'no-cache');
-              headers.set('X-Cache-Disabled', '1');
-            }
+            headers.set('X-Cache', 'MISS');
             
             const response = new Response(html, { status: 200, headers });
             
@@ -368,16 +516,7 @@ return new Response(row.content, { headers: dynHeaders });
         const passthroughHeaders = new Headers(assetResp.headers);
         passthroughHeaders.set('X-Worker-Version', VERSION);
 
-// Testing mode: disable all caching and prevent browser from storing assets/pages.
-if (cacheDisabled) {
-  passthroughHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  passthroughHeaders.set('Pragma', 'no-cache');
-  passthroughHeaders.set('X-Cache', 'BYPASS');
-  passthroughHeaders.set('X-Cache-Disabled', '1');
-  return new Response(assetResp.body, { status: assetResp.status, headers: passthroughHeaders });
-}
-
-        const canCacheAsset = !cacheDisabled && isGetLike && isAssetPath && assetResp.status === 200;
+        const canCacheAsset = isGetLike && isAssetPath && assetResp.status === 200;
         if (canCacheAsset) {
           // If the upstream didn't provide caching headers, set a sensible default.
           if (!passthroughHeaders.get('Cache-Control')) {
