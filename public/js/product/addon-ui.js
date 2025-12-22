@@ -4,19 +4,14 @@
  */
 
 ;(function(){
+  // Use centralized delivery time utility
   function mapDeliveryLabel(label, isInstant) {
-    if (isInstant) return 'Instant Delivery In 60 Minutes';
-    const raw = (label || '').toString().toLowerCase();
-    if (!raw) return '2 Days Delivery';
-    if (raw.includes('24') || raw.includes('1 day') || raw.includes('24 hour')) return '24 Hours Express Delivery';
-    if (raw.includes('48') || raw.includes('2 day')) return '2 Days Delivery';
-    if (raw.includes('72') || raw.includes('3 day')) return '3 Days Delivery';
-    const match = raw.match(/\d+/);
-    if (!match) return '2 Days Delivery';
-    const days = parseInt(match[0], 10);
-    if (!Number.isFinite(days) || days <= 0) return '2 Days Delivery';
-    if (days === 1) return '24 Hours Express Delivery';
-    return `${days} Days Delivery`;
+    if (!window.DeliveryTimeUtils) {
+      console.error('DeliveryTimeUtils not loaded');
+      return '2 Days Delivery';
+    }
+    const days = window.DeliveryTimeUtils.parseDeliveryDays(label);
+    return window.DeliveryTimeUtils.getDeliveryText(isInstant, days || 2);
   }
 
   function renderAddonField(field) {

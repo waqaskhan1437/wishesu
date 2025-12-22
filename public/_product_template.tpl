@@ -88,6 +88,8 @@
   <script src="https://cdn.plyr.io/3.7.8/plyr.js" defer></script>
 
   <script src="/js/api.js" defer></script>
+  <!-- Load centralized delivery time utility first -->
+  <script src="/src/utils/delivery-time.js"></script>
   <script src="/js/universal-player.js" defer></script>
   <script src="/js/instant-upload.js" defer></script>
   <!-- Whop checkout integration -->

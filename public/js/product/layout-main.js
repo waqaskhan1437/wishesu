@@ -322,33 +322,35 @@
     const badgeRow = document.createElement('div');
     badgeRow.className = 'badges-row';
 
+    // Use centralized delivery time utility
     const parseDeliveryDays = (value) => {
-      const raw = (value || '').toString().toLowerCase();
-      if (!raw) return '';
-      if (raw.includes('instant') || raw.includes('60')) return '';
-      if (raw.includes('24') || raw.includes('1 day') || raw.includes('24 hour')) return '1';
-      if (raw.includes('48') || raw.includes('2 day')) return '2';
-      if (raw.includes('72') || raw.includes('3 day')) return '3';
-      const match = raw.match(/\d+/);
-      if (!match) return '';
-      const num = parseInt(match[0], 10);
-      return Number.isFinite(num) && num > 0 ? String(num) : '';
+      if (!window.DeliveryTimeUtils) {
+        console.error('DeliveryTimeUtils not loaded');
+        return '';
+      }
+      return window.DeliveryTimeUtils.parseDeliveryDays(value);
     };
 
     const formatDeliveryLabel = (value, instant) => {
-      if (instant) return 'Instant Delivery In 60 Minutes';
-      const days = parseInt(parseDeliveryDays(value || ''), 10);
-      if (!Number.isFinite(days) || days <= 0) return '2 Days Delivery';
-      if (days === 1) return '24 Hours Express Delivery';
-      return `${days} Days Delivery`;
+      if (!window.DeliveryTimeUtils) {
+        console.error('DeliveryTimeUtils not loaded');
+        return '2 Days Delivery';
+      }
+      const days = parseDeliveryDays(value);
+      return window.DeliveryTimeUtils.getDeliveryText(instant, days || 2);
     };
 
     const computeDeliveryBadge = (label) => {
+      if (!window.DeliveryTimeUtils) {
+        console.error('DeliveryTimeUtils not loaded');
+        return { icon: 'ðŸšš', text: '2 Days Delivery' };
+      }
       const raw = (label || '').toString();
-      const v = raw.toLowerCase();
-      const isInstant = v.includes('instant') || v.includes('60');
-      const text = formatDeliveryLabel(raw, isInstant);
-      return { icon: isInstant ? 'fs­' : 'dYss', text };
+      const isInstant = window.DeliveryTimeUtils.isInstantDelivery(raw);
+      const days = parseDeliveryDays(raw);
+      const text = window.DeliveryTimeUtils.getDeliveryText(isInstant, days || 2);
+      const icon = window.DeliveryTimeUtils.getDeliveryIcon(text);
+      return { icon, text };
     };
 
     const setDeliveryBadge = (label) => {

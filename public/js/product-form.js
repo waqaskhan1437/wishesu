@@ -317,26 +317,21 @@ function setupGalleryField(form){
   });
 }
 
+// Use centralized delivery time utility
 function parseDeliveryDays(value){
-  if (value === null || value === undefined) return '';
-  const raw = String(value).toLowerCase();
-  if (!raw) return '';
-  if (raw.includes('instant') || raw.includes('60')) return '';
-  if (raw.includes('24') || raw.includes('1 day') || raw.includes('24 hour')) return '1';
-  if (raw.includes('48') || raw.includes('2 day')) return '2';
-  if (raw.includes('72') || raw.includes('3 day')) return '3';
-  const match = raw.match(/\d+/);
-  if (!match) return '';
-  const num = parseInt(match[0], 10);
-  return Number.isFinite(num) && num > 0 ? String(num) : '';
+  if (!window.DeliveryTimeUtils) {
+    console.error('DeliveryTimeUtils not loaded');
+    return '';
+  }
+  return window.DeliveryTimeUtils.parseDeliveryDays(value);
 }
 
 function formatDeliveryLabel(days, instant){
-  if (instant) return 'Instant Delivery In 60 Minutes';
-  const n = parseInt(days || '', 10);
-  if (!Number.isFinite(n) || n <= 0) return '2 Days Delivery';
-  if (n === 1) return '24 Hours Express Delivery';
-  return `${n} Days Delivery`;
+  if (!window.DeliveryTimeUtils) {
+    console.error('DeliveryTimeUtils not loaded');
+    return '2 Days Delivery';
+  }
+  return window.DeliveryTimeUtils.getDeliveryText(instant, days);
 }
 function collectBase(form){
   const days = parseDeliveryDays(form.normal_delivery_text.value);

@@ -161,31 +161,18 @@
     },
 
     getDeliveryText: function(deliveryText, instant) {
-      if (instant) return 'Instant Delivery In 60 Minutes';
-      if (!deliveryText) return '2 Days Delivery';
-
-      const text = String(deliveryText).toLowerCase();
-      if (text.includes('24') || text.includes('1 day') || text.includes('24 hour')) {
-        return '24 Hours Express Delivery';
-      }
-      if (text.includes('48') || text.includes('2 day')) {
+      // Use centralized utility
+      if (!window.DeliveryTimeUtils) {
+        console.error('DeliveryTimeUtils not loaded');
         return '2 Days Delivery';
       }
-      if (text.includes('72') || text.includes('3 day')) {
-        return '3 Days Delivery';
-      }
-
-      const match = text.match(/\d+/);
-      if (!match) return '2 Days Delivery';
-      const days = parseInt(match[0], 10);
-      if (!Number.isFinite(days) || days <= 0) return '2 Days Delivery';
-      if (days === 1) return '24 Hours Express Delivery';
-      return `${days} Days Delivery`;
+      const days = window.DeliveryTimeUtils.parseDeliveryDays(deliveryText);
+      return window.DeliveryTimeUtils.getDeliveryText(instant, days || 2);
     },
 
     getDeliveryIcon: function(deliveryText) {
-      const text = (deliveryText || '').toLowerCase();
-      return '';
+      if (!window.DeliveryTimeUtils) return '';
+      return window.DeliveryTimeUtils.getDeliveryIcon(deliveryText);
     },
 
     formatRatingText: function(rating, count) {
