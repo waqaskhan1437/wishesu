@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Version Debug - Quick Check</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 20px;
+      color: #60a5fa;
+      text-align: center;
+      border-bottom: 2px solid #1e40af;
+      padding-bottom: 10px;
+    }
+
+    .section {
+      background: #1e293b;
+      border: 2px solid #334155;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .section h2 {
+      color: #fbbf24;
+      margin-bottom: 15px;
+      font-size: 1.3rem;
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      margin: 8px 0;
+      background: #334155;
+      border-radius: 4px;
+      border-left: 4px solid #6b7280;
+    }
+
+    .check.pass {
+      border-left-color: #10b981;
+      background: #064e3b;
+    }
+
+    .check.fail {
+      border-left-color: #ef4444;
+      background: #7f1d1d;
+    }
+
+    .check.warn {
+      border-left-color: #f59e0b;
+      background: #78350f;
+    }
+
+    .icon {
+      font-size: 1.5rem;
+      min-width: 30px;
+    }
+
+    .label {
+      font-weight: bold;
+      min-width: 200px;
+    }
+
+    .value {
+      color: #93c5fd;
+      font-family: monospace;
+      font-size: 0.95rem;
+    }
+
+    .version-big {
+      text-align: center;
+      font-size: 3rem;
+      font-weight: bold;
+      color: #10b981;
+      margin: 20px 0;
+      padding: 20px;
+      background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+      border-radius: 10px;
+      text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+    }
+
+    .code-block {
+      background: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 10px 0;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #2563eb;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      margin: 10px 10px 10px 0;
+      cursor: pointer;
+      border: none;
+      font-size: 1rem;
+    }
+
+    .btn:hover {
+      background: #1d4ed8;
+    }
+
+    .btn-success {
+      background: #10b981;
+    }
+
+    .btn-success:hover {
+      background: #059669;
+    }
+
+    .btn-danger {
+      background: #ef4444;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .timestamp {
+      text-align: center;
+      color: #94a3b8;
+      margin-top: 20px;
+      font-size: 0.9rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin: 20px 0;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 2px solid #334155;
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .card h3 {
+      color: #60a5fa;
+      margin-bottom: 15px;
+    }
+
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #334155;
+    }
+
+    .stat:last-child {
+      border-bottom: none;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #fbbf24;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Version Debug Tool</h1>
+
+    <div class="version-big" id="version-display">
+      Checking...
+    </div>
+
+    <div class="section">
+      <h2>📋 Quick Status</h2>
+      <div id="quick-status" class="loading">Loading...</div>
+    </div>
+
+    <div class="section">
+      <h2>🎯 Deployment Verification</h2>
+      <div id="deployment-checks"></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>📦 Script Versions</h3>
+        <div id="script-versions"></div>
+      </div>
+
+      <div class="card">
+        <h3>🗄️ Cache Status</h3>
+        <div id="cache-status"></div>
+      </div>
+
+      <div class="card">
+        <h3>👷 Service Worker</h3>
+        <div id="sw-status"></div>
+      </div>
+
+      <div class="card">
+        <h3>🌐 Server Info</h3>
+        <div id="server-info"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🛠️ Actions</h2>
+      <button class="btn btn-success" onclick="location.href='/clear-cache.html'">🧹 Clear Cache</button>
+      <button class="btn" onclick="location.reload(true)">🔄 Hard Reload</button>
+      <button class="btn" onclick="location.href='/'">🏠 Go Home</button>
+      <button class="btn btn-danger" onclick="clearEverything()">💣 Nuclear Clear</button>
+    </div>
+
+    <div class="section">
+      <h2>📊 Detailed Information</h2>
+      <div class="code-block" id="detailed-info"></div>
+    </div>
+
+    <div class="timestamp">
+      Last checked: <span id="last-check"></span>
+    </div>
+  </div>
+
+  <script>
+    const EXPECTED_VERSION = '1766444251';
+    let checks = {
+      pass: 0,
+      fail: 0,
+      warn: 0
+    };
+
+    function createCheck(label, status, value) {
+      checks[status]++;
+      const icons = {
+        pass: '✅',
+        fail: '❌',
+        warn: '⚠️'
+      };
+      return `
+        <div class="check ${status}">
+          <span class="icon">${icons[status]}</span>
+          <span class="label">${label}:</span>
+          <span class="value">${value}</span>
+        </div>
+      `;
+    }
+
+    async function checkVersion() {
+      const results = [];
+      const detailedInfo = {};
+
+      // Update timestamp
+      document.getElementById('last-check').textContent = new Date().toLocaleString();
+
+      // 1. Check server version via API
+      try {
+        const response = await fetch('/api/debug?_=' + Date.now());
+        const data = await response.json();
+        const serverVersion = data.version || 'unknown';
+
+        detailedInfo.serverVersion = serverVersion;
+
+        if (serverVersion === EXPECTED_VERSION) {
+          results.push(createCheck('Server Version', 'pass', serverVersion));
+          document.getElementById('version-display').textContent = `✅ Version ${serverVersion}`;
+          document.getElementById('version-display').style.background = 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)';
+        } else {
+          results.push(createCheck('Server Version', 'fail', `${serverVersion} (Expected: ${EXPECTED_VERSION})`));
+          document.getElementById('version-display').textContent = `❌ OLD Version ${serverVersion}`;
+          document.getElementById('version-display').style.background = 'linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%)';
+        }
+      } catch (err) {
+        results.push(createCheck('Server Version', 'fail', 'API Error: ' + err.message));
+        detailedInfo.serverError = err.message;
+      }
+
+      // 2. Check page source for version in scripts
+      const scripts = document.querySelectorAll('script[src]');
+      const scriptVersions = new Set();
+      scripts.forEach(script => {
+        const src = script.getAttribute('src');
+        const match = src.match(/v=(\d+)/);
+        if (match) scriptVersions.add(match[1]);
+      });
+
+      detailedInfo.scriptVersionsFound = Array.from(scriptVersions);
+
+      if (scriptVersions.size === 0) {
+        results.push(createCheck('Script Versions', 'warn', 'No versioned scripts found'));
+      } else if (scriptVersions.has(EXPECTED_VERSION)) {
+        results.push(createCheck('Script Versions', 'pass', `Using ${EXPECTED_VERSION}`));
+      } else {
+        results.push(createCheck('Script Versions', 'fail', `Found: ${Array.from(scriptVersions).join(', ')}`));
+      }
+
+      // 3. Check Service Worker
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        detailedInfo.serviceWorkers = registrations.length;
+
+        if (registrations.length > 0) {
+          const reg = registrations[0];
+          const swVersion = reg.active ? 'active' : 'inactive';
+          results.push(createCheck('Service Worker', 'pass', `${registrations.length} registered (${swVersion})`));
+
+          // Try to get SW version from scope
+          const scope = reg.scope;
+          detailedInfo.swScope = scope;
+        } else {
+          results.push(createCheck('Service Worker', 'warn', 'Not registered'));
+        }
+      } else {
+        results.push(createCheck('Service Worker', 'warn', 'Not supported'));
+      }
+
+      // 4. Check Cache Storage
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        detailedInfo.cacheNames = cacheNames;
+
+        const currentCache = cacheNames.find(name => name.includes(EXPECTED_VERSION));
+        if (currentCache) {
+          results.push(createCheck('Cache Storage', 'pass', currentCache));
+        } else if (cacheNames.length > 0) {
+          results.push(createCheck('Cache Storage', 'warn', `Old caches: ${cacheNames.join(', ')}`));
+        } else {
+          results.push(createCheck('Cache Storage', 'warn', 'No caches found'));
+        }
+      }
+
+      // 5. Check localStorage
+      const localStorageSize = Object.keys(localStorage).length;
+      detailedInfo.localStorageKeys = localStorageSize;
+      results.push(createCheck('localStorage', 'pass', `${localStorageSize} keys`));
+
+      // 6. Check page URL for cache-busting
+      const urlHasTimestamp = window.location.search.includes('_=');
+      if (urlHasTimestamp) {
+        results.push(createCheck('URL Cache Bust', 'pass', 'Timestamp present'));
+      } else {
+        results.push(createCheck('URL Cache Bust', 'warn', 'No timestamp in URL'));
+      }
+
+      // Display results
+      document.getElementById('deployment-checks').innerHTML = results.join('');
+
+      // Quick status
+      const totalChecks = checks.pass + checks.fail + checks.warn;
+      const passPercentage = Math.round((checks.pass / totalChecks) * 100);
+
+      let statusHtml = `
+        <div style="font-size: 1.2rem; margin-bottom: 15px;">
+          <strong>Overall Health: ${passPercentage}%</strong>
+        </div>
+        <div style="display: flex; gap: 20px; justify-content: center;">
+          <div style="color: #10b981;">✅ Pass: ${checks.pass}</div>
+          <div style="color: #f59e0b;">⚠️ Warn: ${checks.warn}</div>
+          <div style="color: #ef4444;">❌ Fail: ${checks.fail}</div>
+        </div>
+      `;
+
+      if (checks.fail === 0 && checks.warn === 0) {
+        statusHtml += '<div style="margin-top: 15px; color: #10b981; font-weight: bold;">🎉 Everything looks perfect!</div>';
+      } else if (checks.fail > 0) {
+        statusHtml += '<div style="margin-top: 15px; color: #ef4444; font-weight: bold;">⚠️ Issues detected! Clear cache and reload.</div>';
+      }
+
+      document.getElementById('quick-status').innerHTML = statusHtml;
+
+      // Display detailed info
+      document.getElementById('detailed-info').textContent = JSON.stringify(detailedInfo, null, 2);
+
+      // Load other sections
+      loadScriptVersions();
+      loadCacheStatus();
+      loadSWStatus();
+      loadServerInfo();
+    }
+
+    function loadScriptVersions() {
+      const scripts = document.querySelectorAll('script[src]');
+      let html = '';
+
+      scripts.forEach((script, i) => {
+        const src = script.getAttribute('src');
+        const match = src.match(/v=(\d+)/);
+        const version = match ? match[1] : 'none';
+        const status = version === EXPECTED_VERSION ? '✅' : (version === 'none' ? '⚠️' : '❌');
+
+        html += `<div class="stat"><span>${status} Script ${i+1}</span><span>${version}</span></div>`;
+      });
+
+      document.getElementById('script-versions').innerHTML = html || '<div class="stat">No versioned scripts</div>';
+    }
+
+    async function loadCacheStatus() {
+      if (!('caches' in window)) {
+        document.getElementById('cache-status').innerHTML = '<div class="stat">Not supported</div>';
+        return;
+      }
+
+      const cacheNames = await caches.keys();
+      let html = `<div class="stat"><span>Total Caches</span><span>${cacheNames.length}</span></div>`;
+
+      cacheNames.forEach(name => {
+        const isCurrent = name.includes(EXPECTED_VERSION);
+        const icon = isCurrent ? '✅' : '❌';
+        html += `<div class="stat"><span>${icon} ${name}</span><span>${isCurrent ? 'Current' : 'Old'}</span></div>`;
+      });
+
+      document.getElementById('cache-status').innerHTML = html || '<div class="stat">No caches</div>';
+    }
+
+    async function loadSWStatus() {
+      if (!('serviceWorker' in navigator)) {
+        document.getElementById('sw-status').innerHTML = '<div class="stat">Not supported</div>';
+        return;
+      }
+
+      const regs = await navigator.serviceWorker.getRegistrations();
+      let html = `<div class="stat"><span>Registered</span><span>${regs.length}</span></div>`;
+
+      regs.forEach((reg, i) => {
+        const state = reg.active ? 'Active' : reg.installing ? 'Installing' : 'Waiting';
+        html += `<div class="stat"><span>SW ${i+1}</span><span>${state}</span></div>`;
+      });
+
+      document.getElementById('sw-status').innerHTML = html || '<div class="stat">None</div>';
+    }
+
+    async function loadServerInfo() {
+      try {
+        const response = await fetch('/api/debug?_=' + Date.now());
+        const data = await response.json();
+
+        let html = `
+          <div class="stat"><span>Version</span><span>${data.version || 'unknown'}</span></div>
+          <div class="stat"><span>Status</span><span>${data.status || 'unknown'}</span></div>
+        `;
+
+        if (data.bindings) {
+          html += `<div class="stat"><span>DB</span><span>${data.bindings.DB ? '✅' : '❌'}</span></div>`;
+          html += `<div class="stat"><span>R2</span><span>${data.bindings.R2_BUCKET ? '✅' : '❌'}</span></div>`;
+        }
+
+        document.getElementById('server-info').innerHTML = html;
+      } catch (err) {
+        document.getElementById('server-info').innerHTML = `<div class="stat">Error: ${err.message}</div>`;
+      }
+    }
+
+    async function clearEverything() {
+      if (!confirm('⚠️ This will clear EVERYTHING! Continue?')) return;
+
+      try {
+        // Unregister service workers
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (let reg of regs) await reg.unregister();
+        }
+
+        // Delete all caches
+        if ('caches' in window) {
+          const names = await caches.keys();
+          for (let name of names) await caches.delete(name);
+        }
+
+        // Clear storage
+        localStorage.clear();
+        sessionStorage.clear();
+
+        alert('✅ Everything cleared! Page will reload...');
+        setTimeout(() => location.reload(true), 1000);
+      } catch (err) {
+        alert('❌ Error: ' + err.message);
+      }
+    }
+
+    // Run checks on load
+    checkVersion();
+
+    // Auto-refresh every 5 seconds
+    setInterval(() => {
+      document.getElementById('last-check').textContent = new Date().toLocaleString();
+    }, 5000);
+  </script>
+</body>
+</html>
