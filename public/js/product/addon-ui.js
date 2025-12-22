@@ -4,14 +4,14 @@
  */
 
 ;(function(){
-  // Use centralized delivery time utility
-  function mapDeliveryLabel(label, isInstant) {
+  // STRICT: Use centralized delivery time utility with addon delivery data
+  function mapDeliveryLabel(deliveryText, isInstant) {
     if (!window.DeliveryTimeUtils) {
       console.error('DeliveryTimeUtils not loaded');
       return '2 Days Delivery';
     }
-    const days = window.DeliveryTimeUtils.parseDeliveryDays(label);
-    return window.DeliveryTimeUtils.getDeliveryText(isInstant, days || 2);
+    // STRICT: Pass instant flag and deliveryText (which should be days like "1", "2", "3")
+    return window.DeliveryTimeUtils.getDeliveryText(isInstant, deliveryText);
   }
 
   function renderAddonField(field) {

@@ -1,38 +1,57 @@
 /**
  * Centralized Delivery Time Utility
  * Universal logic for delivery time formatting across the entire application
+ *
+ * STRICT IMPLEMENTATION:
+ * - instant = 1 (true) → "Instant Delivery In 60 Minutes"
+ * - delivery_time = 1 → "24 Hours Express Delivery"
+ * - delivery_time = 2 → "2 Days Delivery"
+ * - delivery_time = 3 → "3 Days Delivery"
  */
 
 /**
  * Get delivery text based on instant flag and delivery days
- * @param {boolean} instant - Whether instant delivery is enabled
+ * @param {boolean|number} instant - Whether instant delivery is enabled (1 or true)
  * @param {number|string} deliveryDays - Number of delivery days (1, 2, 3, etc.)
  * @returns {string} Formatted delivery text
  */
 function getDeliveryText(instant, deliveryDays) {
-  // If instant delivery is enabled
-  if (instant) {
+  // STRICT: If instant delivery is enabled (1 or true)
+  if (instant === 1 || instant === true || instant === '1') {
     return 'Instant Delivery In 60 Minutes';
   }
 
-  // Parse delivery days to number
-  const days = parseInt(deliveryDays, 10);
+  // Parse delivery days to number - STRICT parsing
+  let days = null;
 
-  // Handle invalid or missing delivery days
-  if (!Number.isFinite(days) || days <= 0) {
-    return '2 Days Delivery'; // Default
+  // If deliveryDays is already a number
+  if (typeof deliveryDays === 'number') {
+    days = deliveryDays;
+  }
+  // If deliveryDays is a string number like "1", "2", "3"
+  else if (typeof deliveryDays === 'string') {
+    const trimmed = deliveryDays.trim();
+    if (trimmed !== '') {
+      const parsed = parseInt(trimmed, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        days = parsed;
+      }
+    }
   }
 
-  // Return formatted text based on days
+  // STRICT: Return formatted text based on days
   if (days === 1) {
     return '24 Hours Express Delivery';
   } else if (days === 2) {
     return '2 Days Delivery';
   } else if (days === 3) {
     return '3 Days Delivery';
-  } else {
+  } else if (days !== null && days > 0) {
     return `${days} Days Delivery`;
   }
+
+  // Default fallback
+  return '2 Days Delivery';
 }
 
 /**

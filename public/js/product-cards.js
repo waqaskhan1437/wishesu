@@ -104,9 +104,9 @@
       const hasDiscount = salePrice < originalPrice;
       const discount = hasDiscount ? Math.round((1 - salePrice / originalPrice) * 100) : 0;
 
-      // Delivery text
-      const deliveryText = this.getDeliveryText(normal_delivery_text, !!instant_delivery);
-      const deliveryIcon = this.getDeliveryIcon(normal_delivery_text);
+      // Delivery text - STRICT: Pass instant_delivery and normal_delivery_text directly
+      const deliveryText = this.getDeliveryText(instant_delivery, normal_delivery_text);
+      const deliveryIcon = this.getDeliveryIcon(deliveryText);
 
       // Rating text
       const rating = parseFloat(average_rating || 5);
@@ -160,14 +160,14 @@
       `;
     },
 
-    getDeliveryText: function(deliveryText, instant) {
-      // Use centralized utility
+    getDeliveryText: function(instant, deliveryDays) {
+      // STRICT: Use centralized utility with correct parameters
       if (!window.DeliveryTimeUtils) {
         console.error('DeliveryTimeUtils not loaded');
         return '2 Days Delivery';
       }
-      const days = window.DeliveryTimeUtils.parseDeliveryDays(deliveryText);
-      return window.DeliveryTimeUtils.getDeliveryText(instant, days || 2);
+      // Directly pass instant and deliveryDays to utility
+      return window.DeliveryTimeUtils.getDeliveryText(instant, deliveryDays);
     },
 
     getDeliveryIcon: function(deliveryText) {

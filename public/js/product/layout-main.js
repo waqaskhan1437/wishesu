@@ -322,43 +322,46 @@
     const badgeRow = document.createElement('div');
     badgeRow.className = 'badges-row';
 
-    // Use centralized delivery time utility
-    const parseDeliveryDays = (value) => {
-      if (!window.DeliveryTimeUtils) {
-        console.error('DeliveryTimeUtils not loaded');
-        return '';
-      }
-      return window.DeliveryTimeUtils.parseDeliveryDays(value);
-    };
-
-    const formatDeliveryLabel = (value, instant) => {
-      if (!window.DeliveryTimeUtils) {
-        console.error('DeliveryTimeUtils not loaded');
-        return '2 Days Delivery';
-      }
-      const days = parseDeliveryDays(value);
-      return window.DeliveryTimeUtils.getDeliveryText(instant, days || 2);
-    };
-
-    const computeDeliveryBadge = (label) => {
+    // STRICT: Use centralized delivery time utility with proper data
+    const computeDeliveryBadge = (instant, deliveryDays) => {
       if (!window.DeliveryTimeUtils) {
         console.error('DeliveryTimeUtils not loaded');
         return { icon: '🚚', text: '2 Days Delivery' };
       }
-      const raw = (label || '').toString();
-      const isInstant = window.DeliveryTimeUtils.isInstantDelivery(raw);
-      const days = parseDeliveryDays(raw);
-      const text = window.DeliveryTimeUtils.getDeliveryText(isInstant, days || 2);
+      // Get formatted text using strict logic
+      const text = window.DeliveryTimeUtils.getDeliveryText(instant, deliveryDays);
       const icon = window.DeliveryTimeUtils.getDeliveryIcon(text);
       return { icon, text };
     };
 
-    const setDeliveryBadge = (label) => {
-      const { icon, text } = computeDeliveryBadge(label);
+    const setDeliveryBadge = (instant, deliveryDays) => {
+      const { icon, text } = computeDeliveryBadge(instant, deliveryDays);
       const iconEl = badgeRow.querySelector('#delivery-badge-icon');
       const textEl = badgeRow.querySelector('#delivery-badge-text');
       if (iconEl) iconEl.textContent = icon;
       if (textEl) textEl.textContent = text;
+    };
+
+    // Wrapper for updateDeliveryBadge that accepts text and converts to proper format
+    const updateDeliveryBadgeFromText = (displayText) => {
+      // When addon changes, displayText is the formatted text like "Instant Delivery In 60 Minutes"
+      // We need to reverse-engineer instant and days from it
+      const text = (displayText || '').toString().toLowerCase();
+      let instant = 0;
+      let days = 2;
+
+      if (text.includes('instant') || text.includes('60')) {
+        instant = 1;
+        days = null;
+      } else if (text.includes('24') || text.includes('1 day')) {
+        days = 1;
+      } else if (text.includes('2 day')) {
+        days = 2;
+      } else if (text.includes('3 day')) {
+        days = 3;
+      }
+
+      setDeliveryBadge(instant, days);
     };
 
     badgeRow.innerHTML = `
@@ -368,19 +371,27 @@
       </div>
     `;
 
-    let initialDeliveryLabel = '';
+    // PRIORITY SYSTEM: Addon > Product Basic Info
+    let initialInstant = 0;
+    let initialDays = 2;
+
+    // First Priority: Check if delivery-time addon exists
     const deliveryField = (addonGroups || []).find(g => g && g.id === 'delivery-time' && (g.type === 'radio' || g.type === 'select') && Array.isArray(g.options));
     if (deliveryField) {
-      initialDeliveryLabel = deliveryField.options.find(o => o && o.default)?.label || deliveryField.options[0]?.label || '';
+      // Get default option from addon
+      const defaultOpt = deliveryField.options.find(o => o && o.default) || deliveryField.options[0];
+      if (defaultOpt && defaultOpt.delivery) {
+        initialInstant = defaultOpt.delivery.instant ? 1 : 0;
+        initialDays = defaultOpt.delivery.text || 2;
+      }
+    } else {
+      // Second Priority: Use product basic info
+      initialInstant = product.instant_delivery || 0;
+      initialDays = product.normal_delivery_text || 2;
     }
 
-    if (!initialDeliveryLabel) {
-      if (product.instant_delivery) initialDeliveryLabel = 'instant';
-      else initialDeliveryLabel = product.normal_delivery_text || '';
-    }
-
-    setDeliveryBadge(initialDeliveryLabel);
-    window.updateDeliveryBadge = setDeliveryBadge;
+    setDeliveryBadge(initialInstant, initialDays);
+    window.updateDeliveryBadge = updateDeliveryBadgeFromText;
 
     const priceBadge = document.createElement('div');
     priceBadge.className = 'badge-box badge-price';
