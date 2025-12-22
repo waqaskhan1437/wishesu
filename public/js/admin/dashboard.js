@@ -586,6 +586,7 @@
       <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
         <button class="btn" style="background: #f59e0b; color: white;" id="clear-temp-files-btn">Clear Temp Files</button>
         <button class="btn" style="background: #f59e0b; color: white;" id="clear-pending-checkouts-btn">Clear Pending Checkouts</button>
+        <button class="btn" style="background: #ef4444; color: white;" id="reset-data-btn">Reset All Data</button>
         <span id="maintenance-status" style="margin-left: 10px; font-size: 0.9rem; color: #6b7280;"></span>
       </div>
       <div style="margin-top: 15px; padding: 10px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
@@ -752,6 +753,31 @@
           statusSpan.style.color = '#10b981';
         } else {
           statusSpan.textContent = '❌ Failed: ' + (res.error || 'Unknown error');
+          statusSpan.style.color = '#ef4444';
+        }
+      } catch (err) {
+        statusSpan.textContent = '❌ Error: ' + err.message;
+        statusSpan.style.color = '#ef4444';
+      }
+    });
+
+    document.getElementById('reset-data-btn').addEventListener('click', async () => {
+      const first = confirm('Reset ALL data? This will delete products, pages, orders, reviews, blog, forum, settings, and users.');
+      if (!first) return;
+      const text = prompt('Type RESET to confirm this action:');
+      if (text !== 'RESET') return;
+
+      const statusSpan = document.getElementById('maintenance-status');
+      statusSpan.textContent = 'Resetting data...';
+      statusSpan.style.color = '#6b7280';
+
+      try {
+        const res = await apiFetch('/api/admin/reset-data', { method: 'POST' });
+        if (res && res.success) {
+          statusSpan.textContent = '✅ Data reset complete. Refresh the admin to reload.';
+          statusSpan.style.color = '#10b981';
+        } else {
+          statusSpan.textContent = '❌ Reset failed: ' + (res.error || 'Unknown error');
           statusSpan.style.color = '#ef4444';
         }
       } catch (err) {

@@ -87,7 +87,8 @@ import {
   uploadTempFile,
   getArchiveCredentials,
   listUsers,
-  updateUserBlocks
+  updateUserBlocks,
+  resetData
 } from './controllers/admin.js';
 
 // Blog
@@ -645,6 +646,10 @@ export async function routeApiRequest(req, env, url, path, method) {
       // Table might not exist, that's okay
       return json({ success: true, count: 0, message: 'No pending checkouts table or already empty' });
     }
+  }
+
+  if (method === 'POST' && path === '/api/admin/reset-data') {
+    return resetData(env);
   }
 
   if (method === 'GET' && path === '/api/admin/export-data') {

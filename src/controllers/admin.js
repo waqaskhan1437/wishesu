@@ -512,6 +512,37 @@ export async function uploadEncryptedFile(env, req, url) {
 }
 
 /**
+ * Reset data tables (keeps schema and code intact)
+ */
+export async function resetData(env) {
+  const tables = [
+    'products',
+    'orders',
+    'reviews',
+    'pages',
+    'blog_posts',
+    'forum_replies',
+    'forum_topics',
+    'chat_messages',
+    'chat_sessions',
+    'checkout_sessions',
+    'settings',
+    'customers',
+    'pending_checkouts'
+  ];
+
+  for (const t of tables) {
+    try {
+      await env.DB.prepare(`DELETE FROM ${t}`).run();
+    } catch (_) {
+      // ignore missing tables
+    }
+  }
+
+  return json({ success: true });
+}
+
+/**
  * Handle secure download
  */
 export async function handleSecureDownload(env, orderId, baseUrl) {
