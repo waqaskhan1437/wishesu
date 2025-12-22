@@ -4,6 +4,16 @@
 
 import { json } from '../utils/response.js';
 import { normalizeEmail, upsertCustomer } from '../utils/customers.js';
+
+let ordersColumnsChecked = false;
+
+async function ensureOrderColumns(env) {
+  if (ordersColumnsChecked) return;
+  try {
+    await env.DB.prepare('ALTER TABLE orders ADD COLUMN assigned_team TEXT').run();
+  } catch (_) {}
+  ordersColumnsChecked = true;
+}
 import { toISO8601 } from '../utils/formatting.js';
 import { getGoogleScriptUrl } from '../config/secrets.js';
 
@@ -36,6 +46,7 @@ export async function getOrders(env) {
  * Create order (from checkout)
  */
 export async function createOrder(env, body) {
+  await ensureOrderColumns(env);
   if (!body.productId || !body.email) return json({ error: 'productId and email required' }, 400);
   
   const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
@@ -69,6 +80,7 @@ export async function createOrder(env, body) {
  * Create manual order (admin)
  */
 export async function createManualOrder(env, body) {
+  await ensureOrderColumns(env);
   if (!body.productId || !body.email) {
     return json({ error: 'productId and email required' }, 400);
   }

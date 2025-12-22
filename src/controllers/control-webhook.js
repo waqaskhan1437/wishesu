@@ -16,6 +16,12 @@ function readSecretHeader(req) {
   return req.headers.get('x-control-secret') || '';
 }
 
+async function ensureAssignedTeam(env) {
+  try {
+    await env.DB.prepare('ALTER TABLE orders ADD COLUMN assigned_team TEXT').run();
+  } catch (_) {}
+}
+
 async function getControlSettings(env) {
   const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?')
     .bind('control_webhook')
@@ -45,6 +51,7 @@ async function deleteOrderById(env, body) {
 }
 
 async function assignOrder(env, body) {
+  await ensureAssignedTeam(env);
   const orderId = String(body.orderId || '').trim();
   const team = String(body.assigned_team || body.team || '').trim();
   if (!orderId || !team) return json({ success: false, error: 'orderId and assigned_team required' }, 400);
