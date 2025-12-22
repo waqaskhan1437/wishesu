@@ -4,6 +4,8 @@
 
 import { json } from '../utils/response.js';
 import { normalizeEmail, upsertCustomer } from '../utils/customers.js';
+import { toISO8601 } from '../utils/formatting.js';
+import { getGoogleScriptUrl } from '../config/secrets.js';
 
 let ordersColumnsChecked = false;
 
@@ -14,8 +16,23 @@ async function ensureOrderColumns(env) {
   } catch (_) {}
   ordersColumnsChecked = true;
 }
-import { toISO8601 } from '../utils/formatting.js';
-import { getGoogleScriptUrl } from '../config/secrets.js';
+
+async function notifyOrderCreated(env, order) {
+  try {
+    const googleScriptUrl = await getGoogleScriptUrl(env);
+    if (!googleScriptUrl) return;
+    await fetch(googleScriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'order.created',
+        order
+      })
+    }).catch(err => console.error('Failed to send order.created webhook:', err));
+  } catch (err) {
+    console.error('Error triggering order.created webhook:', err);
+  }
+}
 
 // Re-export from shared utility for backwards compatibility
 export { getLatestOrderForEmail } from '../utils/order-helpers.js';
@@ -72,6 +89,15 @@ export async function createOrder(env, body) {
   ).run();
 
   await upsertCustomer(env, email, body.name);
+  await notifyOrderCreated(env, {
+    order_id: orderId,
+    product_id: Number(body.productId),
+    email,
+    name: String(body.name || '').trim() || null,
+    amount: body.amount || null,
+    status: 'PAID',
+    assigned_team: String(body.assigned_team || '').trim() || null
+  });
   
   return json({ success: true, orderId });
 }
@@ -110,6 +136,16 @@ export async function createManualOrder(env, body) {
   ).run();
 
   await upsertCustomer(env, email, body.name);
+  await notifyOrderCreated(env, {
+    order_id: orderId,
+    product_id: Number(body.productId),
+    email,
+    name: String(body.name || '').trim() || null,
+    amount: body.amount || null,
+    status: body.status || 'paid',
+    assigned_team: String(body.assigned_team || '').trim() || null,
+    manual: true
+  });
   
   return json({ success: true, orderId });
 }
