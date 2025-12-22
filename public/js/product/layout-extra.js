@@ -272,7 +272,9 @@
               pag.style.cssText = 'display:flex;justify-content:center;gap:12px;margin-top:30px;padding:20px 0;';
               
               const prev = document.createElement('button');
-              prev.textContent = '← Prev';
+              prev.type = 'button';
+              prev.textContent = 'Prev';
+              prev.setAttribute('aria-label', 'Previous reviews page');
               prev.disabled = currentPage === 1;
               prev.style.cssText = `padding:10px 20px;background:${currentPage===1?'#999':'#667eea'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===1?'not-allowed':'pointer'};font-weight:600`;
               if (currentPage > 1) prev.onclick = () => { renderPage(currentPage - 1); container.scrollIntoView({behavior:'smooth'}); };
@@ -284,7 +286,9 @@
               pag.appendChild(info);
               
               const next = document.createElement('button');
-              next.textContent = 'Next →';
+              next.type = 'button';
+              next.textContent = 'Next';
+              next.setAttribute('aria-label', 'Next reviews page');
               next.disabled = currentPage === totalPages;
               next.style.cssText = `padding:10px 20px;background:${currentPage===totalPages?'#999':'#667eea'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===totalPages?'not-allowed':'pointer'};font-weight:600`;
               if (currentPage < totalPages) next.onclick = () => { renderPage(currentPage + 1); container.scrollIntoView({behavior:'smooth'}); };
@@ -430,3 +434,5 @@
   window.renderProductDescription = renderProductDescription;
   window.initializePlayer = initializePlayer;
 })();
+
+

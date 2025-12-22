@@ -218,7 +218,7 @@
 
         .review-date {
           font-size: 0.85rem;
-          color: #9ca3af;
+          color: #6b7280;
         }
 
         .review-product {
