@@ -1,0 +1,40 @@
+🚀 DEPLOY NOW - Quick Commands
+
+Problem Found: Server showing version "15" instead of "1766444251"
+Fixed Files:
+✅ src/config/constants.js - Changed VERSION from "15" to "1766444251"
+✅ src/controllers/admin/debug.js - Now uses env.VERSION
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DEPLOY COMMANDS (Copy-Paste):
+
+cd C:\Users\waqas\Downloads\wishesu-fixed-v13-admin-mobile\wishesu_v7
+npx wrangler deploy
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VERIFY (After Deploy):
+
+curl https://wishesu1.waqaskhan1437.workers.dev/api/debug
+
+Expected: "version":"1766444251"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TEST PAGES:
+
+1. Version Check:
+   https://wishesu1.waqaskhan1437.workers.dev/version-check.html
+   Should show: ✅ Version 1766444251 (GREEN)
+
+2. Clear Cache:
+   https://wishesu1.waqaskhan1437.workers.dev/clear-cache.html
+
+3. Homepage:
+   https://wishesu1.waqaskhan1437.workers.dev/
+   Should show green banner
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+AB DEPLOY KARO! 🚀
