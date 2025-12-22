@@ -163,12 +163,23 @@ export async function renderForumArchive(env) {
   const items = topics.map(t => {
     const d = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
     const replies = Number(t.reply_count || 0);
-    const excerpt = escapeHtml(String(t.body || '')).slice(0, 260);
-    return `<a class="topic" href="/forum/${encodeURIComponent(t.slug)}">
-      <div class="title">${escapeHtml(t.title || t.slug)}</div>
-      <div class="meta">By ${escapeHtml(t.author_name || 'Anonymous')} • ${escapeHtml(d)} • ${replies} replies</div>
-      <div class="desc">${excerpt || ''}</div>
+    const excerpt = makeExcerpt(t.body, 220);
+    return `<a class="topic-card" href="/forum/${encodeURIComponent(t.slug)}" data-search="${escapeHtml((t.title || '') + ' ' + (t.body || ''))}">
+      <div class="topic-head">
+        <div class="title">${escapeHtml(t.title || t.slug)}</div>
+        <div class="pill">${replies} replies</div>
+      </div>
+      <div class="meta">By ${escapeHtml(t.author_name || 'Anonymous')} • ${escapeHtml(d)}</div>
+      <div class="desc">${escapeHtml(excerpt)}</div>
       <div class="read-more">Read more →</div>
+    </a>`;
+  }).join('');
+
+  const latest = topics.slice(0, 6).map(t => {
+    const d = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
+    return `<a class="side-link" href="/forum/${encodeURIComponent(t.slug)}">
+      <div class="side-title">${escapeHtml(t.title || t.slug)}</div>
+      <div class="side-date">${escapeHtml(d)}</div>
     </a>`;
   }).join('');
 
@@ -179,49 +190,134 @@ export async function renderForumArchive(env) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Forum</title>
     <style>
-      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;color:#111827;margin:0}
-      .wrap{max-width:900px;margin:0 auto;padding:28px 18px}
-      h1{margin:0 0 12px;font-size:28px}
-      .sub{color:#6b7280;margin:0 0 24px}
-      .list{display:flex;flex-direction:column;gap:12px;margin-bottom:28px}
-      .topic{display:block;text-decoration:none;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px}
-      .topic:hover{border-color:#cbd5e1}
-      .title{font-weight:700;color:#111827}
-      .meta{color:#6b7280;font-size:13px;margin-top:6px}
-      .desc{color:#374151;margin-top:10px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-      .read-more{color:#111827;font-weight:600;margin-top:10px}
-      .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px}
-      label{display:block;font-weight:600;margin-bottom:6px}
-      input, textarea{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-family:inherit}
+      :root{
+        --bg:#0b0f19;
+        --card:#0f172a;
+        --ink:#f8fafc;
+        --muted:#94a3b8;
+        --accent:#f97316;
+        --accent-2:#22d3ee;
+        --border:rgba(148,163,184,0.25);
+      }
+      *{box-sizing:border-box}
+      body{
+        font-family:'Sora',system-ui,-apple-system,sans-serif;
+        background:
+          radial-gradient(900px 500px at 10% -10%, rgba(34,211,238,0.18), transparent 60%),
+          radial-gradient(900px 500px at 90% -10%, rgba(249,115,22,0.2), transparent 60%),
+          var(--bg);
+        color:var(--ink);
+        margin:0;
+      }
+      .wrap{max-width:1200px;margin:0 auto;padding:40px 20px}
+      h1{margin:0 0 10px;font-size:38px;letter-spacing:0.5px}
+      .sub{color:var(--muted);margin:0 0 26px;font-size:16px}
+      .hero{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+      .hero-actions{display:flex;gap:10px;flex-wrap:wrap}
+      .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:1px solid var(--border);color:var(--ink);background:rgba(15,23,42,0.6);font-size:13px}
+      .chip span{color:var(--accent-2)}
+      .layout{display:grid;grid-template-columns:1.3fr 0.7fr;gap:24px;align-items:start}
+      .search{
+        display:flex;gap:10px;align-items:center;background:rgba(15,23,42,0.7);
+        border:1px solid var(--border);border-radius:14px;padding:10px 14px;margin-bottom:16px;
+      }
+      .search input{
+        flex:1;background:transparent;border:0;color:var(--ink);font-size:15px;outline:none;
+      }
+      .search input::placeholder{color:var(--muted)}
+      .list{display:flex;flex-direction:column;gap:14px}
+      .topic-card{
+        display:block;text-decoration:none;background:rgba(15,23,42,0.8);
+        border:1px solid var(--border);border-radius:18px;padding:18px 20px;
+        box-shadow:0 10px 30px rgba(2,6,23,0.35);transition:transform .2s,border-color .2s,box-shadow .2s;
+      }
+      .topic-card:hover{border-color:rgba(34,211,238,0.7);transform:translateY(-2px);box-shadow:0 14px 36px rgba(2,6,23,0.5)}
+      .topic-head{display:flex;justify-content:space-between;gap:12px;align-items:center}
+      .title{font-weight:700;color:var(--ink);font-size:20px}
+      .pill{font-size:12px;padding:6px 10px;border-radius:999px;background:rgba(249,115,22,0.16);color:#fdba74;border:1px solid rgba(249,115,22,0.35)}
+      .meta{color:var(--muted);font-size:13px;margin-top:6px}
+      .desc{color:#cbd5f5;margin-top:10px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+      .read-more{color:var(--accent-2);font-weight:600;margin-top:12px;font-size:14px}
+      .side{
+        background:rgba(15,23,42,0.85);border:1px solid var(--border);border-radius:18px;padding:18px 18px;
+        position:sticky;top:20px;box-shadow:0 10px 30px rgba(2,6,23,0.35);
+      }
+      .side h3{margin:0 0 12px;font-size:18px}
+      .side-links{display:flex;flex-direction:column;gap:12px}
+      .side-link{text-decoration:none;border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:block;background:rgba(2,6,23,0.3)}
+      .side-link:hover{border-color:rgba(249,115,22,0.6)}
+      .side-title{font-weight:600;color:var(--ink);font-size:14px}
+      .side-date{color:var(--muted);font-size:12px;margin-top:4px}
+      .card{
+        margin-top:16px;background:rgba(2,6,23,0.5);border:1px solid var(--border);border-radius:16px;padding:16px
+      }
+      label{display:block;font-weight:600;margin-bottom:6px;color:#e2e8f0}
+      input, textarea{
+        width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-family:inherit;
+        background:rgba(15,23,42,0.8);color:var(--ink)
+      }
       textarea{min-height:120px;resize:vertical}
-      .btn{padding:10px 16px;border:0;border-radius:8px;background:#111827;color:#fff;font-weight:600;cursor:pointer}
-      .note{color:#6b7280;font-size:13px;margin-top:8px}
+      .btn{
+        padding:10px 16px;border:0;border-radius:10px;background:linear-gradient(135deg,var(--accent),#fb7185);
+        color:#0b0f19;font-weight:700;cursor:pointer
+      }
+      .note{color:var(--muted);font-size:13px;margin-top:8px}
       .msg{margin-top:10px;font-size:14px}
+      @media (max-width: 900px){
+        .layout{grid-template-columns:1fr}
+        .side{position:static}
+      }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div class="wrap">
-      <h1>Forum</h1>
-      <p class="sub">Start a discussion or ask a question.</p>
-      <div class="list">${items || '<div style="color:#6b7280">No topics yet.</div>'}</div>
-      <div class="card">
-        <h2 style="margin:0 0 12px;font-size:20px">New Discussion</h2>
-        <label>Name</label>
-        <input id="forum-name" type="text" placeholder="Your name" />
-        <label style="margin-top:10px">Email</label>
-        <input id="forum-email" type="email" placeholder="you@example.com" />
-        <label style="margin-top:10px">Title</label>
-        <input id="forum-title" type="text" placeholder="Topic title" />
-        <label style="margin-top:10px">Body</label>
-        <textarea id="forum-body" placeholder="Write your discussion..."></textarea>
-        <button class="btn" id="forum-submit" type="button" style="margin-top:12px">Submit for approval</button>
-        <div class="note">Every post needs admin approval. Only one pending submission is allowed per email.</div>
-        <div class="msg" id="forum-msg"></div>
+      <div class="hero">
+        <div>
+          <h1>Community Forum</h1>
+          <p class="sub">Ask questions, share ideas, and help each other grow.</p>
+          <div class="chip"><span>●</span> Moderated community</div>
+        </div>
+        <div class="hero-actions">
+          <div class="chip"><span>★</span> Respectful discussions</div>
+        </div>
+      </div>
+      <div class="layout">
+        <div>
+          <div class="search">
+            <input id="forum-search" type="text" placeholder="Search discussions..." />
+          </div>
+          <div class="list" id="forum-list">${items || '<div style="color:#94a3b8">No topics yet.</div>'}</div>
+          <div class="card">
+            <h2 style="margin:0 0 12px;font-size:20px">Start a discussion</h2>
+            <label>Name</label>
+            <input id="forum-name" type="text" placeholder="Your name" />
+            <label style="margin-top:10px">Email</label>
+            <input id="forum-email" type="email" placeholder="you@example.com" />
+            <label style="margin-top:10px">Title</label>
+            <input id="forum-title" type="text" placeholder="Topic title" />
+            <label style="margin-top:10px">Body</label>
+            <textarea id="forum-body" placeholder="Write your discussion..."></textarea>
+            <button class="btn" id="forum-submit" type="button" style="margin-top:12px">Submit for approval</button>
+            <div class="note">Every post needs admin approval. Only one pending submission is allowed per email.</div>
+            <div class="msg" id="forum-msg"></div>
+          </div>
+        </div>
+        <aside class="side">
+          <h3>Trending now</h3>
+          <div class="side-links">${latest || '<div style="color:#94a3b8">No topics yet.</div>'}</div>
+          <div class="card">
+            <strong>Community links</strong>
+            <div style="margin-top:8px;color:#94a3b8;font-size:13px">Be kind • Stay on topic • Help others</div>
+          </div>
+        </aside>
       </div>
     </div>
     <script>
       const btn = document.getElementById('forum-submit');
       const msg = document.getElementById('forum-msg');
+      const search = document.getElementById('forum-search');
+      const list = document.getElementById('forum-list');
       btn.addEventListener('click', async () => {
         msg.textContent = '';
         const payload = {
@@ -247,6 +343,17 @@ export async function renderForumArchive(env) {
           msg.textContent = e.message || 'Failed to submit';
         }
       });
+
+      if (search && list) {
+        search.addEventListener('input', () => {
+          const q = search.value.trim().toLowerCase();
+          const cards = list.querySelectorAll('.topic-card');
+          cards.forEach(c => {
+            const hay = (c.getAttribute('data-search') || '').toLowerCase();
+            c.style.display = !q || hay.includes(q) ? '' : 'none';
+          });
+        });
+      }
     </script>
   </body>
   </html>`;
@@ -281,6 +388,21 @@ export async function renderForumTopic(env, slug) {
     </div>`;
   }).join('');
 
+  const latest = await env.DB.prepare(
+    `SELECT slug, title, created_at
+     FROM forum_topics
+     WHERE status = 'approved'
+     ORDER BY created_at DESC
+     LIMIT 6`
+  ).all();
+  const latestItems = (latest.results || []).map(t => {
+    const d = t.created_at ? new Date(t.created_at).toLocaleDateString() : '';
+    return `<a class="side-link" href="/forum/${encodeURIComponent(t.slug)}">
+      <div class="side-title">${escapeHtml(t.title || t.slug)}</div>
+      <div class="side-date">${escapeHtml(d)}</div>
+    </a>`;
+  }).join('');
+
   const html = `<!doctype html>
   <html lang="en">
   <head>
@@ -288,46 +410,94 @@ export async function renderForumTopic(env, slug) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(topic.title || topic.slug)}</title>
     <style>
-      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#111827;margin:0}
-      .wrap{max-width:900px;margin:0 auto;padding:28px 18px}
+      :root{
+        --bg:#0b0f19;
+        --card:#0f172a;
+        --ink:#f8fafc;
+        --muted:#94a3b8;
+        --accent:#f97316;
+        --accent-2:#22d3ee;
+        --border:rgba(148,163,184,0.25);
+      }
+      *{box-sizing:border-box}
+      body{
+        font-family:'Sora',system-ui,-apple-system,sans-serif;
+        background:
+          radial-gradient(900px 500px at 10% -10%, rgba(34,211,238,0.18), transparent 60%),
+          radial-gradient(900px 500px at 90% -10%, rgba(249,115,22,0.2), transparent 60%),
+          var(--bg);
+        color:var(--ink);
+        margin:0;
+      }
+      .wrap{max-width:1200px;margin:0 auto;padding:40px 20px}
       a{color:inherit}
-      .back{display:inline-block;margin-bottom:16px;color:#6b7280;text-decoration:none}
+      .back{display:inline-block;margin-bottom:16px;color:var(--muted);text-decoration:none}
       .back:hover{text-decoration:underline}
-      .card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px}
-      .meta{color:#6b7280;font-size:13px;margin-top:6px}
-      .reply{border-top:1px solid #e5e7eb;padding:12px 0}
+      .layout{display:grid;grid-template-columns:1.3fr 0.7fr;gap:24px;align-items:start}
+      .card{
+        background:rgba(15,23,42,0.85);border:1px solid var(--border);border-radius:18px;padding:18px;margin-bottom:16px;
+        box-shadow:0 10px 30px rgba(2,6,23,0.35);
+      }
+      .meta{color:var(--muted);font-size:13px;margin-top:6px}
+      .reply{border-top:1px solid var(--border);padding:12px 0}
       .reply:first-child{border-top:0}
-      .form{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-top:16px}
-      label{display:block;font-weight:600;margin-bottom:6px}
-      input, textarea{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-family:inherit}
+      .form{border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:16px;background:rgba(2,6,23,0.5)}
+      label{display:block;font-weight:600;margin-bottom:6px;color:#e2e8f0}
+      input, textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;font-family:inherit;background:rgba(15,23,42,0.8);color:var(--ink)}
       textarea{min-height:120px;resize:vertical}
-      .btn{padding:10px 16px;border:0;border-radius:8px;background:#111827;color:#fff;font-weight:600;cursor:pointer}
+      .btn{padding:10px 16px;border:0;border-radius:10px;background:linear-gradient(135deg,var(--accent),#fb7185);color:#0b0f19;font-weight:700;cursor:pointer}
       .msg{margin-top:10px;font-size:14px}
-      h1{margin:0 0 6px;font-size:26px}
+      h1{margin:0 0 6px;font-size:28px}
+      .side{
+        background:rgba(15,23,42,0.85);border:1px solid var(--border);border-radius:18px;padding:18px 18px;
+        position:sticky;top:20px;box-shadow:0 10px 30px rgba(2,6,23,0.35);
+      }
+      .side h3{margin:0 0 12px;font-size:18px}
+      .side-links{display:flex;flex-direction:column;gap:12px}
+      .side-link{text-decoration:none;border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:block;background:rgba(2,6,23,0.3)}
+      .side-title{font-weight:600;color:var(--ink);font-size:14px}
+      .side-date{color:var(--muted);font-size:12px;margin-top:4px}
+      @media (max-width: 900px){
+        .layout{grid-template-columns:1fr}
+        .side{position:static}
+      }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div class="wrap">
       <a class="back" href="/forum">← Back to Forum</a>
-      <div class="card">
-        <h1>${escapeHtml(topic.title || topic.slug)}</h1>
-        <div class="meta">By ${escapeHtml(topic.author_name || 'Anonymous')} • ${escapeHtml(topic.created_at ? new Date(topic.created_at).toLocaleDateString() : '')}</div>
-        <div style="margin-top:12px">${toParagraphs(topic.body || '')}</div>
-      </div>
-      <div class="card">
-        <h2 style="margin:0 0 12px;font-size:20px">Replies</h2>
-        ${items || '<div style="color:#6b7280">No replies yet.</div>'}
-      </div>
-      <div class="form">
-        <h2 style="margin:0 0 12px;font-size:20px">Reply</h2>
-        <label>Name</label>
-        <input id="reply-name" type="text" placeholder="Your name" />
-        <label style="margin-top:10px">Email</label>
-        <input id="reply-email" type="email" placeholder="you@example.com" />
-        <label style="margin-top:10px">Body</label>
-        <textarea id="reply-body" placeholder="Write your reply..."></textarea>
-        <button class="btn" id="reply-submit" type="button" style="margin-top:12px">Submit for approval</button>
-        <div class="msg" id="reply-msg"></div>
+      <div class="layout">
+        <div>
+          <div class="card">
+            <h1>${escapeHtml(topic.title || topic.slug)}</h1>
+            <div class="meta">By ${escapeHtml(topic.author_name || 'Anonymous')} • ${escapeHtml(topic.created_at ? new Date(topic.created_at).toLocaleDateString() : '')}</div>
+            <div style="margin-top:12px">${toParagraphs(topic.body || '')}</div>
+          </div>
+          <div class="card">
+            <h2 style="margin:0 0 12px;font-size:20px">Replies</h2>
+            ${items || '<div style="color:#94a3b8">No replies yet.</div>'}
+          </div>
+          <div class="form">
+            <h2 style="margin:0 0 12px;font-size:20px">Reply</h2>
+            <label>Name</label>
+            <input id="reply-name" type="text" placeholder="Your name" />
+            <label style="margin-top:10px">Email</label>
+            <input id="reply-email" type="email" placeholder="you@example.com" />
+            <label style="margin-top:10px">Body</label>
+            <textarea id="reply-body" placeholder="Write your reply..."></textarea>
+            <button class="btn" id="reply-submit" type="button" style="margin-top:12px">Submit for approval</button>
+            <div class="msg" id="reply-msg"></div>
+          </div>
+        </div>
+        <aside class="side">
+          <h3>Latest discussions</h3>
+          <div class="side-links">${latestItems || '<div style="color:#94a3b8">No topics yet.</div>'}</div>
+          <div class="card" style="margin-top:14px;">
+            <strong>Ask better questions</strong>
+            <div style="margin-top:8px;color:#94a3b8;font-size:13px">Share context • Be specific • Stay kind</div>
+          </div>
+        </aside>
       </div>
     </div>
     <script>
