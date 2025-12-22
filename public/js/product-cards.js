@@ -107,9 +107,9 @@
       const deliveryText = this.getDeliveryText(normal_delivery_text);
       const deliveryIcon = this.getDeliveryIcon(normal_delivery_text);
 
-      // Rating stars
+      // Rating text
       const rating = parseFloat(average_rating || 5);
-      const stars = this.renderStars(rating);
+      const ratingText = this.formatRatingText(rating, review_count);
 
       const priceHtml = `
         <div class="product-prices">
@@ -119,8 +119,7 @@
       `;
       const reviewHtml = `
         <div class="product-reviews">
-          ${stars}
-          <span class="review-count">(${review_count || 0})</span>
+          <span class="rating-text">${ratingText}</span>
         </div>
       `;
       const deliveryHtml = `
@@ -186,6 +185,41 @@
       if (text.includes('instant') || text.includes('60')) return '⚡';
       if (text.includes('24') || text.includes('1 day')) return '🚀';
       return '📦';
+    },
+
+    getDeliveryText: function(deliveryText) {
+      if (!deliveryText) return 'Instant Delivery In 60 Minutes';
+
+      const text = String(deliveryText).toLowerCase();
+      const minutesMatch = text.match(/\\d+/);
+      const minutes = minutesMatch ? parseInt(minutesMatch[0], 10) : null;
+
+      if (text.includes('instant') || minutes === 60 || minutes === 1) {
+        return 'Instant Delivery In 60 Minutes';
+      }
+      if (text.includes('24') || text.includes('1 day') || text.includes('24 hours') || text.includes('express')) {
+        return '24 Hours Express Delivery';
+      }
+      if (text.includes('48') || text.includes('2 day') || text.includes('2 days')) {
+        return '2 Days Delivery';
+      }
+      if (text.includes('3 day') || text.includes('3 days') || text.includes('72')) {
+        return '3 Days Delivery';
+      }
+      return deliveryText;
+    },
+
+    getDeliveryIcon: function(deliveryText) {
+      const text = (deliveryText || '').toLowerCase();
+      if (text.includes('instant') || text.includes('60') || text.includes('1 day')) return '⚡';
+      if (text.includes('24') || text.includes('express')) return '⏱';
+      return '⏳';
+    },
+
+    formatRatingText: function(rating, count) {
+      const safeRating = Number.isFinite(rating) ? rating : 5;
+      const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
+      return `*${safeRating.toFixed(1)}(${safeCount})`;
     },
 
     // Render rating stars
@@ -314,6 +348,11 @@
           display: flex;
           align-items: center;
           gap: 4px;
+          color: #111827;
+          font-weight: 600;
+        }
+        .rating-text {
+          letter-spacing: 0.2px;
         }
 
         .rating-stars {

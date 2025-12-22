@@ -88,6 +88,63 @@
         </a>
       `;
     }
+    function getDeliveryLabelOverride(product) {
+      const raw = (product.normal_delivery_text || '').toString();
+      const text = raw.toLowerCase();
+      const minutesMatch = text.match(/\d+/);
+      const minutes = minutesMatch ? parseInt(minutesMatch[0], 10) : null;
+
+      if (product.instant_delivery || text.includes('instant') || minutes === 60 || minutes === 1) {
+        return 'Instant Delivery In 60 Minutes';
+      }
+      if (text.includes('24') || text.includes('1 day') || text.includes('24 hours') || text.includes('express')) {
+        return '24 Hours Express Delivery';
+      }
+      if (text.includes('48') || text.includes('2 day') || text.includes('2 days')) {
+        return '2 Days Delivery';
+      }
+      if (text.includes('3 day') || text.includes('3 days') || text.includes('72')) {
+        return '3 Days Delivery';
+      }
+      return raw || 'Instant Delivery In 60 Minutes';
+    }
+
+    createProductCard = function(product) {
+      const price = product.sale_price || product.normal_price || 0;
+      const hasDiscount = product.sale_price && product.normal_price > product.sale_price;
+      const rating = Number.isFinite(Number(product.rating_average)) ? Number(product.rating_average) : 5;
+      const reviewCount = Number.isFinite(Number(product.review_count)) ? Number(product.review_count) : 0;
+      const deliveryLabel = getDeliveryLabelOverride(product);
+
+      return `
+        <a class="product-card" href="/product?id=${product.id}">
+          <div class="product-thumbnail">
+            ${product.thumbnail_url ? 
+              `<img src="${product.thumbnail_url}" alt="${product.title}">` : 
+              `<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2em;">dYZª</div>`
+            }
+            ${product.video_url ? '<div class="play-overlay">ƒ-</div>' : ''}
+          </div>
+          <div class="product-info">
+            <div class="product-title">${product.title || 'Product'}</div>
+            <div class="product-price-row">
+              <div>
+                <span class="product-price">$${price}</span>
+                ${hasDiscount ? `<span class="product-sale">$${product.normal_price}</span>` : ''}
+              </div>
+            </div>
+            <div class="product-meta">
+              <div class="product-reviews">
+                <span>*${rating.toFixed(1)}(${reviewCount})</span>
+              </div>
+              <div class="delivery-time">${deliveryLabel}</div>
+            </div>
+            <span class="buy-btn">Book Now</span>
+          </div>
+        </a>
+      `;
+    }
+
 loadProducts();
   </script>
 </body>
