@@ -6,6 +6,7 @@ import { json } from '../utils/response.js';
 import { escapeHtml, normalizeQuickAction } from '../utils/formatting.js';
 import { enforceUserRateLimit } from '../utils/validation.js';
 import { getLatestOrderForEmail } from '../utils/order-helpers.js';
+import { getGoogleScriptUrl } from '../config/secrets.js';
 
 /**
  * Start a new chat session or reuse existing one
@@ -175,17 +176,14 @@ export async function sendMessage(env, body, reqUrl) {
   // Trigger email alert webhook on first customer message
   if (isFirstUserMessage) {
     try {
-      const setting = await env.DB.prepare(
-        `SELECT value FROM settings WHERE key = ?`
-      ).bind('GOOGLE_SCRIPT_URL').first();
-
-      const scriptUrl = String(setting?.value || '').trim();
+      const scriptUrl = await getGoogleScriptUrl(env);
 
       if (scriptUrl) {
         const session = await env.DB.prepare(
           `SELECT id, name, email, created_at FROM chat_sessions WHERE id = ?`
         ).bind(sessionId).first();
 
+        const origin = reqUrl ? new URL(reqUrl).origin : null;
         await fetch(scriptUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -195,7 +193,8 @@ export async function sendMessage(env, body, reqUrl) {
             name: session?.name || null,
             email: session?.email || null,
             created_at: session?.created_at || null,
-            message: trimmed
+            message: trimmed,
+            origin
           })
         });
       }
