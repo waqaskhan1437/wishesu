@@ -205,6 +205,240 @@
     after a deployment.
   -->
   <script>
+    // INLINE COMPREHENSIVE DEBUG - Shows immediately on page load!
+    (function() {
+      const EXPECTED_VERSION = '1766444251';
+      const debugLog = [];
+
+      // Create visible debug console IMMEDIATELY
+      const debugDiv = document.createElement('div');
+      debugDiv.id = 'instant-debug';
+      debugDiv.style.cssText = 'position:fixed;top:60px;right:10px;width:450px;max-height:85vh;background:#000;color:#0f0;border:3px solid #0f0;font-family:monospace;font-size:11px;z-index:999999;overflow-y:auto;padding:10px;box-shadow:0 0 20px rgba(0,255,0,0.5);';
+      debugDiv.innerHTML = '<div style="font-size:14px;font-weight:bold;margin-bottom:10px;color:#0f0;">🚀 INSTANT DEBUG - Loading...</div><div id="debug-lines"></div>';
+      document.documentElement.appendChild(debugDiv);
+
+      const debugLines = debugDiv.querySelector('#debug-lines');
+
+      function log(msg, status = 'info') {
+        const colors = {
+          info: '#0ff',
+          success: '#0f0',
+          error: '#f00',
+          warn: '#ff0'
+        };
+        const icons = {
+          info: 'ℹ️',
+          success: '✅',
+          error: '❌',
+          warn: '⚠️'
+        };
+        const time = new Date().toLocaleTimeString();
+        const line = `<div style="color:${colors[status]};padding:3px 0;border-bottom:1px solid #111;">${icons[status]} [${time}] ${msg}</div>`;
+        debugLines.innerHTML = line + debugLines.innerHTML;
+        debugLog.push({ time, msg, status });
+        console.log(`[INSTANT DEBUG ${status.toUpperCase()}]`, msg);
+      }
+
+      log('🚀 Instant Debug Started', 'success');
+      log(`📍 URL: ${window.location.pathname}`, 'info');
+      log(`🎯 Expected Version: ${EXPECTED_VERSION}`, 'info');
+
+      // Check 1: HTML Meta Version
+      const meta = document.querySelector('meta[name="build-version"]');
+      if (meta) {
+        const htmlVersion = meta.getAttribute('content');
+        log(`📄 HTML Version: ${htmlVersion}`, htmlVersion === EXPECTED_VERSION ? 'success' : 'error');
+        if (htmlVersion !== EXPECTED_VERSION) {
+          log(`❌ HTML VERSION MISMATCH! Expected ${EXPECTED_VERSION}`, 'error');
+          log(`💡 SOLUTION: HTML file is OLD/CACHED!`, 'warn');
+        }
+      } else {
+        log('⚠️ No build-version meta tag found', 'warn');
+      }
+
+      // Check 2: All Scripts
+      setTimeout(() => {
+        const allScripts = Array.from(document.querySelectorAll('script[src]'));
+        log(`📦 Total Scripts: ${allScripts.length}`, 'info');
+
+        const oldScripts = [];
+        const newScripts = [];
+        const noVersionScripts = [];
+
+        allScripts.forEach((script, i) => {
+          const src = script.getAttribute('src');
+          const versionMatch = src.match(/v=(\d+)/);
+
+          if (!versionMatch) {
+            noVersionScripts.push(src);
+            log(`⚠️ Script ${i + 1}: NO VERSION - ${src}`, 'warn');
+          } else {
+            const version = versionMatch[1];
+            if (version === EXPECTED_VERSION) {
+              newScripts.push(src);
+              log(`✅ Script ${i + 1}: NEW (v=${version}) - ${src.split('/').pop()}`, 'success');
+            } else {
+              oldScripts.push({ src, version });
+              log(`❌ Script ${i + 1}: OLD (v=${version}) - ${src}`, 'error');
+              log(`   🚨 EXPECTED v=${EXPECTED_VERSION}, GOT v=${version}`, 'error');
+            }
+          }
+        });
+
+        // Summary
+        log(`📊 SCRIPTS SUMMARY:`, 'info');
+        log(`   ✅ NEW: ${newScripts.length}`, 'success');
+        log(`   ⚠️ NO VERSION: ${noVersionScripts.length}`, 'warn');
+        log(`   ❌ OLD: ${oldScripts.length}`, oldScripts.length > 0 ? 'error' : 'success');
+
+        if (oldScripts.length > 0) {
+          log(`🚨 OLD FILES DETECTED! Cache not cleared!`, 'error');
+          oldScripts.forEach(s => {
+            log(`   → ${s.src} (v=${s.version})`, 'error');
+          });
+        }
+
+        if (noVersionScripts.length > 0) {
+          log(`⚠️ UNVERSIONED FILES:`, 'warn');
+          noVersionScripts.forEach(s => {
+            log(`   → ${s}`, 'warn');
+          });
+        }
+
+      }, 500);
+
+      // Check 3: ES6 Module Scripts
+      setTimeout(() => {
+        const moduleScripts = Array.from(document.querySelectorAll('script[type="module"]'));
+        log(`📜 ES6 Module Scripts: ${moduleScripts.length}`, moduleScripts.length > 0 ? 'success' : 'error');
+
+        if (moduleScripts.length === 0) {
+          log(`❌ NO ES6 MODULES FOUND!`, 'error');
+          log(`💡 AdminApp won't load without module script!`, 'error');
+        } else {
+          moduleScripts.forEach((script, i) => {
+            if (script.src) {
+              log(`   📜 Module ${i + 1}: ${script.src}`, 'success');
+            } else {
+              const content = script.textContent.substring(0, 80).trim();
+              log(`   📜 Module ${i + 1}: Inline (${content}...)`, 'success');
+
+              // Check if it imports AdminApp
+              if (content.includes('AdminApp')) {
+                log(`   ✅ Found AdminApp import!`, 'success');
+              }
+            }
+          });
+        }
+      }, 800);
+
+      // Check 4: Tab Elements
+      setTimeout(() => {
+        const tabs = document.querySelectorAll('.menu-item');
+        log(`🖱️ Tab Elements: ${tabs.length} found`, tabs.length > 0 ? 'success' : 'error');
+
+        if (tabs.length === 0) {
+          log(`❌ NO TAB ELEMENTS! Dashboard HTML structure missing!`, 'error');
+        } else {
+          tabs.forEach((tab, i) => {
+            const viewName = tab.getAttribute('data-view') || tab.textContent.trim();
+            const hasOnclick = tab.onclick !== null;
+            const hasListener = tab.addEventListener !== undefined;
+
+            log(`   Tab ${i + 1}: "${viewName}" - onclick=${hasOnclick}`, hasOnclick ? 'success' : 'warn');
+
+            if (!hasOnclick) {
+              log(`   ⚠️ Tab "${viewName}" has NO onclick handler!`, 'warn');
+            }
+          });
+        }
+      }, 1200);
+
+      // Check 5: AdminApp Initialization
+      setTimeout(() => {
+        const appExists = typeof AdminApp !== 'undefined' || window.AdminApp;
+        log(`⚙️ AdminApp: ${appExists ? 'EXISTS' : 'NOT FOUND'}`, appExists ? 'success' : 'error');
+
+        if (!appExists) {
+          log(`❌ CRITICAL: AdminApp class NOT loaded!`, 'error');
+          log(`💡 This is why tabs don't work!`, 'error');
+          log(`💡 Check if /js/admin/app.js loaded correctly`, 'error');
+          log(`💡 Check browser console for import errors`, 'error');
+        } else {
+          log(`✅ AdminApp loaded successfully!`, 'success');
+
+          // Check if app initialized
+          if (window.AdminApp && window.AdminApp.init) {
+            log(`✅ AdminApp has init method`, 'success');
+          }
+        }
+      }, 1500);
+
+      // Check 6: Server Version
+      setTimeout(async () => {
+        try {
+          log(`🌐 Checking server version...`, 'info');
+          const resp = await fetch('/api/debug?_=' + Date.now());
+          const data = await resp.json();
+          const serverVersion = data.version;
+
+          log(`🌐 Server Version: ${serverVersion}`, serverVersion === EXPECTED_VERSION ? 'success' : 'error');
+
+          if (serverVersion !== EXPECTED_VERSION) {
+            log(`❌ SERVER VERSION MISMATCH!`, 'error');
+            log(`   Expected: ${EXPECTED_VERSION}`, 'error');
+            log(`   Got: ${serverVersion}`, 'error');
+            log(`💡 SOLUTION: Redeploy with correct version`, 'warn');
+          }
+        } catch (error) {
+          log(`❌ Server check failed: ${error.message}`, 'error');
+        }
+      }, 2000);
+
+      // Check 7: Main Panel
+      setTimeout(() => {
+        const mainPanel = document.getElementById('main-panel');
+        log(`📦 main-panel: ${mainPanel ? 'FOUND' : 'NOT FOUND'}`, mainPanel ? 'success' : 'error');
+
+        if (!mainPanel) {
+          log(`❌ main-panel missing! Views won't load!`, 'error');
+        }
+      }, 1000);
+
+      // Check 8: Sidebar
+      setTimeout(() => {
+        const sidebar = document.querySelector('.sidebar');
+        log(`📦 sidebar: ${sidebar ? 'FOUND' : 'NOT FOUND'}`, sidebar ? 'success' : 'error');
+      }, 1000);
+
+      // Final Summary after 3 seconds
+      setTimeout(() => {
+        log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+        log(`📊 DIAGNOSTIC COMPLETE`, 'success');
+        log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'info');
+
+        // Count issues
+        const errors = debugLog.filter(l => l.status === 'error').length;
+        const warnings = debugLog.filter(l => l.status === 'warn').length;
+        const success = debugLog.filter(l => l.status === 'success').length;
+
+        log(`Results: ✅ ${success} | ⚠️ ${warnings} | ❌ ${errors}`, errors > 0 ? 'error' : warnings > 0 ? 'warn' : 'success');
+
+        if (errors > 0) {
+          log(`🚨 ${errors} ERRORS FOUND! Check red messages above!`, 'error');
+        }
+        if (warnings > 0) {
+          log(`⚠️ ${warnings} WARNINGS! Check yellow messages above!`, 'warn');
+        }
+        if (errors === 0 && warnings === 0) {
+          log(`🎉 Everything looks perfect!`, 'success');
+        }
+      }, 3000);
+
+    })();
+  </script>
+
+  <script>
     (async function() {
       try {
         const meta = document.querySelector('meta[name="build-version"]');
