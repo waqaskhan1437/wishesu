@@ -90,6 +90,7 @@
         normal_price,
         sale_price,
         normal_delivery_text,
+        instant_delivery,
         average_rating,
         review_count
       } = product;
@@ -104,7 +105,7 @@
       const discount = hasDiscount ? Math.round((1 - salePrice / originalPrice) * 100) : 0;
 
       // Delivery text
-      const deliveryText = this.getDeliveryText(normal_delivery_text);
+      const deliveryText = this.getDeliveryText(normal_delivery_text, !!instant_delivery);
       const deliveryIcon = this.getDeliveryIcon(normal_delivery_text);
 
       // Rating text
@@ -124,7 +125,7 @@
       `;
       const deliveryHtml = `
         <div class="product-delivery">
-          <span class="delivery-icon">${deliveryIcon}</span>
+          ${deliveryIcon ? `<span class="delivery-icon">${deliveryIcon}</span>` : ''}
           <span class="delivery-text">${deliveryText}</span>
         </div>
       `;
@@ -159,32 +160,31 @@
       `;
     },
 
-    getDeliveryText: function(deliveryText) {
-      if (!deliveryText) return 'Instant Delivery In 60 Minutes';
+    getDeliveryText: function(deliveryText, instant) {
+      if (instant) return 'Instant Delivery In 60 Minutes';
+      if (!deliveryText) return '2 Days Delivery';
 
       const text = String(deliveryText).toLowerCase();
-      const minutesMatch = text.match(/\d+/);
-      const minutes = minutesMatch ? parseInt(minutesMatch[0], 10) : null;
-
-      if (text.includes('instant') || minutes === 60 || minutes === 1) {
-        return 'Instant Delivery In 60 Minutes';
-      }
-      if (text.includes('24') || text.includes('1 day') || text.includes('24 hours') || text.includes('express')) {
+      if (text.includes('24') || text.includes('1 day') || text.includes('24 hour')) {
         return '24 Hours Express Delivery';
       }
-      if (text.includes('48') || text.includes('2 day') || text.includes('2 days')) {
+      if (text.includes('48') || text.includes('2 day')) {
         return '2 Days Delivery';
       }
-      if (text.includes('3 day') || text.includes('3 days') || text.includes('72')) {
+      if (text.includes('72') || text.includes('3 day')) {
         return '3 Days Delivery';
       }
-      return deliveryText;
+
+      const match = text.match(/\d+/);
+      if (!match) return '2 Days Delivery';
+      const days = parseInt(match[0], 10);
+      if (!Number.isFinite(days) || days <= 0) return '2 Days Delivery';
+      if (days === 1) return '24 Hours Express Delivery';
+      return `${days} Days Delivery`;
     },
 
     getDeliveryIcon: function(deliveryText) {
       const text = (deliveryText || '').toLowerCase();
-      if (text.includes('instant') || text.includes('60') || text.includes('1 day')) return 'FAST';
-      if (text.includes('24') || text.includes('express')) return '24H';
       return '';
     },
 

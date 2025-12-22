@@ -322,23 +322,33 @@
     const badgeRow = document.createElement('div');
     badgeRow.className = 'badges-row';
 
+    const parseDeliveryDays = (value) => {
+      const raw = (value || '').toString().toLowerCase();
+      if (!raw) return '';
+      if (raw.includes('instant') || raw.includes('60')) return '';
+      if (raw.includes('24') || raw.includes('1 day') || raw.includes('24 hour')) return '1';
+      if (raw.includes('48') || raw.includes('2 day')) return '2';
+      if (raw.includes('72') || raw.includes('3 day')) return '3';
+      const match = raw.match(/\d+/);
+      if (!match) return '';
+      const num = parseInt(match[0], 10);
+      return Number.isFinite(num) && num > 0 ? String(num) : '';
+    };
+
+    const formatDeliveryLabel = (value, instant) => {
+      if (instant) return 'Instant Delivery In 60 Minutes';
+      const days = parseInt(parseDeliveryDays(value || ''), 10);
+      if (!Number.isFinite(days) || days <= 0) return '2 Days Delivery';
+      if (days === 1) return '24 Hours Express Delivery';
+      return `${days} Days Delivery`;
+    };
+
     const computeDeliveryBadge = (label) => {
       const raw = (label || '').toString();
       const v = raw.toLowerCase();
-
-      if (v.includes('instant') || v.includes('60') || v.includes('1 hour')) {
-        return { icon: '⚡', text: raw || 'Instant Delivery In 60 Minutes' };
-      }
-      if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) {
-        return { icon: '🚀', text: raw || '24 Hours Express Delivery' };
-      }
-      if (v.includes('48') || v.includes('2 day')) {
-        return { icon: '📦', text: raw || '2 Days Delivery' };
-      }
-      if (v.includes('3 day') || v.includes('72')) {
-        return { icon: '📅', text: raw || '3 Days Delivery' };
-      }
-      return { icon: '🚚', text: raw || '2 Days Delivery' };
+      const isInstant = v.includes('instant') || v.includes('60');
+      const text = formatDeliveryLabel(raw, isInstant);
+      return { icon: isInstant ? 'fs�' : 'dYss', text };
     };
 
     const setDeliveryBadge = (label) => {
@@ -363,12 +373,8 @@
     }
 
     if (!initialDeliveryLabel) {
-      const normText = (product.normal_delivery_text || '').toLowerCase();
-      if (product.instant_delivery) initialDeliveryLabel = 'Instant Delivery In 60 Minutes';
-      else if (normText.includes('1 day') || normText.includes('24 hour')) initialDeliveryLabel = '24 Hours Express Delivery';
-      else if (normText.includes('48') || normText.includes('2 day')) initialDeliveryLabel = '2 Days Delivery';
-      else if (normText.includes('3 day') || normText.includes('72')) initialDeliveryLabel = '3 Days Delivery';
-      else initialDeliveryLabel = product.normal_delivery_text || '2 Days Delivery';
+      if (product.instant_delivery) initialDeliveryLabel = 'instant';
+      else initialDeliveryLabel = product.normal_delivery_text || '';
     }
 
     setDeliveryBadge(initialDeliveryLabel);
@@ -472,3 +478,4 @@
   }
   window.renderProductMain = renderProductMain;
 })();
+

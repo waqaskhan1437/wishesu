@@ -316,7 +316,30 @@ function setupGalleryField(form){
     }
   });
 }
+
+function parseDeliveryDays(value){
+  if (value === null || value === undefined) return '';
+  const raw = String(value).toLowerCase();
+  if (!raw) return '';
+  if (raw.includes('instant') || raw.includes('60')) return '';
+  if (raw.includes('24') || raw.includes('1 day') || raw.includes('24 hour')) return '1';
+  if (raw.includes('48') || raw.includes('2 day')) return '2';
+  if (raw.includes('72') || raw.includes('3 day')) return '3';
+  const match = raw.match(/\d+/);
+  if (!match) return '';
+  const num = parseInt(match[0], 10);
+  return Number.isFinite(num) && num > 0 ? String(num) : '';
+}
+
+function formatDeliveryLabel(days, instant){
+  if (instant) return 'Instant Delivery In 60 Minutes';
+  const n = parseInt(days || '', 10);
+  if (!Number.isFinite(n) || n <= 0) return '2 Days Delivery';
+  if (n === 1) return '24 Hours Express Delivery';
+  return `${n} Days Delivery`;
+}
 function collectBase(form){
+  const days = parseDeliveryDays(form.normal_delivery_text.value);
   return {
     title: form.title.value.trim(),
     slug: form.slug.value.trim(),
@@ -324,7 +347,7 @@ function collectBase(form){
     normal_price: parseFloat(form.normal_price.value) || 0,
     sale_price: form.sale_price.value ? parseFloat(form.sale_price.value) : null,
     instant_delivery: form.instant_delivery.checked ? 1 : 0,
-    normal_delivery_text: form.normal_delivery_text.value.trim(),
+    normal_delivery_text: days,
     whop_plan: form.whop_plan ? form.whop_plan.value.trim() : '',
     whop_price_map: form.whop_price_map ? form.whop_price_map.value.trim() : ''
   };
@@ -357,7 +380,7 @@ function fillBaseFields(form, product){
   form.normal_price.value = product.normal_price || '';
   form.sale_price.value = product.sale_price || '';
   form.instant_delivery.checked = !!product.instant_delivery;
-  form.normal_delivery_text.value = product.normal_delivery_text || '';
+  form.normal_delivery_text.value = parseDeliveryDays(product.normal_delivery_text || '');
   if(product.thumbnail_url) form.thumbnail_url.value = product.thumbnail_url;
   if(product.video_url) form.video_url.value = product.video_url;
   if (form.whop_plan && product.whop_plan) form.whop_plan.value = product.whop_plan;
@@ -427,7 +450,7 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     if (instant) {
       normalDeliveryTextInput.value = '';
     } else {
-      normalDeliveryTextInput.value = text || label;
+      normalDeliveryTextInput.value = parseDeliveryDays(text || label);
     }
     syncing = false;
   };
@@ -450,14 +473,15 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     if (!rows.length) return;
 
     const wantInstant = !!instantDeliveryInput.checked;
-    const wantText = (normalDeliveryTextInput.value || '').trim().toLowerCase();
+    const wantDays = parseDeliveryDays(normalDeliveryTextInput.value);
 
     const getRowMeta = (row) => {
       const hasDelivery = !!row.querySelector('.addon-opt-delivery')?.checked;
       const rowInstant = !!row.querySelector('.addon-opt-delivery-instant')?.checked;
       const rowText = (row.querySelector('.addon-opt-delivery-text')?.value || '').trim().toLowerCase();
       const rowLabel = (row.querySelector('.addon-opt-label')?.value || '').trim().toLowerCase();
-      return { hasDelivery, rowInstant, rowText, rowLabel };
+      const rowDays = parseDeliveryDays(rowText || rowLabel);
+      return { hasDelivery, rowInstant, rowText, rowLabel, rowDays };
     };
 
     let targetRow = null;
@@ -470,13 +494,13 @@ function initDeliveryTimeAddonSync(form, opts = {}){
       });
     } else {
       targetRow = rows.find(r => {
-        const { hasDelivery, rowInstant, rowText, rowLabel } = getRowMeta(r);
+        const { hasDelivery, rowInstant, rowDays, rowLabel } = getRowMeta(r);
         if (hasDelivery) {
           if (rowInstant) return false;
-          if (wantText) return rowText === wantText || rowLabel === wantText;
+          if (wantDays) return rowDays === wantDays;
           return true;
         }
-        if (wantText) return rowLabel === wantText;
+        if (wantDays) return rowDays === wantDays;
         return !(rowLabel.includes('instant') || rowLabel.includes('60'));
       });
     }
@@ -523,13 +547,13 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     const text = dataset.deliveryText || '';
     
     instantDeliveryInput.checked = instant;
-    normalDeliveryTextInput.value = instant ? '' : text;
+    normalDeliveryTextInput.value = instant ? '' : parseDeliveryDays(text);
     
     syncing = false;
     
     // Update delivery badge on product page
     if (typeof window.updateDeliveryBadge === 'function') {
-      const badgeText = instant ? 'Instant Delivery In 60 Minutes' : (text || '2 Days Delivery');
+      const badgeText = formatDeliveryLabel(parseDeliveryDays(text), instant);
       window.updateDeliveryBadge(badgeText);
     }
   };
