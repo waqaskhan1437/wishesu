@@ -22,8 +22,15 @@
   <script src="/src/utils/delivery-time.js?v=21"></script>
   <script src="js/product-cards.js?v=21"></script>
   <script>
-    // Use the shared ProductCards renderer so design stays consistent
-    ProductCards.render('product-list', { filter: 'all', columns: 3, limit: 12 });
+    // Products Grid: Show ALL products WITH "Book Now" button (full catalog)
+    ProductCards.render('product-list', {
+      filter: 'all',
+      columns: 3,
+      limit: 100,           // Show all products
+      showReviews: true,
+      showDelivery: true,
+      showButton: true      // Grid page has button - complete product display
+    });
   </script>
 </body>
 </html>

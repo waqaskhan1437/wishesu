@@ -19,7 +19,8 @@
         columns = 3,           // Cards per row
         ids = [],              // array of product IDs or slugs to include (optional)
         showReviews = true,    // show rating stars and count
-        showDelivery = true    // show delivery information
+        showDelivery = true,   // show delivery information
+        showButton = true      // show "Book Now" button
       } = options;
 
       // Fetch products
@@ -69,7 +70,7 @@
           max-width: 1200px;
           margin: 0 auto;
         ">
-          ${products.map(p => this.renderCard(p, { showReviews, showDelivery })).join('')}
+          ${products.map(p => this.renderCard(p, { showReviews, showDelivery, showButton })).join('')}
         </div>
       `;
 
@@ -81,7 +82,7 @@
 
     // Render single card
     renderCard: function(product, opts = {}) {
-      const { showReviews = true, showDelivery = true } = opts;
+      const { showReviews = true, showDelivery = true, showButton = true } = opts;
       const {
         id,
         title,
@@ -151,10 +152,8 @@
             <!-- Delivery Info -->
             ${showDelivery ? deliveryHtml : ''}
 
-            <!-- Book Now Button -->
-            <span class="book-now-btn">
-              Book Now
-            </span>
+            <!-- Book Now Button (optional) -->
+            ${showButton ? '<span class="book-now-btn">Book Now</span>' : ''}
           </div>
         </a>
       `;

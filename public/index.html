@@ -19,14 +19,20 @@
     <div id="product-list"></div>
   </div>
 
-  <script src="js/api.js?v=21"></script>
   <!-- Load centralized delivery time utility first -->
   <script src="/src/utils/delivery-time.js?v=21"></script>
   <!-- Load the reusable product cards component -->
   <script src="js/product-cards.js?v=21"></script>
   <script>
-    // Use the shared ProductCards renderer so design stays consistent
-    ProductCards.render('product-list', { filter: 'all', columns: 3, limit: 9 });
+    // Homepage: Show featured products WITHOUT "Book Now" button (cleaner design)
+    ProductCards.render('product-list', {
+      filter: 'all',
+      columns: 3,
+      limit: 9,
+      showReviews: true,
+      showDelivery: true,
+      showButton: false  // Homepage has no button - cleaner look
+    });
   </script>
   <script src="js/chat-widget.js?v=21"></script>
 </body>
