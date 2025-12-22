@@ -115,6 +115,23 @@ export async function sendMessage(env, body, reqUrl) {
   const trimmed = rawContent.trim();
   if (!trimmed) return json({ error: 'content is required' }, 400);
 
+  // De-dupe rapid duplicate sends (client retries or double events)
+  try {
+    const last = await env.DB.prepare(
+      `SELECT id, role, content, created_at
+       FROM chat_messages
+       WHERE session_id = ?
+       ORDER BY id DESC
+       LIMIT 1`
+    ).bind(sessionId).first();
+    if (last && String(last.role) === role && String(last.content) === escapeHtml(trimmed)) {
+      const lastTs = new Date(last.created_at).getTime();
+      if (!Number.isNaN(lastTs) && (Date.now() - lastTs) < 10000) {
+        return json({ success: true, messageId: last.id, deduped: true });
+      }
+    }
+  } catch (_) {}
+
   // 500 char limit (backend)
   if (trimmed.length > 500) return json({ error: 'Message too long (max 500 characters)' }, 400);
 

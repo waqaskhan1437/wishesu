@@ -96,6 +96,7 @@
   let pollTimer = null;
 
   let isSending = false;
+  const recentLocal = [];
   let cooldownTimer = null;
 
   function el(tag, attrs = {}, children = []) {
@@ -544,6 +545,8 @@
         lastId = Math.max(lastId, mid);
         seenIds.add(mid);
       }
+      recentLocal.push({ content: escapeText(msg), ts: Date.now() });
+      if (recentLocal.length > 10) recentLocal.shift();
       appendMessage('user', msg, new Date().toISOString());
 
       input.value = '';
@@ -578,6 +581,14 @@
     for (const m of messages) {
       const mid = Number(m.id) || 0;
       if (mid && seenIds.has(mid)) continue;
+      if (m.role === 'user') {
+        const dup = recentLocal.find(r => r.content === String(m.content || '') && (Date.now() - r.ts) < 10000);
+        if (dup) {
+          if (mid) seenIds.add(mid);
+          lastId = Math.max(lastId, mid || lastId);
+          continue;
+        }
+      }
       if (mid) seenIds.add(mid);
       lastId = Math.max(lastId, mid || lastId);
       appendMessage(m.role, m.content, m.created_at);
