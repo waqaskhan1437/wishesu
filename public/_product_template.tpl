@@ -87,22 +87,22 @@
 
   <script src="https://cdn.plyr.io/3.7.8/plyr.js" defer></script>
 
-  <script src="/js/api.js" defer></script>
+  <script src="/js/api.js?v=21" defer></script>
   <!-- Load centralized delivery time utility first -->
-  <script src="/src/utils/delivery-time.js"></script>
-  <script src="/js/universal-player.js" defer></script>
-  <script src="/js/instant-upload.js" defer></script>
+  <script src="/src/utils/delivery-time.js?v=21"></script>
+  <script src="/js/universal-player.js?v=21" defer></script>
+  <script src="/js/instant-upload.js?v=21" defer></script>
   <!-- Whop checkout integration -->
-  <script src="/js/whop/checkout.js" defer></script>
+  <script src="/js/whop/checkout.js?v=21" defer></script>
   <!-- Reviews widget -->
-  <script src="/js/reviews-widget.js" defer></script>
+  <script src="/js/reviews-widget.js?v=21" defer></script>
   <!-- load product modules in dependency order -->
-  <script src="/js/product/addon-ui.js" defer></script>
-  <script src="/js/product/seo-utils.js" defer></script>
-  <script src="/js/product/layout-main.js" defer></script>
-  <script src="/js/product/layout-extra.js" defer></script>
-  <script src="/js/product/checkout.js" defer></script>
-  <script src="/js/product/main.js" defer></script>
-  <script src="/js/chat-widget.js" defer></script>
+  <script src="/js/product/addon-ui.js?v=21" defer></script>
+  <script src="/js/product/seo-utils.js?v=21" defer></script>
+  <script src="/js/product/layout-main.js?v=21" defer></script>
+  <script src="/js/product/layout-extra.js?v=21" defer></script>
+  <script src="/js/product/checkout.js?v=21" defer></script>
+  <script src="/js/product/main.js?v=21" defer></script>
+  <script src="/js/chat-widget.js?v=21" defer></script>
 </body>
 </html>
