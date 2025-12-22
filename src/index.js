@@ -24,6 +24,28 @@ export default {
     }
     const method = req.method;
 
+// Cache toggle:
+// - Set DISABLE_CACHE=1 in your Worker environment to disable all caching (testing mode)
+// - Or add ?nocache=1 / ?_nocache=1 to any URL, or send header X-Bypass-Cache: 1 to bypass cache per request
+const reqCacheControl = (req.headers.get('cache-control') || '').toLowerCase();
+const cacheBypassParam = url.searchParams.get('nocache') === '1' || url.searchParams.get('_nocache') === '1';
+const cacheDisabled =
+  String(env?.DISABLE_CACHE || '') === '1' ||
+  cacheBypassParam ||
+  req.headers.get('x-bypass-cache') === '1' ||
+  reqCacheControl.includes('no-store') ||
+  reqCacheControl.includes('no-cache');
+
+const withNoStore = (resp) => {
+  if (!cacheDisabled || !resp) return resp;
+  const headers = new Headers(resp.headers);
+  headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  headers.set('Pragma', 'no-cache');
+  headers.set('X-Cache', headers.get('X-Cache') || 'BYPASS');
+  headers.set('X-Cache-Disabled', '1');
+  return new Response(resp.body, { status: resp.status, headers });
+};
+
     // Auto-purge cache on version change (only for admin/webhook routes)
     const shouldPurgeCache = path.startsWith('/admin') || path.startsWith('/api/admin/') || path.startsWith('/api/whop/webhook');
     if (shouldPurgeCache) {
@@ -67,14 +89,14 @@ export default {
         }
         if (env.DB) {
           await initDB(env);
-          return renderBlogArchive(env, url.origin);
+          return withNoStore(await renderBlogArchive(env, url.origin));
         }
       }
       if ((method === 'GET' || method === 'HEAD') && path.startsWith('/blog/')) {
         const slug = path.split('/').filter(Boolean)[1];
         if (env.DB) {
           await initDB(env);
-          return renderBlogPost(env, slug);
+          return withNoStore(await renderBlogPost(env, slug));
         }
       }
 
@@ -108,13 +130,13 @@ export default {
       // ----- API ROUTES -----
       if (path.startsWith('/api/') || path === '/submit-order') {
         const apiResponse = await routeApiRequest(req, env, url, path, method);
-        if (apiResponse) return apiResponse;
+        if (apiResponse) return withNoStore(apiResponse);
       }
 
       // ----- SECURE DOWNLOAD -----
       if (path.startsWith('/download/')) {
         const orderId = path.split('/').pop();
-        return handleSecureDownload(env, orderId, url.origin);
+        return withNoStore(await handleSecureDownload(env, orderId, url.origin));
       }
 
       // ----- ADMIN SPA ROUTING -----
@@ -137,6 +159,10 @@ export default {
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
             headers.set('X-Worker-Version', VERSION);
+            if (cacheDisabled) {
+              headers.set('X-Cache', 'BYPASS');
+              headers.set('X-Cache-Disabled', '1');
+            }
             return new Response(assetResp.body, { status: assetResp.status, headers });
           }
         }
@@ -150,9 +176,15 @@ export default {
             await initDB(env);
             const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
             if (row && row.content) {
-              return new Response(row.content, {
-                headers: { 'Content-Type': 'text/html; charset=utf-8' }
-              });
+const dynHeaders = new Headers({ 'Content-Type': 'text/html; charset=utf-8' });
+dynHeaders.set('X-Worker-Version', VERSION);
+if (cacheDisabled) {
+  dynHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  dynHeaders.set('Pragma', 'no-cache');
+  dynHeaders.set('X-Cache', 'BYPASS');
+  dynHeaders.set('X-Cache-Disabled', '1');
+}
+return new Response(row.content, { headers: dynHeaders });
             }
           }
         } catch (e) {
@@ -186,7 +218,7 @@ export default {
         // and improve performance. Admin HTML is still served with no-store.
         const isGetLike = (method === 'GET' || method === 'HEAD');
         const isAssetPath = /\.(js|css|png|jpg|jpeg|gif|svg|ico|webp|woff2?|ttf|eot|map)$/.test(assetPath);
-        if (isGetLike && isAssetPath) {
+        if (!cacheDisabled && isGetLike && isAssetPath) {
           try {
             const assetCacheKey = new Request(assetReq.url, { method: 'GET' });
             const cachedAsset = await caches.default.match(assetCacheKey);
@@ -208,7 +240,7 @@ export default {
         const isSuccess = assetResp.status === 200;
         
         // Caching: Only cache HTML pages, never admin routes
-        const shouldCache = isHTML && isSuccess && !path.startsWith('/admin') && !path.includes('/admin/');
+        const shouldCache = isHTML && isSuccess && !path.startsWith('/admin') && !path.includes('/admin/') && !cacheDisabled;
         const cacheKey = new Request(req.url, { 
           method: 'GET',
           headers: { 'Accept': 'text/html' }
@@ -294,7 +326,12 @@ export default {
             const headers = new Headers();
             headers.set('Content-Type', 'text/html; charset=utf-8');
             headers.set('X-Worker-Version', VERSION);
-            headers.set('X-Cache', 'MISS');
+            headers.set('X-Cache', cacheDisabled ? 'BYPASS' : 'MISS');
+            if (cacheDisabled) {
+              headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+              headers.set('Pragma', 'no-cache');
+              headers.set('X-Cache-Disabled', '1');
+            }
             
             const response = new Response(html, { status: 200, headers });
             
@@ -331,7 +368,16 @@ export default {
         const passthroughHeaders = new Headers(assetResp.headers);
         passthroughHeaders.set('X-Worker-Version', VERSION);
 
-        const canCacheAsset = isGetLike && isAssetPath && assetResp.status === 200;
+// Testing mode: disable all caching and prevent browser from storing assets/pages.
+if (cacheDisabled) {
+  passthroughHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  passthroughHeaders.set('Pragma', 'no-cache');
+  passthroughHeaders.set('X-Cache', 'BYPASS');
+  passthroughHeaders.set('X-Cache-Disabled', '1');
+  return new Response(assetResp.body, { status: assetResp.status, headers: passthroughHeaders });
+}
+
+        const canCacheAsset = !cacheDisabled && isGetLike && isAssetPath && assetResp.status === 200;
         if (canCacheAsset) {
           // If the upstream didn't provide caching headers, set a sensible default.
           if (!passthroughHeaders.get('Cache-Control')) {
