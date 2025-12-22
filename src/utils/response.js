@@ -5,7 +5,7 @@
 import { CORS } from '../config/cors.js';
 
 /**
- * Create a JSON response with CORS headers
+ * Create a JSON response with CORS headers and no-cache
  * @param {Object} data - Data to serialize
  * @param {number} status - HTTP status code
  * @returns {Response}
@@ -13,7 +13,13 @@ import { CORS } from '../config/cors.js';
 export function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS, 'Content-Type': 'application/json' }
+    headers: {
+      ...CORS,
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
   });
 }
 

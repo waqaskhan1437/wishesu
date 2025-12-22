@@ -3,7 +3,7 @@
  * Automatically clears old cache when version changes
  */
 
-const CACHE_VERSION = 'v100';
+const CACHE_VERSION = 'v1766444251';
 const CACHE_NAME = `wishesu-cache-${CACHE_VERSION}`;
 
 // Install event - clear old caches
