@@ -143,6 +143,63 @@ export async function saveWhopSettings(env, body) {
 }
 
 /**
+ * Get analytics settings (GTM)
+ */
+export async function getAnalyticsSettings(env) {
+  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('analytics').first();
+  if (row && row.value) {
+    try {
+      const settings = JSON.parse(row.value);
+      return json({ settings });
+    } catch (_) {
+      return json({ settings: {} });
+    }
+  }
+  return json({ settings: {} });
+}
+
+/**
+ * Save analytics settings (GTM)
+ */
+export async function saveAnalyticsSettings(env, body) {
+  const settings = {
+    gtm_id: String(body.gtm_id || '').trim()
+  };
+  await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+    .bind('analytics', JSON.stringify(settings))
+    .run();
+  return json({ success: true });
+}
+
+/**
+ * Get external control webhook settings
+ */
+export async function getControlWebhookSettings(env) {
+  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('control_webhook').first();
+  if (row && row.value) {
+    try {
+      const settings = JSON.parse(row.value);
+      return json({ settings });
+    } catch (_) {
+      return json({ settings: { enabled: false, secret: '' } });
+    }
+  }
+  return json({ settings: { enabled: false, secret: '' } });
+}
+
+/**
+ * Save external control webhook settings
+ */
+export async function saveControlWebhookSettings(env, body) {
+  const settings = {
+    enabled: !!body.enabled,
+    secret: String(body.secret || '').trim()
+  };
+  await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('control_webhook', JSON.stringify(settings)).run();
+  return json({ success: true });
+}
+
+/**
  * Get default public pages (home/products/blog)
  */
 export async function getDefaultPages(env) {

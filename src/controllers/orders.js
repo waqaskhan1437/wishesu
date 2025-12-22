@@ -48,7 +48,7 @@ export async function createOrder(env, body) {
   
   const email = normalizeEmail(body.email);
   await env.DB.prepare(
-    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, customer_email, customer_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, customer_email, customer_name, assigned_team) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     orderId,
     Number(body.productId),
@@ -56,7 +56,8 @@ export async function createOrder(env, body) {
     'PAID',
     Number(body.deliveryTime) || 60,
     email,
-    String(body.name || '').trim() || null
+    String(body.name || '').trim() || null,
+    String(body.assigned_team || '').trim() || null
   ).run();
 
   await upsertCustomer(env, email, body.name);
@@ -84,7 +85,7 @@ export async function createManualOrder(env, body) {
   
   const email = normalizeEmail(body.email);
   await env.DB.prepare(
-    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, customer_email, customer_name) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, customer_email, customer_name, assigned_team) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     orderId,
     Number(body.productId),
@@ -92,7 +93,8 @@ export async function createManualOrder(env, body) {
     body.status || 'paid',
     Number(body.deliveryTime) || 60,
     email,
-    String(body.name || '').trim() || null
+    String(body.name || '').trim() || null,
+    String(body.assigned_team || '').trim() || null
   ).run();
 
   await upsertCustomer(env, email, body.name);

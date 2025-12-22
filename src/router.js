@@ -80,6 +80,10 @@ import {
   purgeCache,
   getWhopSettings,
   saveWhopSettings,
+  getAnalyticsSettings,
+  saveAnalyticsSettings,
+  getControlWebhookSettings,
+  saveControlWebhookSettings,
   getDefaultPages,
   saveDefaultPages,
   getR2File,
@@ -110,6 +114,9 @@ import {
   setForumTopicStatus,
   setForumReplyStatus
 } from './controllers/forum.js';
+
+// External control webhook
+import { handleControlWebhook } from './controllers/control-webhook.js';
 
 /**
  * Route API requests to appropriate handlers
@@ -207,6 +214,24 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/settings/default-pages') {
     const body = await req.json().catch(() => ({}));
     return saveDefaultPages(env, body);
+  }
+
+  // ----- ANALYTICS SETTINGS -----
+  if (method === 'GET' && path === '/api/settings/analytics') {
+    return getAnalyticsSettings(env);
+  }
+  if (method === 'POST' && path === '/api/settings/analytics') {
+    const body = await req.json().catch(() => ({}));
+    return saveAnalyticsSettings(env, body);
+  }
+
+  // ----- CONTROL WEBHOOK SETTINGS -----
+  if (method === 'GET' && path === '/api/settings/control-webhook') {
+    return getControlWebhookSettings(env);
+  }
+  if (method === 'POST' && path === '/api/settings/control-webhook') {
+    const body = await req.json().catch(() => ({}));
+    return saveControlWebhookSettings(env, body);
   }
 
   // ----- USERS (ADMIN) -----
@@ -650,6 +675,11 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'POST' && path === '/api/admin/reset-data') {
     return resetData(env);
+  }
+
+  // ----- EXTERNAL CONTROL WEBHOOK -----
+  if (method === 'POST' && path === '/api/admin/control-webhook') {
+    return handleControlWebhook(env, req);
   }
 
   if (method === 'GET' && path === '/api/admin/export-data') {

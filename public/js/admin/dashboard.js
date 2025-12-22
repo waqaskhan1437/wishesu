@@ -581,6 +581,43 @@
     </div>
 
     <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
+      <h3>Analytics & Tracking</h3>
+      <p style="color: #6b7280; margin-bottom: 20px;">Manage Google Tag Manager without code deployments.</p>
+      <div style="margin: 20px 0;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Google Tag Manager ID</label>
+        <input type="text" id="analytics-gtm-id" placeholder="GTM-XXXXXXX" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+        <small style="color: #6b7280;">Example: GTM-XXXXXXX</small>
+      </div>
+      <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <button class="btn btn-primary" id="save-analytics-btn">Save Analytics</button>
+        <span id="analytics-status" style="font-size: 0.9rem; color: #6b7280;"></span>
+      </div>
+    </div>
+
+    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
+      <h3>External Control Webhook</h3>
+      <p style="color: #6b7280; margin-bottom: 20px;">Allow Google Script to control orders, approvals, and assignments.</p>
+      <div style="margin: 20px 0;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Webhook Secret</label>
+        <input type="text" id="control-webhook-secret" placeholder="secret_token" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+        <small style="color: #6b7280;">Use this secret in Google Script header: <code>x-control-secret</code> or <code>Authorization: Bearer</code></small>
+      </div>
+      <div style="margin: 10px 0; padding: 12px; background: #f9fafb; border-radius: 8px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="control-webhook-enabled" style="width: 18px; height: 18px; cursor: pointer;">
+          <span style="font-weight: 600;">Enable Control Webhook</span>
+        </label>
+      </div>
+      <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <button class="btn btn-primary" id="save-control-webhook-btn">Save Webhook Settings</button>
+        <span id="control-webhook-status" style="font-size: 0.9rem; color: #6b7280;"></span>
+      </div>
+      <div style="margin-top: 10px; font-size: 0.85rem; color: #6b7280;">
+        Endpoint: <code>/api/admin/control-webhook</code>
+      </div>
+    </div>
+
+    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
       <h3>System Maintenance</h3>
       <p style="color: #6b7280; margin-bottom: 20px;">Manage temporary files and pending checkouts.</p>
       <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
@@ -665,9 +702,13 @@
     </div>`;
 
     loadWhopSettings();
+    loadAnalyticsSettings();
     setupDefaultPagesUI();
+    loadControlWebhookSettings();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
+    document.getElementById('save-analytics-btn').addEventListener('click', saveAnalyticsSettings);
+    document.getElementById('save-control-webhook-btn').addEventListener('click', saveControlWebhookSettings);
     
     // Export/Import handlers
     setupExportImportHandlers();
@@ -1206,6 +1247,113 @@
         if (minimalCheckoutEl) minimalCheckoutEl.checked = !!data.settings.enable_minimal_checkout;
       }
     } catch (err) { console.error('Settings error:', err); }
+  }
+
+  async function loadAnalyticsSettings() {
+    const input = document.getElementById('analytics-gtm-id');
+    const statusEl = document.getElementById('analytics-status');
+    if (!input) return;
+    try {
+      const res = await apiFetch('/api/settings/analytics');
+      const settings = res.settings || {};
+      input.value = settings.gtm_id || '';
+      if (statusEl) statusEl.textContent = '';
+    } catch (err) {
+      if (statusEl) {
+        statusEl.textContent = 'Failed to load analytics';
+        statusEl.style.color = '#ef4444';
+      }
+    }
+  }
+
+  async function saveAnalyticsSettings() {
+    const input = document.getElementById('analytics-gtm-id');
+    const statusEl = document.getElementById('analytics-status');
+    if (!input) return;
+
+    const gtmId = input.value.trim();
+    if (gtmId && !/^GTM-[A-Z0-9]+$/i.test(gtmId)) {
+      statusEl.textContent = 'Invalid GTM ID';
+      statusEl.style.color = '#ef4444';
+      return;
+    }
+
+    try {
+      statusEl.textContent = 'Saving...';
+      statusEl.style.color = '#6b7280';
+      const res = await apiFetch('/api/settings/analytics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gtm_id: gtmId })
+      });
+      if (res && res.success) {
+        statusEl.textContent = '✅ Saved';
+        statusEl.style.color = '#10b981';
+      } else {
+        statusEl.textContent = '❌ Save failed';
+        statusEl.style.color = '#ef4444';
+      }
+    } catch (err) {
+      statusEl.textContent = '❌ Error: ' + err.message;
+      statusEl.style.color = '#ef4444';
+    }
+  }
+
+  async function loadControlWebhookSettings() {
+    const secretEl = document.getElementById('control-webhook-secret');
+    const enabledEl = document.getElementById('control-webhook-enabled');
+    const statusEl = document.getElementById('control-webhook-status');
+    if (!secretEl || !enabledEl) return;
+    try {
+      const res = await apiFetch('/api/settings/control-webhook');
+      const settings = res.settings || {};
+      secretEl.value = settings.secret || '';
+      enabledEl.checked = !!settings.enabled;
+      if (statusEl) statusEl.textContent = '';
+    } catch (err) {
+      if (statusEl) {
+        statusEl.textContent = 'Failed to load webhook settings';
+        statusEl.style.color = '#ef4444';
+      }
+    }
+  }
+
+  async function saveControlWebhookSettings() {
+    const secretEl = document.getElementById('control-webhook-secret');
+    const enabledEl = document.getElementById('control-webhook-enabled');
+    const statusEl = document.getElementById('control-webhook-status');
+    if (!secretEl || !enabledEl) return;
+
+    const payload = {
+      secret: secretEl.value.trim(),
+      enabled: enabledEl.checked
+    };
+
+    if (!payload.secret) {
+      statusEl.textContent = 'Secret required before enabling';
+      statusEl.style.color = '#ef4444';
+      return;
+    }
+
+    try {
+      statusEl.textContent = 'Saving...';
+      statusEl.style.color = '#6b7280';
+      const res = await apiFetch('/api/settings/control-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res && res.success) {
+        statusEl.textContent = '✅ Saved';
+        statusEl.style.color = '#10b981';
+      } else {
+        statusEl.textContent = '❌ Save failed';
+        statusEl.style.color = '#ef4444';
+      }
+    } catch (err) {
+      statusEl.textContent = '❌ Error: ' + err.message;
+      statusEl.style.color = '#ef4444';
+    }
   }
 
   async function saveWhopSettings() {

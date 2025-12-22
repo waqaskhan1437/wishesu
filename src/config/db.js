@@ -49,7 +49,8 @@ export async function initDB(env) {
           delivered_at DATETIME,
           delivery_time_minutes INTEGER DEFAULT 60,
           revision_count INTEGER DEFAULT 0,
-          revision_requested INTEGER DEFAULT 0
+          revision_requested INTEGER DEFAULT 0,
+          assigned_team TEXT
         )
       `),
       // Reviews table
@@ -193,6 +194,7 @@ async function runMigrations(env) {
   const migrations = [
     { table: 'products', column: 'gallery_images', type: 'TEXT' },
     { table: 'orders', column: 'delivered_video_metadata', type: 'TEXT' },
+    { table: 'orders', column: 'assigned_team', type: 'TEXT' },
     { table: 'orders', column: 'customer_email', type: 'TEXT' },
     { table: 'orders', column: 'customer_name', type: 'TEXT' },
     { table: 'reviews', column: 'delivered_video_url', type: 'TEXT' },

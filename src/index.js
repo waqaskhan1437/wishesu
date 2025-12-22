@@ -57,11 +57,42 @@ export default {
         return { homePath: '/index.html', productsPath: '/products-grid.html', blogPath: '/blog' };
       };
 
+      const getGtmId = async () => {
+        if (!env.DB) return '';
+        await initDB(env);
+        const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('analytics').first();
+        if (row && row.value) {
+          try {
+            const v = JSON.parse(row.value);
+            const id = String(v.gtm_id || '').trim();
+            return /^GTM-[A-Z0-9]+$/i.test(id) ? id : '';
+          } catch (_) {
+            return '';
+          }
+        }
+        return '';
+      };
+
+      const injectGtm = (html, gtmId) => {
+        if (!gtmId) return html;
+        if (html.includes('googletagmanager.com/gtm.js')) return html;
+        const headSnippet = `\n<!-- Google Tag Manager -->\n<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${gtmId}');</script>\n<!-- End Google Tag Manager -->\n`;
+        const bodySnippet = `\n<!-- Google Tag Manager (noscript) -->\n<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=${gtmId}" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>\n<!-- End Google Tag Manager (noscript) -->\n`;
+        let out = html;
+        out = out.includes('</head>') ? out.replace('</head>', headSnippet + '</head>') : headSnippet + out;
+        out = out.includes('</body>') ? out.replace('</body>', bodySnippet + '</body>') : out + bodySnippet;
+        return out;
+      };
+
       // Public blog route (admin configurable)
       if ((method === 'GET' || method === 'HEAD') && (path === '/blog/submit' || path === '/blog/submit/')) {
         if (env.DB) {
           await initDB(env);
-          return renderBlogSubmit();
+          const gtmId = await getGtmId();
+          const resp = await renderBlogSubmit();
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
         }
       }
       if ((method === 'GET' || method === 'HEAD') && (path === '/blog' || path === '/blog/')) {
@@ -74,14 +105,22 @@ export default {
         }
         if (env.DB) {
           await initDB(env);
-          return renderBlogArchive(env, url.origin);
+          const gtmId = await getGtmId();
+          const resp = await renderBlogArchive(env, url.origin);
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
         }
       }
       if ((method === 'GET' || method === 'HEAD') && path.startsWith('/blog/')) {
         const slug = path.split('/').filter(Boolean)[1];
         if (env.DB) {
           await initDB(env);
-          return renderBlogPost(env, slug);
+          const gtmId = await getGtmId();
+          const resp = await renderBlogPost(env, slug);
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
         }
       }
 
@@ -89,14 +128,22 @@ export default {
       if ((method === 'GET' || method === 'HEAD') && (path === '/forum' || path === '/forum/')) {
         if (env.DB) {
           await initDB(env);
-          return renderForumArchive(env, url.origin);
+          const gtmId = await getGtmId();
+          const resp = await renderForumArchive(env, url.origin);
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
         }
       }
       if ((method === 'GET' || method === 'HEAD') && path.startsWith('/forum/')) {
         const slug = path.split('/').filter(Boolean)[1];
         if (env.DB) {
           await initDB(env);
-          return renderForumTopic(env, slug);
+          const gtmId = await getGtmId();
+          const resp = await renderForumTopic(env, slug);
+          const html = injectGtm(await resp.text(), gtmId);
+          const headers = new Headers(resp.headers);
+          return new Response(html, { status: resp.status, headers });
         }
       }
 
@@ -176,7 +223,9 @@ export default {
                AND (status = 'published' OR status = 'active' OR status IS NULL OR status = '')`
             ).bind(slug).first();
             if (row && row.content) {
-              return new Response(row.content, {
+              const gtmId = await getGtmId();
+              const html = injectGtm(row.content, gtmId);
+              return new Response(html, {
                 headers: { 'Content-Type': 'text/html; charset=utf-8' }
               });
             }
@@ -265,6 +314,7 @@ export default {
           try {
             const baseUrl = url.origin;
             let html = await assetResp.text();
+            const gtmId = await getGtmId();
             
             // Product detail page - inject individual product schema
             if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
@@ -317,6 +367,8 @@ export default {
               }
             }
             
+            html = injectGtm(html, gtmId);
+
             const headers = new Headers();
             headers.set('Content-Type', 'text/html; charset=utf-8');
             headers.set('X-Worker-Version', VERSION);
