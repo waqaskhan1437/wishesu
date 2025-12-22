@@ -48,14 +48,6 @@
       input.onchange = () => {
         if (window.updateTotal) window.updateTotal();
 
-        if (field.id === 'delivery-time' && typeof window.updateDeliveryBadge === 'function') {
-          const selectedOpt = input.selectedOptions[0];
-          if (selectedOpt) {
-            const selectedLabel = selectedOpt.text.replace(/\s*\(\+\$[\d.]+\)\s*$/, '').trim();
-            window.updateDeliveryBadge(selectedLabel);
-          }
-        }
-
         renderExtras(extras, input.selectedOptions[0]?.dataset || {}, field.id);
       };
       if (input.selectedOptions[0]) renderExtras(extras, input.selectedOptions[0].dataset, field.id);
@@ -87,11 +79,6 @@
             input.querySelectorAll('.addon-option-card').forEach(c => c.classList.remove('selected'));
             if (inp.checked) l.classList.add('selected');
             renderExtras(extras, inp.dataset, field.id);
-
-            if (field.id === 'delivery-time' && inp.checked && typeof window.updateDeliveryBadge === 'function') {
-              const selectedLabel = opt.label;
-              window.updateDeliveryBadge(selectedLabel);
-            }
           } else {
             l.classList.toggle('selected', inp.checked);
             renderExtras(subExtras, inp.checked ? inp.dataset : {}, field.id + '_' + idx);

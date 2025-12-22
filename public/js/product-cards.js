@@ -214,7 +214,7 @@
       const style = document.createElement('style');
       style.id = 'product-cards-styles';
       style.textContent = `
-        .product-cards-grid .product-card {
+        .product-card {
           background: white;
           border-radius: 12px;
           overflow: hidden;
@@ -226,27 +226,32 @@
           text-decoration: none;
           color: inherit;
         }
-        .product-cards-grid .product-card:hover {
+
+        .product-card:hover {
           transform: translateY(-8px);
           box-shadow: 0 12px 24px rgba(0,0,0,0.15);
         }
-        .product-cards-grid .product-thumbnail {
+
+        .product-thumbnail {
           position: relative;
           width: 100%;
           aspect-ratio: 16/9;
           overflow: hidden;
           background: #f3f4f6;
         }
-        .product-cards-grid .product-thumbnail img {
+
+        .product-thumbnail img {
           width: 100%;
           height: 100%;
           object-fit: cover;
           transition: transform 0.3s ease;
         }
-        .product-cards-grid .product-card:hover .product-thumbnail img {
+
+        .product-card:hover .product-thumbnail img {
           transform: scale(1.05);
         }
-        .product-cards-grid .discount-badge {
+
+        .discount-badge {
           position: absolute;
           top: 12px;
           right: 12px;
@@ -258,14 +263,16 @@
           font-size: 0.85em;
           box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
         }
-        .product-cards-grid .product-content {
+
+        .product-content {
           padding: 20px;
           display: flex;
           flex-direction: column;
           gap: 12px;
           flex: 1;
         }
-        .product-cards-grid .product-title {
+
+        .product-title {
           font-size: 1.1rem;
           font-weight: 600;
           color: #1f2937;
@@ -277,55 +284,67 @@
           -webkit-box-orient: vertical;
           overflow: hidden;
         }
-        .product-cards-grid .product-meta-row {
+
+        .product-meta-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
           gap: 10px;
         }
-        .product-cards-grid .product-prices {
+
+        .product-prices {
           display: flex;
           align-items: center;
           gap: 8px;
         }
-        .product-cards-grid .original-price {
+
+        .original-price {
           font-size: 0.9rem;
           color: #9ca3af;
           text-decoration: line-through;
         }
-        .product-cards-grid .sale-price {
+
+        .sale-price {
           font-size: 1.5rem;
           font-weight: 700;
           color: #3b82f6;
         }
-        .product-cards-grid .product-reviews {
+
+        .product-reviews {
           display: flex;
           align-items: center;
           gap: 4px;
         }
-        .product-cards-grid .rating-stars {
+
+        .rating-stars {
           display: flex;
           gap: 2px;
         }
-        .product-cards-grid .star {
+
+        .star {
           font-size: 1rem;
           line-height: 1;
         }
-        .product-cards-grid .star-full {
+
+        .star-full {
           color: #fbbf24;
         }
-        .product-cards-grid .star-half {
+
+        .star-half {
           color: #fbbf24;
           opacity: 0.5;
         }
-        .product-cards-grid .star-empty {
+
+        .star-empty {
           color: #d1d5db;
         }
-        .product-cards-grid .review-count {
+
+        .review-count {
           font-size: 0.85rem;
           color: #6b7280;
         }
-        .product-cards-grid .product-delivery {
+
+        .product-delivery {
           display: flex;
           align-items: center;
           gap: 6px;
@@ -336,10 +355,12 @@
           color: #1e40af;
           font-weight: 500;
         }
-        .product-cards-grid .delivery-icon {
+
+        .delivery-icon {
           font-size: 1.1em;
         }
-        .product-cards-grid .book-now-btn {
+
+        .book-now-btn {
           display: block;
           text-align: center;
           width: 100%;
@@ -354,11 +375,13 @@
           transition: all 0.2s ease;
           margin-top: auto;
         }
-        .product-cards-grid .book-now-btn:hover {
+
+        .book-now-btn:hover {
           transform: translateY(-2px);
           box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
         }
-        .product-cards-grid .book-now-btn:active {
+
+        .book-now-btn:active {
           transform: translateY(0);
         }
 

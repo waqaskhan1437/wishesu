@@ -13,7 +13,7 @@ export async function getProducts(env) {
   const r = await env.DB.prepare(`
     SELECT
       p.id, p.title, p.slug, p.normal_price, p.sale_price,
-      p.thumbnail_url, p.normal_delivery_text,
+      p.thumbnail_url, p.instant_delivery, p.normal_delivery_text,
       COUNT(r.id) as review_count,
       AVG(r.rating) as rating_average
     FROM products p
@@ -37,7 +37,7 @@ export async function getProducts(env) {
  */
 export async function getProductsList(env) {
   const r = await env.DB.prepare(
-    'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text, status FROM products ORDER BY id DESC'
+    'SELECT id, title, slug, normal_price, sale_price, instant_delivery, thumbnail_url, normal_delivery_text, status FROM products ORDER BY id DESC'
   ).all();
   return json({ products: r.results || [] });
 }

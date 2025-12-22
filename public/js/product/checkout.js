@@ -202,7 +202,9 @@
           amount: window.currentTotal,
           email: email,
           metadata: {
-            addons: selectedAddons
+            addons: selectedAddons,
+            instant_delivery: window.productData?.instant_delivery || 0,
+            normal_delivery_text: window.productData?.normal_delivery_text || ''
           }
         })
       });
@@ -260,6 +262,9 @@
         // Store addons in localStorage as backup (in case Whop redirects before callback)
         const orderData = {
           addons: selectedAddons,
+            // Delivery time comes from admin product form fields
+            instant_delivery: window.productData?.instant_delivery || 0,
+            normal_delivery_text: window.productData?.normal_delivery_text || '',
           email: data.email || email,
           amount: window.currentTotal,
           productId: data.product_id || window.productData.id,
@@ -276,6 +281,8 @@
           metadata: {
             ...data.metadata,
             addons: selectedAddons,
+            instant_delivery: window.productData?.instant_delivery || 0,
+            normal_delivery_text: window.productData?.normal_delivery_text || '',
             product_id: window.productData.id,
             productId: window.productData.id
           },

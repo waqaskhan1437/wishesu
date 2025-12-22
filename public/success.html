@@ -190,17 +190,33 @@
       if (orderData && orderData.addons && orderData.addons.length > 0) {
         console.log('🚀 Creating order with addons...');
 
-        // Calculate delivery time
-        let deliveryTime = 2880; // Default 48 hours
-        const deliveryAddon = orderData.addons.find(a => a.field === 'delivery-time');
-        if (deliveryAddon) {
-          const v = (deliveryAddon.value || '').toLowerCase();
-          if (v.includes('instant') || v.includes('60')) deliveryTime = 60;
-          else if (v.includes('24') || v.includes('express')) deliveryTime = 1440;
-          else if (v.includes('48') || v.includes('2 day')) deliveryTime = 2880;
+                // Calculate delivery time (FORM-DRIVEN): use values saved from admin product form
+        let deliveryTime = 2880; // Default 48 hours (2 days)
+
+        const instantFromForm = orderData.instant_delivery || orderData.instantDelivery || 0;
+        const daysRaw = orderData.normal_delivery_text ?? orderData.delivery_days ?? orderData.deliveryDays ?? '';
+        const daysFromForm = Number(daysRaw) || 0;
+
+        if (instantFromForm) {
+          deliveryTime = 60;
+        } else if (Number.isFinite(daysFromForm) && daysFromForm > 0) {
+          deliveryTime = daysFromForm * 1440;
+        } else {
+          // Legacy fallback: infer from delivery-time addon (older stored orders)
+          const deliveryAddon = orderData.addons.find(a => a.field === 'delivery-time');
+          if (deliveryAddon) {
+            const v = (deliveryAddon.value || '').toLowerCase();
+            if (v.includes('instant') || v.includes('60')) deliveryTime = 60;
+            else if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) deliveryTime = 1440;
+            else {
+              const match = v.match(/\d+/);
+              const days = match ? parseInt(match[0], 10) : 0;
+              if (Number.isFinite(days) && days > 0) deliveryTime = days * 1440;
+            }
+          }
         }
 
-        const payload = {
+                const payload = {
           productId: orderData.productId || productId || 1,
           amount: orderData.amount || 0,
           email: orderData.email || '',
