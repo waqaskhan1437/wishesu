@@ -54,7 +54,25 @@
     </div>
 
     <div id="product-container" class="loading-state">
-      <div class="spinner"></div>
+      <div class="skeleton">
+        <div>
+          <div class="skeleton-media"></div>
+          <div class="skeleton-thumbs">
+            <div class="skeleton-thumb"></div>
+            <div class="skeleton-thumb"></div>
+            <div class="skeleton-thumb"></div>
+          </div>
+        </div>
+        <div class="skeleton-info">
+          <div class="skeleton-line lg"></div>
+          <div class="skeleton-line md"></div>
+          <div class="skeleton-line sm"></div>
+          <div class="skeleton-line md"></div>
+          <div class="skeleton-line sm"></div>
+          <div class="skeleton-line md"></div>
+        </div>
+      </div>
+      <div class="spinner" style="margin-top:24px;"></div>
       <p>Loading amazing product...</p>
     </div>
   </main>
