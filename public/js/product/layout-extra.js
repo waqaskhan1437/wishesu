@@ -276,7 +276,7 @@
               prev.textContent = 'Prev';
               prev.setAttribute('aria-label', 'Previous reviews page');
               prev.disabled = currentPage === 1;
-              prev.style.cssText = `padding:10px 20px;background:${currentPage===1?'#999':'#667eea'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===1?'not-allowed':'pointer'};font-weight:600`;
+              prev.style.cssText = `padding:10px 20px;background:${currentPage===1?'#94a3b8':'#0f172a'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===1?'not-allowed':'pointer'};font-weight:600`;
               if (currentPage > 1) prev.onclick = () => { renderPage(currentPage - 1); container.scrollIntoView({behavior:'smooth'}); };
               pag.appendChild(prev);
               
@@ -290,7 +290,7 @@
               next.textContent = 'Next';
               next.setAttribute('aria-label', 'Next reviews page');
               next.disabled = currentPage === totalPages;
-              next.style.cssText = `padding:10px 20px;background:${currentPage===totalPages?'#999':'#667eea'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===totalPages?'not-allowed':'pointer'};font-weight:600`;
+              next.style.cssText = `padding:10px 20px;background:${currentPage===totalPages?'#94a3b8':'#0f172a'};color:#fff;border:none;border-radius:8px;cursor:${currentPage===totalPages?'not-allowed':'pointer'};font-weight:600`;
               if (currentPage < totalPages) next.onclick = () => { renderPage(currentPage + 1); container.scrollIntoView({behavior:'smooth'}); };
               pag.appendChild(next);
               
