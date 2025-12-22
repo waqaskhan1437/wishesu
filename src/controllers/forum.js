@@ -29,6 +29,15 @@ function toParagraphs(text) {
   return safe.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
 }
 
+function makeExcerpt(text, limit) {
+  const plain = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!plain) return '';
+  if (plain.length <= limit) return plain;
+  return plain.slice(0, limit).replace(/\s+\S*$/, '') + '...';
+}
+
 async function hasPendingSubmission(env, email) {
   const row = await env.DB.prepare(
     `SELECT id FROM forum_topics WHERE author_email = ? AND status = 'pending'
