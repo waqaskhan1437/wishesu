@@ -3287,16 +3287,30 @@
         <h2 style="margin:0;font-size:1.5em;color:#1f2937;">Forum Moderation</h2>
         <a class="btn" style="background:#111827;color:#fff;" href="/forum" target="_blank">View Forum</a>
       </div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+        <label style="font-weight:600;">Topics</label>
+        <select id="forum-topics-status" style="padding:8px;border:1px solid #d1d5db;border-radius:8px;">
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <label style="font-weight:600;">Replies</label>
+        <select id="forum-replies-status" style="padding:8px;border:1px solid #d1d5db;border-radius:8px;">
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
         <div class="table-container">
-          <h3 style="padding:20px;margin:0;">Pending Topics</h3>
+          <h3 style="padding:20px;margin:0;">Topics</h3>
           <table>
             <thead><tr><th>Title</th><th>Author</th><th>Date</th><th>Action</th></tr></thead>
             <tbody id="forum-topics-tbody"><tr><td colspan="4" style="text-align:center;">Loading...</td></tr></tbody>
           </table>
         </div>
         <div class="table-container">
-          <h3 style="padding:20px;margin:0;">Pending Replies</h3>
+          <h3 style="padding:20px;margin:0;">Replies</h3>
           <table>
             <thead><tr><th>Reply</th><th>Author</th><th>Topic</th><th>Action</th></tr></thead>
             <tbody id="forum-replies-tbody"><tr><td colspan="4" style="text-align:center;">Loading...</td></tr></tbody>
@@ -3315,6 +3329,8 @@
 
     const topicsBody = panel.querySelector('#forum-topics-tbody');
     const repliesBody = panel.querySelector('#forum-replies-tbody');
+    const topicsStatus = panel.querySelector('#forum-topics-status');
+    const repliesStatus = panel.querySelector('#forum-replies-status');
 
     async function updateTopicStatus(id, status) {
       await fetch('/api/admin/forum/topic/status', {
@@ -3334,13 +3350,57 @@
       await refreshReplies();
     }
 
+    async function editTopic(topic) {
+      const title = prompt('Edit title', topic.title || '');
+      if (!title) return;
+      const body = prompt('Edit body', topic.body || '');
+      if (!body) return;
+      await fetch('/api/admin/forum/topic/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: topic.id, title, body })
+      });
+      await refreshTopics();
+    }
+
+    async function editReply(reply) {
+      const body = prompt('Edit reply', reply.body || '');
+      if (!body) return;
+      await fetch('/api/admin/forum/reply/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: reply.id, body })
+      });
+      await refreshReplies();
+    }
+
+    async function deleteTopic(id) {
+      if (!confirm('Delete this topic and all replies?')) return;
+      await fetch('/api/admin/forum/topic/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      await refreshTopics();
+    }
+
+    async function deleteReply(id) {
+      if (!confirm('Delete this reply?')) return;
+      await fetch('/api/admin/forum/reply/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      await refreshReplies();
+    }
+
     async function refreshTopics() {
       topicsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
-      const res = await fetch('/api/admin/forum/topics?status=pending');
+      const res = await fetch('/api/admin/forum/topics?status=' + encodeURIComponent(topicsStatus.value));
       const data = await res.json();
       const topics = data.topics || [];
       if (topics.length === 0) {
-        topicsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6b7280;">No pending topics.</td></tr>';
+        topicsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6b7280;">No topics.</td></tr>';
         return;
       }
       topicsBody.innerHTML = topics.map(t => `
@@ -3351,6 +3411,9 @@
           <td>
             <button class="btn btn-primary" data-approve-topic="${t.id}">Approve</button>
             <button class="btn" style="background:#6b7280;color:#fff;" data-reject-topic="${t.id}">Reject</button>
+            <button class="btn" style="background:#111827;color:#fff;" data-pending-topic="${t.id}">Unapprove</button>
+            <button class="btn" style="background:#0f172a;color:#fff;" data-edit-topic="${t.id}">Edit</button>
+            <button class="btn" style="background:#dc2626;color:#fff;" data-delete-topic="${t.id}">Delete</button>
           </td>
         </tr>
       `).join('');
@@ -3361,15 +3424,25 @@
       topicsBody.querySelectorAll('[data-reject-topic]').forEach(btn => {
         btn.addEventListener('click', () => updateTopicStatus(btn.dataset.rejectTopic, 'rejected'));
       });
+      topicsBody.querySelectorAll('[data-pending-topic]').forEach(btn => {
+        btn.addEventListener('click', () => updateTopicStatus(btn.dataset.pendingTopic, 'pending'));
+      });
+      topicsBody.querySelectorAll('[data-edit-topic]').forEach(btn => {
+        const t = topics.find(x => String(x.id) === String(btn.dataset.editTopic));
+        btn.addEventListener('click', () => editTopic(t));
+      });
+      topicsBody.querySelectorAll('[data-delete-topic]').forEach(btn => {
+        btn.addEventListener('click', () => deleteTopic(btn.dataset.deleteTopic));
+      });
     }
 
     async function refreshReplies() {
       repliesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
-      const res = await fetch('/api/admin/forum/replies?status=pending');
+      const res = await fetch('/api/admin/forum/replies?status=' + encodeURIComponent(repliesStatus.value));
       const data = await res.json();
       const replies = data.replies || [];
       if (replies.length === 0) {
-        repliesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6b7280;">No pending replies.</td></tr>';
+        repliesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#6b7280;">No replies.</td></tr>';
         return;
       }
       repliesBody.innerHTML = replies.map(r => `
@@ -3380,6 +3453,9 @@
           <td>
             <button class="btn btn-primary" data-approve-reply="${r.id}">Approve</button>
             <button class="btn" style="background:#6b7280;color:#fff;" data-reject-reply="${r.id}">Reject</button>
+            <button class="btn" style="background:#111827;color:#fff;" data-pending-reply="${r.id}">Unapprove</button>
+            <button class="btn" style="background:#0f172a;color:#fff;" data-edit-reply="${r.id}">Edit</button>
+            <button class="btn" style="background:#dc2626;color:#fff;" data-delete-reply="${r.id}">Delete</button>
           </td>
         </tr>
       `).join('');
@@ -3390,8 +3466,20 @@
       repliesBody.querySelectorAll('[data-reject-reply]').forEach(btn => {
         btn.addEventListener('click', () => updateReplyStatus(btn.dataset.rejectReply, 'rejected'));
       });
+      repliesBody.querySelectorAll('[data-pending-reply]').forEach(btn => {
+        btn.addEventListener('click', () => updateReplyStatus(btn.dataset.pendingReply, 'pending'));
+      });
+      repliesBody.querySelectorAll('[data-edit-reply]').forEach(btn => {
+        const r = replies.find(x => String(x.id) === String(btn.dataset.editReply));
+        btn.addEventListener('click', () => editReply(r));
+      });
+      repliesBody.querySelectorAll('[data-delete-reply]').forEach(btn => {
+        btn.addEventListener('click', () => deleteReply(btn.dataset.deleteReply));
+      });
     }
 
+    topicsStatus.addEventListener('change', refreshTopics);
+    repliesStatus.addEventListener('change', refreshReplies);
     await Promise.all([refreshTopics(), refreshReplies()]);
   }
 

@@ -112,7 +112,11 @@ import {
   listForumTopics,
   listForumReplies,
   setForumTopicStatus,
-  setForumReplyStatus
+  setForumReplyStatus,
+  updateForumTopic,
+  updateForumReply,
+  deleteForumTopic,
+  deleteForumReply
 } from './controllers/forum.js';
 
 // External control webhook
@@ -315,6 +319,22 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/admin/forum/reply/status') {
     const body = await req.json().catch(() => ({}));
     return setForumReplyStatus(env, body);
+  }
+  if (method === 'POST' && path === '/api/admin/forum/topic/update') {
+    const body = await req.json().catch(() => ({}));
+    return updateForumTopic(env, body);
+  }
+  if (method === 'POST' && path === '/api/admin/forum/reply/update') {
+    const body = await req.json().catch(() => ({}));
+    return updateForumReply(env, body);
+  }
+  if (method === 'POST' && path === '/api/admin/forum/topic/delete') {
+    const body = await req.json().catch(() => ({}));
+    return deleteForumTopic(env, body);
+  }
+  if (method === 'POST' && path === '/api/admin/forum/reply/delete') {
+    const body = await req.json().catch(() => ({}));
+    return deleteForumReply(env, body);
   }
 
   

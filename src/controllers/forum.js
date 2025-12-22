@@ -159,6 +159,46 @@ export async function setForumReplyStatus(env, body) {
   return json({ success: true });
 }
 
+export async function updateForumTopic(env, body) {
+  const id = Number(body.id);
+  const title = String(body.title || '').trim();
+  const text = String(body.body || '').trim();
+  if (!id || !title || !text) {
+    return json({ success: false, error: 'id, title, and body required' }, 400);
+  }
+  await env.DB.prepare(
+    'UPDATE forum_topics SET title = ?, body = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+  ).bind(title, text, id).run();
+  return json({ success: true });
+}
+
+export async function updateForumReply(env, body) {
+  const id = Number(body.id);
+  const text = String(body.body || '').trim();
+  if (!id || !text) {
+    return json({ success: false, error: 'id and body required' }, 400);
+  }
+  await env.DB.prepare(
+    'UPDATE forum_replies SET body = ? WHERE id = ?'
+  ).bind(text, id).run();
+  return json({ success: true });
+}
+
+export async function deleteForumTopic(env, body) {
+  const id = Number(body.id);
+  if (!id) return json({ success: false, error: 'id required' }, 400);
+  await env.DB.prepare('DELETE FROM forum_replies WHERE topic_id = ?').bind(id).run();
+  await env.DB.prepare('DELETE FROM forum_topics WHERE id = ?').bind(id).run();
+  return json({ success: true });
+}
+
+export async function deleteForumReply(env, body) {
+  const id = Number(body.id);
+  if (!id) return json({ success: false, error: 'id required' }, 400);
+  await env.DB.prepare('DELETE FROM forum_replies WHERE id = ?').bind(id).run();
+  return json({ success: true });
+}
+
 export async function renderForumArchive(env) {
   const rows = await env.DB.prepare(
     `SELECT t.id, t.slug, t.title, t.body, t.author_name, t.created_at,
