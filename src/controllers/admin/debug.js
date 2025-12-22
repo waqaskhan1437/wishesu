@@ -18,7 +18,7 @@ export function getDebugInfo(env) {
       PRODUCT_MEDIA: !!env.PRODUCT_MEDIA,
       ASSETS: !!env.ASSETS
     },
-    version: VERSION,
+    version: env.VERSION || VERSION,
     timestamp: new Date().toISOString()
   });
 }

@@ -3,7 +3,8 @@
  */
 
 // Application version - used for cache busting and debug info
-export const VERSION = globalThis.VERSION || "15";
+// Note: This is a fallback. Actual version comes from env.VERSION in wrangler.toml
+export const VERSION = "1766444251";
 
 // Rate limiting defaults
 export const RATE_LIMIT = {
