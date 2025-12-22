@@ -63,7 +63,6 @@
     if (document.hidden) {
       stopPolling();
       releaseLeader();
-      releaseLeader();
     } else if (isOpen) {
       startPolling();
       syncNow();
@@ -93,6 +92,7 @@
   let isOpen = localStorage.getItem(LS_OPEN) === 'true';
 
   let lastId = 0;
+  const seenIds = new Set();
   let pollTimer = null;
 
   let isSending = false;
@@ -325,6 +325,7 @@
     name = '';
     email = '';
     lastId = 0;
+    seenIds.clear();
     messagesEl.innerHTML = '';
   }
 
@@ -342,7 +343,6 @@
   }
 
   addQuickAction('📦 My Order Status', 'My Order Status');
-  addQuickAction('🚚 Shipping Info', 'Shipping Info');
   addQuickAction('💬 Talk to Human', 'Talk to Human');
   addQuickAction('🚚 Check Delivery Status', 'Check Delivery Status');
 
@@ -364,9 +364,19 @@
   }
 
   // ---- Session creation modal ----
+  function updateAuthUI() {
+    const authed = !!sessionId;
+    logoutBtn.style.display = authed ? 'inline-flex' : 'none';
+    messagesEl.style.display = authed ? 'block' : 'none';
+    quickRow.style.display = authed ? 'flex' : 'none';
+    inputBar.style.display = authed ? 'grid' : 'none';
+    hint.style.display = authed ? 'block' : 'none';
+  }
+
   function showSessionModal() {
     input.disabled = true;
     sendBtn.disabled = true;
+    updateAuthUI();
 
     const modal = el('div', { class: 'wc-modal', id: 'wc-modal' }, [
       el('div', { style: 'font-weight:800; margin-bottom:8px;' }, ['Start chat']),
@@ -390,6 +400,7 @@
           input.disabled = false;
           sendBtn.disabled = false;
           input.focus();
+          updateAuthUI();
           syncNow();
           applyCooldownUI();
         } }, ['Start'])
@@ -528,6 +539,11 @@
         return;
       }
 
+      const mid = Number(data.messageId || 0);
+      if (mid) {
+        lastId = Math.max(lastId, mid);
+        seenIds.add(mid);
+      }
       appendMessage('user', msg, new Date().toISOString());
 
       input.value = '';
@@ -560,8 +576,14 @@
 
     const messages = data.messages || [];
     for (const m of messages) {
-      lastId = Math.max(lastId, Number(m.id) || lastId);
+      const mid = Number(m.id) || 0;
+      if (mid && seenIds.has(mid)) continue;
+      if (mid) seenIds.add(mid);
+      lastId = Math.max(lastId, mid || lastId);
       appendMessage(m.role, m.content, m.created_at);
+    }
+    if (Number(data.lastId)) {
+      lastId = Math.max(lastId, Number(data.lastId));
     }
   }
 
@@ -596,6 +618,8 @@
   }
 
   // Restore open state
+  updateAuthUI();
   if (isOpen) setOpen(true);
   // Also restore cooldown UI if panel opened later
 })();
+
