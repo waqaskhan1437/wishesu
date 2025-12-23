@@ -76,7 +76,6 @@ import {
 
 // Admin - Now using modular admin controllers
 import {
-  getDebugInfo,
   purgeCache,
   getWhopSettings,
   saveWhopSettings,
@@ -148,10 +147,6 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (path === '/api/time') {
     return json({ serverTime: Date.now() });
-  }
-
-  if (path === '/api/debug') {
-    return getDebugInfo(env);
   }
 
   if (method === 'GET' && path === '/api/whop/test-webhook') {

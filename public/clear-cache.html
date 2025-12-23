@@ -232,14 +232,6 @@
         // Step 5: Force refresh all resources
         status.textContent = 'Clearing all cached resources...';
 
-        // Add timestamp to force cache bust
-        const timestamp = Date.now();
-        const link = document.createElement('link');
-        link.rel = 'preload';
-        link.href = `/api/debug?_=${timestamp}`;
-        link.as = 'fetch';
-        document.head.appendChild(link);
-
         highlightStep('step5');
         updateProgress(100);
 

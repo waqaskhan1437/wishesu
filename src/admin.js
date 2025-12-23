@@ -4,29 +4,11 @@
 
 import { json } from '../utils/response.js';
 import { CORS } from '../config/cors.js';
-import { VERSION } from '../config/constants.js';
 import { getMimeTypeFromFilename, resolveContentType } from '../utils/upload-helper.js';
 import { normalizeArchiveMetaValue } from '../utils/formatting.js';
 
 // Flag to track if version purge check was done
 let purgeVersionChecked = false;
-
-/**
- * Get debug info
- */
-export function getDebugInfo(env) {
-  return json({
-    status: 'running',
-    bindings: {
-      DB: !!env.DB,
-      R2_BUCKET: !!env.R2_BUCKET,
-      PRODUCT_MEDIA: !!env.PRODUCT_MEDIA,
-      ASSETS: !!env.ASSETS
-    },
-    version: VERSION,
-    timestamp: new Date().toISOString()
-  });
-}
 
 /**
  * Purge Cloudflare cache manually

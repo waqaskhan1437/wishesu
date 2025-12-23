@@ -84,55 +84,6 @@
   </script>
   <script src="js/chat-widget.js?v=1766444251"></script>
 
-  <!-- INSTANT DEBUG - Shows immediately -->
-  <script>
-    (function() {
-      const V = '1766444251';
-      const d = document.createElement('div');
-      d.style.cssText = 'position:fixed;top:10px;right:10px;width:400px;max-height:90vh;background:#000;color:#0f0;border:2px solid #0f0;font:11px monospace;z-index:999999;overflow-y:auto;padding:8px;';
-      d.innerHTML = '<b style="color:#0f0;">🔍 DEBUG</b><div id="dbg"></div>';
-      document.documentElement.appendChild(d);
-      const l = d.querySelector('#dbg');
-      function log(m, s = 'i') {
-        const c = { i: '#0ff', s: '#0f0', e: '#f00', w: '#ff0' };
-        const ic = { i: 'ℹ️', s: '✅', e: '❌', w: '⚠️' };
-        l.innerHTML = `<div style="color:${c[s]};padding:2px 0;border-bottom:1px solid #111;">${ic[s]} ${m}</div>` + l.innerHTML;
-        console.log('[DEBUG]', m);
-      }
-      log('🚀 Page Loading...', 's');
-      log(`URL: ${location.pathname}`, 'i');
-      log(`Expected: v=${V}`, 'i');
-      setTimeout(() => {
-        const scripts = Array.from(document.querySelectorAll('script[src]'));
-        log(`Scripts: ${scripts.length} total`, 'i');
-        let old = 0, newS = 0, none = 0;
-        scripts.forEach(sc => {
-          const src = sc.src;
-          const vm = src.match(/v=(\d+)/);
-          if (!vm) { none++; log(`⚠️ NO VER: ${src.split('/').pop()}`, 'w'); }
-          else if (vm[1] === V) { newS++; log(`✅ NEW: ${src.split('/').pop()}`, 's'); }
-          else { old++; log(`❌ OLD v=${vm[1]}: ${src.split('/').pop()}`, 'e'); }
-        });
-        log(`Summary: ✅${newS} ⚠️${none} ❌${old}`, old > 0 ? 'e' : 's');
-        if (old > 0) log('🚨 OLD FILES! Clear cache!', 'e');
-      }, 500);
-      setTimeout(async () => {
-        try {
-          const r = await fetch('/api/debug?_=' + Date.now());
-          const data = await r.json();
-          log(`Server: v=${data.version}`, data.version === V ? 's' : 'e');
-          if (data.version !== V) log(`❌ MISMATCH! Need v=${V}`, 'e');
-        } catch (e) { log(`Server check failed`, 'e'); }
-      }, 1000);
-    })();
-  </script>
-
-  <!-- Version Banner for Debug -->
-  <script src="js/version-banner.js?v=1766444251"></script>
-
-  <!-- Debug Monitor - Real-time debugging -->
-  <script src="js/debug-monitor.js?v=1766444251"></script>
-
   <!-- Service Worker for Cache Management -->
   <script>
     if ('serviceWorker' in navigator) {
@@ -171,4 +122,5 @@
   </script>
 </body>
 </html>
+
 

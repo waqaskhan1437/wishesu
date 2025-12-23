@@ -25,20 +25,7 @@ export default {
     }
     const method = req.method;
 
-    const requiresAdminAuth = (p, m) => {
-      if (p.startsWith('/admin')) return true;
-      if (p.startsWith('/api/admin/')) return true;
-      if (p === '/api/purge-cache') return true;
-      if (p === '/api/blog/list' || p === '/api/blog/get' || p === '/api/blog/save' || p === '/api/blog/status' || p === '/api/blog/delete') return true;
-      if (p === '/api/page/save' || p === '/api/page/delete') return true;
-      if (p === '/api/pages/save' || p === '/api/pages/delete' || p === '/api/pages/status' || p === '/api/pages/duplicate' || p === '/api/pages/load') return true;
-      if (p === '/api/product/save' || p === '/api/product/delete') return true;
-      if (p === '/api/products/status' || p === '/api/products/duplicate') return true;
-      if (p === '/api/orders' || p === '/api/order/update' || p === '/api/order/delete' || p === '/api/order/deliver' || p === '/api/order/revision' || p === '/api/order/portfolio' || p === '/api/order/archive-link' || p === '/api/order/upload-encrypted-file') return true;
-      if (p === '/api/reviews/update' || p === '/api/reviews/delete') return true;
-      if (p === '/api/settings/default-pages' || p === '/api/settings/whop' || p === '/api/settings/analytics' || p === '/api/settings/control-webhook') return true;
-      return false;
-    };
+    const requiresAdminAuth = () => false;
 
     const getClientIp = () => {
       return req.headers.get('cf-connecting-ip') ||
@@ -145,6 +132,10 @@ export default {
         if (!['GET','HEAD','OPTIONS'].includes(method) && !isSameOrigin()) {
           return new Response('CSRF blocked', { status: 403 });
         }
+      }
+
+      if ((path.startsWith('/admin') || path.startsWith('/api/admin/')) && !['GET','HEAD','OPTIONS'].includes(method) && !isSameOrigin()) {
+        return new Response('CSRF blocked', { status: 403 });
       }
       // Helper: read default public pages from settings
       const getDefaultPages = async () => {

@@ -4,9 +4,6 @@
  * Replaces monolithic admin.js (657 lines)
  */
 
-// Debug & Health
-export { getDebugInfo } from './debug.js';
-
 // Cache Management
 export { purgeCache, maybePurgeCache } from './cache.js';
 

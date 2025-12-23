@@ -4,7 +4,6 @@
  */
 
 import {
-  getDebugInfo,
   purgeCache,
   getWhopSettings,
   saveWhopSettings,
@@ -28,11 +27,6 @@ import {
  * @param {Function} router - Route registration function
  */
 export function registerAdminRoutes(router) {
-  // Debug info
-  router.get('/api/debug', async (req, env, url) => {
-    return getDebugInfo(env);
-  });
-
   // Cache management
   router.post('/api/purge-cache', async (req, env, url) => {
     return purgeCache(env);
