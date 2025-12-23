@@ -1,13 +1,24 @@
 /**
- * Debug Monitor - Comprehensive Real-time Debugging
- * Shows detailed info about everything happening on the page
+ * INTELLIGENT Debug Monitor - Optimized Real-time Debugging
+ * Smart memory management, detailed tracking, performance optimized
  */
 
 (function() {
   const DEBUG_VERSION = '1766444251';
   const DEBUG_ENABLED = true; // Always enabled
 
-  // Store all debug data
+  // Smart Configuration - Prevents memory overflow
+  const CONFIG = {
+    MAX_LOGS: 100,           // Maximum logs to keep in memory
+    MAX_NETWORK_LOGS: 50,    // Maximum network requests to track
+    MAX_ERROR_LOGS: 30,      // Maximum errors to keep
+    CLEANUP_INTERVAL: 30000, // Clean old data every 30 seconds
+    MONITOR_PERFORMANCE: true,
+    MONITOR_MEMORY: true,
+    AUTO_EXPORT_ON_ERROR: false
+  };
+
+  // Store all debug data with size limits
   const debugData = {
     version: DEBUG_VERSION,
     pageLoad: new Date().toISOString(),
@@ -17,7 +28,8 @@
     network: [],
     scripts: [],
     performance: {},
-    environment: {}
+    environment: {},
+    memorySnapshots: []
   };
 
   // Create debug console
@@ -279,28 +291,39 @@
     return container;
   }
 
-  // Log function
+  // Smart Log function with memory management
   function log(type, message, details = null) {
     const timestamp = new Date().toLocaleTimeString();
     const entry = { timestamp, type, message, details };
 
-    // Add to appropriate array
+    // Add to appropriate array with size limit
     if (type === 'error') {
       debugData.errors.push(entry);
+      if (debugData.errors.length > CONFIG.MAX_ERROR_LOGS) {
+        debugData.errors.shift(); // Remove oldest
+      }
       updateCount('debug-error-count', debugData.errors.length);
     } else if (type === 'warn') {
       debugData.warnings.push(entry);
+      if (debugData.warnings.length > CONFIG.MAX_LOGS) {
+        debugData.warnings.shift();
+      }
       updateCount('debug-warn-count', debugData.warnings.length);
     } else {
       debugData.info.push(entry);
+      if (debugData.info.length > CONFIG.MAX_LOGS) {
+        debugData.info.shift();
+      }
       updateCount('debug-ok-count', debugData.info.length);
     }
 
     // Add to activity log
     addLogLine(timestamp, type, message, details);
 
-    // Also log to console
-    console.log(`[DEBUG ${type.toUpperCase()}]`, message, details || '');
+    // Also log to console (only in development)
+    if (window.location.hostname === 'localhost' || window.location.hostname.includes('127.0.0.1')) {
+      console.log(`[DEBUG ${type.toUpperCase()}]`, message, details || '');
+    }
   }
 
   function addLogLine(time, type, message, details) {
@@ -414,44 +437,70 @@
     });
   }
 
-  // Monitor network requests
+  // Optimized Network monitoring with smart filtering
   function monitorNetwork() {
     const originalFetch = window.fetch;
     window.fetch = function(...args) {
       const url = args[0];
       const startTime = performance.now();
 
-      log('network', `Fetching: ${url}`);
+      // Skip monitoring debug/health check endpoints to reduce noise
+      const skipUrls = ['/api/debug', '/health', '/ping'];
+      const shouldSkip = skipUrls.some(skip => url.includes(skip));
+
+      if (!shouldSkip) {
+        log('network', `→ ${url.split('?')[0]}`); // Log only path, not query params
+      }
 
       return originalFetch.apply(this, args)
         .then(response => {
           const duration = (performance.now() - startTime).toFixed(2);
           const status = response.ok ? 'success' : 'error';
 
-          debugData.network.push({
-            url,
-            status: response.status,
-            ok: response.ok,
-            duration
-          });
+          if (!shouldSkip) {
+            // Smart size limiting
+            debugData.network.push({
+              url: url.split('?')[0], // Store only path
+              status: response.status,
+              ok: response.ok,
+              duration,
+              timestamp: new Date().toISOString()
+            });
 
-          const networkContainer = document.getElementById('network-log');
-          if (networkContainer) {
-            const line = document.createElement('div');
-            line.className = 'debug-line';
-            line.innerHTML = `
-              <span class="debug-type ${status}">${response.status}</span>
-              <span class="debug-message">${url} <span class="debug-badge">${duration}ms</span></span>
-            `;
-            networkContainer.insertBefore(line, networkContainer.firstChild);
+            // Keep only recent network logs
+            if (debugData.network.length > CONFIG.MAX_NETWORK_LOGS) {
+              debugData.network.shift();
+            }
+
+            const networkContainer = document.getElementById('network-log');
+            if (networkContainer) {
+              const line = document.createElement('div');
+              line.className = 'debug-line';
+              line.innerHTML = `
+                <span class="debug-type ${status}">${response.status}</span>
+                <span class="debug-message">${url.split('?')[0]} <span class="debug-badge">${duration}ms</span></span>
+              `;
+              networkContainer.insertBefore(line, networkContainer.firstChild);
+
+              // Keep only last 30 in DOM
+              while (networkContainer.children.length > 30) {
+                networkContainer.removeChild(networkContainer.lastChild);
+              }
+            }
+
+            if (duration > 2000) {
+              log('warn', `Slow request: ${url.split('?')[0]} (${duration}ms)`);
+            } else if (!response.ok) {
+              log('error', `${response.status} ${url.split('?')[0]} (${duration}ms)`);
+            }
           }
-
-          log(status, `${response.status} ${url} (${duration}ms)`);
           return response;
         })
         .catch(error => {
           const duration = (performance.now() - startTime).toFixed(2);
-          log('error', `Fetch failed: ${url}`, error.message);
+          if (!shouldSkip) {
+            log('error', `Fetch failed: ${url.split('?')[0]}`, error.message);
+          }
           throw error;
         });
     };
@@ -636,13 +685,80 @@
     }
   }
 
+  // Memory cleanup task
+  function startMemoryCleanup() {
+    setInterval(() => {
+      // Check memory usage
+      if (CONFIG.MONITOR_MEMORY && performance.memory) {
+        const memUsage = {
+          used: (performance.memory.usedJSHeapSize / 1048576).toFixed(2),
+          total: (performance.memory.totalJSHeapSize / 1048576).toFixed(2),
+          limit: (performance.memory.jsHeapSizeLimit / 1048576).toFixed(2)
+        };
+
+        debugData.memorySnapshots.push({
+          timestamp: new Date().toISOString(),
+          ...memUsage
+        });
+
+        // Keep only last 10 snapshots
+        if (debugData.memorySnapshots.length > 10) {
+          debugData.memorySnapshots.shift();
+        }
+
+        // Warn if memory is high
+        const usagePercent = (performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100;
+        if (usagePercent > 80) {
+          log('warn', `High memory usage: ${usagePercent.toFixed(1)}% (${memUsage.used}MB / ${memUsage.limit}MB)`);
+        }
+      }
+
+      // Clean old DOM elements
+      ['activity-log', 'network-log', 'errors-log'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.children.length > 50) {
+          while (el.children.length > 30) {
+            el.removeChild(el.lastChild);
+          }
+        }
+      });
+    }, CONFIG.CLEANUP_INTERVAL);
+  }
+
+  // Performance monitoring
+  function monitorPerformance() {
+    if (!CONFIG.MONITOR_PERFORMANCE) return;
+
+    // Track page load performance
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        const perfData = performance.getEntriesByType('navigation')[0];
+        if (perfData) {
+          debugData.performance = {
+            dns: (perfData.domainLookupEnd - perfData.domainLookupStart).toFixed(2),
+            connect: (perfData.connectEnd - perfData.connectStart).toFixed(2),
+            ttfb: (perfData.responseStart - perfData.requestStart).toFixed(2),
+            download: (perfData.responseEnd - perfData.responseStart).toFixed(2),
+            domReady: (perfData.domContentLoadedEventEnd - perfData.domContentLoadedEventStart).toFixed(2),
+            load: (perfData.loadEventEnd - perfData.loadEventStart).toFixed(2),
+            total: (perfData.loadEventEnd - perfData.fetchStart).toFixed(2)
+          };
+
+          log('info', `Page loaded in ${debugData.performance.total}ms`, debugData.performance);
+        }
+      }, 0);
+    });
+  }
+
   function setup() {
-    log('info', '🐛 Debug Monitor Started', { version: DEBUG_VERSION, page: window.location.pathname });
+    log('info', '🐛 Intelligent Debug Monitor Started', { version: DEBUG_VERSION, page: window.location.pathname });
 
     createDebugConsole();
     collectSystemInfo();
     monitorNetwork();
     monitorErrors();
+    monitorPerformance();
+    startMemoryCleanup();
 
     // Run checks
     setTimeout(() => {
@@ -651,7 +767,7 @@
       checkServiceWorker();
       checkCaches();
 
-      log('success', 'All checks complete');
+      log('success', '✅ All checks complete - Monitor active with smart memory management');
     }, 1000);
   }
 
