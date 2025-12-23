@@ -6,7 +6,9 @@
 
 export class StorageManager {
   constructor(storageType = 'local') {
-    this.storage = storageType === 'session' ? sessionStorage : localStorage;
+    this.storage = storageType === 'session'
+      ? globalThis.sessionStorage
+      : globalThis.localStorage;
     this.prefix = 'wishesu_';
   }
 
@@ -245,13 +247,13 @@ export class StorageManager {
   }
 }
 
-// Create singleton instances
-const localStorage = new StorageManager('local');
-const sessionStorage = new StorageManager('session');
+// Create singleton instances without shadowing globals
+const localStore = new StorageManager('local');
+const sessionStore = new StorageManager('session');
 
 // Export instances
-export default localStorage;
-export { sessionStorage };
+export default localStore;
+export { sessionStore as sessionStorage };
 
 // Export convenience functions for localStorage
 export function set(key, value) {
