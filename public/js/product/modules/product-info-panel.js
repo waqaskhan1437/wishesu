@@ -9,7 +9,7 @@
 function computeDeliveryBadge(instant, deliveryDays) {
   if (!window.DeliveryTimeUtils) {
     console.error('DeliveryTimeUtils not loaded');
-    return { icon: '🚚', text: '2 Days Delivery' };
+    return { icon: '', text: '2 Days Delivery' };
   }
   const text = window.DeliveryTimeUtils.getDeliveryText(instant, deliveryDays);
   const icon = window.DeliveryTimeUtils.getDeliveryIcon(text);
@@ -67,9 +67,9 @@ function renderRatingRow(product) {
   const emptyStars = 5 - fullStars - halfStar;
 
   let starsHtml = '';
-  for (let i = 0; i < fullStars; i++) starsHtml += '★';
-  if (halfStar) starsHtml += '☆';
-  for (let i = 0; i < emptyStars; i++) starsHtml += '☆';
+  for (let i = 0; i < fullStars; i++) starsHtml += '...';
+  if (halfStar) starsHtml += '';
+  for (let i = 0; i < emptyStars; i++) starsHtml += '';
 
   const reviewText = reviewCount === 0
     ? 'No reviews yet'
@@ -133,7 +133,7 @@ function renderBadgesRow(product, addonGroups) {
 function renderDigitalNote() {
   const note = document.createElement('div');
   note.className = 'digital-note';
-  note.innerHTML = '<span>📩</span> <span><strong>Digital Delivery:</strong> Receive via WhatsApp/Email.</span>';
+  note.innerHTML = '<span></span> <span><strong>Digital Delivery:</strong> Receive via WhatsApp/Email.</span>';
   return note;
 }
 
@@ -192,7 +192,7 @@ function renderCheckoutFooter() {
     cardBtn.id = 'checkout-btn';
     cardBtn.className = 'btn-buy';
     cardBtn.style.cssText = 'flex: 1; min-width: 140px; background: #2563eb; color: #fff;';
-    cardBtn.textContent = 'Pay with Card 💳';
+    cardBtn.textContent = 'Pay with Card';
     cardBtn.addEventListener('click', function(e) {
       e.preventDefault();
       if (typeof handleCheckout === 'function') handleCheckout();
@@ -237,3 +237,5 @@ export function renderProductInfoPanel(product, addonGroups) {
 
   return panel;
 }
+
+

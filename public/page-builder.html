@@ -1,20 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Landing Page Builder</title>
-  <!--
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Landing Page Builder</title>
+ <!--
     This page implements a simple landing page builder without any
     external dependencies.  The original builder relied on GrapesJS
     loaded via remote CDNs, which often fail in restricted
     environments (e.g. Cloudflare Workers) and result in a blank page.
-    Instead, this builder provides a set of pre‑designed sections
+    Instead, this builder provides a set of predesigned sections
     (hero, features, pricing, call to action and footer) that users
     can add, edit directly in place, reorder or remove.  Saving,
     loading and previewing pages still use the existing API endpoints.
   -->
-  <style>
+ <style>
     * {
       margin: 0;
       padding: 0;
@@ -231,71 +231,71 @@
       color: #ef4444;
       text-align: center;
     }
-  </style>
+ </style>
 
-  <!-- Load reusable widgets for products and reviews.  These scripts
+ <!-- Load reusable widgets for products and reviews.  These scripts
        expose global objects (ProductCards, ReviewsWidget) that can be
        used to render dynamic lists within the builder.  Placing
        these imports in the head ensures they are available before
        the builder logic executes. -->
-       <!-- Schema now injected server-side - removed collection-schema.js -->
-       <script src="js/product-cards.js?v=1766444251"></script>
-       <script src="js/reviews-widget.js?v=1766444251"></script>
+ <!-- Schema now injected server-side - removed collection-schema.js -->
+ <script src="js/product-cards.js?v=1766444251"></script>
+ <script src="js/reviews-widget.js?v=1766444251"></script>
 </head>
 <body>
-  <div class="top-bar">
-    <div class="top-bar-left">
-      <a href="/admin/dashboard.html" class="back-btn">← Back to Admin</a>
-      <h1>🎨 Landing Page Builder</h1>
-    </div>
-    <div class="top-bar-actions">
-      <button class="btn btn-secondary" id="load-btn">📂 Load</button>
-      <button class="btn btn-primary" id="preview-btn">👁️ Preview</button>
-      <button class="btn btn-success" id="save-btn">💾 Save to R2</button>
-      <button class="btn btn-secondary" id="seo-toggle-btn">🔍 SEO</button>
-    </div>
-  </div>
-  <!-- Main builder layout -->
-  <div class="builder-wrapper">
-    <aside class="sidebar">
-      <h2>Sections</h2>
-      <!-- Standard landing page building blocks -->
-      <button type="button" data-section="hero">🎯 Hero Section</button>
-      <!-- Header and Footer are now managed via the Components admin and are automatically applied. -->
-      <button type="button" data-section="features">✨ Features (3 Columns)</button>
-      <button type="button" data-section="pricing">💰 Pricing Cards</button>
-      <button type="button" data-section="cta">📢 Call to Action</button>
+ <div class="top-bar">
+ <div class="top-bar-left">
+ <a href="/admin/dashboard.html" class="back-btn"> Back to Admin</a>
+ <h1> Landing Page Builder</h1>
+ </div>
+ <div class="top-bar-actions">
+ <button class="btn btn-secondary" id="load-btn"> Load</button>
+ <button class="btn btn-primary" id="preview-btn"> Preview</button>
+ <button class="btn btn-success" id="save-btn"> Save to R2</button>
+ <button class="btn btn-secondary" id="seo-toggle-btn"> SEO</button>
+ </div>
+ </div>
+ <!-- Main builder layout -->
+ <div class="builder-wrapper">
+ <aside class="sidebar">
+ <h2>Sections</h2>
+ <!-- Standard landing page building blocks -->
+ <button type="button" data-section="hero"> Hero Section</button>
+ <!-- Header and Footer are now managed via the Components admin and are automatically applied. -->
+ <button type="button" data-section="features"> Features (3 Columns)</button>
+ <button type="button" data-section="pricing"> Pricing Cards</button>
+ <button type="button" data-section="cta"> Call to Action</button>
       
-      <hr style="margin: 20px 0; border-color: #e5e7eb;">
-      <!-- Dynamic data driven blocks -->
-      <!-- Dynamic product and review lists are now created in the Components admin.  -->
-      <button type="button" data-section="custom-html">📝 Custom HTML</button>
-      <button type="button" data-section="page-list">📄 Pages List</button>
-      <button type="button" data-section="image">🖼️ Image</button>
-    </aside>
-    <main id="builder-canvas"></main>
-  </div>
-  <!-- SEO settings panel (hidden by default) -->
-  <div id="seo-panel" style="display:none; position:fixed; top:var(--page-builder-top-bar-height); right:0; width:300px; height:calc(100% - var(--page-builder-top-bar-height)); background:#ffffff; border-left:1px solid #e5e7eb; padding:20px; overflow-y:auto; box-shadow:-2px 0 8px rgba(0,0,0,0.05); z-index:1010;">
-    <h2 style="margin-top:0; font-size:1.3rem; color:#1f2937;">SEO Settings</h2>
-    <div style="margin-bottom:15px;">
-      <label for="seo-title" style="display:block;font-size:0.85rem;color:#374151;margin-bottom:4px;">Page Title</label>
-      <input type="text" id="seo-title" placeholder="Enter SEO title" style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:4px;" />
-    </div>
-    <div style="margin-bottom:15px;">
-      <label for="seo-slug" style="display:block;font-size:0.85rem;color:#374151;margin-bottom:4px;">Permalink (slug)</label>
-      <input type="text" id="seo-slug" placeholder="e.g., my-landing-page" style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:4px;" />
-      <small style="color:#6b7280; font-size:0.75rem;">Slug will form the URL (letters, numbers and hyphens only).</small>
-    </div>
-    <div style="margin-bottom:15px;">
-      <label for="seo-desc" style="display:block;font-size:0.85rem;color:#374151;margin-bottom:4px;">Meta Description</label>
-      <textarea id="seo-desc" rows="4" placeholder="Enter SEO description" style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:4px; resize:vertical;"></textarea>
-    </div>
-    <p style="font-size:0.75rem; color:#6b7280;">These details appear in search results. Fill them in before saving your page.</p>
-  </div>
-  <!-- Hidden error element for future error messages -->
-  <div id="builder-error">⚠️ Failed to initialise the builder.</div>
-  <script>
+ <hr style="margin: 20px 0; border-color: #e5e7eb;">
+ <!-- Dynamic data driven blocks -->
+ <!-- Dynamic product and review lists are now created in the Components admin.  -->
+ <button type="button" data-section="custom-html"> Custom HTML</button>
+ <button type="button" data-section="page-list"> Pages List</button>
+ <button type="button" data-section="image">- Image</button>
+ </aside>
+ <main id="builder-canvas"></main>
+ </div>
+ <!-- SEO settings panel (hidden by default) -->
+ <div id="seo-panel" style="display:none; position:fixed; top:var(--page-builder-top-bar-height); right:0; width:300px; height:calc(100% - var(--page-builder-top-bar-height)); background:#ffffff; border-left:1px solid #e5e7eb; padding:20px; overflow-y:auto; box-shadow:-2px 0 8px rgba(0,0,0,0.05); z-index:1010;">
+ <h2 style="margin-top:0; font-size:1.3rem; color:#1f2937;">SEO Settings</h2>
+ <div style="margin-bottom:15px;">
+ <label for="seo-title" style="display:block;font-size:0.85rem;color:#374151;margin-bottom:4px;">Page Title</label>
+ <input type="text" id="seo-title" placeholder="Enter SEO title" style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:4px;" />
+ </div>
+ <div style="margin-bottom:15px;">
+ <label for="seo-slug" style="display:block;font-size:0.85rem;color:#374151;margin-bottom:4px;">Permalink (slug)</label>
+ <input type="text" id="seo-slug" placeholder="e.g., my-landing-page" style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:4px;" />
+ <small style="color:#6b7280; font-size:0.75rem;">Slug will form the URL (letters, numbers and hyphens only).</small>
+ </div>
+ <div style="margin-bottom:15px;">
+ <label for="seo-desc" style="display:block;font-size:0.85rem;color:#374151;margin-bottom:4px;">Meta Description</label>
+ <textarea id="seo-desc" rows="4" placeholder="Enter SEO description" style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:4px; resize:vertical;"></textarea>
+ </div>
+ <p style="font-size:0.75rem; color:#6b7280;">These details appear in search results. Fill them in before saving your page.</p>
+ </div>
+ <!-- Hidden error element for future error messages -->
+ <div id="builder-error"> Failed to initialise the builder.</div>
+ <script>
     function updateTopBarHeight() {
       const topBar = document.querySelector('.top-bar');
       if (!topBar) return;
@@ -306,96 +306,96 @@
     window.addEventListener('resize', updateTopBarHeight);
 
     // Reusable section templates with inline styles.  The inline styles keep
-    // the final output self‑contained so there is no dependency on external
+    // the final output selfcontained so there is no dependency on external
     // CSS frameworks.  Additional sections can be added here as needed.
     const SECTION_TEMPLATES = {
       // A simple header template.  You can edit the title and nav links in place.
       header: `
-        <header style="padding: 20px; background: #ffffff; border-bottom: 1px solid #e5e7eb;">
-          <div style="max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between;">
-            <h1 style="font-size: 1.5rem; color: #1f2937;">My Site</h1>
-            <nav>
-              <a href="#" style="margin-right: 15px; color: #3b82f6; text-decoration: none;">Home</a>
-              <a href="#" style="margin-right: 15px; color: #3b82f6; text-decoration: none;">Blog</a>
-              <a href="#" style="color: #3b82f6; text-decoration: none;">Contact</a>
-            </nav>
-          </div>
-        </header>
+ <header style="padding: 20px; background: #ffffff; border-bottom: 1px solid #e5e7eb;">
+ <div style="max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between;">
+ <h1 style="font-size: 1.5rem; color: #1f2937;">My Site</h1>
+ <nav>
+ <a href="#" style="margin-right: 15px; color: #3b82f6; text-decoration: none;">Home</a>
+ <a href="#" style="margin-right: 15px; color: #3b82f6; text-decoration: none;">Blog</a>
+ <a href="#" style="color: #3b82f6; text-decoration: none;">Contact</a>
+ </nav>
+ </div>
+ </header>
       `,
       hero: `
-        <section style="padding: 80px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-align: center; color: white;">
-          <h1 style="font-size: 3rem; font-weight: bold; margin-bottom: 20px;">Amazing Product</h1>
-          <p style="font-size: 1.2rem; margin-bottom: 30px;">Transform your business with our solution</p>
-          <a href="#" style="display: inline-block; padding: 15px 40px; background: white; color: #667eea; border-radius: 8px; text-decoration: none; font-weight: bold;">Get Started</a>
-        </section>
+ <section style="padding: 80px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); text-align: center; color: white;">
+ <h1 style="font-size: 3rem; font-weight: bold; margin-bottom: 20px;">Amazing Product</h1>
+ <p style="font-size: 1.2rem; margin-bottom: 30px;">Transform your business with our solution</p>
+ <a href="#" style="display: inline-block; padding: 15px 40px; background: white; color: #667eea; border-radius: 8px; text-decoration: none; font-weight: bold;">Get Started</a>
+ </section>
       `,
       features: `
-        <section style="padding: 60px 20px; background: #f9fafb;">
-          <div style="max-width: 1200px; margin: 0 auto;">
-            <h2 style="text-align: center; font-size: 2.5rem; margin-bottom: 50px; color: #1f2937;">Features</h2>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px;">
-              <div style="text-align: center; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; margin-bottom: 15px;">🚀</div>
-                <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Fast</h3>
-                <p style="color: #6b7280;">Lightning fast performance</p>
-              </div>
-              <div style="text-align: center; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; margin-bottom: 15px;">💎</div>
-                <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Premium</h3>
-                <p style="color: #6b7280;">High quality materials</p>
-              </div>
-              <div style="text-align: center; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <div style="font-size: 3rem; margin-bottom: 15px;">🛡️</div>
-                <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Secure</h3>
-                <p style="color: #6b7280;">Bank‑level security</p>
-              </div>
-            </div>
-          </div>
-        </section>
+ <section style="padding: 60px 20px; background: #f9fafb;">
+ <div style="max-width: 1200px; margin: 0 auto;">
+ <h2 style="text-align: center; font-size: 2.5rem; margin-bottom: 50px; color: #1f2937;">Features</h2>
+ <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px;">
+ <div style="text-align: center; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+ <div style="font-size: 3rem; margin-bottom: 15px;"></div>
+ <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Fast</h3>
+ <p style="color: #6b7280;">Lightning fast performance</p>
+ </div>
+ <div style="text-align: center; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+ <div style="font-size: 3rem; margin-bottom: 15px;"></div>
+ <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Premium</h3>
+ <p style="color: #6b7280;">High quality materials</p>
+ </div>
+ <div style="text-align: center; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+ <div style="font-size: 3rem; margin-bottom: 15px;"></div>
+ <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Secure</h3>
+ <p style="color: #6b7280;">Banklevel security</p>
+ </div>
+ </div>
+ </div>
+ </section>
       `,
       pricing: `
-        <section style="padding: 60px 20px; background: white;">
-          <div style="max-width: 1200px; margin: 0 auto;">
-            <h2 style="text-align: center; font-size: 2.5rem; margin-bottom: 50px; color: #1f2937;">Pricing</h2>
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px;">
-              <div style="padding: 40px; border: 2px solid #e5e7eb; border-radius: 12px; text-align: center;">
-                <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Basic</h3>
-                <div style="font-size: 3rem; font-weight: bold; color: #3b82f6; margin: 20px 0;">$29</div>
-                <p style="color: #6b7280; margin-bottom: 30px;">Per month</p>
-                <a href="#" style="display: block; padding: 12px; background: #3b82f6; color: white; border-radius: 8px; text-decoration: none; font-weight: 600;">Choose Plan</a>
-              </div>
-              <div style="padding: 40px; border: 2px solid #3b82f6; border-radius: 12px; text-align: center; box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);">
-                <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Pro</h3>
-                <div style="font-size: 3rem; font-weight: bold; color: #3b82f6; margin: 20px 0;">$59</div>
-                <p style="color: #6b7280; margin-bottom: 30px;">Per month</p>
-                <a href="#" style="display: block; padding: 12px; background: #3b82f6; color: white; border-radius: 8px; text-decoration: none; font-weight: 600;">Choose Plan</a>
-              </div>
-              <div style="padding: 40px; border: 2px solid #e5e7eb; border-radius: 12px; text-align: center;">
-                <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Enterprise</h3>
-                <div style="font-size: 3rem; font-weight: bold; color: #3b82f6; margin: 20px 0;">$99</div>
-                <p style="color: #6b7280; margin-bottom: 30px;">Per month</p>
-                <a href="#" style="display: block; padding: 12px; background: #3b82f6; color: white; border-radius: 8px; text-decoration: none; font-weight: 600;">Choose Plan</a>
-              </div>
-            </div>
-          </div>
-        </section>
+ <section style="padding: 60px 20px; background: white;">
+ <div style="max-width: 1200px; margin: 0 auto;">
+ <h2 style="text-align: center; font-size: 2.5rem; margin-bottom: 50px; color: #1f2937;">Pricing</h2>
+ <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px;">
+ <div style="padding: 40px; border: 2px solid #e5e7eb; border-radius: 12px; text-align: center;">
+ <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Basic</h3>
+ <div style="font-size: 3rem; font-weight: bold; color: #3b82f6; margin: 20px 0;">$29</div>
+ <p style="color: #6b7280; margin-bottom: 30px;">Per month</p>
+ <a href="#" style="display: block; padding: 12px; background: #3b82f6; color: white; border-radius: 8px; text-decoration: none; font-weight: 600;">Choose Plan</a>
+ </div>
+ <div style="padding: 40px; border: 2px solid #3b82f6; border-radius: 12px; text-align: center; box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);">
+ <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Pro</h3>
+ <div style="font-size: 3rem; font-weight: bold; color: #3b82f6; margin: 20px 0;">$59</div>
+ <p style="color: #6b7280; margin-bottom: 30px;">Per month</p>
+ <a href="#" style="display: block; padding: 12px; background: #3b82f6; color: white; border-radius: 8px; text-decoration: none; font-weight: 600;">Choose Plan</a>
+ </div>
+ <div style="padding: 40px; border: 2px solid #e5e7eb; border-radius: 12px; text-align: center;">
+ <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: #1f2937;">Enterprise</h3>
+ <div style="font-size: 3rem; font-weight: bold; color: #3b82f6; margin: 20px 0;">$99</div>
+ <p style="color: #6b7280; margin-bottom: 30px;">Per month</p>
+ <a href="#" style="display: block; padding: 12px; background: #3b82f6; color: white; border-radius: 8px; text-decoration: none; font-weight: 600;">Choose Plan</a>
+ </div>
+ </div>
+ </div>
+ </section>
       `,
       cta: `
-        <section style="padding: 80px 20px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); text-align: center;">
-          <h2 style="font-size: 2.5rem; color: white; margin-bottom: 20px;">Ready to Get Started?</h2>
-          <p style="font-size: 1.2rem; color: white; margin-bottom: 30px; opacity: 0.9;">Join thousands of satisfied customers</p>
-          <a href="#" style="display: inline-block; padding: 15px 40px; background: white; color: #f5576c; border-radius: 8px; text-decoration: none; font-weight: bold;">Start Free Trial</a>
-        </section>
+ <section style="padding: 80px 20px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); text-align: center;">
+ <h2 style="font-size: 2.5rem; color: white; margin-bottom: 20px;">Ready to Get Started?</h2>
+ <p style="font-size: 1.2rem; color: white; margin-bottom: 30px; opacity: 0.9;">Join thousands of satisfied customers</p>
+ <a href="#" style="display: inline-block; padding: 15px 40px; background: white; color: #f5576c; border-radius: 8px; text-decoration: none; font-weight: bold;">Start Free Trial</a>
+ </section>
       `,
       footer: `
-        <footer style="padding: 40px 20px; background: #1f2937; color: white; text-align: center;">
-          <p>&copy; 2025 Your Company. All rights reserved.</p>
-          <div style="margin-top: 20px;">
-            <a href="#" style="color: white; margin: 0 10px; text-decoration: none;">Privacy</a>
-            <a href="#" style="color: white; margin: 0 10px; text-decoration: none;">Terms</a>
-            <a href="#" style="color: white; margin: 0 10px; text-decoration: none;">Contact</a>
-          </div>
-        </footer>
+ <footer style="padding: 40px 20px; background: #1f2937; color: white; text-align: center;">
+ <p>&copy; 2025 Your Company. All rights reserved.</p>
+ <div style="margin-top: 20px;">
+ <a href="#" style="color: white; margin: 0 10px; text-decoration: none;">Privacy</a>
+ <a href="#" style="color: white; margin: 0 10px; text-decoration: none;">Terms</a>
+ <a href="#" style="color: white; margin: 0 10px; text-decoration: none;">Contact</a>
+ </div>
+ </footer>
       `
     };
 
@@ -406,7 +406,7 @@
     // including a literal closing script tag (`<\/script>`) sequence inside this
     // worker script.  The HTML parser terminates a <script> tag at the first
     // occurrence of a closing script tag even inside string literals, and
-    // Cloudflare’s HTML minifier may optimise string concatenation back into
+    // Cloudflares HTML minifier may optimise string concatenation back into
     // a single closing tag, breaking the page.  To safely build closing
     // script tags at runtime, compute them from character codes instead of
     // writing them inline.  The sequence below evaluates to a closing
@@ -447,11 +447,11 @@
       const controls = document.createElement('div');
       controls.className = 'section-controls';
       const upBtn = document.createElement('button');
-      upBtn.innerText = '⬆';
+      upBtn.innerText = '';
       const downBtn = document.createElement('button');
-      downBtn.innerText = '⬇';
+      downBtn.innerText = '';
       const delBtn = document.createElement('button');
-      delBtn.innerText = '🗑';
+      delBtn.innerText = '-';
       // Add a code edit button for static sections.  When clicked this opens a
       // prompt prepopulated with the current HTML of the section (minus
       // controls).  If the user enters new markup it replaces the contents
@@ -490,7 +490,7 @@
         if (ctrl) ctrl.remove();
         const currentHtml = clone.innerHTML.trim();
         // Create an overlay with a textarea and action buttons.  This provides
-        // a more user‑friendly editor than the default browser prompt.
+        // a more userfriendly editor than the default browser prompt.
         // Build an overlay with DOM API instead of innerHTML to avoid HTML
         // escaping issues.  The textarea holds the raw HTML for editing.  The
         // overlay is appended to the document body and removed on save/cancel.
@@ -533,7 +533,7 @@
      */
     function addSection(key) {
       // Look up the template.  For header/footer, allow defaults stored in
-      // localStorage to override the hard‑coded template.  This enables users
+      // localStorage to override the hardcoded template.  This enables users
       // to set a custom header/footer once and reuse it across pages.
       let html = SECTION_TEMPLATES[key];
       if (!html) return;
@@ -574,7 +574,7 @@
     // ---------------------------------------------------------------------------
     // Dynamic builder helpers
     //
-    // The following functions extend the basic builder with support for data‑driven
+    // The following functions extend the basic builder with support for datadriven
     // widgets such as product lists and review lists.  They also provide a
     // unified mechanism for generating a clean HTML output that includes
     // dynamic script calls for these widgets.  These helpers are defined
@@ -653,7 +653,7 @@
       const includes = { product: false, reviews: false, pages: false };
       // Determine the default header and footer.  These are pulled from
       // localStorage (set via the Components admin).  If no custom default
-      // exists, fall back to the built‑in templates.  The header and footer
+      // exists, fall back to the builtin templates.  The header and footer
       // are automatically inserted at the beginning and end of the page if
       // they are defined.  This avoids needing to manually add them for
       // every page.
@@ -1094,12 +1094,12 @@
                 });
                 
                 // Show a message to the user
-                alert('✅ Loaded page for editing!');
+                alert('... Loaded page for editing!');
               } else {
-                alert('❌ Failed to load page: ' + data.error);
+                alert(' Failed to load page: ' + data.error);
               }
             })
-            .catch(err => alert('❌ Error loading page: ' + err.message));
+            .catch(err => alert(' Error loading page: ' + err.message));
         } catch (e) {
           console.error(e);
         }
@@ -1141,7 +1141,7 @@
           return;
         }
         const seoDesc = descInput ? descInput.value.trim() : '';
-        const fullHTML = `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>${seoTitle}</title>\n  <meta name="description" content="${seoDesc.replace(/"/g, '&quot;')}">\n</head>\n<body>\n${html}\n</body>\n</html>`;
+        const fullHTML = `<!DOCTYPE html>\n<html lang="en">\n<head>\n <meta charset="UTF-8">\n <meta name="viewport" content="width=device-width, initial-scale=1.0">\n <title>${seoTitle}</title>\n <meta name="description" content="${seoDesc.replace(/"/g, '&quot;')}">\n</head>\n<body>\n${html}\n</body>\n</html>`;
         try {
           const res = await fetch('/api/pages/save', {
             method: 'POST',
@@ -1150,12 +1150,12 @@
           });
           const data = await res.json();
           if (data.success) {
-            alert(`✅ Page saved!\n\nURL: ${window.location.origin}/${slug}.html`);
+            alert(`... Page saved!\n\nURL: ${window.location.origin}/${slug}.html`);
           } else {
-            alert('❌ Save failed: ' + data.error);
+            alert(' Save failed: ' + data.error);
           }
         } catch (err) {
-          alert('❌ Error: ' + err.message);
+          alert(' Error: ' + err.message);
         }
       });
       // Preview the current page in a new window
@@ -1258,19 +1258,19 @@
               }
             });
             
-            alert('✅ Page loaded!');
+            alert('... Page loaded!');
           } else {
-            alert('❌ Load failed: ' + data.error);
+            alert(' Load failed: ' + data.error);
           }
         } catch (err) {
-          alert('❌ Error: ' + err.message);
+          alert(' Error: ' + err.message);
         }
       });
     });
-  </script>
-  <!-- Load page list widget so it is available when building pages -->
-  <script src="js/page-list-widget.js?v=1766444251"></script>
-  <script>
+ </script>
+ <!-- Load page list widget so it is available when building pages -->
+ <script src="js/page-list-widget.js?v=1766444251"></script>
+ <script>
     // Navigation function for admin dashboard
     function loadView(view) {
       // This will be handled by the dashboard page
@@ -1279,6 +1279,9 @@
         window.close();
       }
     }
-  </script>
+ </script>
 </body>
 </html>
+
+
+

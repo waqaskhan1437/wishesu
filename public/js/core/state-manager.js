@@ -199,9 +199,6 @@ export class StateManager {
    */
   debug() {
     console.group('State Manager Debug');
-    console.log('Current State:', this._state);
-    console.log('Active Listeners:', Array.from(this._listeners.keys()));
-    console.log('Recent History:', this.getHistory(5));
     console.groupEnd();
   }
 }

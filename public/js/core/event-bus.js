@@ -215,11 +215,9 @@ export class EventBus {
    */
   debug() {
     console.group('Event Bus Debug');
-    console.log('Regular Events:', Array.from(this._events.keys()).map(key => ({
       event: key,
       listeners: this._events.get(key).length
     })));
-    console.log('Once Events:', Array.from(this._onceEvents.keys()).map(key => ({
       event: key,
       listeners: this._onceEvents.get(key).length
     })));

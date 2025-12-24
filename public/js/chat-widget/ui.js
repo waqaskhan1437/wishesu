@@ -125,7 +125,7 @@ export class ChatUI {
     this.createStyles();
 
     // Button
-    this.elements.btn = this.createElement('button', { class: 'wc-chat-btn', title: 'Chat' }, ['💬']);
+    this.elements.btn = this.createElement('button', { class: 'wc-chat-btn', title: 'Chat' }, ['']);
 
     // Panel
     this.elements.panel = this.createElement('div', { class: 'wc-chat-panel', role: 'dialog', 'aria-label': 'Chat' });
@@ -136,7 +136,7 @@ export class ChatUI {
       style: 'border:0;background:transparent;font-size:18px;cursor:pointer;padding:6px;',
       type: 'button',
       'aria-label': 'Close'
-    }, ['✕']);
+    }, ['']);
 
     const header = this.createElement('div', { class: 'wc-chat-header' }, [
       this.createElement('div', {}, ['Support']),
@@ -148,7 +148,7 @@ export class ChatUI {
     this.elements.quickRow = this.createElement('div', { class: 'wc-quick' }, []);
 
     // Input bar
-    this.elements.input = this.createElement('input', { type: 'text', placeholder: 'Type a message…', maxlength: String(LIMITS.MAX_MESSAGE_LENGTH) });
+    this.elements.input = this.createElement('input', { type: 'text', placeholder: 'Type a message', maxlength: String(LIMITS.MAX_MESSAGE_LENGTH) });
     this.elements.sendBtn = this.createElement('button', { type: 'button' }, ['Send']);
     this.elements.counter = this.createElement('div', { class: 'wc-counter' }, [`0/${LIMITS.MAX_MESSAGE_LENGTH}`]);
     this.elements.hint = this.createElement('div', { class: 'wc-hint' }, ['']);
@@ -228,7 +228,7 @@ export class ChatUI {
 
     const meta = this.createElement('div', { class: 'wc-meta' }, [
       role === 'user' ? 'You' : (role === 'admin' ? 'Admin' : 'System'),
-      created_at ? ` • ${this.formatTime(created_at)}` : ''
+      created_at ? `  ${this.formatTime(created_at)}` : ''
     ]);
 
     wrap.appendChild(bubble);
@@ -252,3 +252,4 @@ export class ChatUI {
     this.elements.counter.textContent = `${val.length}/${LIMITS.MAX_MESSAGE_LENGTH}`;
   }
 }
+

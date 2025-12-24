@@ -54,7 +54,7 @@
       if (reviews.length === 0) {
         container.innerHTML = `
           <div style="text-align: center; padding: 40px; color: #6b7280;">
-            <div style="font-size: 3rem; margin-bottom: 15px;">⭐</div>
+            <div style="font-size: 3rem; margin-bottom: 15px;"></div>
             <p>No reviews yet. Be the first to review!</p>
           </div>
         `;
@@ -118,7 +118,7 @@
           </div>
           
           ${productDisplayName ? `
-            <div class="review-product">📦 ${productDisplayName}</div>
+            <div class="review-product"> ${productDisplayName}</div>
           ` : ''}
           
           <div class="review-text">${reviewText}</div>
@@ -133,9 +133,9 @@
 
       for (let i = 0; i < 5; i++) {
         if (i < fullStars) {
-          stars += '<span class="star star-full" aria-hidden="true">★</span>';
+          stars += '<span class="star star-full" aria-hidden="true">...</span>';
         } else {
-          stars += '<span class="star star-empty" aria-hidden="true">☆</span>';
+          stars += '<span class="star star-empty" aria-hidden="true"></span>';
         }
       }
 
@@ -248,5 +248,6 @@
     }
   };
 
-  console.log('✅ Reviews Widget Ready');
 })();
+
+

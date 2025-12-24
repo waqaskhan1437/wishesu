@@ -20,18 +20,19 @@ export function registerWhopRoutes(router) {
   // Create checkout session
   router.post('/api/whop/checkout', async (req, env, url) => {
     const body = await req.json().catch(() => ({}));
-    return createCheckout(env, body, url.href);
+    return createCheckout(env, body, url.origin);
   });
 
   // Create plan checkout
   router.post('/api/whop/checkout/plan', async (req, env, url) => {
     const body = await req.json().catch(() => ({}));
-    return createPlanCheckout(env, body, url.href);
+    return createPlanCheckout(env, body, url.origin);
   });
 
   // Webhook handler
   router.post('/api/whop/webhook', async (req, env, url) => {
-    return handleWebhook(req, env);
+    const body = await req.json().catch(() => ({}));
+    return handleWebhook(env, body, url.origin);
   });
 
   // Test Whop API (admin)

@@ -134,7 +134,6 @@ export async function getPresignedR2Url(env, url) {
     const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
     const maxSizeLabel = isVideo ? '500MB' : '10MB';
 
-    console.log('Generating presigned URL:', sanitizedFilename, 'for session:', sessionId);
 
     // Generate presigned URL for PUT request (15 minutes expiry)
     const signedUrl = await env.R2_BUCKET.createSignedUrl({

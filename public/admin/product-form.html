@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin – Product Form</title>
-  <link rel="stylesheet" href="../css/style.css">
-  <style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Admin  Product Form</title>
+ <link rel="stylesheet" href="../css/style.css">
+ <style>
     /* Tab Navigation Styles */
     .tabs-container {
       background: white;
@@ -509,263 +509,263 @@
         width: 100%;
       }
     }
-  </style>
+ </style>
 </head>
 <body class="admin-page">
-  <div class="admin-shell product-form-wrapper">
-    <!-- Back Button -->
-    <a href="/admin/" class="admin-back-btn">
-      ← Back to Dashboard
-    </a>
+ <div class="admin-shell product-form-wrapper">
+ <!-- Back Button -->
+ <a href="/admin/" class="admin-back-btn">
+       Back to Dashboard
+ </a>
 
-    <!-- Page Header -->
-    <div class="page-header">
-      <h1>📝 Product Form</h1>
-      <p>Create and manage your products with organized sections for all details</p>
-    </div>
+ <!-- Page Header -->
+ <div class="page-header">
+ <h1> Product Form</h1>
+ <p>Create and manage your products with organized sections for all details</p>
+ </div>
 
-    <!-- Tabs Container -->
-    <form id="product-form" class="admin-form">
-      <div class="tabs-container">
-        <!-- Tab Navigation -->
-        <div class="tabs-nav">
-          <button type="button" class="tab-button active" data-tab="basic">
-            <span class="tab-icon">📋</span>
-            <span>Basic Details</span>
-          </button>
-          <button type="button" class="tab-button" data-tab="media">
-            <span class="tab-icon">🖼️</span>
-            <span>Media</span>
-          </button>
-          <button type="button" class="tab-button" data-tab="addons">
-            <span class="tab-icon">⚙️</span>
-            <span>Custom Fields</span>
-          </button>
-          <button type="button" class="tab-button" data-tab="seo">
-            <span class="tab-icon">🔍</span>
-            <span>SEO Settings</span>
-          </button>
-          <button type="button" class="tab-button" data-tab="whop">
-            <span class="tab-icon">💳</span>
-            <span>Whop Integration</span>
-          </button>
-        </div>
+ <!-- Tabs Container -->
+ <form id="product-form" class="admin-form">
+ <div class="tabs-container">
+ <!-- Tab Navigation -->
+ <div class="tabs-nav">
+ <button type="button" class="tab-button active" data-tab="basic">
+ <span class="tab-icon"></span>
+ <span>Basic Details</span>
+ </button>
+ <button type="button" class="tab-button" data-tab="media">
+ <span class="tab-icon">-</span>
+ <span>Media</span>
+ </button>
+ <button type="button" class="tab-button" data-tab="addons">
+ <span class="tab-icon"></span>
+ <span>Custom Fields</span>
+ </button>
+ <button type="button" class="tab-button" data-tab="seo">
+ <span class="tab-icon"></span>
+ <span>SEO Settings</span>
+ </button>
+ <button type="button" class="tab-button" data-tab="whop">
+ <span class="tab-icon"></span>
+ <span>Whop Integration</span>
+ </button>
+ </div>
 
-        <!-- Tab 1: Basic Details -->
-        <div class="tab-content active" id="tab-basic">
-          <div class="form-section-header">
-            <h2 class="form-section-title">Basic Product Information</h2>
-            <p class="form-section-desc">Set up the core details of your product</p>
-          </div>
+ <!-- Tab 1: Basic Details -->
+ <div class="tab-content active" id="tab-basic">
+ <div class="form-section-header">
+ <h2 class="form-section-title">Basic Product Information</h2>
+ <p class="form-section-desc">Set up the core details of your product</p>
+ </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label for="title">Product Title *</label>
-              <input type="text" id="title" name="title" required placeholder="e.g. Birthday Greeting Video">
-              <span class="field-helper-text">This will be the main product name displayed to customers</span>
-            </div>
-            <div class="form-group">
-              <label for="slug">URL Slug</label>
-              <input type="text" id="slug" name="slug" placeholder="auto-generated-from-title">
-              <span class="field-helper-text">Leave empty to auto-generate from title</span>
-            </div>
-          </div>
+ <div class="form-row">
+ <div class="form-group">
+ <label for="title">Product Title *</label>
+ <input type="text" id="title" name="title" required placeholder="e.g. Birthday Greeting Video">
+ <span class="field-helper-text">This will be the main product name displayed to customers</span>
+ </div>
+ <div class="form-group">
+ <label for="slug">URL Slug</label>
+ <input type="text" id="slug" name="slug" placeholder="auto-generated-from-title">
+ <span class="field-helper-text">Leave empty to auto-generate from title</span>
+ </div>
+ </div>
 
-          <div class="form-group">
-            <label for="description">Product Description</label>
-            <textarea id="description" name="description" rows="4" placeholder="Describe your product in detail..."></textarea>
-            <span class="field-helper-text">Provide a clear and engaging description</span>
-          </div>
+ <div class="form-group">
+ <label for="description">Product Description</label>
+ <textarea id="description" name="description" rows="4" placeholder="Describe your product in detail..."></textarea>
+ <span class="field-helper-text">Provide a clear and engaging description</span>
+ </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label for="normal_price">Normal Price ($) *</label>
-              <input type="number" id="normal_price" name="normal_price" step="0.01" placeholder="0.00">
-              <span class="field-helper-text">Regular price in USD</span>
-            </div>
-            <div class="form-group">
-              <label for="sale_price">Sale Price ($)</label>
-              <input type="number" id="sale_price" name="sale_price" step="0.01" placeholder="Optional sale price">
-              <span class="field-helper-text">Optional discounted price</span>
-            </div>
-          </div>
+ <div class="form-row">
+ <div class="form-group">
+ <label for="normal_price">Normal Price ($) *</label>
+ <input type="number" id="normal_price" name="normal_price" step="0.01" placeholder="0.00">
+ <span class="field-helper-text">Regular price in USD</span>
+ </div>
+ <div class="form-group">
+ <label for="sale_price">Sale Price ($)</label>
+ <input type="number" id="sale_price" name="sale_price" step="0.01" placeholder="Optional sale price">
+ <span class="field-helper-text">Optional discounted price</span>
+ </div>
+ </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <div class="checkbox-wrapper">
-                <input type="checkbox" id="instant_delivery" name="instant_delivery">
-                <label for="instant_delivery">⚡ Enable Instant Delivery (Automated)</label>
-              </div>
-              <span class="field-helper-text">Product will be delivered automatically after purchase</span>
-            </div>
-            <div class="form-group">
-              <label for="normal_delivery_text">Delivery Days</label>
-              <input type="number" id="normal_delivery_text" name="normal_delivery_text" placeholder="e.g. 2" min="1" step="1" inputmode="numeric">
-              <span class="field-helper-text">Enter days only (e.g. 1, 2, 3...)</span>
-            </div>
-          </div>
-        </div>
+ <div class="form-row">
+ <div class="form-group">
+ <div class="checkbox-wrapper">
+ <input type="checkbox" id="instant_delivery" name="instant_delivery">
+ <label for="instant_delivery"> Enable Instant Delivery (Automated)</label>
+ </div>
+ <span class="field-helper-text">Product will be delivered automatically after purchase</span>
+ </div>
+ <div class="form-group">
+ <label for="normal_delivery_text">Delivery Days</label>
+ <input type="number" id="normal_delivery_text" name="normal_delivery_text" placeholder="e.g. 2" min="1" step="1" inputmode="numeric">
+ <span class="field-helper-text">Enter days only (e.g. 1, 2, 3...)</span>
+ </div>
+ </div>
+ </div>
 
-        <!-- Tab 2: Media -->
-        <div class="tab-content" id="tab-media">
-          <div class="form-section-header">
-            <h2 class="form-section-title">Product Media</h2>
-            <p class="form-section-desc">Upload images and videos to showcase your product</p>
-          </div>
+ <!-- Tab 2: Media -->
+ <div class="tab-content" id="tab-media">
+ <div class="form-section-header">
+ <h2 class="form-section-title">Product Media</h2>
+ <p class="form-section-desc">Upload images and videos to showcase your product</p>
+ </div>
 
-          <!-- Thumbnail -->
-          <fieldset class="upload-group">
-            <legend>📸 Thumbnail Image</legend>
-            <div class="form-group">
-              <label for="thumbnail_file">Upload Image</label>
-              <input type="file" id="thumbnail_file" name="thumbnail_file" accept="image/*">
-            </div>
-            <div class="upload-divider">OR</div>
-            <div class="form-group">
-              <label for="thumbnail_url">Image URL</label>
-              <input type="text" id="thumbnail_url" name="thumbnail_url" placeholder="https://example.com/thumb.jpg">
-            </div>
-          </fieldset>
+ <!-- Thumbnail -->
+ <fieldset class="upload-group">
+ <legend> Thumbnail Image</legend>
+ <div class="form-group">
+ <label for="thumbnail_file">Upload Image</label>
+ <input type="file" id="thumbnail_file" name="thumbnail_file" accept="image/*">
+ </div>
+ <div class="upload-divider">OR</div>
+ <div class="form-group">
+ <label for="thumbnail_url">Image URL</label>
+ <input type="text" id="thumbnail_url" name="thumbnail_url" placeholder="https://example.com/thumb.jpg">
+ </div>
+ </fieldset>
 
-          <!-- Gallery -->
-          <fieldset class="upload-group" id="gallery-wrapper">
-            <legend>🖼️ Gallery Images</legend>
-            <div class="gallery-row">
-              <div class="form-group">
-                <label>Upload Image</label>
-                <input type="file" name="gallery_files[]" accept="image/*">
-              </div>
-              <div class="upload-divider">OR</div>
-              <div class="form-group">
-                <label>Image URL</label>
-                <input type="text" name="gallery_urls[]" placeholder="https://example.com/image.jpg">
-              </div>
-            </div>
-            <button type="button" id="add-gallery-image" class="btn-secondary">+ Add More Images</button>
-          </fieldset>
+ <!-- Gallery -->
+ <fieldset class="upload-group" id="gallery-wrapper">
+ <legend>- Gallery Images</legend>
+ <div class="gallery-row">
+ <div class="form-group">
+ <label>Upload Image</label>
+ <input type="file" name="gallery_files[]" accept="image/*">
+ </div>
+ <div class="upload-divider">OR</div>
+ <div class="form-group">
+ <label>Image URL</label>
+ <input type="text" name="gallery_urls[]" placeholder="https://example.com/image.jpg">
+ </div>
+ </div>
+ <button type="button" id="add-gallery-image" class="btn-secondary">+ Add More Images</button>
+ </fieldset>
 
-          <!-- Video -->
-          <fieldset class="upload-group">
-            <legend>🎥 Product Video</legend>
-            <div class="form-group">
-              <label for="video_file">Upload Video</label>
-              <input type="file" id="video_file" name="video_file" accept="video/*">
-            </div>
-            <div class="upload-divider">OR</div>
-            <div class="form-group">
-              <label for="video_url">Video URL</label>
-              <input type="text" id="video_url" name="video_url" placeholder="https://example.com/video.mp4">
-            </div>
-          </fieldset>
-        </div>
+ <!-- Video -->
+ <fieldset class="upload-group">
+ <legend> Product Video</legend>
+ <div class="form-group">
+ <label for="video_file">Upload Video</label>
+ <input type="file" id="video_file" name="video_file" accept="video/*">
+ </div>
+ <div class="upload-divider">OR</div>
+ <div class="form-group">
+ <label for="video_url">Video URL</label>
+ <input type="text" id="video_url" name="video_url" placeholder="https://example.com/video.mp4">
+ </div>
+ </fieldset>
+ </div>
 
-        <!-- Tab 3: Custom Fields (Addons) -->
-        <div class="tab-content" id="tab-addons">
-          <div class="form-section-header">
-            <h2 class="form-section-title">Custom Fields (Addons)</h2>
-            <p class="form-section-desc">Create custom options like dropdowns, checkboxes, and file uploads for customers</p>
-          </div>
+ <!-- Tab 3: Custom Fields (Addons) -->
+ <div class="tab-content" id="tab-addons">
+ <div class="form-section-header">
+ <h2 class="form-section-title">Custom Fields (Addons)</h2>
+ <p class="form-section-desc">Create custom options like dropdowns, checkboxes, and file uploads for customers</p>
+ </div>
 
-          <div id="addons-builder">
-            <div id="addons-fields"></div>
-            <button type="button" id="add-addon-field" class="btn-primary">
-              <span>+</span>
-              <span>Add New Field</span>
-            </button>
-            <input type="hidden" name="addons_json" id="addons-json">
-          </div>
-        </div>
+ <div id="addons-builder">
+ <div id="addons-fields"></div>
+ <button type="button" id="add-addon-field" class="btn-primary">
+ <span>+</span>
+ <span>Add New Field</span>
+ </button>
+ <input type="hidden" name="addons_json" id="addons-json">
+ </div>
+ </div>
 
-        <!-- Tab 4: SEO Settings -->
-        <div class="tab-content" id="tab-seo">
-          <div class="form-section-header">
-            <h2 class="form-section-title">SEO Settings</h2>
-            <p class="form-section-desc">Optimize your product for search engines</p>
-          </div>
+ <!-- Tab 4: SEO Settings -->
+ <div class="tab-content" id="tab-seo">
+ <div class="form-section-header">
+ <h2 class="form-section-title">SEO Settings</h2>
+ <p class="form-section-desc">Optimize your product for search engines</p>
+ </div>
 
-          <div class="form-group">
-            <label for="seo_title">Meta Title</label>
-            <input type="text" id="seo_title" name="seo_title" maxlength="160" placeholder="SEO optimized title">
-            <span class="field-helper-text">Recommended: 50-60 characters</span>
-          </div>
+ <div class="form-group">
+ <label for="seo_title">Meta Title</label>
+ <input type="text" id="seo_title" name="seo_title" maxlength="160" placeholder="SEO optimized title">
+ <span class="field-helper-text">Recommended: 50-60 characters</span>
+ </div>
 
-          <div class="form-group">
-            <label for="seo_description">Meta Description</label>
-            <textarea id="seo_description" name="seo_description" rows="3" maxlength="320" placeholder="Brief description for search results"></textarea>
-            <span class="field-helper-text">Recommended: 150-160 characters</span>
-          </div>
+ <div class="form-group">
+ <label for="seo_description">Meta Description</label>
+ <textarea id="seo_description" name="seo_description" rows="3" maxlength="320" placeholder="Brief description for search results"></textarea>
+ <span class="field-helper-text">Recommended: 150-160 characters</span>
+ </div>
 
-          <div class="form-group">
-            <label for="seo_keywords">Focus Keywords</label>
-            <input type="text" id="seo_keywords" name="seo_keywords" placeholder="keyword1, keyword2, keyword3">
-            <span class="field-helper-text">Separate keywords with commas</span>
-          </div>
+ <div class="form-group">
+ <label for="seo_keywords">Focus Keywords</label>
+ <input type="text" id="seo_keywords" name="seo_keywords" placeholder="keyword1, keyword2, keyword3">
+ <span class="field-helper-text">Separate keywords with commas</span>
+ </div>
 
-          <div class="form-group">
-            <label for="seo_canonical">Canonical URL (Optional)</label>
-            <input type="text" id="seo_canonical" name="seo_canonical" placeholder="https://example.com/product">
-            <span class="field-helper-text">Specify the preferred URL for search engines</span>
-          </div>
-        </div>
+ <div class="form-group">
+ <label for="seo_canonical">Canonical URL (Optional)</label>
+ <input type="text" id="seo_canonical" name="seo_canonical" placeholder="https://example.com/product">
+ <span class="field-helper-text">Specify the preferred URL for search engines</span>
+ </div>
+ </div>
 
-        <!-- Tab 5: Whop Integration -->
-        <div class="tab-content" id="tab-whop">
-          <div class="form-section-header">
-            <h2 class="form-section-title">💳 Whop Payment Integration</h2>
-            <p class="form-section-desc">Connect your product to Whop for payment processing</p>
-          </div>
+ <!-- Tab 5: Whop Integration -->
+ <div class="tab-content" id="tab-whop">
+ <div class="form-section-header">
+ <h2 class="form-section-title"> Whop Payment Integration</h2>
+ <p class="form-section-desc">Connect your product to Whop for payment processing</p>
+ </div>
 
-          <div class="form-group">
-            <label for="whop_plan">Whop Product Link or Plan ID</label>
-            <input type="text" id="whop_plan" name="whop_plan" placeholder="https://whop.com/your-product OR plan_XXXXXXXXX">
-            <span class="field-helper-text">
-              <strong>Option 1:</strong> Paste your Whop product link (e.g., https://whop.com/your-product)<br>
-              <strong>Option 2:</strong> Or just the Plan ID (e.g., plan_XXXXXXXXX)
-            </span>
-          </div>
+ <div class="form-group">
+ <label for="whop_plan">Whop Product Link or Plan ID</label>
+ <input type="text" id="whop_plan" name="whop_plan" placeholder="https://whop.com/your-product OR plan_XXXXXXXXX">
+ <span class="field-helper-text">
+ <strong>Option 1:</strong> Paste your Whop product link (e.g., https://whop.com/your-product)<br>
+ <strong>Option 2:</strong> Or just the Plan ID (e.g., plan_XXXXXXXXX)
+ </span>
+ </div>
 
-          <div style="background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
-            <p style="margin: 0; color: #1e40af; font-size: 0.95rem;">
-              💡 <strong>Auto-checkout:</strong> A checkout session will be automatically created when the customer clicks "Checkout" and will auto-delete after payment or 15 minutes if unused.
-            </p>
-          </div>
+ <div style="background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+ <p style="margin: 0; color: #1e40af; font-size: 0.95rem;">
+ <strong>Auto-checkout:</strong> A checkout session will be automatically created when the customer clicks "Checkout" and will auto-delete after payment or 15 minutes if unused.
+ </p>
+ </div>
 
-          <div class="form-group">
-            <label for="whop_price_map">Whop Price Map (Advanced)</label>
-            <textarea id="whop_price_map" name="whop_price_map" rows="3" placeholder="e.g. 5|plan_abc123,10|plan_def456"></textarea>
-            <span class="field-helper-text">
+ <div class="form-group">
+ <label for="whop_price_map">Whop Price Map (Advanced)</label>
+ <textarea id="whop_price_map" name="whop_price_map" rows="3" placeholder="e.g. 5|plan_abc123,10|plan_def456"></textarea>
+ <span class="field-helper-text">
               Optional: For products with multiple price tiers, map amounts to different plan IDs.<br>
               Format: <code>amount|planId,amount|planId</code>
-            </span>
-          </div>
-        </div>
+ </span>
+ </div>
+ </div>
 
-        <!-- Form Actions (Sticky at bottom) -->
-        <div class="form-actions">
-          <button type="submit" class="btn-primary">
-            <span>💾</span>
-            <span>Save Product</span>
-          </button>
-        </div>
-      </div>
-    </form>
-  </div>
+ <!-- Form Actions (Sticky at bottom) -->
+ <div class="form-actions">
+ <button type="submit" class="btn-primary">
+ <span></span>
+ <span>Save Product</span>
+ </button>
+ </div>
+ </div>
+ </form>
+ </div>
 
-  <script src="../js/api.js?v=1766444251"></script>
-  <!-- Load centralized delivery time utility first -->
-  <script src="/src/utils/delivery-time.js?v=1766444251"></script>
-  <!-- load addon builder modules (split into multiple smaller files) -->
-  <script src="../js/addons/data.js?v=1766444251"></script>
-  <script src="../js/addons/utils.js?v=1766444251"></script>
-  <script src="../js/addons/fields.js?v=1766444251"></script>
-  <script src="../js/addons/config.js?v=1766444251"></script>
-  <script src="../js/addons/builder.js?v=1766444251"></script>
-  <!-- other logic -->
-  <script src="../js/product-seo.js?v=1766444251"></script>
-  <script src="../js/product-form.js?v=1766444251"></script>
+ <script src="../js/api.js?v=1766444251"></script>
+ <!-- Load centralized delivery time utility first -->
+ <script src="/src/utils/delivery-time.js?v=1766444251"></script>
+ <!-- load addon builder modules (split into multiple smaller files) -->
+ <script src="../js/addons/data.js?v=1766444251"></script>
+ <script src="../js/addons/utils.js?v=1766444251"></script>
+ <script src="../js/addons/fields.js?v=1766444251"></script>
+ <script src="../js/addons/config.js?v=1766444251"></script>
+ <script src="../js/addons/builder.js?v=1766444251"></script>
+ <!-- other logic -->
+ <script src="../js/product-seo.js?v=1766444251"></script>
+ <script src="../js/product-form.js?v=1766444251"></script>
   
-  <!-- Tab Switching Logic -->
-  <script>
+ <!-- Tab Switching Logic -->
+ <script>
     (function() {
       const tabButtons = document.querySelectorAll('.tab-button');
       const tabContents = document.querySelectorAll('.tab-content');
@@ -784,6 +784,9 @@
         });
       });
     })();
-  </script>
+ </script>
 </body>
 </html>
+
+
+

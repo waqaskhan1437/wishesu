@@ -238,11 +238,6 @@ export class StorageManager {
    */
   debug() {
     console.group('Storage Debug');
-    console.log('Type:', this.storage === localStorage ? 'localStorage' : 'sessionStorage');
-    console.log('Prefix:', this.prefix);
-    console.log('Keys:', this.keys());
-    console.log('Items:', this.getAll());
-    console.log('Size:', `${(this.size() / 1024).toFixed(2)} KB`);
     console.groupEnd();
   }
 }

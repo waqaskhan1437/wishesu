@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clear Cache - Force Refresh</title>
-  <style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Clear Cache - Force Refresh</title>
+ <style>
     * {
       margin: 0;
       padding: 0;
@@ -122,7 +122,7 @@
     }
 
     .details li::before {
-      content: "✅";
+      content: "...";
       font-size: 1.2rem;
     }
 
@@ -131,39 +131,39 @@
       font-size: 0.9rem;
       color: #9ca3af;
     }
-  </style>
+ </style>
 </head>
 <body>
-  <div class="container">
-    <div class="icon" id="icon">🔄</div>
-    <h1 id="title">Clearing Cache...</h1>
-    <div class="status" id="status">Please wait while we clear all cached data</div>
+ <div class="container">
+ <div class="icon" id="icon"></div>
+ <h1 id="title">Clearing Cache...</h1>
+ <div class="status" id="status">Please wait while we clear all cached data</div>
 
-    <div class="progress">
-      <div class="progress-bar" id="progress-bar"></div>
-    </div>
+ <div class="progress">
+ <div class="progress-bar" id="progress-bar"></div>
+ </div>
 
-    <div id="action-button" style="display: none;">
-      <a href="/" class="btn">Go to Homepage</a>
-    </div>
+ <div id="action-button" style="display: none;">
+ <a href="/" class="btn">Go to Homepage</a>
+ </div>
 
-    <div class="details">
-      <h3>What's being cleared:</h3>
-      <ul id="details-list">
-        <li id="step1" style="opacity: 0.3;">Service Worker cache</li>
-        <li id="step2" style="opacity: 0.3;">Browser cache</li>
-        <li id="step3" style="opacity: 0.3;">Local storage</li>
-        <li id="step4" style="opacity: 0.3;">Session storage</li>
-        <li id="step5" style="opacity: 0.3;">All cached resources</li>
-      </ul>
-    </div>
+ <div class="details">
+ <h3>What's being cleared:</h3>
+ <ul id="details-list">
+ <li id="step1" style="opacity: 0.3;">Service Worker cache</li>
+ <li id="step2" style="opacity: 0.3;">Browser cache</li>
+ <li id="step3" style="opacity: 0.3;">Local storage</li>
+ <li id="step4" style="opacity: 0.3;">Session storage</li>
+ <li id="step5" style="opacity: 0.3;">All cached resources</li>
+ </ul>
+ </div>
 
-    <div class="version">
+ <div class="version">
       Version: 1766444251 (Latest)
-    </div>
-  </div>
+ </div>
+ </div>
 
-  <script>
+ <script>
     // Aggressive cache clearing script
     (async function() {
       const icon = document.getElementById('icon');
@@ -236,7 +236,7 @@
         updateProgress(100);
 
         // Success!
-        icon.textContent = '✅';
+        icon.textContent = '...';
         title.textContent = 'Cache Cleared Successfully!';
         status.textContent = 'All cached data has been removed. You can now reload the page to see the latest version.';
         actionButton.style.display = 'block';
@@ -252,7 +252,7 @@
 
       } catch (error) {
         console.error('Cache clear error:', error);
-        icon.textContent = '⚠️';
+        icon.textContent = '';
         title.textContent = 'Partial Clear';
         status.textContent = 'Some caches were cleared. Please manually refresh (Ctrl+Shift+R)';
         actionButton.style.display = 'block';
@@ -260,9 +260,9 @@
     })();
 
     // Log clearing actions
-    console.log('🧹 Cache clearing initiated...');
-    console.log('Version: 1766444251');
-    console.log('Timestamp:', Date.now());
-  </script>
+ </script>
 </body>
 </html>
+
+
+

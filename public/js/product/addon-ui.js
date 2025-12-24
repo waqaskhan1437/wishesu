@@ -117,7 +117,7 @@
         if (opt.price > 0) {
           const p = document.createElement('span');
           p.className = 'opt-price';
-          p.textContent = ' +$' + opt.price;
+          p.textContent = '+$' + opt.price;
           l.appendChild(p);
         }
 

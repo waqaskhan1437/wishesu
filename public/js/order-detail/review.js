@@ -67,7 +67,7 @@ async function submitReview(e, orderData, selectedRating) {
     });
     const data = await res.json();
     if (res.ok && data.success) {
-      alert('âœ… Review submitted!');
+      alert('âœ... Review submitted!');
       document.getElementById('review-section').style.display = 'none';
 
       const approveBtn = document.getElementById('approve-btn');
@@ -100,7 +100,7 @@ async function requestRevision(e, orderId, loadOrder) {
     });
     const data = await res.json();
     if (res.ok && data.success) {
-      alert('âœ… Revision requested!');
+      alert('âœ... Revision requested!');
       loadOrder();
     } else throw new Error(data.error || 'Failed');
   } catch (err) {
@@ -129,3 +129,4 @@ function processTip(amount, orderData) {
     productPriceMap: orderData.whop_price_map || ''
   });
 }
+

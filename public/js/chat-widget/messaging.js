@@ -30,7 +30,7 @@ export class ChatMessaging {
 
     if (this.isSending) {
       this.ui.elements.sendBtn.disabled = true;
-      this.ui.elements.sendBtn.textContent = 'Sending…';
+      this.ui.elements.sendBtn.textContent = 'Sending';
       this.ui.elements.hint.textContent = '';
       return;
     }
@@ -196,3 +196,4 @@ export class ChatMessaging {
     this.pollTimer = null;
   }
 }
+

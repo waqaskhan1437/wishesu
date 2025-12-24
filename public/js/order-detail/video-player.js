@@ -63,7 +63,7 @@ function setupDownloadButton(order, isAdmin) {
       downloadBtn.dataset.downloading = '1';
 
       const originalText = downloadBtn.textContent;
-      downloadBtn.textContent = '⏳ Preparing…';
+      downloadBtn.textContent = 'Preparing';
       downloadBtn.style.pointerEvents = 'none';
       downloadBtn.style.opacity = '0.75';
 
@@ -105,19 +105,19 @@ function setupDownloadButton(order, isAdmin) {
       const detected = window.UniversalPlayer.detect(order.delivered_video_url);
       const openOnlyTypes = ['youtube', 'vimeo', 'bunny-embed'];
       if (openOnlyTypes.includes(detected.type)) {
-        downloadBtn.textContent = '🔗 Open Video';
+        downloadBtn.textContent = '- Open Video';
         downloadBtn.href = order.delivered_video_url;
         downloadBtn.target = '_blank';
         downloadBtn.removeAttribute('download');
       } else {
-        downloadBtn.textContent = '⬇️ Download Video';
+        downloadBtn.textContent = 'Download Video';
         downloadBtn.href = `/download/${order.order_id}`;
         downloadBtn.removeAttribute('target');
         downloadBtn.setAttribute('download', '');
         attachSafeDownload();
       }
     } else if (order.delivered_video_url) {
-      downloadBtn.textContent = '⬇️ Download Video';
+      downloadBtn.textContent = 'Download Video';
       downloadBtn.href = `/download/${order.order_id}`;
       downloadBtn.removeAttribute('target');
       downloadBtn.setAttribute('download', '');
@@ -159,9 +159,11 @@ function updateStatusMessage(order, isAdmin) {
   if (statusEl) {
     statusEl.className = 'status-message status-delivered';
     if (!isAdmin) {
-      statusEl.innerHTML = '<h3>✅ Video Ready!</h3><p>Your video has been delivered and is ready to watch</p>';
+      statusEl.innerHTML = '<h3>... Video Ready!</h3><p>Your video has been delivered and is ready to watch</p>';
     } else {
       statusEl.innerHTML = '<h3>Delivered</h3><p>Video has been delivered to the buyer.</p>';
     }
   }
 }
+
+

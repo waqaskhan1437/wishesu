@@ -13,7 +13,6 @@
   async function loadSettings() {
     try {
       const resp = await window.getWhopSettings();
-      console.log('Loaded settings:', resp);
       
       const settings = (resp && resp.settings) || {};
       
@@ -50,7 +49,6 @@
         }
       }
       
-      console.log('Settings loaded into form');
     } catch (err) {
       console.error('Failed to load Whop settings', err);
     }
@@ -60,7 +58,6 @@
   async function handleSubmit(e) {
     e.preventDefault();
     
-    console.log('Form submitted');
     
     const themeSel = document.getElementById('whop-theme');
     const defaultPlan = document.getElementById('whop-default-plan');
@@ -78,21 +75,19 @@
       webhook_secret: webhookEl ? webhookEl.value.trim() : ''
     };
     
-    console.log('Payload:', payload);
     
     try {
       const res = await window.saveWhopSettings(payload);
-      console.log('Response:', res);
       
       if (res && res.success) {
-        alert('✅ Settings saved successfully!');
+        alert('... Settings saved successfully!');
       } else {
         console.error('Save failed:', res);
         throw new Error(res && res.error ? res.error : 'Unknown error');
       }
     } catch (err) {
       console.error('Error:', err);
-      alert('❌ Failed to save: ' + (err.message || 'Unknown error'));
+      alert(' Failed to save: ' + (err.message || 'Unknown error'));
     }
   }
 
@@ -123,7 +118,7 @@
     const statusSpan = document.getElementById('whop-test-status');
     if (testApiBtn) {
       testApiBtn.addEventListener('click', async () => {
-        statusSpan.textContent = 'Testing API…';
+        statusSpan.textContent = 'Testing API';
         try {
           const res = await apiFetch('/api/whop/test-api');
           if (res && res.success) {
@@ -132,13 +127,13 @@
             statusSpan.textContent = res.error ? `API error: ${res.error}` : 'API failed';
           }
         } catch (err) {
-          statusSpan.textContent = 'API test failed: ' + (err.message || 'Unknown error');
+          statusSpan.textContent = 'API test failed:' + (err.message || 'Unknown error');
         }
       });
     }
     if (testWebhookBtn) {
       testWebhookBtn.addEventListener('click', async () => {
-        statusSpan.textContent = 'Testing webhook…';
+        statusSpan.textContent = 'Testing webhook';
         try {
           const res = await apiFetch('/api/whop/test-webhook');
           if (res && res.success) {
@@ -147,9 +142,11 @@
             statusSpan.textContent = res.error ? `Webhook error: ${res.error}` : 'Webhook failed';
           }
         } catch (err) {
-          statusSpan.textContent = 'Webhook test failed: ' + (err.message || 'Unknown error');
+          statusSpan.textContent = 'Webhook test failed:' + (err.message || 'Unknown error');
         }
       });
     }
   });
 })();
+
+

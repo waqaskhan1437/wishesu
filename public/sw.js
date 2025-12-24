@@ -8,20 +8,17 @@ const CACHE_NAME = `wishesu-cache-${CACHE_VERSION}`;
 
 // Install event - clear old caches
 self.addEventListener('install', (event) => {
-  console.log('[Service Worker] Installing version:', CACHE_VERSION);
 
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('[Service Worker] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[Service Worker] Installation complete, skipping waiting');
       return self.skipWaiting();
     })
   );
@@ -29,20 +26,17 @@ self.addEventListener('install', (event) => {
 
 // Activate event - take control immediately
 self.addEventListener('activate', (event) => {
-  console.log('[Service Worker] Activating version:', CACHE_VERSION);
 
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('[Service Worker] Removing old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[Service Worker] Claiming clients');
       return self.clients.claim();
     })
   );

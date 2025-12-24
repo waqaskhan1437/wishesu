@@ -88,7 +88,7 @@
       });
       const result = await res.json();
       if (result.success) {
-        alert('✅ Review updated!');
+        alert('... Review updated!');
         modal.style.display = 'none';
         location.reload();
       } else {
@@ -106,7 +106,7 @@
       const res = await fetch(`/api/reviews/delete?id=${id}`, { method: 'DELETE' });
       const result = await res.json();
       if (result.success) {
-        alert('✅ Review deleted!');
+        alert('... Review deleted!');
         location.reload();
       } else {
         alert('Error: ' + (result.error || 'Delete failed'));
@@ -169,7 +169,7 @@
       
       // Rating
       const tdRating = document.createElement('td');
-      tdRating.textContent = rv.rating != null ? '⭐'.repeat(Math.round(rv.rating)) : '–';
+      tdRating.textContent = rv.rating != null ? ''.repeat(Math.round(rv.rating)) : '';
       row.appendChild(tdRating);
       
       // Comment (truncated)
@@ -191,7 +191,7 @@
       
       // Date
       const tdDate = document.createElement('td');
-      tdDate.textContent = rv.created_at ? new Date(rv.created_at).toLocaleDateString() : '–';
+      tdDate.textContent = rv.created_at ? new Date(rv.created_at).toLocaleDateString() : '';
       tdDate.style.fontSize = '13px';
       tdDate.style.color = '#6b7280';
       row.appendChild(tdDate);
@@ -199,8 +199,8 @@
       // Actions
       const tdActions = document.createElement('td');
       tdActions.innerHTML = `
-        <button onclick='editReview(${JSON.stringify(rv).replace(/'/g, "&#39;")})' style="padding:6px 10px;background:#667eea;color:white;border:none;border-radius:4px;cursor:pointer;margin-right:5px;font-size:12px;">✏️ Edit</button>
-        <button onclick="deleteReview(${rv.id})" style="padding:6px 10px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">🗑️</button>
+        <button onclick='editReview(${JSON.stringify(rv).replace(/'/g, "&#39;")})' style="padding:6px 10px;background:#667eea;color:white;border:none;border-radius:4px;cursor:pointer;margin-right:5px;font-size:12px;"> Edit</button>
+        <button onclick="deleteReview(${rv.id})" style="padding:6px 10px;background:#ef4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">-</button>
       `;
       row.appendChild(tdActions);
       
@@ -212,3 +212,5 @@
     table.innerHTML = `<tbody><tr><td colspan="8" style="color:red; text-align:center;">Error loading reviews: ${err.message}</td></tr></tbody>`;
   }
 })();
+
+

@@ -11,11 +11,11 @@ import {
   hideStatusMessage,
   showThankYouMessage,
   startCountdown
-} from './buyer-order/modules/order-display.js';
+} from './buyer-order/order-display.js';
 
-import { showVideo } from './buyer-order/modules/order-video.js';
-import { setupReviewHandlers, updateStars, hideReviewUIElements } from './buyer-order/modules/order-review.js';
-import { setupTipHandlers } from './buyer-order/modules/order-tip.js';
+import { showVideo } from './buyer-order/order-video.js';
+import { setupReviewHandlers, updateStars, hideReviewUIElements } from './buyer-order/order-review.js';
+import { setupTipHandlers } from './buyer-order/order-tip.js';
 
 (function() {
   const urlParams = new URLSearchParams(window.location.search);

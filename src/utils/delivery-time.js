@@ -3,10 +3,10 @@
  * Universal logic for delivery time formatting across the entire application
  *
  * STRICT IMPLEMENTATION:
- * - instant = 1 (true) → "Instant Delivery In 60 Minutes"
- * - delivery_time = 1 → "24 Hours Express Delivery"
- * - delivery_time = 2 → "2 Days Delivery"
- * - delivery_time = 3 → "3 Days Delivery"
+ * - instant = 1 (true)  "Instant Delivery In 60 Minutes"
+ * - delivery_time = 1  "24 Hours Express Delivery"
+ * - delivery_time = 2  "2 Days Delivery"
+ * - delivery_time = 3  "3 Days Delivery"
  */
 
 /**
@@ -98,11 +98,11 @@ function isInstantDelivery(value) {
  * @returns {string} Icon class or emoji
  */
 function getDeliveryIcon(text) {
-  if (!text) return '🚚';
+  if (!text) return '';
   const lower = text.toLowerCase();
-  if (lower.includes('instant') || lower.includes('60')) return '⚡';
-  if (lower.includes('24') || lower.includes('1 day')) return '🚀';
-  return '🚚';
+  if (lower.includes('instant') || lower.includes('60')) return '';
+  if (lower.includes('24') || lower.includes('1 day')) return '';
+  return '';
 }
 
 // Export for both Node.js and browser environments
@@ -124,3 +124,4 @@ if (typeof window !== 'undefined') {
     getDeliveryIcon
   };
 }
+

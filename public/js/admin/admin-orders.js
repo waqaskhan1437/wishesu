@@ -48,9 +48,9 @@
         ${renderDelivery(o)}
         ${renderDelivered(o)}
         <div style="margin-top: 15px;">
-          ${o.status !== 'delivered' ? '<button class="btn btn-primary deliver-btn">📦 Deliver</button>' : ''}
-          <button class="btn btn-secondary copy-btn">🔗 Copy Link</button>
-          <button class="btn btn-danger delete-btn">🗑️ Delete</button>
+          ${o.status !== 'delivered' ? '<button class="btn btn-primary deliver-btn"> Deliver</button>' : ''}
+          <button class="btn btn-secondary copy-btn">- Copy Link</button>
+          <button class="btn btn-danger delete-btn">- Delete</button>
         </div>
       </div>
     `;
@@ -61,7 +61,7 @@
     const created = new Date(o.created_at).getTime();
     const delivery = created + (o.delivery_time_minutes || 60) * 60 * 1000;
     const remaining = delivery - Date.now();
-    if (remaining <= 0) return '<span class="countdown-badge" style="background: #ef4444;">⏰ Overdue</span>';
+    if (remaining <= 0) return '<span class="countdown-badge" style="background: #ef4444;"> Overdue</span>';
     const mins = Math.floor(remaining / 60000);
     return `<span class="countdown-badge">${mins} min</span>`;
   }
@@ -76,19 +76,19 @@
       }
       return `<div class="addon-item"><span class="addon-label">${a.field}:</span> ${val}</div>`;
     }).join('');
-    return `<div class="addons-list"><h4 style="margin-top: 0;">📝 Requirements:</h4>${html}</div>`;
+    return `<div class="addons-list"><h4 style="margin-top: 0;"> Requirements:</h4>${html}</div>`;
   }
 
   function renderDelivery(o) {
     if (o.status === 'delivered') return '';
     return `
       <div class="delivery-section" id="delivery-${o.order_id}">
-        <h4>📤 Deliver Video</h4>
+        <h4> Deliver Video</h4>
         <div class="form-group"><label>Video URL:</label><input type="text" class="delivery-url" placeholder="https://..."></div>
         <div class="form-group"><label>OR Upload:</label><input type="file" class="delivery-file" accept="video/*"></div>
         <div class="form-group"><label>Thumbnail (optional):</label><input type="text" class="thumbnail-url"></div>
-        <button class="btn btn-primary submit-delivery-btn">✅ Submit</button>
-        <button class="btn btn-secondary cancel-delivery-btn">❌ Cancel</button>
+        <button class="btn btn-primary submit-delivery-btn">... Submit</button>
+        <button class="btn btn-secondary cancel-delivery-btn"> Cancel</button>
       </div>
     `;
   }
@@ -129,7 +129,7 @@
         const id = this.closest('.order-card').dataset.orderId;
         const link = window.location.origin + '/buyer-order.html?id=' + id;
         navigator.clipboard.writeText(link);
-        alert('✅ Link copied:\n' + link);
+        alert('... Link copied:\n' + link);
       });
     });
 
@@ -140,7 +140,7 @@
           const order = orders.find(o => o.order_id === id);
           fetch(`/api/order/delete?id=${order.id}`, { method: 'DELETE' })
             .then(r => r.json())
-            .then(d => { if (d.success) { alert('✅ Deleted'); loadOrders(); } else alert('Error'); })
+            .then(d => { if (d.success) { alert('... Deleted'); loadOrders(); } else alert('Error'); })
             .catch(e => alert('Error: ' + e.message));
         }
       });
@@ -177,7 +177,7 @@
         body: JSON.stringify({ orderId, videoUrl, thumbnailUrl: thumb })
       });
       const data = await res.json();
-      if (res.ok && data.success) { alert('✅ Delivered!'); loadOrders(); }
+      if (res.ok && data.success) { alert('... Delivered!'); loadOrders(); }
       else throw new Error(data.error || 'Failed');
     } catch (err) {
       alert('Error: ' + err.message);
@@ -187,3 +187,5 @@
   // Manual refresh only - NO AUTO-RELOAD
   window.loadOrders = loadOrders;
 })();
+
+

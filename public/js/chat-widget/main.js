@@ -24,9 +24,9 @@ import { ChatMessaging } from './messaging.js';
   let isOpen = storage.getIsOpen();
 
   // Quick actions
-  ui.addQuickAction('📦 My Order Status', () => messaging.sendMessage('My Order Status'));
-  ui.addQuickAction('💬 Talk to Human', () => messaging.sendMessage('Talk to Human'));
-  ui.addQuickAction('🚚 Check Delivery Status', () => messaging.sendMessage('Check Delivery Status'));
+  ui.addQuickAction(' My Order Status', () => messaging.sendMessage('My Order Status'));
+  ui.addQuickAction(' Talk to Human', () => messaging.sendMessage('Talk to Human'));
+  ui.addQuickAction(' Check Delivery Status', () => messaging.sendMessage('Check Delivery Status'));
 
   // Panel visibility
   function setOpen(open) {
@@ -93,3 +93,4 @@ import { ChatMessaging } from './messaging.js';
   ui.updateAuthUI(!!storage.sessionId);
   if (isOpen) setOpen(true);
 })();
+

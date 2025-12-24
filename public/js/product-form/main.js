@@ -10,29 +10,23 @@ import { initDeliveryTimeAddonSync } from './delivery-sync.js';
 import { addDeleteProductButton } from './delete-button.js';
 
 ;(async function initProductForm() {
-  console.log('🔵 Product Form JS Loaded');
   const params = new URLSearchParams(location.search);
   const productId = params.get('id');
-  console.log('🔵 Product ID from URL:', productId);
 
   const form = document.getElementById('product-form');
-  console.log('🔵 Form element found:', !!form);
 
   if (!form) {
-    console.error('🔴 Form not found! Exiting...');
+    console.error(' Form not found! Exiting...');
     return;
   }
 
   setupGalleryField(form);
 
   if (productId) {
-    console.log('🔵 Loading product data for ID:', productId);
     try {
       const response = await getProduct(productId);
-      console.log('🔵 API Response:', response);
       const { product } = response;
       if (product) {
-        console.log('🔵 Product loaded:', product.title);
         fillBaseFields(form, product);
         if (typeof populateSeoForm === 'function') populateSeoForm(form, product);
 
@@ -40,13 +34,12 @@ import { addDeleteProductButton } from './delete-button.js';
         if (hidden) {
           const addons = Array.isArray(product.addons) ? product.addons : [];
           hidden.value = JSON.stringify(addons);
-          console.log('🔵 Addons loaded:', addons.length);
         }
       } else {
-        console.error('🔴 Product not found in response');
+        console.error(' Product not found in response');
       }
     } catch (err) {
-      console.error('🔴 Failed to load product:', err);
+      console.error(' Failed to load product:', err);
       alert('Failed to load product: ' + err.message);
     }
 
@@ -134,3 +127,4 @@ import { addDeleteProductButton } from './delete-button.js';
     }
   });
 })();
+

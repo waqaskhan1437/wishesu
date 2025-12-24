@@ -58,7 +58,7 @@ import { initReviewHandlers, initTipHandlers } from './review.js';
       } else {
         startCountdown(order.delivery_time_minutes || 60, order.created_at);
         document.getElementById('status-message').className = 'status-message status-processing';
-        document.getElementById('status-message').innerHTML = '<h3>🎬 Video Being Created</h3><p>Processing your order...</p>';
+        document.getElementById('status-message').innerHTML = '<h3> Video Being Created</h3><p>Processing your order...</p>';
       }
     }
 
@@ -83,3 +83,4 @@ import { initReviewHandlers, initTipHandlers } from './review.js';
     countdownTimer.start();
   }
 })();
+

@@ -1,19 +1,5 @@
 /**
- * Blog controller exports.
+ * Blog controller index re-export.
  */
 
-export {
-  listBlogPosts,
-  getBlogPost,
-  saveBlogPost,
-  deleteBlogPost,
-  setBlogStatus
-} from './admin.js';
-
-export { submitBlogPost } from './submissions.js';
-
-export {
-  renderBlogArchive,
-  renderBlogPost,
-  renderBlogSubmit
-} from './render.js';
+export * from '../../features/blog/index.js';

@@ -45,7 +45,7 @@ export async function uploadFileWithProgress(file, label, form) {
           const response = JSON.parse(xhr.responseText);
           if (response.success && response.tempUrl) {
             progressBar.style.width = '100%';
-            progressBar.textContent = '✓ Done';
+            progressBar.textContent = 'Done';
             progressBar.style.background = '#10b981';
 
             const r2Key = response.tempUrl.replace('r2://', '');
@@ -64,19 +64,19 @@ export async function uploadFileWithProgress(file, label, form) {
           }
         } catch (err) {
           progressBar.style.background = '#ef4444';
-          progressBar.textContent = '✗ Failed';
+          progressBar.textContent = '- Failed';
           reject(err);
         }
       } else {
         progressBar.style.background = '#ef4444';
-        progressBar.textContent = '✗ Error';
+        progressBar.textContent = '- Error';
         reject(new Error(`Upload failed with status ${xhr.status}`));
       }
     });
 
     xhr.addEventListener('error', () => {
       progressBar.style.background = '#ef4444';
-      progressBar.textContent = '✗ Error';
+      progressBar.textContent = '- Error';
       reject(new Error('Upload failed'));
     });
 
@@ -85,3 +85,5 @@ export async function uploadFileWithProgress(file, label, form) {
     xhr.send(file);
   });
 }
+
+

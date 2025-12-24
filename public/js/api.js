@@ -8,7 +8,7 @@ const API_BASE = '';
 
 /**
  * Fetch a JSON response from the given endpoint.  Throws if the network
- * request fails or returns a non‑OK status.  This helper centralises
+ * request fails or returns a nonOK status.  This helper centralises
  * error handling for all API calls.
  *
  * @param {string} path The API path (e.g. '/api/products')
@@ -29,7 +29,7 @@ async function apiFetch(path, options = {}) {
 
 /**
  * Get the list of products.  Returns an object like
- * `{ products: [ { id, title, slug, normal_price, sale_price, thumbnail_url }, … ] }`.
+ * `{ products: [ { id, title, slug, normal_price, sale_price, thumbnail_url },  ] }`.
  */
 function getProducts() {
   return apiFetch('/api/products');
@@ -73,7 +73,7 @@ function saveArchiveLink(data) {
 /**
  * Retrieve all orders for the admin dashboard.  This helper wraps
  * a GET request to `/api/orders` and returns an object like
- * `{ orders: […] }` where each order includes decrypted email and
+ * `{ orders: [] }` where each order includes decrypted email and
  * amount when available.
  */
 function getOrders() {
@@ -82,7 +82,7 @@ function getOrders() {
 
 /**
  * Retrieve all reviews across products.  Used by the admin review
- * management page.  Returns an object like `{ reviews: […] }`.
+ * management page.  Returns an object like `{ reviews: [] }`.
  */
 function getAllReviews() {
   return apiFetch('/api/reviews');
@@ -90,7 +90,7 @@ function getAllReviews() {
 
 // Export functions to the global scope so they can be called from
 // inline scripts in HTML files.  Without this assignment, the
-// functions would be module‑scoped and unavailable to the page.
+// functions would be modulescoped and unavailable to the page.
 window.getProducts = getProducts;
 window.getProduct = getProduct;
 window.createOrder = createOrder;

@@ -9,11 +9,11 @@ import { sessionStorage } from '../core/storage.js';
 import { ready } from '../utils/dom-helper.js';
 
 // Import views
-import DashboardView from './views/dashboard-view.js';
-import OrdersView from './views/orders-view.js';
-import ProductsView from './views/products-view.js';
-import ReviewsView from './views/reviews-view.js';
-import SettingsView from './views/settings-view.js';
+import DashboardView from './dashboard-view.js';
+import OrdersView from './orders-view.js';
+import ProductsView from './products-view.js';
+import ReviewsView from './reviews-view.js';
+import SettingsView from './settings-view.js';
 
 class AdminApp {
   constructor() {

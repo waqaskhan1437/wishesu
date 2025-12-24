@@ -74,7 +74,7 @@ window.filterOrders = function(targetStatus) {
           if (typeof val === 'string' && val.includes('[PHOTO LINK]')) {
              // Clean URL extraction
              const url = val.replace('[PHOTO LINK]:', '').trim();
-             val = `<a href="${url}" target="_blank" style="background:#4f46e5; color:white; padding:4px 8px; border-radius:4px; text-decoration:none; font-size:0.8rem; display:inline-block; margin-top:2px;">View Photo 📸</a>`;
+             val = `<a href="${url}" target="_blank" style="background:#4f46e5; color:white; padding:4px 8px; border-radius:4px; text-decoration:none; font-size:0.8rem; display:inline-block; margin-top:2px;">View Photo </a>`;
           }
           
           detailsHtml += `<div style="margin-bottom:4px;"><strong>${label}:</strong> ${val}</div>`;
@@ -91,7 +91,7 @@ window.filterOrders = function(targetStatus) {
             <span style="font-size:0.85rem; color:#666;">${ord.created_at ? new Date(ord.created_at).toLocaleDateString() : ''}</span>
         </td>
         <td style="vertical-align:top;">${detailsHtml}</td>
-        <td style="vertical-align:top;">${ord.amount ? '$'+parseFloat(ord.amount).toLocaleString() : '–'}</td>
+        <td style="vertical-align:top;">${ord.amount ? '$'+parseFloat(ord.amount).toLocaleString() : ''}</td>
         <td style="vertical-align:top;"><span class="status-badge ${statusClass}">${ord.status || 'Pending'}</span></td>
         <td style="vertical-align:top;">${archiveLink}</td>
         <td style="text-align:right; vertical-align:top;">
@@ -121,7 +121,7 @@ window.deleteOrder = async function(dbId) {
 
 window.openDeliverModal = function(orderId) {
   currentEditOrderId = orderId;
-  document.getElementById('modal-order-id').textContent = 'Order ID: ' + orderId;
+  document.getElementById('modal-order-id').textContent = 'Order ID:' + orderId;
   document.getElementById('deliver-url-input').value = '';
   document.getElementById('deliver-file-input').value = '';
   document.getElementById('deliver-modal').style.display = 'flex';
@@ -168,3 +168,4 @@ window.submitDelivery = async function() {
     btn.disabled = false;
   }
 };
+

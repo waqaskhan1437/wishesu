@@ -9,10 +9,10 @@ import { handleProductRouting } from '../controllers/products.js';
 import { handleSecureDownload, maybePurgeCache } from '../controllers/admin/index.js';
 import { cleanupExpired } from '../controllers/whop/index.js';
 import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from '../utils/schema.js';
-import { handleCorsPreflight, applyCors } from './middleware/cors.js';
-import { requireAdminAuth } from './middleware/admin-auth.js';
-import { enforceCsrf } from './middleware/csrf.js';
-import { applyNoStore } from './middleware/cache-headers.js';
+import { handleCorsPreflight, applyCors } from './cors.js';
+import { requireAdminAuth } from './admin-auth.js';
+import { enforceCsrf } from './csrf.js';
+import { applyNoStore } from './cache-headers.js';
 import {
   handleBlogRoutes,
   handleForumRoutes,
@@ -20,8 +20,8 @@ import {
   resolveDefaultPagePath,
   getGtmId,
   injectGtm
-} from './pages/page-handler.js';
-import { handleStaticAsset } from './static/asset-handler.js';
+} from './page-handler.js';
+import { handleStaticAsset } from './asset-handler.js';
 
 function normalizePath(pathname) {
   let path = pathname.replace(/\/+/g, '/');
@@ -134,13 +134,11 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    console.log('Cron job started:', event.cron);
     try {
       if (env.DB) {
         await initDB(env);
         const result = await cleanupExpired(env);
         const data = await result.json();
-        console.log('Cleanup result:', data);
       }
     } catch (e) {
       console.error('Cron job error:', e);

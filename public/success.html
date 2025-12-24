@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Payment Successful!</title>
-  <style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Payment Successful!</title>
+ <style>
     * {
       margin: 0;
       padding: 0;
@@ -124,54 +124,53 @@
     .btn-secondary:hover {
       box-shadow: 0 8px 16px rgba(107, 114, 128, 0.4);
     }
-  </style>
+ </style>
 </head>
 <body>
-  <div class="container">
-    <div class="success-icon">
-      <svg viewBox="0 0 24 24">
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-    </div>
+ <div class="container">
+ <div class="success-icon">
+ <svg viewBox="0 0 24 24">
+ <polyline points="20 6 9 17 4 12"></polyline>
+ </svg>
+ </div>
     
-    <h1>Payment Successful! 🎉</h1>
+ <h1>Payment Successful! </h1>
     
-    <p class="message">
+ <p class="message">
       Thank you for your purchase! Your order has been confirmed and we're preparing everything for you.
-    </p>
+ </p>
     
-    <div class="info-box">
-      <h3>What happens next?</h3>
-      <div class="info-item">
-        <strong>Email:</strong>
-        <span>You'll receive a confirmation email with your order details within 5 minutes.</span>
-      </div>
-      <div class="info-item">
-        <strong>Access:</strong>
-        <span>Your purchase has been activated and you can access your content immediately.</span>
-      </div>
-      <div class="info-item">
-        <strong>Support:</strong>
-        <span>Need help? Our support team is available 24/7 to assist you.</span>
-      </div>
-    </div>
+ <div class="info-box">
+ <h3>What happens next?</h3>
+ <div class="info-item">
+ <strong>Email:</strong>
+ <span>You'll receive a confirmation email with your order details within 5 minutes.</span>
+ </div>
+ <div class="info-item">
+ <strong>Access:</strong>
+ <span>Your purchase has been activated and you can access your content immediately.</span>
+ </div>
+ <div class="info-item">
+ <strong>Support:</strong>
+ <span>Need help? Our support team is available 24/7 to assist you.</span>
+ </div>
+ </div>
     
-    <div style="margin-top: 30px;">
-      <a href="/" class="btn">Go to Homepage</a>
-      <a href="https://whop.com/@me/memberships" class="btn btn-secondary" target="_blank">View on Whop</a>
-    </div>
+ <div style="margin-top: 30px;">
+ <a href="/" class="btn">Go to Homepage</a>
+ <a href="https://whop.com/@me/memberships" class="btn btn-secondary" target="_blank">View on Whop</a>
+ </div>
     
-    <p style="margin-top: 30px; color: #9ca3af; font-size: 0.9rem;">
+ <p style="margin-top: 30px; color: #9ca3af; font-size: 0.9rem;">
       Order ID: <span id="orderId"></span>
-    </p>
-  </div>
+ </p>
+ </div>
 
-  <script>
+ <script>
     (async function() {
       const urlParams = new URLSearchParams(window.location.search);
       const productId = urlParams.get('product');
 
-      console.log('🎉 Success page loaded');
 
       // Check localStorage for pending order data
       let orderData = null;
@@ -179,7 +178,6 @@
         const stored = localStorage.getItem('pendingOrderData');
         if (stored) {
           orderData = JSON.parse(stored);
-          console.log('📦 Found pending order data:', orderData);
           localStorage.removeItem('pendingOrderData'); // Clear after use
         }
       } catch (e) {
@@ -188,7 +186,6 @@
 
       // If we have order data, create the order
       if (orderData && orderData.addons && orderData.addons.length > 0) {
-        console.log('🚀 Creating order with addons...');
 
         // Calculate delivery time
         let deliveryTime = 2880; // Default 48 hours
@@ -212,7 +209,6 @@
           deliveryTime: deliveryTime
         };
 
-        console.log('📤 Sending to API:', payload);
 
         try {
           const res = await fetch('/api/order/create', {
@@ -222,11 +218,9 @@
           });
 
           const data = await res.json();
-          console.log('📥 API Response:', data);
 
           if (data && data.orderId) {
             document.getElementById('orderId').textContent = data.orderId;
-            console.log('✅ Order created:', data.orderId);
 
             // Redirect to buyer order page after 2 seconds
             setTimeout(() => {
@@ -236,16 +230,17 @@
             document.getElementById('orderId').textContent = 'Order processing...';
           }
         } catch (err) {
-          console.error('❌ Order creation failed:', err);
+          console.error(' Order creation failed:', err);
           document.getElementById('orderId').textContent = 'Error - Please contact support';
         }
       } else {
         // No pending order data - just display generic success
         const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
         document.getElementById('orderId').textContent = orderId;
-        console.log('⚠️ No pending order data found in localStorage');
       }
     })();
-  </script>
+ </script>
 </body>
 </html>
+
+

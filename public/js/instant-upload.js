@@ -1,7 +1,7 @@
 /*
   * Instant File Upload
-  * Photos → R2 (fast, free tier)
-  * Videos → Archive.org (unlimited, streaming)
+  * Photos  R2 (fast, free tier)
+  * Videos  Archive.org (unlimited, streaming)
   */
 
 (function() {
@@ -219,7 +219,7 @@
       preview.innerHTML = `
         <div style="padding: 12px; background: #f0fdf4; border: 2px solid #10b981; border-radius: 8px;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="color: #10b981; font-size: 20px;">✓</div>
+            <div style="color: #10b981; font-size: 20px;"></div>
             <div>
               <strong style="color: #065f46;">Uploaded</strong>
               <div style="font-size: 0.85em; color: #6b7280; margin-top: 2px;">${file.name}</div>
@@ -249,7 +249,7 @@
       preview.innerHTML = `
         <div style="padding: 12px; background: #fef2f2; border: 2px solid #ef4444; border-radius: 8px;">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <div style="color: #ef4444; font-size: 20px;">✕</div>
+            <div style="color: #ef4444; font-size: 20px;"></div>
             <div>
               <strong style="color: #991b1b;">Upload Failed</strong>
               <div style="font-size: 0.85em; color: #6b7280; margin-top: 2px;">${errorMsg || 'Please try again'}</div>
@@ -294,3 +294,4 @@
 
   window.uploadQueue = uploadQueue;
 })();
+

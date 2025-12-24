@@ -23,7 +23,7 @@ export async function submitDelivery(orderId, loadOrder) {
 
   const resetUI = (msg) => {
     alert(msg);
-    btn.innerHTML = '✅ Submit Delivery';
+    btn.innerHTML = '... Submit Delivery';
     btn.disabled = false;
     progressDiv.style.display = 'none';
   };
@@ -36,7 +36,7 @@ export async function submitDelivery(orderId, loadOrder) {
     }
 
     btn.disabled = true;
-    btn.innerHTML = '⏳ Initializing Upload...';
+    btn.innerHTML = ' Initializing Upload...';
     progressDiv.style.display = 'block';
     progressBar.style.width = '0%';
     progressText.textContent = 'Getting credentials...';
@@ -60,7 +60,7 @@ export async function submitDelivery(orderId, loadOrder) {
           progressBar.style.width = pct + '%';
 
           if (pct >= 99) {
-            progressText.textContent = '⏳ Processing... (Do not close tab)';
+            progressText.textContent = 'Processing... (Do not close tab)';
             progressText.style.color = '#2563eb';
             progressBar.style.background = '#f59e0b';
           } else {
@@ -74,7 +74,7 @@ export async function submitDelivery(orderId, loadOrder) {
           const finalUrl = `https://archive.org/download/${itemId}/${safeFilename}`;
           const embedUrl = `https://archive.org/details/${itemId}`;
 
-          progressText.textContent = '✅ Upload Complete!';
+          progressText.textContent = '... Upload Complete!';
           progressBar.style.background = '#10b981';
 
           submitDeliveryWithUrl(orderId, finalUrl, thumb, subtitlesUrl, { embedUrl, itemId }, loadOrder);
@@ -105,7 +105,7 @@ async function submitDeliveryWithUrl(orderId, videoUrl, thumb, subtitlesUrl, upl
   const btn = document.getElementById('submit-delivery-btn');
   const progressDiv = document.getElementById('upload-progress');
 
-  btn.innerHTML = '💾 Saving to Database...';
+  btn.innerHTML = ' Saving to Database...';
   btn.disabled = true;
 
   try {
@@ -130,12 +130,12 @@ async function submitDeliveryWithUrl(orderId, videoUrl, thumb, subtitlesUrl, upl
 
     const data = await res.json();
     if (res.ok && data.success) {
-      btn.innerHTML = '✅ Delivered Successfully!';
+      btn.innerHTML = '... Delivered Successfully!';
       alert('Order delivered successfully!');
       loadOrder();
       setTimeout(() => {
         if(progressDiv) progressDiv.style.display = 'none';
-        btn.innerHTML = '✅ Submit Delivery';
+        btn.innerHTML = '... Submit Delivery';
         btn.disabled = false;
       }, 2000);
     } else {
@@ -143,7 +143,9 @@ async function submitDeliveryWithUrl(orderId, videoUrl, thumb, subtitlesUrl, upl
     }
   } catch (err) {
     alert('Error saving delivery: ' + err.message);
-    btn.textContent = '✅ Submit Delivery';
+    btn.textContent = '... Submit Delivery';
     btn.disabled = false;
   }
 }
+
+

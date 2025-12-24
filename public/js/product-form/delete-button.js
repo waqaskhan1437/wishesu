@@ -14,7 +14,7 @@ export function addDeleteProductButton(form, productId) {
   btn.dataset.action = 'delete-product';
   btn.className = 'btn-danger';
   btn.style.cssText = 'margin-left: 10px; background:#ef4444; border:none; color:white; padding:12px 18px; border-radius:10px; font-weight:600; cursor:pointer; display:inline-flex; gap:8px; align-items:center;';
-  btn.innerHTML = '<span>🗑️</span><span>Delete Product</span>';
+  btn.innerHTML = '<span>-</span><span>Delete Product</span>';
 
   btn.addEventListener('click', async () => {
     const ok = confirm('Are you sure you want to permanently delete this product? This cannot be undone.');
@@ -41,3 +41,5 @@ export function addDeleteProductButton(form, productId) {
 
   actions.appendChild(btn);
 }
+
+

@@ -26,7 +26,7 @@
         return;
       }
       // Fetch the list of pages from the backend.  The /api/pages/list
-      // endpoint returns an object like { success: true, pages: [ { slug, title, url, uploaded, size }, … ] }.
+      // endpoint returns an object like { success: true, pages: [ { slug, title, url, uploaded, size },  ] }.
       let pages = [];
       try {
         const res = await fetch('/api/pages/list');

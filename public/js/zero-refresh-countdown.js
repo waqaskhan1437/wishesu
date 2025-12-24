@@ -37,7 +37,7 @@
       
       if (remaining <= 0) {
         clearInterval(interval);
-        element.textContent = '⏰ Time Expired - Refresh to check status';
+        element.textContent = 'Time Expired - Refresh to check status';
         element.style.color = '#ef4444';
         element.style.fontWeight = 'bold';
         
@@ -81,3 +81,4 @@
   // Expose for manual initialization
   window.initCountdowns = initCountdowns;
 })();
+

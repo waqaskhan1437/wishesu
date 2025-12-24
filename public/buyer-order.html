@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Order Status</title>
-  <link rel="stylesheet" href="/css/style.css">
-  <!-- Needed for the embedded Whop checkout modal overlay -->
-  <link rel="stylesheet" href="/css/whop.css">
-  <style>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Order Status</title>
+ <link rel="stylesheet" href="/css/style.css">
+ <!-- Needed for the embedded Whop checkout modal overlay -->
+ <link rel="stylesheet" href="/css/whop.css">
+ <style>
     body { background: #f3f4f6; margin: 0; padding: 0; }
     .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
     .video-container { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
@@ -109,80 +109,83 @@
 </style>
 </head>
 <body style="background-color: #F9FAFB;">
-  <div class="container">
-    <h1 style="text-align: center; color: #1F2937; margin-bottom: 20px;">Your Order</h1>
-    <div id="loading" style="text-align: center; padding: 40px;"><h2>Loading...</h2></div>
-    <div id="error" style="display: none; background: #fee2e2; color: #991b1b; padding: 20px; border-radius: 8px;"></div>
+ <div class="container">
+ <h1 style="text-align: center; color: #1F2937; margin-bottom: 20px;">Your Order</h1>
+ <div id="loading" style="text-align: center; padding: 40px;"><h2>Loading...</h2></div>
+ <div id="error" style="display: none; background: #fee2e2; color: #991b1b; padding: 20px; border-radius: 8px;"></div>
     
-    <div id="order-content" style="display: none;">
-      <div id="status-message" class="status-message" style="display:none;"></div>
-      <div id="video-section" style="display: none;">
-        <div class="video-container" id="player-container"></div>
-        <div class="action-buttons">
-          <a href="#" id="download-btn" class="btn btn-primary" download>⬇️ Download</a>
-          <button id="revision-btn" class="btn btn-secondary">🔄 Revision</button>
-          <button id="approve-btn" class="btn btn-success">✅ Approve & Review</button>
-        </div>
+ <div id="order-content" style="display: none;">
+ <div id="status-message" class="status-message" style="display:none;"></div>
+ <div id="video-section" style="display: none;">
+ <div class="video-container" id="player-container"></div>
+ <div class="action-buttons">
+ <a href="#" id="download-btn" class="btn btn-primary" download> Download</a>
+ <button id="revision-btn" class="btn btn-secondary"> Revision</button>
+ <button id="approve-btn" class="btn btn-success">... Approve & Review</button>
+ </div>
         
-        <!-- Review Section - Right after video -->
-        <div id="review-section" class="review-section" style="margin-top: 20px;">
-          <h3>⭐ Review</h3>
-          <form id="review-form">
-            <div class="form-group"><label>Name:</label><input type="text" id="reviewer-name" required></div>
-            <div class="form-group">
-              <label>Rating:</label>
-              <div class="rating-stars" id="rating-stars">
-                <span data-rating="1">★</span><span data-rating="2">★</span><span data-rating="3">★</span><span data-rating="4">★</span><span data-rating="5">★</span>
-              </div>
-            </div>
-            <div class="form-group"><label>Comment:</label><textarea id="review-comment" required></textarea></div>
-            <label><input type="checkbox" id="portfolio-checkbox" checked> Show in portfolio</label>
-            <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Submit</button>
-          </form>
-        </div>
+ <!-- Review Section - Right after video -->
+ <div id="review-section" class="review-section" style="margin-top: 20px;">
+ <h3> Review</h3>
+ <form id="review-form">
+ <div class="form-group"><label>Name:</label><input type="text" id="reviewer-name" required></div>
+ <div class="form-group">
+ <label>Rating:</label>
+ <div class="rating-stars" id="rating-stars">
+ <span data-rating="1">...</span><span data-rating="2">...</span><span data-rating="3">...</span><span data-rating="4">...</span><span data-rating="5">...</span>
+ </div>
+ </div>
+ <div class="form-group"><label>Comment:</label><textarea id="review-comment" required></textarea></div>
+ <label><input type="checkbox" id="portfolio-checkbox" checked> Show in portfolio</label>
+ <button type="submit" class="btn btn-primary" style="margin-top: 15px;">Submit</button>
+ </form>
+ </div>
         
-        <!-- Tip Section - Right after review -->
-        <div id="tip-section" class="tip-section" style="margin-top: 20px;">
-          <h3>💝 Tip</h3>
-          <div><button class="tip-btn" data-amount="10">$10</button><button class="tip-btn" data-amount="15">$15</button><button class="tip-btn" data-amount="20">$20</button><button class="tip-btn" data-amount="25">$25</button><button class="tip-btn" data-amount="30">$30</button></div>
-        </div>
-      </div>
+ <!-- Tip Section - Right after review -->
+ <div id="tip-section" class="tip-section" style="margin-top: 20px;">
+ <h3> Tip</h3>
+ <div><button class="tip-btn" data-amount="10">$10</button><button class="tip-btn" data-amount="15">$15</button><button class="tip-btn" data-amount="20">$20</button><button class="tip-btn" data-amount="25">$25</button><button class="tip-btn" data-amount="30">$30</button></div>
+ </div>
+ </div>
       
-      <div id="countdown-section" class="countdown-timer">
-        <h2 id="countdown-display">60:00</h2>
-        <p>Estimated Delivery Time</p>
-      </div>
+ <div id="countdown-section" class="countdown-timer">
+ <h2 id="countdown-display">60:00</h2>
+ <p>Estimated Delivery Time</p>
+ </div>
       
       
-      <div id="product-summary-card" class="product-summary-card" aria-label="Product summary">
-        <!-- injected by /js/buyer-order.js -->
-      </div>
+ <div id="product-summary-card" class="product-summary-card" aria-label="Product summary">
+ <!-- injected by /js/buyer-order.js -->
+ </div>
 
 <div class="section">
-        <h3>📋 Order #<span id="order-id"></span></h3>
-        <div class="detail-grid">
-          <div class="detail-item"><div class="detail-label">Email</div><div class="detail-value" id="email"></div></div>
-          <div class="detail-item"><div class="detail-label">Amount</div><div class="detail-value" id="amount"></div></div>
-          <div class="detail-item"><div class="detail-label">Status</div><div class="detail-value" id="status"></div></div>
-          <div class="detail-item"><div class="detail-label">Date</div><div class="detail-value" id="date"></div></div>
-        </div>
-      </div>
+ <h3> Order #<span id="order-id"></span></h3>
+ <div class="detail-grid">
+ <div class="detail-item"><div class="detail-label">Email</div><div class="detail-value" id="email"></div></div>
+ <div class="detail-item"><div class="detail-label">Amount</div><div class="detail-value" id="amount"></div></div>
+ <div class="detail-item"><div class="detail-label">Status</div><div class="detail-value" id="status"></div></div>
+ <div class="detail-item"><div class="detail-label">Date</div><div class="detail-value" id="date"></div></div>
+ </div>
+ </div>
       
-      <div class="section">
-        <h3>📝 Requirements</h3>
-        <div id="requirements"></div>
-        <div id="photos-section" style="display: none;">
-          <h4 style="margin-top: 15px;">📷 Photos:</h4>
-          <div class="photos-grid" id="photos"></div>
-        </div>
-      </div>
-      </div>
-      </div>
-      <script src="/js/api.js?v=1766444251"></script>
-  <script src="/js/whop/checkout.js?v=1766444251"></script>
-  <script src="/js/players/player-factory.js?v=1766444251"></script>
-      <script src="/js/shared-timer-utils.js?v=1766444251"></script>
-      <script src="/js/review-utils.js?v=1766444251"></script>
-    <script type="module" src="/js/buyer-order.js?v=1766444251"></script>
-      </body>
+ <div class="section">
+ <h3> Requirements</h3>
+ <div id="requirements"></div>
+ <div id="photos-section" style="display: none;">
+ <h4 style="margin-top: 15px;"> Photos:</h4>
+ <div class="photos-grid" id="photos"></div>
+ </div>
+ </div>
+ </div>
+ </div>
+ <script src="/js/api.js?v=1766444251"></script>
+ <script src="/js/whop/checkout.js?v=1766444251"></script>
+ <script src="/js/players/player-factory.js?v=1766444251"></script>
+ <script src="/js/shared-timer-utils.js?v=1766444251"></script>
+ <script src="/js/review-utils.js?v=1766444251"></script>
+ <script type="module" src="/js/buyer-order.js?v=1766444251"></script>
+ </body>
 </html>
+
+
+

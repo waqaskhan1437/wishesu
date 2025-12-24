@@ -4,8 +4,8 @@
  * Landing pages, home, featured lists
  */
 
-import { renderCard } from './product-cards/modules/card-renderer.js';
-import { addStyles } from './product-cards/modules/card-styles.js';
+import { renderCard } from './product-cards/card-renderer.js';
+import { addStyles } from './product-cards/card-styles.js';
 
 (function() {
   window.ProductCards = {
@@ -85,5 +85,4 @@ import { addStyles } from './product-cards/modules/card-styles.js';
     addStyles
   };
 
-  console.log('✅ Product Cards System Ready');
 })();
