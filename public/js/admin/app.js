@@ -14,6 +14,12 @@ import OrdersView from './orders-view.js';
 import ProductsView from './products-view.js';
 import ReviewsView from './reviews-view.js';
 import SettingsView from './settings-view.js';
+import ChatsView from './chats-view.js';
+import BlogView from './blog-view.js';
+import ForumView from './forum-view.js';
+import UsersView from './users-view.js';
+import PagesView from './pages-view.js';
+import ComponentsView from './components-view.js';
 
 class AdminApp {
   constructor() {
@@ -27,7 +33,13 @@ class AdminApp {
       'orders',
       'products',
       'reviews',
-      'settings'
+      'chats',
+      'blog',
+      'forum',
+      'users',
+      'settings',
+      'pages',
+      'components'
     ]);
 
     // View key for session storage
@@ -76,8 +88,12 @@ class AdminApp {
     this.views.set('products', new ProductsView(this.mainPanel));
     this.views.set('reviews', new ReviewsView(this.mainPanel));
     this.views.set('settings', new SettingsView(this.mainPanel));
-
-    // Remaining views are not implemented yet.
+    this.views.set('chats', new ChatsView(this.mainPanel));
+    this.views.set('blog', new BlogView(this.mainPanel));
+    this.views.set('forum', new ForumView(this.mainPanel));
+    this.views.set('users', new UsersView(this.mainPanel));
+    this.views.set('pages', new PagesView(this.mainPanel));
+    this.views.set('components', new ComponentsView(this.mainPanel));
   }
 
   /**
