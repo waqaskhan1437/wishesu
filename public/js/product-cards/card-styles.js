@@ -116,7 +116,8 @@ export function addStyles() {
       font-weight: 600;
     }
     .rating-text {
-      letter-spacing: 0.2px;
+      letter-spacing: 0.5px;
+      font-size: 1.05rem;
     }
 
     .rating-stars {
@@ -125,7 +126,7 @@ export function addStyles() {
     }
 
     .star {
-      font-size: 1rem;
+      font-size: 1.2rem;
       line-height: 1;
     }
 

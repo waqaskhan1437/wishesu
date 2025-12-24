@@ -74,7 +74,7 @@ export class ProductCard {
     const rating = parseFloat(average_rating || 5);
     const count = parseInt(review_count || 0);
 
-    const stars = '*'.repeat(Math.max(1, Math.round(rating)));
+    const stars = '&#9733;'.repeat(Math.max(1, Math.round(rating)));
     return `${stars} (${count})`;
   }
 
@@ -164,7 +164,7 @@ export class ProductCard {
 
       const ratingSpan = createElement('span', {
         className: 'rating-text',
-        textContent: ratingText
+        innerHTML: ratingText
       });
       reviewsDiv.appendChild(ratingSpan);
 

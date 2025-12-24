@@ -67,9 +67,9 @@ function renderRatingRow(product) {
   const emptyStars = 5 - fullStars - halfStar;
 
   let starsHtml = '';
-  for (let i = 0; i < fullStars; i++) starsHtml += '*';
-  if (halfStar) starsHtml += '*';
-  for (let i = 0; i < emptyStars; i++) starsHtml += '';
+  for (let i = 0; i < fullStars; i++) starsHtml += '&#9733;';
+  if (halfStar) starsHtml += '&#9733;';
+  for (let i = 0; i < emptyStars; i++) starsHtml += '&#9734;';
 
   const reviewText = reviewCount === 0
     ? 'No reviews yet'
