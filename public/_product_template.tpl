@@ -89,7 +89,7 @@
 
  <script src="/js/api.js?v=21" defer></script>
  <!-- Load centralized delivery time utility first -->
- <script src="/src/utils/delivery-time.js?v=21"></script>
+ <script src="/js/delivery-time.js?v=21"></script>
  <script src="/js/universal-player.js?v=21" defer></script>
  <script src="/js/instant-upload.js?v=21" defer></script>
  <!-- Whop checkout integration -->
