@@ -27,13 +27,7 @@ class AdminApp {
       'orders',
       'products',
       'reviews',
-      'chats',
-      'blog',
-      'forum',
-      'users',
-      'settings',
-      'pages',
-      'components'
+      'settings'
     ]);
 
     // View key for session storage
@@ -83,7 +77,7 @@ class AdminApp {
     this.views.set('reviews', new ReviewsView(this.mainPanel));
     this.views.set('settings', new SettingsView(this.mainPanel));
 
-    // TODO: Add remaining views (chats, blog, forum, users, pages, components)
+    // Remaining views are not implemented yet.
   }
 
   /**
