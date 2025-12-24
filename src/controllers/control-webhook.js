@@ -5,8 +5,8 @@
 import { json } from '../utils/response.js';
 import { createManualOrder, deliverOrder, updateOrder } from './orders.js';
 import { updateReview } from './reviews.js';
-import { setBlogStatus } from './blog.js';
-import { setForumTopicStatus, setForumReplyStatus } from './forum.js';
+import { setBlogStatus } from './blog/index.js';
+import { setForumTopicStatus, setForumReplyStatus } from './forum/index.js';
 
 function readSecretHeader(req) {
   const auth = req.headers.get('authorization') || '';
