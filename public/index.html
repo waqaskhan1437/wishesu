@@ -52,12 +52,16 @@
 
  <!-- Load centralized delivery time utility first -->
  <script src="/js/delivery-time.js?v=1766444251"></script>
- <!-- Load the reusable product cards component -->
- <script src="js/product-cards.js?v=1766444251"></script>
- <script>
+ <script type="module">
+    import '/js/product-cards.js?v=1766444251';
     // Default Product Page: Show ALL products WITH "Book Now" button
     (async function() {
-      const result = await ProductCards.render('product-list', {
+      if (!window.ProductCards) {
+        console.error('ProductCards not available');
+        return;
+      }
+
+      await window.ProductCards.render('product-list', {
         filter: 'all',
         columns: 3,
         limit: 100,           // Show all available products
