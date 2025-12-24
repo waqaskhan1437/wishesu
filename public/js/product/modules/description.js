@@ -4,22 +4,11 @@
 
 import { renderReviews } from './reviews-renderer.js';
 
-function buildReviewSummary(reviewCount, ratingAverage) {
+function buildReviewHeading(reviewCount, ratingAverage) {
   if (reviewCount > 0) {
-    return `
-      <div style="background:#f9fafb; padding:1.5rem; border-radius:8px; text-align:center; color:#6b7280; margin-bottom: 2rem;">
-        <span style="font-size:2rem;">Rating: ${ratingAverage.toFixed(1)}</span>
-        <p style="margin-top: 0.5rem;">Based on ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}</p>
-      </div>
-    `;
+    return `Customer Reviews ${ratingAverage.toFixed(1)} (${reviewCount} ${reviewCount === 1 ? 'Review' : 'Reviews'})`;
   }
-
-  return `
-    <div style="background:#f9fafb; padding:1.5rem; border-radius:8px; text-align:center; color:#6b7280; margin-bottom: 2rem;">
-      <div style="font-size:1.5rem; margin-bottom:15px;">No ratings yet</div>
-      <p>No reviews yet. Be the first to leave a review!</p>
-    </div>
-  `;
+  return 'Customer Reviews';
 }
 
 function loadReviews(product) {
@@ -61,12 +50,13 @@ export function renderProductDescription(wrapper, product) {
   const reviewCount = product.review_count || 0;
   const ratingAverage = product.rating_average || 0;
 
+  const heading = buildReviewHeading(reviewCount, ratingAverage);
+
   descBox.innerHTML = `
     <h2>Description</h2>
     <div>${descText}</div>
     <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #eee;">
-    <h2>Customer Reviews</h2>
-    ${buildReviewSummary(reviewCount, ratingAverage)}
+    <h2>${heading}</h2>
     <div id="reviews-container"></div>
   `;
 
