@@ -2,7 +2,7 @@
  * Chat alert helpers.
  */
 
-import { getGoogleScriptUrl } from '../../../config/secrets.js';
+import { getGoogleScriptUrl } from '../../config/secrets.js';
 
 export async function notifyFirstCustomerMessage(env, sessionId, message, reqUrl) {
   try {

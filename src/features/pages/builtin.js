@@ -2,7 +2,7 @@
  * Built-in page seeding.
  */
 
-import { initDB } from '../../../config/db.js';
+import { initDB } from '../../config/db.js';
 
 const BUILTIN_PAGES = [
   { slug: 'index', title: 'Home', path: '/index.html' },

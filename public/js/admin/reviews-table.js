@@ -2,9 +2,9 @@
  * Reviews table builder.
  */
 
-import DataTable from '../../../components/data-table.js';
-import { formatDate } from '../../../utils/date-utils.js';
-import { createElement } from '../../../utils/dom-helper.js';
+import DataTable from '../components/data-table.js';
+import { formatDate } from '../utils/date-utils.js';
+import { createElement } from '../utils/dom-helper.js';
 
 function renderStars(value) {
   const count = parseInt(value, 10) || 0;

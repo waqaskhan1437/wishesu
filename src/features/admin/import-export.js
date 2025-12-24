@@ -2,7 +2,7 @@
  * Admin import/export handlers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function exportFull(env) {
   try {

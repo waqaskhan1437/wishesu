@@ -2,7 +2,7 @@
  * CORS middleware helpers.
  */
 
-import { CORS } from '../../config/cors.js';
+import { CORS } from '../config/cors.js';
 
 export function applyCors(headers = new Headers()) {
   const out = new Headers(headers);

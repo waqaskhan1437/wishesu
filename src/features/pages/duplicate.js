@@ -2,7 +2,7 @@
  * Page duplication handler.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function duplicatePage(env, body) {
   const id = body.id;

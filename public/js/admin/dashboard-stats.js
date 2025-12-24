@@ -2,8 +2,8 @@
  * Dashboard stats helpers.
  */
 
-import { createElement } from '../../../utils/dom-helper.js';
-import { formatPrice } from '../../../utils/format-utils.js';
+import { createElement } from '../utils/dom-helper.js';
+import { formatPrice } from '../utils/format-utils.js';
 
 export function createStatsGrid() {
   const grid = createElement('div', {

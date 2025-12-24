@@ -2,8 +2,8 @@
  * Chat message handler.
  */
 
-import { json } from '../../../utils/response.js';
-import { enforceUserRateLimit } from '../../../utils/validation.js';
+import { json } from '../../utils/response.js';
+import { enforceUserRateLimit } from '../../utils/validation.js';
 import { normalizeRole, sanitizeContent, updateLastMessage } from './helpers.js';
 import { checkDuplicateMessage } from './dedup.js';
 import { notifyFirstCustomerMessage } from './alerts.js';

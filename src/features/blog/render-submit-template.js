@@ -2,8 +2,8 @@
  * Blog submit template builder.
  */
 
-import { submitStyles } from './styles.js';
-import { submitScript } from './scripts.js';
+import { submitStyles } from './render-styles.js';
+import { submitScript } from './render-scripts.js';
 
 export function buildSubmitHtml() {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" />

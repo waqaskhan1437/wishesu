@@ -2,8 +2,8 @@
  * Product create/update handler.
  */
 
-import { json } from '../../../utils/response.js';
-import { slugifyStr } from '../../../utils/formatting.js';
+import { json } from '../../utils/response.js';
+import { slugifyStr } from '../../utils/formatting.js';
 
 function buildGalleryJson(body) {
   return Array.isArray(body.gallery_images)

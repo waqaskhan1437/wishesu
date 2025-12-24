@@ -4,8 +4,8 @@
  * Replaces duplicate table rendering code in dashboard views
  */
 
-import { createElement } from '../../utils/dom-helper.js';
-import eventBus from '../../core/event-bus.js';
+import { createElement } from '../utils/dom-helper.js';
+import eventBus from '../core/event-bus.js';
 import { createHeader, updateSortIndicators } from './table-header.js';
 import { createPagination, updatePagination } from './table-pagination.js';
 import { renderRows } from './table-renderer.js';

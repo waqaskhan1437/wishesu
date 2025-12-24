@@ -3,12 +3,12 @@
  * Manages orders display and CRUD operations
  */
 
-import apiClient from '../../core/api-client.js';
-import stateManager from '../../core/state-manager.js';
-import FormModal from '../../components/form-modal.js';
-import ConfirmModal from '../../components/confirm-modal.js';
-import Toast from '../../components/toast-notification.js';
-import LoadingSpinner from '../../components/loading-spinner.js';
+import apiClient from '../core/api-client.js';
+import stateManager from '../core/state-manager.js';
+import FormModal from '../components/form-modal.js';
+import ConfirmModal from '../components/confirm-modal.js';
+import Toast from '../components/toast-notification.js';
+import LoadingSpinner from '../components/loading-spinner.js';
 import { createTableContainer } from './shared-containers.js';
 import { withSpinner } from './shared-spinner.js';
 import { createOrdersHeader } from './orders-header.js';

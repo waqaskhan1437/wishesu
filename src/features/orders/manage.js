@@ -2,7 +2,7 @@
  * Order management handlers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function deleteOrder(env, id) {
   await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(Number(id)).run();

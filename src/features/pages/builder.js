@@ -2,7 +2,7 @@
  * Page builder loader.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 import { seedBuiltInPages } from './builtin.js';
 
 export async function loadPageBuilder(env, name) {

@@ -2,7 +2,7 @@
  * Delivery handlers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 import { notifyOrderDelivered, notifyRevisionRequested } from './notifications.js';
 
 function buildDeliveredMetadata(body) {

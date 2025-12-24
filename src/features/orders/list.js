@@ -2,7 +2,7 @@
  * Order list handlers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function getOrders(env) {
   const r = await env.DB.prepare('SELECT * FROM orders ORDER BY id DESC').all();

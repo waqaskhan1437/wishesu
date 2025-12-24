@@ -2,7 +2,7 @@
  * Chat de-duplication helpers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function checkDuplicateMessage(env, sessionId, role, content) {
   try {

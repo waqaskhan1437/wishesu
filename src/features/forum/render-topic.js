@@ -2,10 +2,10 @@
  * Render forum topic page.
  */
 
-import { getForumTopic, getForumReplies, getForumLatestTopics } from './topic-data.js';
-import { buildReplyItems, buildTopicLatest } from './topic-markup.js';
-import { toParagraphs } from '../helpers.js';
-import { buildTopicHtml } from './topic-template.js';
+import { getForumTopic, getForumReplies, getForumLatestTopics } from './render-topic-data.js';
+import { buildReplyItems, buildTopicLatest } from './render-topic-markup.js';
+import { toParagraphs } from './helpers.js';
+import { buildTopicHtml } from './render-topic-template.js';
 
 export async function renderForumTopic(env, slug) {
   const topic = await getForumTopic(env, slug);

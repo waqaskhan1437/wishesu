@@ -2,7 +2,7 @@
  * Product routing helpers.
  */
 
-import { slugifyStr } from '../../../utils/formatting.js';
+import { slugifyStr } from '../../utils/formatting.js';
 
 export async function handleProductRouting(env, url, path) {
   const legacyId = (path === '/product') ? url.searchParams.get('id') : null;

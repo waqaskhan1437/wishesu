@@ -2,9 +2,9 @@
  * Render blog archive.
  */
 
-import { getBlogArchivePosts } from './archive-data.js';
-import { buildArchiveItems, buildArchiveLatest } from './archive-markup.js';
-import { buildArchiveHtml } from './archive-template.js';
+import { getBlogArchivePosts } from './render-archive-data.js';
+import { buildArchiveItems, buildArchiveLatest } from './render-archive-markup.js';
+import { buildArchiveHtml } from './render-archive-template.js';
 
 export async function renderBlogArchive(env, origin) {
   const posts = await getBlogArchivePosts(env);

@@ -2,7 +2,7 @@
  * Thumbnail main image.
  */
 
-import { reRenderVideoFacade } from '../video-facade.js';
+import { reRenderVideoFacade } from './video-facade.js';
 
 export function createMainThumbnail(product, thumbsDiv) {
   const thumbWrapper = document.createElement('div');

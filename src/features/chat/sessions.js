@@ -2,8 +2,8 @@
  * Chat session handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { escapeHtml } from '../../../utils/formatting.js';
+import { json } from '../../utils/response.js';
+import { escapeHtml } from '../../utils/formatting.js';
 
 export async function startChat(env, body) {
   const nameIn = String(body.name || '').trim();

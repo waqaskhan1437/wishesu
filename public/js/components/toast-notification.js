@@ -3,7 +3,7 @@
  * Non-intrusive notification messages
  */
 
-import { createElement } from '../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 
 export class Toast {
   constructor(options = {}) {

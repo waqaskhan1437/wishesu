@@ -2,7 +2,7 @@
  * Chat helper utilities.
  */
 
-import { escapeHtml } from '../../../utils/formatting.js';
+import { escapeHtml } from '../../utils/formatting.js';
 
 export function normalizeRole(roleRaw) {
   const role = String(roleRaw || 'user').trim().toLowerCase();

@@ -2,7 +2,7 @@
  * Review slider helpers.
  */
 
-import { setPlayerSource, showHighlight, scrollToPlayer } from './player.js';
+import { setPlayerSource, showHighlight, scrollToPlayer } from './reviews-player.js';
 
 function showSliderArrows(slider) {
   const container = slider ? slider.parentElement : null;

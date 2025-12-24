@@ -2,8 +2,8 @@
  * Buyer order handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { toISO8601 } from '../../../utils/formatting.js';
+import { json } from '../../utils/response.js';
+import { toISO8601 } from '../../utils/formatting.js';
 
 export async function getBuyerOrder(env, orderId) {
   const row = await env.DB.prepare(

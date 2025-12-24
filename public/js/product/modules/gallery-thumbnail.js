@@ -2,7 +2,7 @@
  * Thumbnail gallery image.
  */
 
-import { createMainImage } from '../video-facade.js';
+import { createMainImage } from './video-facade.js';
 
 export function createGalleryThumbnail(imageUrl, product, index, thumbsDiv) {
   const galleryThumb = document.createElement('img');

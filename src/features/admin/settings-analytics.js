@@ -2,7 +2,7 @@
  * Analytics settings handlers.
  */
 
-import { json } from '../../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function getAnalyticsSettings(env) {
   try {

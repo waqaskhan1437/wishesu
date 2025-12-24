@@ -2,9 +2,9 @@
  * Orders table builder.
  */
 
-import DataTable from '../../../components/data-table.js';
-import { formatDate } from '../../../utils/date-utils.js';
-import { createElement } from '../../../utils/dom-helper.js';
+import DataTable from '../components/data-table.js';
+import { formatDate } from '../utils/date-utils.js';
+import { createElement } from '../utils/dom-helper.js';
 
 export function createOrdersTable(orders, handlers) {
   const getCountdown = handlers.getCountdownDisplay;

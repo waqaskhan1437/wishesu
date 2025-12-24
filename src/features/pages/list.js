@@ -2,8 +2,8 @@
  * Page list handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { toISO8601 } from '../../../utils/formatting.js';
+import { json } from '../../utils/response.js';
+import { toISO8601 } from '../../utils/formatting.js';
 import { seedBuiltInPages } from './builtin.js';
 
 function formatSize(bytes) {

@@ -2,8 +2,8 @@
  * Admin cache handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { VERSION } from '../../../config/constants.js';
+import { json } from '../../utils/response.js';
+import { VERSION } from '../../config/constants.js';
 
 let purgeVersionChecked = false;
 

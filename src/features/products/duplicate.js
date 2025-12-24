@@ -2,8 +2,8 @@
  * Product duplication handler.
  */
 
-import { json } from '../../../utils/response.js';
-import { slugifyStr } from '../../../utils/formatting.js';
+import { json } from '../../utils/response.js';
+import { slugifyStr } from '../../utils/formatting.js';
 
 export async function duplicateProduct(env, body) {
   const id = body.id;

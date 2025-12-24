@@ -2,7 +2,7 @@
  * Product status and delete handlers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function deleteProduct(env, id) {
   if (!id) return json({ error: 'ID required' }, 400);

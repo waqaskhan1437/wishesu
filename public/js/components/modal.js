@@ -4,8 +4,8 @@
  * Eliminates duplicate modal creation code across dashboard
  */
 
-import { createElement } from '../../utils/dom-helper.js';
-import eventBus from '../../core/event-bus.js';
+import { createElement } from '../utils/dom-helper.js';
+import eventBus from '../core/event-bus.js';
 
 export class Modal {
   constructor(options = {}) {

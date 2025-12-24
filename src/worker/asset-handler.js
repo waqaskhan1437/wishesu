@@ -3,7 +3,7 @@
  */
 
 import { getCachedHtml, setCachedHtml } from './html-cache.js';
-import { applyNoStore } from '../cache-headers.js';
+import { applyNoStore } from './cache-headers.js';
 
 export async function handleStaticAsset(req, env, ctx, options) {
   if (!env.ASSETS) return null;

@@ -20,7 +20,7 @@ import {
   listUsers,
   updateUserBlocks,
   resetData
-} from '../controllers/admin.js';
+} from '../controllers/admin/index.js';
 
 /**
  * Register admin routes

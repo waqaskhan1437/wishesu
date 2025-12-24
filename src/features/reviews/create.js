@@ -2,7 +2,7 @@
  * Review creation handler.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function addReview(env, body) {
   if (!body.productId || !body.rating) return json({ error: 'productId and rating required' }, 400);

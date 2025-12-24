@@ -2,7 +2,7 @@
  * Render blog submit page.
  */
 
-import { buildSubmitHtml } from './submit-template.js';
+import { buildSubmitHtml } from './render-submit-template.js';
 
 export async function renderBlogSubmit() {
   const html = buildSubmitHtml();

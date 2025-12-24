@@ -3,7 +3,7 @@
  * Reusable loading indicator
  */
 
-import { createElement } from '../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 
 export class LoadingSpinner {
   constructor(options = {}) {

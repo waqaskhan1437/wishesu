@@ -3,7 +3,7 @@
  * Handles pagination UI and page navigation
  */
 
-import { createElement } from '../../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 
 /**
  * Create pagination controls

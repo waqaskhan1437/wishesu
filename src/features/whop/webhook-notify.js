@@ -2,7 +2,7 @@
  * Whop webhook notifier.
  */
 
-import { getGoogleScriptUrl } from '../../../../config/secrets.js';
+import { getGoogleScriptUrl } from '../../config/secrets.js';
 
 export async function notifyOrderCreated(env, order) {
   try {

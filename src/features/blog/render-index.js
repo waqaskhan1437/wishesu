@@ -2,6 +2,6 @@
  * Blog render exports.
  */
 
-export { renderBlogArchive } from './archive.js';
-export { renderBlogSubmit } from './submit.js';
-export { renderBlogPost } from './post.js';
+export { renderBlogArchive } from './render-archive.js';
+export { renderBlogSubmit } from './render-submit.js';
+export { renderBlogPost } from './render-post.js';

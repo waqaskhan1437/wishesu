@@ -2,8 +2,8 @@
  * Admin user handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { normalizeEmail } from '../../../utils/customers.js';
+import { json } from '../../utils/response.js';
+import { normalizeEmail } from '../../utils/customers.js';
 
 export async function listUsers(env) {
   try {

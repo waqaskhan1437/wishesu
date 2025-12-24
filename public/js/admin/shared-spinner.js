@@ -2,7 +2,7 @@
  * Shared spinner helper.
  */
 
-import LoadingSpinner from '../../../components/loading-spinner.js';
+import LoadingSpinner from '../components/loading-spinner.js';
 
 export async function withSpinner(text, task) {
   const spinner = LoadingSpinner.show({ text });

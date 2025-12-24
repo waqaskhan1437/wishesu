@@ -2,7 +2,7 @@
  * Products header builder.
  */
 
-import { createElement } from '../../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 
 export function createProductsHeader(onCreate) {
   const header = createElement('div', {

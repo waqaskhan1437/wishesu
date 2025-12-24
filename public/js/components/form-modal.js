@@ -5,7 +5,7 @@
  */
 
 import Modal from './modal.js';
-import { createElement } from '../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 
 export class FormModal extends Modal {
   constructor(options = {}) {

@@ -2,7 +2,7 @@
  * Settings tabs builder.
  */
 
-import { createElement } from '../../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 
 export function createSettingsTabs(onSwitch) {
   const tabsContainer = createElement('div', {

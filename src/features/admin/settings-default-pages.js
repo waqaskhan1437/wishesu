@@ -2,7 +2,7 @@
  * Default pages settings handlers.
  */
 
-import { json } from '../../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function getDefaultPages(env) {
   try {

@@ -2,9 +2,9 @@
  * Render forum archive.
  */
 
-import { getForumArchiveTopics } from './archive-data.js';
-import { buildArchiveItems, buildArchiveLatest } from './archive-markup.js';
-import { buildArchiveHtml } from './archive-template.js';
+import { getForumArchiveTopics } from './render-archive-data.js';
+import { buildArchiveItems, buildArchiveLatest } from './render-archive-markup.js';
+import { buildArchiveHtml } from './render-archive-template.js';
 
 export async function renderForumArchive(env) {
   const topics = await getForumArchiveTopics(env);

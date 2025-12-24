@@ -2,7 +2,7 @@
  * Admin authentication middleware.
  */
 
-import { initDB } from '../../config/db.js';
+import { initDB } from '../config/db.js';
 import { isSameOrigin } from './csrf.js';
 
 export const requiresAdminAuth = () => false;

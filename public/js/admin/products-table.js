@@ -2,10 +2,10 @@
  * Products table builder.
  */
 
-import DataTable from '../../../components/data-table.js';
-import { formatDate } from '../../../utils/date-utils.js';
-import { createElement } from '../../../utils/dom-helper.js';
-import { formatPrice } from '../../../utils/format-utils.js';
+import DataTable from '../components/data-table.js';
+import { formatDate } from '../utils/date-utils.js';
+import { createElement } from '../utils/dom-helper.js';
+import { formatPrice } from '../utils/format-utils.js';
 
 export function createProductsTable(products, handlers) {
   return new DataTable({

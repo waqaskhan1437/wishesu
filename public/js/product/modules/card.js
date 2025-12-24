@@ -2,7 +2,7 @@
  * Review card builder.
  */
 
-import { scrollToPlayer, setPlayerSource, showHighlight } from './player.js';
+import { scrollToPlayer, setPlayerSource, showHighlight } from './reviews-player.js';
 
 function applyReadMore(card, reviewText) {
   const words = reviewText.split(' ');

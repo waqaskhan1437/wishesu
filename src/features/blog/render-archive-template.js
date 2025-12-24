@@ -2,7 +2,7 @@
  * Blog archive template builder.
  */
 
-import { archiveStyles } from './styles.js';
+import { archiveStyles } from './render-styles.js';
 
 export function buildArchiveHtml(itemsHtml, latestHtml) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" />

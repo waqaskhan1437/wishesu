@@ -2,8 +2,8 @@
  * Render blog post page.
  */
 
-import { getBlogPostBySlug } from './post-data.js';
-import { buildPostHtml } from './post-template.js';
+import { getBlogPostBySlug } from './render-post-data.js';
+import { buildPostHtml } from './render-post-template.js';
 
 export async function renderBlogPost(env, slug) {
   const post = await getBlogPostBySlug(env, slug);

@@ -2,9 +2,9 @@
  * Forum topic template builder.
  */
 
-import { escapeHtml } from '../helpers.js';
-import { topicStyles } from './styles.js';
-import { topicScript } from './scripts.js';
+import { escapeHtml } from './helpers.js';
+import { topicStyles } from './render-styles.js';
+import { topicScript } from './render-scripts.js';
 
 export function buildTopicHtml(topic, repliesHtml, latestHtml) {
   const title = escapeHtml(topic.title || topic.slug);

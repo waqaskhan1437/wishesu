@@ -2,7 +2,7 @@
  * Whop webhook order helpers.
  */
 
-import { notifyOrderCreated } from './notify.js';
+import { notifyOrderCreated } from './webhook-notify.js';
 
 export async function createOrderFromWebhook(env, webhookData, metadata, origin) {
   if (!metadata?.product_id) return;
@@ -38,3 +38,4 @@ export async function createOrderFromWebhook(env, webhookData, metadata, origin)
     console.error('Failed to create order:', e);
   }
 }
+

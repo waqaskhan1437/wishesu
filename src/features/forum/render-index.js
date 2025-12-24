@@ -2,5 +2,5 @@
  * Forum render exports.
  */
 
-export { renderForumArchive } from './archive.js';
-export { renderForumTopic } from './topic.js';
+export { renderForumArchive } from './render-archive.js';
+export { renderForumTopic } from './render-topic.js';

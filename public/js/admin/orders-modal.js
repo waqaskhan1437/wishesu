@@ -2,7 +2,7 @@
  * Orders modal helpers.
  */
 
-import { fetchOrderProducts } from './api.js';
+import { fetchOrderProducts } from './orders-api.js';
 
 export async function openCreateOrderModal(deps) {
   const { apiClient, Toast, FormModal, onSubmit } = deps;

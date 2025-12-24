@@ -2,8 +2,8 @@
  * Blog admin handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { normalizeEmail } from '../../../utils/customers.js';
+import { json } from '../../utils/response.js';
+import { normalizeEmail } from '../../utils/customers.js';
 import { ensureBlogColumns } from './columns.js';
 import { normalizeStatus, slugify } from './helpers.js';
 

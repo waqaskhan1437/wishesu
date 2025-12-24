@@ -2,8 +2,8 @@
  * Forum submission handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { isCustomerBlocked, normalizeEmail, upsertCustomer } from '../../../utils/customers.js';
+import { json } from '../../utils/response.js';
+import { isCustomerBlocked, normalizeEmail, upsertCustomer } from '../../utils/customers.js';
 import { slugify } from './helpers.js';
 
 async function hasPendingSubmission(env, email) {

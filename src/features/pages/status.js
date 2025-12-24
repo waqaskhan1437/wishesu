@@ -2,7 +2,7 @@
  * Page status and delete handlers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function deletePage(env, id) {
   await env.DB.prepare('DELETE FROM pages WHERE id = ?').bind(Number(id)).run();

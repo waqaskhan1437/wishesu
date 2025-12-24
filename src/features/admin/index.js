@@ -18,7 +18,7 @@ export {
   saveControlWebhookSettings,
   getDefaultPages,
   saveDefaultPages
-} from './settings/index.js';
+} from './settings-index.js';
 export { listUsers, updateUserBlocks } from './users.js';
 export { resetData, handleSecureDownload, uploadCustomerFile } from './data-management.js';
 export {

@@ -2,8 +2,8 @@
  * Blog post template builder.
  */
 
-import { escapeHtml } from '../helpers.js';
-import { postStyles } from './styles.js';
+import { escapeHtml } from './helpers.js';
+import { postStyles } from './render-styles.js';
 
 export function buildPostHtml(post) {
   const title = escapeHtml(post.title || post.slug);

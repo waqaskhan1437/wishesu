@@ -2,8 +2,8 @@
  * Public blog submission handler.
  */
 
-import { json } from '../../../utils/response.js';
-import { isCustomerBlocked, normalizeEmail, upsertCustomer } from '../../../utils/customers.js';
+import { json } from '../../utils/response.js';
+import { isCustomerBlocked, normalizeEmail, upsertCustomer } from '../../utils/customers.js';
 import { ensureBlogColumns } from './columns.js';
 import { escapeHtml, slugify } from './helpers.js';
 

@@ -2,10 +2,10 @@
  * Admin controller - Admin tools and file uploads (Zero-CPU Direct Uploads)
  */
 
-import { json } from '../utils/response.js';
-import { CORS } from '../config/cors.js';
-import { getMimeTypeFromFilename, resolveContentType } from '../utils/upload-helper.js';
-import { normalizeArchiveMetaValue } from '../utils/formatting.js';
+import { json } from './utils/response.js';
+import { CORS } from './config/cors.js';
+import { getMimeTypeFromFilename, resolveContentType } from './utils/upload-helper.js';
+import { normalizeArchiveMetaValue } from './utils/formatting.js';
 
 // Flag to track if version purge check was done
 let purgeVersionChecked = false;

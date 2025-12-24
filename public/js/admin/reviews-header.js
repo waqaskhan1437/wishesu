@@ -2,7 +2,7 @@
  * Reviews header builder.
  */
 
-import { createElement } from '../../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 
 export function createReviewsHeader() {
   return createElement('h2', {

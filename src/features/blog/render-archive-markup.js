@@ -2,7 +2,7 @@
  * Blog archive markup helpers.
  */
 
-import { escapeHtml, makeExcerpt } from '../helpers.js';
+import { escapeHtml, makeExcerpt } from './helpers.js';
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : '';

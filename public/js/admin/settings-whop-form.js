@@ -2,7 +2,7 @@
  * Whop settings form.
  */
 
-import { createElement } from '../../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 
 export function createWhopForm(settings, onSave) {
   const form = createElement('form', {

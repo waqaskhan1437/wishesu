@@ -2,9 +2,9 @@
  * Dashboard recent orders table helpers.
  */
 
-import { createElement } from '../../../utils/dom-helper.js';
-import { formatDate } from '../../../utils/date-utils.js';
-import { formatPrice } from '../../../utils/format-utils.js';
+import { createElement } from '../utils/dom-helper.js';
+import { formatDate } from '../utils/date-utils.js';
+import { formatPrice } from '../utils/format-utils.js';
 
 export function createRecentOrdersSection() {
   const section = createElement('div', {

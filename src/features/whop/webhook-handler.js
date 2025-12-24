@@ -2,11 +2,11 @@
  * Whop webhook handler.
  */
 
-import { json } from '../../../../utils/response.js';
-import { getWhopApiKey } from '../../../../config/secrets.js';
-import { hydrateMetadataFromDb } from './metadata.js';
-import { deleteCheckoutSession, deletePlanForCheckout } from './cleanup.js';
-import { createOrderFromWebhook } from './orders.js';
+import { json } from '../../utils/response.js';
+import { getWhopApiKey } from '../../config/secrets.js';
+import { hydrateMetadataFromDb } from './webhook-metadata.js';
+import { deleteCheckoutSession, deletePlanForCheckout } from './webhook-cleanup.js';
+import { createOrderFromWebhook } from './webhook-orders.js';
 
 export async function handleWebhook(env, webhookData, origin) {
   try {

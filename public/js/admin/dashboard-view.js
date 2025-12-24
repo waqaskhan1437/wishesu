@@ -3,8 +3,8 @@
  * Main dashboard with statistics and recent orders
  */
 
-import apiClient from '../../core/api-client.js';
-import Toast from '../../components/toast-notification.js';
+import apiClient from '../core/api-client.js';
+import Toast from '../components/toast-notification.js';
 import { withSpinner } from './shared-spinner.js';
 import { createStatsGrid, updateStats, updateProductCount } from './dashboard-stats.js';
 import { createRecentOrdersSection, updateRecentOrders } from './dashboard-recent-orders.js';

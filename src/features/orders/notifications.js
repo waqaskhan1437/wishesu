@@ -2,7 +2,7 @@
  * Order notification helpers.
  */
 
-import { getGoogleScriptUrl } from '../../../config/secrets.js';
+import { getGoogleScriptUrl } from '../../config/secrets.js';
 
 export async function notifyOrderCreated(env, order) {
   try {

@@ -2,7 +2,7 @@
  * Forum admin handlers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function listForumTopics(env, status) {
   const s = String(status || '').trim().toLowerCase();

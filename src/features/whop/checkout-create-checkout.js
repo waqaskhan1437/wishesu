@@ -2,13 +2,13 @@
  * Create Whop checkout session using an existing plan.
  */
 
-import { json } from '../../../../utils/response.js';
-import { getWhopApiKey } from '../../../../config/secrets.js';
-import { getProductById } from './product.js';
-import { getWhopSettings, resolvePlanId, normalizePlanId } from './settings.js';
-import { createCheckoutSession } from './whop-api.js';
-import { trackCheckoutSession } from './store.js';
-import { parseWhopError } from './helpers.js';
+import { json } from '../../utils/response.js';
+import { getWhopApiKey } from '../../config/secrets.js';
+import { getProductById } from './checkout-product.js';
+import { getWhopSettings, resolvePlanId, normalizePlanId } from './checkout-settings.js';
+import { createCheckoutSession } from './checkout-whop-api.js';
+import { trackCheckoutSession } from './checkout-store.js';
+import { parseWhopError } from './checkout-helpers.js';
 
 export async function createCheckout(env, body, origin) {
   const { product_id } = body || {};

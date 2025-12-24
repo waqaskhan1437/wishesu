@@ -2,4 +2,4 @@
  * Whop webhook exports.
  */
 
-export { handleWebhook } from './handler.js';
+export { handleWebhook } from './webhook-handler.js';

@@ -3,11 +3,11 @@
  * Manages reviews display and moderation
  */
 
-import apiClient from '../../core/api-client.js';
-import stateManager from '../../core/state-manager.js';
-import ConfirmModal from '../../components/confirm-modal.js';
-import Toast from '../../components/toast-notification.js';
-import LoadingSpinner from '../../components/loading-spinner.js';
+import apiClient from '../core/api-client.js';
+import stateManager from '../core/state-manager.js';
+import ConfirmModal from '../components/confirm-modal.js';
+import Toast from '../components/toast-notification.js';
+import LoadingSpinner from '../components/loading-spinner.js';
 import { createTableContainer } from './shared-containers.js';
 import { withSpinner } from './shared-spinner.js';
 import { createReviewsHeader } from './reviews-header.js';

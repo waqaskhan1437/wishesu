@@ -2,7 +2,7 @@
  * Review update handler.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function updateReview(env, body) {
   const id = Number(body.id);

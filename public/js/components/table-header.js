@@ -3,7 +3,7 @@
  * Handles table header creation and sorting functionality
  */
 
-import { createElement } from '../../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 
 /**
  * Create table header

@@ -2,8 +2,8 @@
  * Quick action auto-replies.
  */
 
-import { escapeHtml, normalizeQuickAction } from '../../../utils/formatting.js';
-import { getLatestOrderForEmail } from '../../../utils/order-helpers.js';
+import { escapeHtml, normalizeQuickAction } from '../../utils/formatting.js';
+import { getLatestOrderForEmail } from '../../utils/order-helpers.js';
 
 export async function maybeAutoReply(env, sessionId, message, reqUrl) {
   const normalized = normalizeQuickAction(message);

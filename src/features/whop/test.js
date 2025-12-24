@@ -2,8 +2,8 @@
  * Whop test handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { getWhopApiKey } from '../../../config/secrets.js';
+import { json } from '../../utils/response.js';
+import { getWhopApiKey } from '../../config/secrets.js';
 
 export async function testApi(env) {
   const apiKey = await getWhopApiKey(env);

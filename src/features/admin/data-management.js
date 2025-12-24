@@ -2,9 +2,9 @@
  * Admin data management handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { CORS } from '../../../config/cors.js';
-import { getMimeTypeFromFilename } from '../../../utils/upload-helper.js';
+import { json } from '../../utils/response.js';
+import { CORS } from '../../config/cors.js';
+import { getMimeTypeFromFilename } from '../../utils/upload-helper.js';
 
 export async function resetData(env) {
   const tables = [

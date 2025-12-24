@@ -4,7 +4,7 @@
  * Replaces shared-timer-utils.js functionality
  */
 
-import { getCountdown, formatCountdown } from '../../utils/date-utils.js';
+import { getCountdown, formatCountdown } from '../utils/date-utils.js';
 
 export class CountdownTimer {
   constructor(targetDate, options = {}) {

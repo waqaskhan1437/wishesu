@@ -2,19 +2,19 @@
  * Create dynamic plan + checkout session.
  */
 
-import { json } from '../../../../utils/response.js';
-import { getWhopApiKey } from '../../../../config/secrets.js';
-import { getProductById, getBasePrice } from './product.js';
-import { getWhopSettings, resolveProductId } from './settings.js';
-import { createCheckoutSession, createPlan, setProductAllowMultiple } from './whop-api.js';
-import { trackPlanSession, updateCheckoutSessionId } from './store.js';
+import { json } from '../../utils/response.js';
+import { getWhopApiKey } from '../../config/secrets.js';
+import { getProductById, getBasePrice } from './checkout-product.js';
+import { getWhopSettings, resolveProductId } from './checkout-settings.js';
+import { createCheckoutSession, createPlan, setProductAllowMultiple } from './checkout-whop-api.js';
+import { trackPlanSession, updateCheckoutSessionId } from './checkout-store.js';
 import {
   resolvePrice,
   buildPlanPayload,
   buildCheckoutMetadata,
   buildCheckoutPayload,
   parseWhopError
-} from './helpers.js';
+} from './checkout-helpers.js';
 
 export async function createPlanCheckout(env, body, origin) {
   const { product_id, amount, email, metadata } = body || {};

@@ -2,8 +2,8 @@
  * Order creation handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { normalizeEmail, upsertCustomer } from '../../../utils/customers.js';
+import { json } from '../../utils/response.js';
+import { normalizeEmail, upsertCustomer } from '../../utils/customers.js';
 import { ensureOrderColumns } from './columns.js';
 import { notifyOrderCreated } from './notifications.js';
 

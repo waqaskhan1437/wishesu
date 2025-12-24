@@ -2,9 +2,9 @@
  * Page handlers for blog/forum and dynamic pages.
  */
 
-import { initDB } from '../../config/db.js';
-import { renderBlogArchive, renderBlogPost, renderBlogSubmit } from '../../controllers/blog/index.js';
-import { renderForumArchive, renderForumTopic } from '../../controllers/forum/index.js';
+import { initDB } from '../config/db.js';
+import { renderBlogArchive, renderBlogPost, renderBlogSubmit } from '../controllers/blog/index.js';
+import { renderForumArchive, renderForumTopic } from '../controllers/forum/index.js';
 
 export async function getDefaultPages(env) {
   if (!env.DB) {

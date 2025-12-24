@@ -2,7 +2,7 @@
  * Admin maintenance handlers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function testGoogleSync(env, body) {
   const googleUrl = body.googleUrl;

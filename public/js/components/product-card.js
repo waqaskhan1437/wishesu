@@ -4,8 +4,8 @@
  * Replaces duplicate product card implementations
  */
 
-import { createElement } from '../../utils/dom-helper.js';
-import { formatPrice } from '../../utils/format-utils.js';
+import { createElement } from '../utils/dom-helper.js';
+import { formatPrice } from '../utils/format-utils.js';
 
 export class ProductCard {
   constructor(product, options = {}) {

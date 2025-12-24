@@ -2,9 +2,9 @@
  * Admin upload handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { getMimeTypeFromFilename } from '../../../utils/upload-helper.js';
-import { CORS } from '../../../config/cors.js';
+import { json } from '../../utils/response.js';
+import { getMimeTypeFromFilename } from '../../utils/upload-helper.js';
+import { CORS } from '../../config/cors.js';
 
 export function getArchiveCredentials(env) {
   if (!env.ARCHIVE_ACCESS_KEY || !env.ARCHIVE_SECRET_KEY) {

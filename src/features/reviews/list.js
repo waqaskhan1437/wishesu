@@ -2,8 +2,8 @@
  * Review list handlers.
  */
 
-import { json } from '../../../utils/response.js';
-import { toISO8601 } from '../../../utils/formatting.js';
+import { json } from '../../utils/response.js';
+import { toISO8601 } from '../../utils/formatting.js';
 
 function normalizeIds(raw) {
   return raw.split(',').map(id => parseInt(id, 10)).filter(n => !isNaN(n));

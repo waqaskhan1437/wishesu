@@ -2,7 +2,7 @@
  * Chat sync handler.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function syncChat(env, url) {
   const sessionId = url.searchParams.get('sessionId');

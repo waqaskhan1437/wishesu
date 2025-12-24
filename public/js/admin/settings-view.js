@@ -3,10 +3,10 @@
  * Application settings management
  */
 
-import apiClient from '../../core/api-client.js';
-import Toast from '../../components/toast-notification.js';
+import apiClient from '../core/api-client.js';
+import Toast from '../components/toast-notification.js';
 import { withSpinner } from './shared-spinner.js';
-import { createElement } from '../../utils/dom-helper.js';
+import { createElement } from '../utils/dom-helper.js';
 import { createSettingsTabs, setActiveTab } from './settings-tabs.js';
 import { renderPlaceholder } from './settings-content.js';
 import { createWhopForm } from './settings-whop-form.js';

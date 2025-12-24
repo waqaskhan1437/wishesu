@@ -2,9 +2,9 @@
  * Product main layout builder.
  */
 
-import { renderVideoWrapper } from '../video-facade.js';
-import { renderThumbnailGallery } from '../thumbnail-gallery.js';
-import { renderProductInfoPanel } from '../product-info-panel.js';
+import { renderVideoWrapper } from './video-facade.js';
+import { renderThumbnailGallery } from './thumbnail-gallery.js';
+import { renderProductInfoPanel } from './product-info-panel.js';
 
 export function renderProductMain(container, product, addonGroups) {
   container.className = '';

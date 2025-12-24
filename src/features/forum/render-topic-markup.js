@@ -2,7 +2,7 @@
  * Forum topic markup helpers.
  */
 
-import { escapeHtml, toParagraphs } from '../helpers.js';
+import { escapeHtml, toParagraphs } from './helpers.js';
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : '';

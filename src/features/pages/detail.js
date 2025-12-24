@@ -2,8 +2,8 @@
  * Page detail handler.
  */
 
-import { json } from '../../../utils/response.js';
-import { toISO8601 } from '../../../utils/formatting.js';
+import { json } from '../../utils/response.js';
+import { toISO8601 } from '../../utils/formatting.js';
 
 export async function getPage(env, slug) {
   const row = await env.DB.prepare('SELECT * FROM pages WHERE slug = ?').bind(slug).first();

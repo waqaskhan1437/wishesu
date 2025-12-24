@@ -2,7 +2,7 @@
  * Page save handlers.
  */
 
-import { json } from '../../../utils/response.js';
+import { json } from '../../utils/response.js';
 
 export async function savePage(env, body) {
   if (!body.slug || !body.title) return json({ error: 'slug and title required' }, 400);
