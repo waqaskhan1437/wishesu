@@ -5,6 +5,20 @@
 import { slugifyStr } from '../../utils/formatting.js';
 
 export async function handleProductRouting(env, url, path) {
+  if (path === '/product.html') {
+    const slugParam = url.searchParams.get('slug');
+    const idParam = url.searchParams.get('id');
+    if (slugParam) {
+      const slug = String(slugParam);
+      return Response.redirect(`${url.origin}/product/${encodeURIComponent(slug)}`, 301);
+    }
+    if (idParam) {
+      const rewritten = new URL(url.toString());
+      rewritten.pathname = '/product';
+      return Response.redirect(rewritten.toString(), 301);
+    }
+  }
+
   const legacyId = (path === '/product') ? url.searchParams.get('id') : null;
   if (legacyId) {
     const p = await env.DB.prepare('SELECT id, title, slug FROM products WHERE id = ? LIMIT 1').bind(Number(legacyId)).first();

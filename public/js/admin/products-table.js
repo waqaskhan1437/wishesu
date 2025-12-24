@@ -40,11 +40,15 @@ export function createProductsTable(products, handlers) {
         key: 'slug',
         label: 'Slug',
         sortable: true,
-        formatter: (value) => {
+        formatter: (value, row) => {
+          const slug = value || '';
+          const href = row && row.id
+            ? `/product-${encodeURIComponent(row.id)}/${encodeURIComponent(slug)}`
+            : `/product/${encodeURIComponent(slug)}`;
           return createElement('a', {
-            href: `/product.html?slug=${value}`,
+            href,
             target: '_blank',
-            textContent: value,
+            textContent: slug,
             className: 'product-link'
           });
         }
