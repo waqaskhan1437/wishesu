@@ -74,7 +74,7 @@ export class ProductCard {
     const rating = parseFloat(average_rating || 5);
     const count = parseInt(review_count || 0);
 
-    const stars = ''.repeat(Math.round(rating));
+    const stars = '*'.repeat(Math.max(1, Math.round(rating)));
     return `${stars} (${count})`;
   }
 

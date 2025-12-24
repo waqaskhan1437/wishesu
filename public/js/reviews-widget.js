@@ -133,7 +133,7 @@
 
       for (let i = 0; i < 5; i++) {
         if (i < fullStars) {
-          stars += '<span class="star star-full" aria-hidden="true">...</span>';
+          stars += '<span class="star star-full" aria-hidden="true">*</span>';
         } else {
           stars += '<span class="star star-empty" aria-hidden="true"></span>';
         }

@@ -169,7 +169,7 @@
       
       // Rating
       const tdRating = document.createElement('td');
-      tdRating.textContent = rv.rating != null ? ''.repeat(Math.round(rv.rating)) : '';
+      tdRating.textContent = rv.rating != null ? '*'.repeat(Math.round(rv.rating)) : '';
       row.appendChild(tdRating);
       
       // Comment (truncated)

@@ -28,7 +28,8 @@ function getDeliveryIcon(deliveryText) {
 function formatRatingText(rating, count) {
   const safeRating = Number.isFinite(rating) ? rating : 5;
   const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
-  return `*${safeRating.toFixed(1)}(${safeCount})`;
+  const stars = '*'.repeat(Math.max(1, Math.round(safeRating)));
+  return `${stars} ${safeRating.toFixed(1)} (${safeCount})`;
 }
 
 /**
@@ -122,9 +123,9 @@ export function renderStars(rating) {
 
   for (let i = 0; i < 5; i++) {
     if (i < fullStars) {
-      stars += '<span class="star star-full">...</span>';
+      stars += '<span class="star star-full">*</span>';
     } else if (i === fullStars && hasHalfStar) {
-      stars += '<span class="star star-half">...</span>';
+      stars += '<span class="star star-half">*</span>';
     } else {
       stars += '<span class="star star-empty"></span>';
     }
