@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Products - Shop</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Structured Data for Product Collection -->
+  <script type="application/ld+json" id="collection-schema">{}</script>
+  <style>
+    body { margin: 0; background: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .page-wrap { padding: 30px 20px; max-width: 1400px; margin: 0 auto; }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .page-title {
+      font-size: 2.5rem;
+      margin: 0;
+      color: #111827;
+      font-weight: 700;
+    }
+    .product-count {
+      color: #6b7280;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+    @media (max-width: 768px) {
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .page-title {
+        font-size: 1.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-wrap">
+    <div class="page-header">
+      <h1 class="page-title">All Products</h1>
+      <span class="product-count" id="product-count">Loading...</span>
+    </div>
+    <div id="product-list"></div>
+  </div>
+
+  <!-- Load centralized delivery time utility first -->
+  <script src="/src/utils/delivery-time.js?v=1766444251"></script>
+  <!-- Load the reusable product cards component -->
+  <script src="js/product-cards.js?v=1766444251"></script>
+  <script>
+    // Default Product Page: Show ALL products WITH "Book Now" button
+    (async function() {
+      const result = await ProductCards.render('product-list', {
+        filter: 'all',
+        columns: 3,
+        limit: 100,           // Show all available products
+        showReviews: true,
+        showDelivery: true,
+        showButton: true      // Full product display with action button
+      });
+
+      // Update product count
+      const countElement = document.getElementById('product-count');
+      if (countElement) {
+        // Get products from API to show accurate count
+        fetch('/api/products')
+          .then(res => res.json())
+          .then(data => {
+            const count = data.products ? data.products.length : 0;
+            countElement.textContent = `${count} ${count === 1 ? 'Product' : 'Products'}`;
+          })
+          .catch(() => {
+            countElement.textContent = '';
+          });
+      }
+    })();
+  </script>
+  <script src="js/chat-widget.js?v=1766444251"></script>
+
+  <!-- Service Worker for Cache Management -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('✅ Service Worker registered:', registration.scope);
+
+            // Check for updates every 5 minutes
+            setInterval(() => {
+              registration.update();
+            }, 5 * 60 * 1000);
+
+            // Listen for new service worker
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New version available, reload page
+                  console.log('🔄 New version available, reloading...');
+                  window.location.reload();
+                }
+              });
+            });
+          })
+          .catch(error => {
+            console.log('❌ Service Worker registration failed:', error);
+          });
+      });
+
+      // Handle controller change
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('🔄 Service Worker controller changed');
+      });
+    }
+  </script>
+</body>
+</html>
+
+
