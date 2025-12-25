@@ -48,7 +48,7 @@ import {
   blockSession,
   deleteSession,
   getSessions
-} from './modules/chat/chat.controller.js';
+} from './modules/chat/controllers/chat.js';
 
 // Whop - Now using modular whop controllers
 import {
@@ -58,7 +58,7 @@ import {
   testApi as testWhopApi,
   testWebhook as testWhopWebhook,
   cleanupExpired
-} from './modules/whop/whop.controller.js';
+} from './modules/whop/index.js';
 
 // Pages
 import {
@@ -101,7 +101,7 @@ import {
   testGoogleSync,
   clearTempFiles,
   clearPendingCheckouts
-} from './modules/admin/admin.controller.js';
+} from './modules/admin/index.js';
 
 // Blog
 import {
