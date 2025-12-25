@@ -11,7 +11,7 @@ not_found_handling = "404-page"
 [[d1_databases]]
 binding = "DB"
 database_name = "secure-shop-db"
-database_id = "YOUR_DATABASE_ID_HERE"
+database_id = "146ed085-2fa4-4a3d-a917-da5335358311"
 
 [[r2_buckets]]
 binding = "PRODUCT_MEDIA"
@@ -25,4 +25,4 @@ bucket_name = "temp-uploads-bucket"
 crons = ["0 2 * * *"]
 
 [vars]
-VERSION = "1.0.0-modular"
+VERSION = "2.0.0-modular"
