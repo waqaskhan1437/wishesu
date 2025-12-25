@@ -1,16 +1,23 @@
 {
-  "name": "cloudflare-ecommerce",
-  "version": "1.0.1",
-  "description": "Complete e-commerce solution with Whop integration and Google Sheets automation.",
-  "main": "worker.js",
+  "name": "wishesu-modular",
+  "version": "1.0.0",
+  "description": "Modular Cloudflare Workers E-commerce Platform",
+  "main": "src/index.js",
+  "type": "module",
   "scripts": {
-    "dev": "wrangler dev --local --port 5000 --ip 0.0.0.0",
-    "deploy": "wrangler deploy"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "ecommerce",
+    "modular"
+  ],
+  "author": "WishesU",
   "license": "ISC",
   "devDependencies": {
-    "wrangler": "^4.54.0"
+    "wrangler": "^3.0.0"
   }
 }

@@ -1,19 +1,10 @@
-name = "wishesu1"
+name = "wishesu-modular"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
 [assets]
 directory = "./public"
-# Expose the static asset directory as the `ASSETS` binding.  With a Worker
-# script present, Cloudflare still serves matching files automatically
-#【679589428825689†L551-L555】; however, binding the directory allows our worker to
-# explicitly fetch assets and modify response headers (for example, to set
-# `Cache-Control` and attach a version header)【679589428825689†L520-L544】.
 binding = "ASSETS"
-# Always run the worker before serving assets.  This setting allows the
-# worker to inject custom headers and perform routing logic before
-# delegating to the static asset server.  Without this option, asset requests
-# would bypass the worker entirely when a matching file exists【679589428825689†L594-L641】.
 run_worker_first = true
 not_found_handling = "404-page"
 
@@ -32,10 +23,5 @@ bucket_name = "temp-uploads-bucket"
 [triggers]
 crons = ["0 2 * * *"]
 
-# Optional build-time variables.  You can update VERSION before each publish
-# to force Cloudflare to treat your worker and static assets as a new
-# deployment.  This value is also surfaced via the /api/debug endpoint and
-# attached to static asset responses via the X-Worker-Version header.  It can
-# help confirm that you are receiving the latest build.
 [vars]
-VERSION = "1766444251"
+VERSION = "1.0.0-modular"

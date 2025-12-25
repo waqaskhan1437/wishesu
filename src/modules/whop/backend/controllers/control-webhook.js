@@ -2,7 +2,7 @@
  * External control webhook (Google Script)
  */
 
-import { json } from '../utils/response.js';
+import { json } from '../../../../core/utils/response.js';
 import { createManualOrder, deliverOrder, updateOrder } from './orders.js';
 import { updateReview } from './reviews.js';
 import { setBlogStatus } from './blog/index.js';

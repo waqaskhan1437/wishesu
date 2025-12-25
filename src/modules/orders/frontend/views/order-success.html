@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Order Confirmed | WishVideo</title>
- <link rel="stylesheet" href="css/style.css">
- <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
- <style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Confirmed | WishVideo</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
     /* Inline styles for specific Success Page elements */
     .success-card {
       background: white;
@@ -62,49 +62,49 @@
       transition: background 0.2s;
     }
     .btn-home:hover { background: #4f46e5; }
- </style>
+  </style>
 </head>
 <body>
 
- <header class="site-header">
- <div class="header-inner">
- <div class="logo">WISHVIDEO</div>
- <nav class="site-nav">
- <a href="/">Home</a>
- <a href="/all-products">All Products</a>
- <a href="/contact">Contact</a>
- </nav>
- </div>
- </header>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">WISHVIDEO</div>
+      <nav class="site-nav">
+        <a href="/">Home</a>
+        <a href="/all-products">All Products</a>
+        <a href="/contact">Contact</a>
+      </nav>
+    </div>
+  </header>
 
- <main>
- <div class="success-card">
- <div class="icon-circle"></div>
- <h1 style="margin-bottom: 0.5rem;">Thank You!</h1>
- <p style="color: #6b7280; margin-top: 0;">Your order has been placed successfully.</p>
+  <main>
+    <div class="success-card">
+      <div class="icon-circle">✓</div>
+      <h1 style="margin-bottom: 0.5rem;">Thank You!</h1>
+      <p style="color: #6b7280; margin-top: 0;">Your order has been placed successfully.</p>
       
- <div id="order-info" style="display: none;">
- <span class="order-id">Order #<span id="order-id-val">...</span></span>
- </div>
+      <div id="order-info" style="display: none;">
+        <span class="order-id">Order #<span id="order-id-val">...</span></span>
+      </div>
 
- <div class="next-steps">
- <h4>What happens next?</h4>
- <ul>
- <li> You will receive an order confirmation email shortly.</li>
- <li> <strong>Instant Delivery:</strong> If you ordered an instant video, check your WhatsApp/Email in 60 mins.</li>
- <li> <strong>Custom Orders:</strong> Our team has started working on your request.</li>
- </ul>
- </div>
+      <div class="next-steps">
+        <h4>What happens next?</h4>
+        <ul>
+          <li>📩 You will receive an order confirmation email shortly.</li>
+          <li>⚡ <strong>Instant Delivery:</strong> If you ordered an instant video, check your WhatsApp/Email in 60 mins.</li>
+          <li>🎨 <strong>Custom Orders:</strong> Our team has started working on your request.</li>
+        </ul>
+      </div>
 
- <a href="/" class="btn-home">Continue Shopping</a>
- </div>
- </main>
+      <a href="/" class="btn-home">Continue Shopping</a>
+    </div>
+  </main>
 
- <footer class="site-footer" style="text-align: center; color: #9ca3af; margin-top: 3rem;">
- <p>&copy; 2025 WishVideo. All rights reserved.</p>
- </footer>
+  <footer class="site-footer" style="text-align: center; color: #9ca3af; margin-top: 3rem;">
+    <p>&copy; 2025 WishVideo. All rights reserved.</p>
+  </footer>
 
- <script>
+  <script>
     // Simple script to show Order ID from URL
     const params = new URLSearchParams(window.location.search);
     const orderId = params.get('orderId');
@@ -112,8 +112,6 @@
       document.getElementById('order-info').style.display = 'block';
       document.getElementById('order-id-val').textContent = orderId;
     }
- </script>
+  </script>
 </body>
 </html>
-
-

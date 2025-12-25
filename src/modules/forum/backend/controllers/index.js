@@ -1,5 +1,18 @@
 /**
- * Forum controller index re-export.
+ * Forum Module Controllers Index
  */
 
-export * from '../../features/forum/index.js';
+export {
+  submitForumTopic,
+  submitForumReply,
+  listForumTopics,
+  listForumReplies,
+  setForumTopicStatus,
+  setForumReplyStatus,
+  updateForumTopic,
+  updateForumReply,
+  deleteForumTopic,
+  deleteForumReply,
+  renderForumArchive,
+  renderForumTopic
+} from './forum.controller.js';

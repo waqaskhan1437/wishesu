@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Reviews Migration Utility - Admin</title>
- <style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reviews Migration Utility - Admin</title>
+  <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -120,44 +120,44 @@
     .back-link:hover {
       text-decoration: underline;
     }
- </style>
+  </style>
 </head>
 <body>
- <div class="container">
- <h1>Reviews Migration Utility</h1>
- <p class="description">
+  <div class="container">
+    <h1>Reviews Migration Utility</h1>
+    <p class="description">
       This tool helps migrate old reviews that were created before the portfolio delivery system was fully implemented. 
       It will automatically link review videos from their associated orders to ensure all reviews display properly on product pages.
- </p>
+    </p>
 
- <div class="section">
- <h2>What This Does</h2>
- <p>
+    <div class="section">
+      <h2>What This Does</h2>
+      <p>
         When you click the migration button below, the system will search for all reviews that have an associated order ID but are missing video URL information. 
         It will then copy the delivered video URL and thumbnail URL from the order table to the review table. This ensures that customer portfolio videos appear correctly with their reviews.
- </p>
- <p>
+      </p>
+      <p>
         This process is safe to run multiple times as it only updates reviews that are missing video data. Reviews that already have video URLs will not be affected.
- </p>
- </div>
+      </p>
+    </div>
 
- <div class="section">
- <h2>Migration Process</h2>
- <button id="migrate-btn" onclick="migrateReviews()">Start Migration</button>
- <div id="migrate-result" class="result"></div>
- </div>
+    <div class="section">
+      <h2>Migration Process</h2>
+      <button id="migrate-btn" onclick="migrateReviews()">Start Migration</button>
+      <div id="migrate-result" class="result"></div>
+    </div>
 
- <div class="section">
- <h2>System Status</h2>
- <button id="check-btn" onclick="checkStatus()">Check Current Status</button>
- <div id="status-result" class="result"></div>
- <div id="stats" class="stats" style="display: none;"></div>
- </div>
+    <div class="section">
+      <h2>System Status</h2>
+      <button id="check-btn" onclick="checkStatus()">Check Current Status</button>
+      <div id="status-result" class="result"></div>
+      <div id="stats" class="stats" style="display: none;"></div>
+    </div>
 
- <a href="/admin/dashboard.html" class="back-link"> Back to Admin Dashboard</a>
- </div>
+    <a href="/admin/dashboard.html" class="back-link">← Back to Admin Dashboard</a>
+  </div>
 
- <script>
+  <script>
     async function migrateReviews() {
       const btn = document.getElementById('migrate-btn');
       const result = document.getElementById('migrate-result');
@@ -176,14 +176,14 @@
         
         if (response.ok && data.success) {
           result.className = 'result success';
-          result.textContent = `... Success! Migrated ${data.rowsUpdated} reviews with video links from their orders.`;
+          result.textContent = `✅ Success! Migrated ${data.rowsUpdated} reviews with video links from their orders.`;
           result.style.display = 'block';
         } else {
           throw new Error(data.error || 'Migration failed');
         }
       } catch (error) {
         result.className = 'result error';
-        result.textContent = ` Error: ${error.message}`;
+        result.textContent = `❌ Error: ${error.message}`;
         result.style.display = 'block';
       } finally {
         btn.disabled = false;
@@ -213,41 +213,38 @@
         const reviewsWithOrders = reviews.filter(r => r.order_id).length;
         
         result.className = 'result info';
-        result.textContent = ` System analysis complete. Found ${totalReviews} total reviews in the database.`;
+        result.textContent = `📊 System analysis complete. Found ${totalReviews} total reviews in the database.`;
         result.style.display = 'block';
         
         statsDiv.innerHTML = `
- <div class="stat-card">
- <div class="stat-number">${totalReviews}</div>
- <div class="stat-label">Total Reviews</div>
- </div>
- <div class="stat-card">
- <div class="stat-number">${reviewsWithVideos}</div>
- <div class="stat-label">With Video URLs</div>
- </div>
- <div class="stat-card">
- <div class="stat-number">${reviewsWithoutVideos}</div>
- <div class="stat-label">Missing Video URLs</div>
- </div>
- <div class="stat-card">
- <div class="stat-number">${reviewsWithOrders}</div>
- <div class="stat-label">Linked to Orders</div>
- </div>
+          <div class="stat-card">
+            <div class="stat-number">${totalReviews}</div>
+            <div class="stat-label">Total Reviews</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">${reviewsWithVideos}</div>
+            <div class="stat-label">With Video URLs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">${reviewsWithoutVideos}</div>
+            <div class="stat-label">Missing Video URLs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">${reviewsWithOrders}</div>
+            <div class="stat-label">Linked to Orders</div>
+          </div>
         `;
         statsDiv.style.display = 'grid';
         
       } catch (error) {
         result.className = 'result error';
-        result.textContent = ` Error checking status: ${error.message}`;
+        result.textContent = `❌ Error checking status: ${error.message}`;
         result.style.display = 'block';
       } finally {
         btn.disabled = false;
         btn.textContent = 'Check Current Status';
       }
     }
- </script>
+  </script>
 </body>
 </html>
-
-
-

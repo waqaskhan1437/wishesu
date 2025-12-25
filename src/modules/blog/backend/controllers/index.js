@@ -1,5 +1,15 @@
 /**
- * Blog controller index re-export.
+ * Blog Module Controllers Index
  */
 
-export * from '../../features/blog/index.js';
+export {
+  listBlogPosts,
+  getBlogPost,
+  saveBlogPost,
+  deleteBlogPost,
+  setBlogStatus,
+  submitBlogPost,
+  renderBlogArchive,
+  renderBlogPost,
+  renderBlogSubmit
+} from './blog.controller.js';
