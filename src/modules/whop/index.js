@@ -1,12 +1,15 @@
 /**
  * Whop Integration Module
- * Entry point for Whop integration
+ * Entry point for Whop integration (backend only)
+ *
+ * Note: Frontend scripts live under /public and must not be exported from
+ * the Worker bundle.
  */
 
-// Export frontend components
-export * from './frontend/scripts/whop.js';
-
-// Export backend API
+// Backend API
 export * from './whop.api.js';
-export * from './controllers/webhooks.js';
+
+// Controllers
+export * from './controllers/index.js';
+export * from './controllers/webhook.js';
 export * from './controllers/control-webhook.js';

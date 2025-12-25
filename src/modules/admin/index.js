@@ -8,20 +8,6 @@
  */
 
 // ==========================================
-// FRONTEND EXPORTS
-// ==========================================
-
-// Core Admin Scripts
-export * from './frontend/scripts/app.js';
-export * from './frontend/scripts/components-view.js';
-export * from './frontend/scripts/dashboard-api.js';
-export * from './frontend/scripts/dashboard-stats.js';
-export * from './frontend/scripts/dashboard-view.js';
-export * from './frontend/scripts/pages-api.js';
-export * from './frontend/scripts/pages-table.js';
-export * from './frontend/scripts/pages-view.js';
-
-// ==========================================
 // BACKEND EXPORTS
 // ==========================================
 
@@ -46,28 +32,6 @@ export const MODULE_INFO = {
   version: '1.0.0',
   description: 'Admin dashboard and management system',
   files: {
-    frontend: {
-      views: [
-        'dashboard.html',
-        'index.html',
-        'landing-builder.html',
-        'migrate-reviews.html'
-      ],
-      styles: [
-        'admin-nav.css',
-        'style.admin.css'
-      ],
-      scripts: [
-        'app.js',
-        'components-view.js',
-        'dashboard-api.js',
-        'dashboard-stats.js',
-        'dashboard-view.js',
-        'pages-api.js',
-        'pages-table.js',
-        'pages-view.js'
-      ]
-    },
     backend: {
       api: ['admin.api.js'],
       controllers: [
