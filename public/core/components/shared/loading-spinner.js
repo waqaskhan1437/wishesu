@@ -105,6 +105,22 @@ export class LoadingSpinner {
     spinner.show();
     return spinner;
   }
+
+  /**
+   * Static helper: hide a specific spinner instance (preferred)
+   * or remove any visible spinners if no instance was provided.
+   */
+  static hide(spinner = null) {
+    // If a spinner instance was provided, use it.
+    if (spinner && typeof spinner.hide === 'function') {
+      return spinner.hide();
+    }
+
+    // Back-compat: remove any spinner elements left in the DOM.
+    document.querySelectorAll('.loading-spinner').forEach((el) => {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+  }
 }
 
 export default LoadingSpinner;

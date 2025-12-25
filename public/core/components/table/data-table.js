@@ -13,6 +13,9 @@ import { renderRows } from './modules/table-renderer.js';
 export class DataTable {
   constructor(options = {}) {
     this.options = {
+      // Optional: initial render target. Many views construct DataTable
+      // with a container in options and then call .render() with no args.
+      container: options.container || null,
       columns: options.columns || [],
       data: options.data || [],
       sortable: options.sortable !== false,
@@ -39,9 +42,13 @@ export class DataTable {
    * Render table
    */
   render(container) {
-    this.container = typeof container === 'string'
-      ? document.querySelector(container)
-      : container;
+    const target = (container !== undefined && container !== null)
+      ? container
+      : this.options.container;
+
+    this.container = typeof target === 'string'
+      ? document.querySelector(target)
+      : target;
 
     if (!this.container) {
       console.error('Table container not found');
