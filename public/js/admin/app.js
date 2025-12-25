@@ -9,17 +9,17 @@ import { sessionStorage } from '../core/storage.js';
 import { ready } from '../utils/dom-helper.js';
 
 // Import views
-import DashboardView from './views/dashboard-view.js';
-import OrdersView from './views/orders-view.js';
-import ProductsView from './views/products-view.js';
-import ReviewsView from './views/reviews-view.js';
-import SettingsView from './views/settings-view.js';
-import ChatsView from './views/chats-view.js';
-import BlogView from './views/blog-view.js';
-import ForumView from './views/forum-view.js';
-import UsersView from './views/users-view.js';
-import PagesView from './views/pages-view.js';
-import ComponentsView from './views/components-view.js';
+import DashboardView from './views/dashboard-view.js?v=1766656722';
+import OrdersView from './views/orders-view.js?v=1766656722';
+import ProductsView from './views/products-view.js?v=1766656722';
+import ReviewsView from './views/reviews-view.js?v=1766656722';
+import SettingsView from './views/settings-view.js?v=1766656722';
+import ChatsView from './views/chats-view.js?v=1766656722';
+import BlogView from './views/blog-view.js?v=1766656722';
+import ForumView from './views/forum-view.js?v=1766656722';
+import UsersView from './views/users-view.js?v=1766656722';
+import PagesView from './views/pages-view.js?v=1766656722';
+import ComponentsView from './views/components-view.js?v=1766656722';
 
 class AdminApp {
   constructor() {
@@ -83,6 +83,7 @@ class AdminApp {
    * Initialize view instances
    */
   _initializeViews() {
+    console.log("Initializing views...");
     this.views.set('dashboard', new DashboardView(this.mainPanel));
     this.views.set('orders', new OrdersView(this.mainPanel));
     this.views.set('products', new ProductsView(this.mainPanel));
@@ -94,6 +95,7 @@ class AdminApp {
     this.views.set('users', new UsersView(this.mainPanel));
     this.views.set('pages', new PagesView(this.mainPanel));
     this.views.set('components', new ComponentsView(this.mainPanel));
+    console.log('All views registered:', Array.from(this.views.keys()));
   }
 
   /**
