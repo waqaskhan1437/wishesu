@@ -344,7 +344,12 @@ if ((method === 'GET' || method === 'HEAD') && path === '/product.html') {
 
       // ----- STATIC ASSETS WITH SERVER-SIDE SCHEMA INJECTION & CACHING -----
       if (env.ASSETS) {
-        let assetReq = req;
+        // IMPORTANT: always base the asset request on the (possibly) rewritten URL.
+        // Earlier in this handler we may update `path` and `url.pathname` for default page
+        // mapping (e.g., '/' -> '/index.html'). If we keep using the original `req`,
+        // ASSETS.fetch would still request '/', which doesn't exist in the assets bundle.
+        // Using `url.toString()` ensures we fetch the correct asset.
+        let assetReq = new Request(url.toString(), req);
         let assetPath = path;
         let schemaProductId = null;
 
