@@ -14,7 +14,10 @@
       "Bash(wc:*)",
       "Bash(ls:*)",
       "Bash(dir:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(then echo \"Empty folder, deleting...\")",
+      "Bash(else echo \"Has files, keeping...\")",
+      "Bash(fi)"
     ]
   }
 }
