@@ -3,9 +3,11 @@ import { CORS } from '../../core/config/cors.js';
 import {
   getAllProducts,
   getProductByIdOrSlug,
+  getProductById,
   createProduct,
   updateProduct,
-  removeProduct
+  removeProduct,
+  duplicateProduct
 } from './service.js';
 
 const slugify = (value) =>
@@ -71,4 +73,15 @@ export async function save(req, env) {
 export async function remove(req, env, id) {
   await removeProduct(env.DB, id);
   return json({ ok: true }, 200, CORS);
+}
+
+export async function duplicate(req, env) {
+  const body = await req.json().catch(() => ({}));
+  const id = Number(body.id || 0);
+  if (!id) return json({ error: 'id required' }, 400, CORS);
+  const source = await getProductById(env.DB, id);
+  if (!source) return json({ error: 'Not found' }, 404, CORS);
+  const res = await duplicateProduct(env.DB, source);
+  const newId = res?.meta?.last_row_id ?? res?.lastRowId;
+  return get(req, env, newId);
 }

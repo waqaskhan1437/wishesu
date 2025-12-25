@@ -10,5 +10,17 @@ export const ProductAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data || {})
     });
+  },
+  async remove(id) {
+    return safeFetch(`/api/product/delete?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+  },
+  async duplicate(id) {
+    return safeFetch('/api/product/duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
   }
 };

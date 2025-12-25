@@ -1,4 +1,4 @@
-import { list, get, save, remove } from './controller.js';
+import { list, get, save, remove, duplicate } from './controller.js';
 
 export async function productRouter(req, env, url, path, method) {
   if (method === 'GET' && path === '/api/products') {
@@ -17,6 +17,10 @@ export async function productRouter(req, env, url, path, method) {
   if (method === 'DELETE' && path === '/api/product/delete') {
     const id = url.searchParams.get('id');
     return remove(req, env, id);
+  }
+
+  if (method === 'POST' && path === '/api/product/duplicate') {
+    return duplicate(req, env);
   }
 
   return null;

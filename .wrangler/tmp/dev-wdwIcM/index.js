@@ -210,6 +210,41 @@ async function removeProduct(db, id) {
   return db.prepare("DELETE FROM products WHERE id = ?").bind(Number(id)).run();
 }
 __name(removeProduct, "removeProduct");
+async function getProductById(db, id) {
+  return db.prepare(
+    "SELECT * FROM products WHERE id = ? LIMIT 1"
+  ).bind(Number(id)).first();
+}
+__name(getProductById, "getProductById");
+async function slugExists(db, slug) {
+  const row = await db.prepare("SELECT id FROM products WHERE slug = ? LIMIT 1").bind(slug).first();
+  return !!row;
+}
+__name(slugExists, "slugExists");
+async function duplicateProduct(db, source) {
+  const baseSlug = source.slug || "product";
+  let newSlug = `${baseSlug}-copy`;
+  let idx = 1;
+  while (await slugExists(db, newSlug)) {
+    newSlug = `${baseSlug}-copy${idx}`;
+    idx += 1;
+  }
+  return db.prepare(
+    `INSERT INTO products (title, slug, price, status, instant, delivery_days, media_json, addons_json, video_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    `${source.title || "Product"} Copy`,
+    newSlug,
+    source.price || 0,
+    "draft",
+    source.instant || 0,
+    source.delivery_days || 2,
+    source.media_json || "[]",
+    source.addons_json || "[]",
+    source.video_url || ""
+  ).run();
+}
+__name(duplicateProduct, "duplicateProduct");
 
 // src/modules/products/controller.js
 var slugify = /* @__PURE__ */ __name((value) => String(value || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""), "slugify");
@@ -270,6 +305,17 @@ async function remove(req, env, id) {
   return json({ ok: true }, 200, CORS);
 }
 __name(remove, "remove");
+async function duplicate(req, env) {
+  const body = await req.json().catch(() => ({}));
+  const id = Number(body.id || 0);
+  if (!id) return json({ error: "id required" }, 400, CORS);
+  const source = await getProductById(env.DB, id);
+  if (!source) return json({ error: "Not found" }, 404, CORS);
+  const res = await duplicateProduct(env.DB, source);
+  const newId = res?.meta?.last_row_id ?? res?.lastRowId;
+  return get(req, env, newId);
+}
+__name(duplicate, "duplicate");
 
 // src/modules/products/router.js
 async function productRouter(req, env, url, path, method) {
@@ -286,6 +332,9 @@ async function productRouter(req, env, url, path, method) {
   if (method === "DELETE" && path === "/api/product/delete") {
     const id = url.searchParams.get("id");
     return remove(req, env, id);
+  }
+  if (method === "POST" && path === "/api/product/duplicate") {
+    return duplicate(req, env);
   }
   return null;
 }

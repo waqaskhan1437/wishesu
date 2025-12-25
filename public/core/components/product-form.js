@@ -1,18 +1,13 @@
 import { el } from '../utils.js';
+import { safeFetch } from '../api.js';
 import { createAddonBuilder } from '../addons/builder.js';
 import { ProductAPI } from '../services/product-api.js';
 
 const slugify = (value) =>
-  String(value || '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  String(value || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 const buildMedia = (form) =>
-  [...form.querySelectorAll('[name="image_url"]')]
-    .map((input) => input.value.trim())
-    .filter(Boolean);
+  [...form.querySelectorAll('[name="image_url"]')].map((input) => input.value.trim()).filter(Boolean);
 
 const addUrlRow = (list) => {
   const row = el('div', { class: 'media-row' }, [
@@ -26,8 +21,8 @@ const addUrlRow = (list) => {
 export function ProductForm({ onSaved }) {
   const wrap = el('div', { class: 'card glass' });
   const form = el('form', { class: 'form-grid' });
-
   form.innerHTML = `
+    <input type="hidden" name="id" />
     <div class="tabbar">
       <button type="button" class="tab-btn active" data-tab="basic">Basic</button>
       <button type="button" class="tab-btn" data-tab="media">Media</button>
@@ -78,37 +73,24 @@ export function ProductForm({ onSaved }) {
       <small class="form-msg"></small>
     </div>
   `;
-
   const mediaList = form.querySelector('[data-media-urls]');
   addUrlRow(mediaList);
-
   const addonMount = form.querySelector('[data-addon-builder]');
   const addonBuilder = createAddonBuilder();
   addonMount.appendChild(addonBuilder.node);
-
   form.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-tab]');
     if (btn) {
       form.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b === btn));
-      form.querySelectorAll('.tab-panel').forEach((p) => {
-        p.classList.toggle('active', p.dataset.panel === btn.dataset.tab);
-      });
+      form.querySelectorAll('.tab-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === btn.dataset.tab));
       return;
     }
-
-    if (e.target.closest('[data-add-url]')) {
-      addUrlRow(mediaList);
-      return;
-    }
+    if (e.target.closest('[data-add-url]')) addUrlRow(mediaList);
   });
-
   form.querySelector('[name="title"]').addEventListener('input', (e) => {
     const slugField = form.querySelector('[name="slug"]');
-    if (!slugField.value.trim()) {
-      slugField.value = slugify(e.target.value);
-    }
+    if (!slugField.value.trim()) slugField.value = slugify(e.target.value);
   });
-
   form.querySelector('[data-upload]').addEventListener('click', async () => {
     const file = form.querySelector('[name="image_file"]').files[0];
     const msg = form.querySelector('[data-upload-msg]');
@@ -117,7 +99,6 @@ export function ProductForm({ onSaved }) {
       msg.style.color = '#ffb3b3';
       return;
     }
-
     msg.textContent = 'Uploading...';
     msg.style.color = 'var(--muted)';
     const key = `products/${Date.now()}_${file.name}`;
@@ -131,7 +112,6 @@ export function ProductForm({ onSaved }) {
       msg.style.color = '#ffb3b3';
       return;
     }
-
     const put = await fetch(res.data.uploadUrl, {
       method: 'PUT',
       body: file,
@@ -142,18 +122,35 @@ export function ProductForm({ onSaved }) {
       msg.style.color = '#ffb3b3';
       return;
     }
-
     addUrlRow(mediaList);
     mediaList.lastElementChild.querySelector('[name="image_url"]').value = `r2://PRODUCT_MEDIA/${key}`;
     msg.textContent = 'Uploaded';
     msg.style.color = '#b9ffe9';
   });
-
+  const setValues = (product) => {
+    if (!product) return;
+    form.querySelector('[name="id"]').value = product.id || '';
+    form.querySelector('[name="title"]').value = product.title || '';
+    form.querySelector('[name="slug"]').value = product.slug || '';
+    form.querySelector('[name="price"]').value = product.price || 0;
+    form.querySelector('[name="delivery_days"]').value = product.delivery_days || 0;
+    form.querySelector('[name="instant"]').checked = !!product.instant;
+    form.querySelector('[name="status"]').value = product.status || 'active';
+    form.querySelector('[name="video_url"]').value = product.video_url || '';
+    mediaList.innerHTML = '';
+    const media = Array.isArray(product.media) ? product.media : [];
+    if (media.length === 0) addUrlRow(mediaList);
+    media.forEach((url) => {
+      addUrlRow(mediaList);
+      mediaList.lastElementChild.querySelector('[name="image_url"]').value = url;
+    });
+  };
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
     const data = Object.fromEntries(fd.entries());
     const payload = {
+      id: data.id || undefined,
       title: data.title,
       slug: data.slug || slugify(data.title),
       price: Number(data.price || 0),
@@ -164,7 +161,6 @@ export function ProductForm({ onSaved }) {
       media: buildMedia(form),
       addons: addonBuilder.read()
     };
-
     const msg = form.querySelector('.form-msg');
     msg.textContent = 'Saving...';
     msg.style.color = 'var(--muted)';
@@ -179,8 +175,9 @@ export function ProductForm({ onSaved }) {
     msg.style.color = '#b9ffe9';
     window.toast?.('Product saved');
     onSaved?.();
+    form.reset();
+    form.querySelector('[name="id"]').value = '';
   });
-
   wrap.appendChild(form);
-  return wrap;
+  return { node: wrap, setValues };
 }

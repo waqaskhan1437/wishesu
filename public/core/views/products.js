@@ -1,22 +1,7 @@
-import { el, formatMoney } from '../utils.js';
-import { getDeliveryText } from '../delivery.js';
+import { el } from '../utils.js';
+import { DataTable } from '../components/data-table.js';
 import { ProductForm } from '../components/product-form.js';
-import { getAddonDisplay } from '../addons.js';
 import { ProductAPI } from '../services/product-api.js';
-
-const createVideoFacade = (url) => {
-  const frame = el('div', { class: 'video-facade' }, [el('div', { class: 'video-play' })]);
-  frame.addEventListener('click', () => {
-    const iframe = el('iframe', {
-      class: 'video-iframe',
-      src: url,
-      allow: 'autoplay; fullscreen',
-      title: 'Preview'
-    });
-    frame.replaceWith(iframe);
-  });
-  return frame;
-};
 
 export function ProductsView() {
   const wrap = el('div', { class: 'section fade-in' });
@@ -24,77 +9,59 @@ export function ProductsView() {
   wrap.appendChild(el('p', { text: 'Manage product media, pricing, and personalized video presets.' }));
 
   const form = ProductForm({ onSaved: () => load() });
-
-  const media = el('div', { class: 'media-grid' }, [
-    el('div', { class: 'media-card' }, [
-      el('strong', { text: 'Upload Media' }),
-      el('div', { class: 'media-drop' }, [
-        el('div', { text: 'Drop photos or videos here' }),
-        el('small', { text: 'Direct R2/Archive upload will be wired in Phase 9.' })
-      ])
-    ]),
-    el('div', { class: 'media-card' }, [
-      el('strong', { text: 'Featured Video' }),
-      createVideoFacade('https://player.vimeo.com/video/76979871?autoplay=1')
-    ]),
-    el('div', { class: 'media-card' }, [
-      el('strong', { text: 'Gallery Preview' }),
-      el('div', { class: 'media-thumb' }),
-      el('div', { text: '3 images 1 overlay' })
-    ])
-  ]);
-
-  const list = el('div', { class: 'grid-2' });
-  const fallbackItems = [
-    {
-      title: 'Birthday Spark',
-      price: 2400,
-      media: '3 photos, 1 intro video',
-      instant: 1,
-      delivery_days: 0,
-      addons: [
-        {
-          id: 'extras',
-          type: 'checkbox_group',
-          label: 'Extras',
-          options: [
-            { label: 'Name glow', price: 0, delivery: { instant: false, text: '2 Days Delivery' } },
-            { label: 'Rush edit', price: 0, delivery: { instant: true, text: '' } }
-          ]
-        }
-      ]
-    }
-  ];
+  const list = el('div', { class: 'section' });
 
   const renderList = (items) => {
     list.innerHTML = '';
-    items.forEach((item) => {
-      const displayAddons = getAddonDisplay(item.addons || []);
-      const addons = el('div', { class: 'chips' }, displayAddons.map((addon) => {
-        const suffix = addon.deliveryText ? ` ? ${addon.deliveryText}` : '';
-        return el('div', { class: 'chip', text: `${addon.label}${suffix}` });
-      }));
-
-      list.appendChild(
-        el('div', { class: 'card glass' }, [
-          el('h3', { text: item.title || item.name }),
-          el('p', { text: item.media || 'Media not set' }),
-          el('strong', { text: formatMoney(item.price) }),
-          el('small', { text: getDeliveryText(item.instant, item.delivery_days ?? item.deliveryDays) }),
-          addons
-        ])
-      );
-    });
+    const columns = [
+      { key: 'id', label: 'Product ID' },
+      {
+        key: 'thumbnail',
+        label: 'Thumbnail',
+        render: (row) => {
+          const url = (row.media || [])[0];
+          return url ? el('img', { src: url, alt: 'thumb', width: '60' }) : el('span', { text: '-' });
+        }
+      },
+      {
+        key: 'link',
+        label: 'Link',
+        render: (row) => el('a', { href: `/product.html?id=${row.id}`, text: 'Open', target: '_blank' })
+      },
+      {
+        key: 'actions',
+        label: 'Actions',
+        render: (row) => {
+          const wrap = el('div', { class: 'chips' });
+          const edit = el('button', { class: 'page-btn', text: 'Edit' });
+          const del = el('button', { class: 'page-btn', text: 'Delete' });
+          const dup = el('button', { class: 'page-btn', text: 'Duplicate' });
+          edit.addEventListener('click', () => form.setValues(row));
+          del.addEventListener('click', async () => {
+            await ProductAPI.remove(row.id);
+            load();
+          });
+          dup.addEventListener('click', async () => {
+            await ProductAPI.duplicate(row.id);
+            load();
+          });
+          wrap.appendChild(edit);
+          wrap.appendChild(del);
+          wrap.appendChild(dup);
+          return wrap;
+        }
+      }
+    ];
+    list.appendChild(DataTable({ columns, rows: items }));
   };
 
   const load = async () => {
     const res = await ProductAPI.list();
-    const items = res.ok && res.data?.results?.length ? res.data.results : fallbackItems;
+    const items = res.ok && res.data?.results?.length ? res.data.results : [];
     renderList(items);
   };
 
-  wrap.appendChild(form);
-  wrap.appendChild(media);
+  wrap.appendChild(form.node);
   wrap.appendChild(list);
   load();
   return wrap;
