@@ -7,11 +7,11 @@ import { CORS, handleOptions } from './core/config/cors.js';
 import { initDB } from './core/config/db.js';
 import { VERSION } from './core/config/constants.js';
 import { routeApiRequest } from './router.js';
-import { handleProductRouting } from './modules/products/backend/controllers/products.controller.js';
-import { handleSecureDownload, maybePurgeCache } from './modules/admin/backend/controllers/index.js';
-import { cleanupExpired } from './modules/whop/backend/controllers/index.js';
-import { renderBlogArchive, renderBlogPost, renderBlogSubmit } from './modules/blog/backend/controllers/blog.controller.js';
-import { renderForumArchive, renderForumTopic } from './modules/forum/backend/controllers/forum.controller.js';
+import { handleProductRouting } from './modules/products/products.controller.js';
+import { handleSecureDownload, maybePurgeCache } from './modules/admin/admin.controller.js';
+import { cleanupExpired } from './modules/whop/whop.controller.js';
+import { renderBlogArchive, renderBlogPost, renderBlogSubmit } from './modules/blog/blog.controller.js';
+import { renderForumArchive, renderForumTopic } from './modules/forum/forum.controller.js';
 import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from './core/utils/schema.js';
 import { getMimeTypeFromFilename } from './core/utils/upload-helper.js';
 

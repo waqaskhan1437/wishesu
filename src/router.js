@@ -15,7 +15,7 @@ import {
   deleteProduct,
   updateProductStatus,
   duplicateProduct
-} from './modules/products/backend/controllers/products.controller.js';
+} from './modules/products/products.controller.js';
 
 // Orders
 import {
@@ -29,7 +29,7 @@ import {
   requestRevision,
   updatePortfolio,
   updateArchiveLink
-} from './modules/orders/backend/controllers/orders.controller.js';
+} from './modules/orders/orders.controller.js';
 
 // Reviews
 import {
@@ -38,7 +38,7 @@ import {
   addReview,
   updateReview,
   deleteReview
-} from './modules/reviews/backend/controllers/reviews.controller.js';
+} from './modules/reviews/reviews.controller.js';
 
 // Chat
 import {
@@ -48,7 +48,7 @@ import {
   blockSession,
   deleteSession,
   getSessions
-} from './modules/chat/backend/controllers/chat.js';
+} from './modules/chat/chat.controller.js';
 
 // Whop - Now using modular whop controllers
 import {
@@ -58,7 +58,7 @@ import {
   testApi as testWhopApi,
   testWebhook as testWhopWebhook,
   cleanupExpired
-} from './modules/whop/backend/controllers/index.js';
+} from './modules/whop/whop.controller.js';
 
 // Pages
 import {
@@ -72,7 +72,7 @@ import {
   updatePageStatus,
   duplicatePage,
   loadPageBuilder
-} from './modules/admin/backend/controllers/pages.js';
+} from './modules/admin/controllers/pages.js';
 
 // Admin - Now using modular admin controllers
 import {
@@ -101,7 +101,7 @@ import {
   testGoogleSync,
   clearTempFiles,
   clearPendingCheckouts
-} from './modules/admin/backend/controllers/index.js';
+} from './modules/admin/admin.controller.js';
 
 // Blog
 import {
@@ -111,7 +111,7 @@ import {
   deleteBlogPost,
   setBlogStatus,
   submitBlogPost
-} from './modules/blog/backend/controllers/blog.controller.js';
+} from './modules/blog/blog.controller.js';
 
 // Forum
 import {
@@ -125,10 +125,10 @@ import {
   updateForumReply,
   deleteForumTopic,
   deleteForumReply
-} from './modules/forum/backend/controllers/forum.controller.js';
+} from './modules/forum/forum.controller.js';
 
 // External control webhook
-import { handleControlWebhook } from './modules/admin/backend/controllers/control-webhook.js';
+import { handleControlWebhook } from './modules/admin/controllers/control-webhook.js';
 
 /**
  * Route API requests to appropriate handlers

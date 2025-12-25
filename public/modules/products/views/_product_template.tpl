@@ -20,12 +20,12 @@
   <link rel="preload" as="style" href="https://cdn.plyr.io/3.7.8/plyr.css" />
   <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
 
-  <link rel="preload" as="style" href="/css/style.css">
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preload" as="style" href="/core/styles/style.css">
+  <link rel="stylesheet" href="/core/styles/style.css">
 
   <!-- Additional styles for the Whop checkout modal -->
-  <link rel="preload" as="style" href="/css/whop.css">
-  <link rel="stylesheet" href="/css/whop.css">
+  <link rel="preload" as="style" href="/core/styles/whop.css">
+  <link rel="stylesheet" href="/core/styles/whop.css">
   
   <style>
     @keyframes spin {
@@ -87,22 +87,22 @@
 
   <script src="https://cdn.plyr.io/3.7.8/plyr.js" defer></script>
 
-  <script src="/js/api.js?v=21" defer></script>
+  <script src="/core/scripts/api.js?v=21" defer></script>
   <!-- Load centralized delivery time utility first -->
   <script src="/src/utils/delivery-time.js?v=21"></script>
-  <script src="/js/universal-player.js?v=21" defer></script>
-  <script src="/js/instant-upload.js?v=21" defer></script>
+  <script src="/core/scripts/universal-player.js?v=21" defer></script>
+  <script src="/core/scripts/instant-upload.js?v=21" defer></script>
   <!-- Whop checkout integration -->
-  <script src="/js/whop/checkout.js?v=21" defer></script>
+  <script src="/core/scripts/whop/checkout.js?v=21" defer></script>
   <!-- Reviews widget -->
-  <script src="/js/reviews-widget.js?v=21" defer></script>
+  <script src="/core/scripts/reviews-widget.js?v=21" defer></script>
   <!-- load product modules in dependency order -->
-  <script src="/js/product/addon-ui.js?v=21" defer></script>
-  <script src="/js/product/seo-utils.js?v=21" defer></script>
-  <script src="/js/product/layout-main.js?v=21" defer></script>
-  <script src="/js/product/layout-extra.js?v=21" defer></script>
-  <script src="/js/product/checkout.js?v=21" defer></script>
-  <script src="/js/product/main.js?v=21" defer></script>
-  <script src="/js/chat-widget.js?v=21" defer></script>
+  <script src="/core/scripts/product/addon-ui.js?v=21" defer></script>
+  <script src="/core/scripts/product/seo-utils.js?v=21" defer></script>
+  <script src="/core/scripts/product/layout-main.js?v=21" defer></script>
+  <script src="/core/scripts/product/layout-extra.js?v=21" defer></script>
+  <script src="/core/scripts/product/checkout.js?v=21" defer></script>
+  <script src="/core/scripts/product/main.js?v=21" defer></script>
+  <script src="/core/scripts/chat-widget.js?v=21" defer></script>
 </body>
 </html>

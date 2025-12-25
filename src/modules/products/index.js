@@ -36,10 +36,10 @@ export * from './frontend/scripts/products-view.js';
 // ==========================================
 
 // Product API
-export * from './backend/api/products.api.js';
+export * from './products.api.js';
 
 // Product Controllers
-export * from './backend/controllers/products.controller.js';
+export * from './products.controller.js';
 
 // ==========================================
 // MODULE INFO

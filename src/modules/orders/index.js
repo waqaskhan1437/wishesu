@@ -35,11 +35,11 @@ export * from './frontend/scripts/dashboard-recent-orders.js';
 // ==========================================
 
 // Orders API
-export * from './backend/api/orders.api.js';
+export * from './orders.api.js';
 
 // Orders Controllers
-export * from './backend/controllers/orders.controller.js';
-export * from './backend/controllers/order-helpers.js';
+export * from './orders.controller.js';
+export * from './controllers/order-helpers.js';
 
 // ==========================================
 // MODULE INFO

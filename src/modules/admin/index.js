@@ -26,17 +26,17 @@ export * from './frontend/scripts/pages-view.js';
 // ==========================================
 
 // Admin API
-export * from './backend/api/admin.api.js';
+export * from './admin.api.js';
 
 // Admin Controllers
-export * from './backend/controllers/index.js';
-export * from './backend/controllers/cache.js';
-export * from './backend/controllers/data-management.js';
-export * from './backend/controllers/import-export.js';
-export * from './backend/controllers/maintenance.js';
-export * from './backend/controllers/settings.js';
-export * from './backend/controllers/upload.js';
-export * from './backend/controllers/users.js';
+export * from './controllers/index.js';
+export * from './controllers/cache.js';
+export * from './controllers/data-management.js';
+export * from './controllers/import-export.js';
+export * from './controllers/maintenance.js';
+export * from './controllers/settings.js';
+export * from './controllers/upload.js';
+export * from './controllers/users.js';
 
 // ==========================================
 // MODULE INFO

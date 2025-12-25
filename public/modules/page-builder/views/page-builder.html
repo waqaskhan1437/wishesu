@@ -722,7 +722,7 @@
           parts.push('<script src="/modules/cards/scripts/product-cards.js?v=1766444251">' + END_SCRIPT);
         }
         if (includes.reviews) parts.push('<script src="/modules/reviews/scripts/reviews-widget.js?v=1766444251">' + END_SCRIPT);
-        if (includes.pages) parts.push('<script src="js/page-list-widget.js?v=1766444251">' + END_SCRIPT);
+        if (includes.pages) parts.push('<script src="core/scripts/page-list-widget.js?v=1766444251">' + END_SCRIPT);
         let callBlock = '<script>\n';
         embeds.forEach(info => {
           if (info.type === 'product') {
@@ -879,7 +879,7 @@
       pre.style.borderRadius = '6px';
       const embedCode =
         `<div id="${id}"></div>\n` +
-        '<script src="js/page-list-widget.js?v=1766444251">' + END_SCRIPT + '\n' +
+        '<script src="core/scripts/page-list-widget.js?v=1766444251">' + END_SCRIPT + '\n' +
         `<script>\n  PageListWidget.render('${id}', ${JSON.stringify(options)});\n` + END_SCRIPT;
       pre.textContent = embedCode;
       wrapper.appendChild(pre);
@@ -1269,7 +1269,7 @@
     });
   </script>
   <!-- Load page list widget so it is available when building pages -->
-  <script src="js/page-list-widget.js?v=1766444251"></script>
+  <script src="core/scripts/page-list-widget.js?v=1766444251"></script>
   <script>
     // Navigation function for admin dashboard
     function loadView(view) {

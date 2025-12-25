@@ -4,5 +4,5 @@
  */
 
 // Export backend API
-export * from './backend/api/reviews.api.js';
-export * from './backend/controllers/reviews.controller.js';
+export * from './reviews.api.js';
+export * from './reviews.controller.js';
