@@ -1,16 +1,12 @@
 /**
- * Router - Central API Router
- * Routes requests to appropriate module controllers
+ * Router - Route matching logic with Zero-CPU Upload Support
+ * Optimized: DB initialization performed once at top level for all /api/ routes
  */
 
 import { json } from './core/utils/response.js';
 import { initDB } from './core/config/db.js';
 
-// ==========================================
-// MODULE IMPORTS
-// ==========================================
-
-// Products Module
+// Products
 import {
   getProducts,
   getProductsList,
@@ -21,7 +17,7 @@ import {
   duplicateProduct
 } from './modules/products/backend/controllers/products.controller.js';
 
-// Orders Module
+// Orders
 import {
   getOrders,
   createOrder,
@@ -35,7 +31,7 @@ import {
   updateArchiveLink
 } from './modules/orders/backend/controllers/orders.controller.js';
 
-// Reviews Module
+// Reviews
 import {
   getReviews,
   getProductReviews,
@@ -44,7 +40,7 @@ import {
   deleteReview
 } from './modules/reviews/backend/controllers/reviews.controller.js';
 
-// Chat Module
+// Chat
 import {
   startChat,
   syncChat,
@@ -54,7 +50,7 @@ import {
   getSessions
 } from './modules/chat/backend/controllers/chat.js';
 
-// Whop Module
+// Whop - Now using modular whop controllers
 import {
   createCheckout,
   createPlanCheckout,
@@ -64,7 +60,7 @@ import {
   cleanupExpired
 } from './modules/whop/backend/controllers/index.js';
 
-// Page Builder Module
+// Pages
 import {
   getPages,
   getPagesList,
@@ -76,9 +72,9 @@ import {
   updatePageStatus,
   duplicatePage,
   loadPageBuilder
-} from './modules/admin/backend/controllers/index.js';
+} from './modules/admin/backend/controllers/pages.js';
 
-// Admin Module
+// Admin - Now using modular admin controllers
 import {
   purgeCache,
   getWhopSettings,
@@ -107,7 +103,7 @@ import {
   clearPendingCheckouts
 } from './modules/admin/backend/controllers/index.js';
 
-// Blog Module
+// Blog
 import {
   listBlogPosts,
   getBlogPost,
@@ -115,9 +111,9 @@ import {
   deleteBlogPost,
   setBlogStatus,
   submitBlogPost
-} from './modules/blog/backend/controllers/index.js';
+} from './modules/blog/backend/controllers/blog.controller.js';
 
-// Forum Module
+// Forum
 import {
   submitForumTopic,
   submitForumReply,
@@ -129,16 +125,22 @@ import {
   updateForumReply,
   deleteForumTopic,
   deleteForumReply
-} from './modules/forum/backend/controllers/index.js';
+} from './modules/forum/backend/controllers/forum.controller.js';
 
-// Control Webhook
-import { handleControlWebhook } from './modules/admin/backend/controllers/index.js';
+// External control webhook
+import { handleControlWebhook } from './modules/admin/backend/controllers/control-webhook.js';
 
 /**
  * Route API requests to appropriate handlers
+ * @param {Request} req - Request object
+ * @param {Object} env - Environment bindings
+ * @param {URL} url - Parsed URL
+ * @param {string} path - URL path
+ * @param {string} method - HTTP method
+ * @returns {Promise<Response|null>}
  */
 export async function routeApiRequest(req, env, url, path, method) {
-  // ----- NON-DB ROUTES -----
+  // ----- NON-DB ROUTES (health checks, debug) -----
   if (path === '/api/health') {
     return json({ ok: true, time: Date.now() });
   }
@@ -156,11 +158,13 @@ export async function routeApiRequest(req, env, url, path, method) {
     return uploadTempFile(env, req, url);
   }
 
+  // Archive.org credentials for direct browser upload (Zero CPU)
   if (method === 'POST' && path === '/api/upload/archive-credentials') {
     return getArchiveCredentials(env);
   }
 
   // ----- ALL OTHER API ROUTES REQUIRE DB -----
+  // Consolidated DB check - performed once for all routes below
   if (!path.startsWith('/api/')) {
     return null;
   }
@@ -169,11 +173,10 @@ export async function routeApiRequest(req, env, url, path, method) {
     return json({ error: 'Database not configured' }, 500);
   }
 
+  // Initialize DB once for all subsequent routes (optimization)
   await initDB(env);
 
-  // ==========================================
-  // CHAT MODULE ROUTES
-  // ==========================================
+  // ----- CHAT APIs -----
   if (path === '/api/chat/start' && method === 'POST') {
     const body = await req.json().catch(() => ({}));
     return startChat(env, body);
@@ -188,7 +191,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return sendMessage(env, body, req.url);
   }
 
-  // Admin Chat Routes
+  // ----- ADMIN CHAT APIs -----
   if (path === '/api/admin/chats/block' && method === 'POST') {
     const body = await req.json().catch(() => ({}));
     return blockSession(env, body);
@@ -207,14 +210,12 @@ export async function routeApiRequest(req, env, url, path, method) {
     return getSessions(env);
   }
 
-  // ==========================================
-  // ADMIN MODULE ROUTES
-  // ==========================================
+  // ----- CACHE PURGE -----
   if (method === 'POST' && path === '/api/purge-cache') {
     return purgeCache(env);
   }
 
-  // Settings Routes
+  // ----- DEFAULT PAGES SETTINGS -----
   if (method === 'GET' && path === '/api/settings/default-pages') {
     return getDefaultPages(env);
   }
@@ -223,6 +224,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return saveDefaultPages(env, body);
   }
 
+  // ----- ANALYTICS SETTINGS -----
   if (method === 'GET' && path === '/api/settings/analytics') {
     return getAnalyticsSettings(env);
   }
@@ -231,6 +233,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return saveAnalyticsSettings(env, body);
   }
 
+  // ----- CONTROL WEBHOOK SETTINGS -----
   if (method === 'GET' && path === '/api/settings/control-webhook') {
     return getControlWebhookSettings(env);
   }
@@ -239,7 +242,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return saveControlWebhookSettings(env, body);
   }
 
-  // Users Routes
+  // ----- USERS (ADMIN) -----
   if (method === 'GET' && path === '/api/admin/users/list') {
     return listUsers(env);
   }
@@ -248,9 +251,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return updateUserBlocks(env, body);
   }
 
-  // ==========================================
-  // BLOG MODULE ROUTES
-  // ==========================================
+  // ----- BLOG (ADMIN APIs) -----
   if (method === 'GET' && path === '/api/blog/list') {
     return listBlogPosts(env);
   }
@@ -282,9 +283,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return submitBlogPost(env, body);
   }
 
-  // ==========================================
-  // FORUM MODULE ROUTES
-  // ==========================================
+  // ----- FORUM (PUBLIC) -----
   if (method === 'POST' && path === '/api/forum/topic/submit') {
     let body = {};
     try { body = await req.json(); } catch (_) {}
@@ -308,7 +307,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return submitForumReply(env, body);
   }
 
-  // Admin Forum Routes
+  // ----- FORUM (ADMIN) -----
   if (method === 'GET' && path === '/api/admin/forum/topics') {
     const status = url.searchParams.get('status');
     return listForumTopics(env, status);
@@ -342,9 +341,9 @@ export async function routeApiRequest(req, env, url, path, method) {
     return deleteForumReply(env, body);
   }
 
-  // ==========================================
-  // PRODUCTS MODULE ROUTES
-  // ==========================================
+
+
+  // ----- PRODUCTS -----
   if (method === 'GET' && path === '/api/products') {
     return getProducts(env);
   }
@@ -378,9 +377,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return deleteProduct(env, id);
   }
 
-  // ==========================================
-  // WHOP MODULE ROUTES
-  // ==========================================
+  // ----- WHOP CHECKOUT -----
   if (method === 'POST' && path === '/api/whop/create-checkout') {
     const body = await req.json();
     return createCheckout(env, body, url.origin);
@@ -404,15 +401,15 @@ export async function routeApiRequest(req, env, url, path, method) {
     return cleanupExpired(env);
   }
 
-  // ==========================================
-  // ORDERS MODULE ROUTES
-  // ==========================================
+  // ----- ORDERS -----
   if (method === 'GET' && path === '/api/orders') {
     return getOrders(env);
   }
 
   if (method === 'POST' && (path === '/api/order/create' || path === '/submit-order')) {
     const body = await req.json();
+    // Only use createManualOrder if explicitly marked as manual order from admin
+    // Regular checkout orders have email+productId but should use createOrder
     if (body.manualOrder === true) {
       return createManualOrder(env, body, url.origin);
     }
@@ -458,9 +455,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return uploadEncryptedFile(env, req, url);
   }
 
-  // ==========================================
-  // REVIEWS MODULE ROUTES
-  // ==========================================
+  // ----- REVIEWS -----
   if (method === 'GET' && path === '/api/reviews') {
     return getReviews(env, url);
   }
@@ -485,9 +480,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return deleteReview(env, id);
   }
 
-  // ==========================================
-  // SETTINGS MODULE ROUTES
-  // ==========================================
+  // ----- SETTINGS -----
   if (method === 'GET' && path === '/api/settings/whop') {
     return getWhopSettings(env);
   }
@@ -497,9 +490,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return saveWhopSettings(env, body);
   }
 
-  // ==========================================
-  // PAGES MODULE ROUTES
-  // ==========================================
+  // ----- PAGES -----
   if (method === 'GET' && path === '/api/pages') {
     return getPages(env);
   }
@@ -548,17 +539,13 @@ export async function routeApiRequest(req, env, url, path, method) {
     return loadPageBuilder(env, name);
   }
 
-  // ==========================================
-  // R2 FILE ACCESS
-  // ==========================================
+  // ----- R2 FILE ACCESS -----
   if (method === 'GET' && path === '/api/r2/file') {
     const key = url.searchParams.get('key');
     return getR2File(env, key);
   }
 
-  // ==========================================
-  // ADMIN EXPORT/IMPORT ROUTES
-  // ==========================================
+  // ----- ADMIN EXPORT/IMPORT ENDPOINTS -----
   if (method === 'GET' && path === '/api/admin/export/full') {
     return exportFull(env);
   }
@@ -579,9 +566,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return importPages(env, req);
   }
 
-  // ==========================================
-  // ADMIN MAINTENANCE ROUTES
-  // ==========================================
+  // ----- ADMIN MAINTENANCE ENDPOINTS -----
   if (method === 'POST' && path === '/api/admin/test-google-sync') {
     const body = await req.json().catch(() => ({}));
     return testGoogleSync(env, body);
@@ -599,6 +584,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return resetData(env);
   }
 
+  // ----- EXTERNAL CONTROL WEBHOOK -----
   if (method === 'POST' && path === '/api/admin/control-webhook') {
     return handleControlWebhook(env, req);
   }
