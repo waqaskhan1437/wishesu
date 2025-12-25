@@ -4,7 +4,7 @@
  */
 
 import { json } from '../../../../core/utils/response.js';
-import { normalizeEmail } from '../../utils/customers.js';
+import { normalizeEmail } from '../../../../core/utils/customers.js';
 
 /**
  * List all users

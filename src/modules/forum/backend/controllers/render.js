@@ -1,5 +1,7 @@
 /**
- * Forum render re-export.
+ * Forum render exports
  */
-
-export { renderForumArchive, renderForumTopic } from '../../features/forum/render-index.js';
+export {
+  renderForumArchive,
+  renderForumTopic
+} from './forum.controller.js';

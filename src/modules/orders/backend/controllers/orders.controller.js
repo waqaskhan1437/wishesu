@@ -5,7 +5,7 @@
 import { json } from '../../../../core/utils/response.js';
 import { normalizeEmail, upsertCustomer } from '../../../../core/utils/customers.js';
 import { toISO8601 } from '../../../../core/utils/formatting.js';
-import { getGoogleScriptUrl } from '../config/secrets.js';
+import { getGoogleScriptUrl } from '../../../../core/config/secrets.js';
 
 let ordersColumnsChecked = false;
 

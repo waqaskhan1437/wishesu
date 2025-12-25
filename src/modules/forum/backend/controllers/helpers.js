@@ -1,5 +1,4 @@
 /**
- * Forum helpers re-export.
+ * Forum helpers - internal functions used by forum.controller.js
  */
-
-export { slugify, escapeHtml, toParagraphs, makeExcerpt } from '../../features/forum/helpers.js';
+// Internal helpers are in forum.controller.js

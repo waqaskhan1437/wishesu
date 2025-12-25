@@ -1,5 +1,4 @@
 /**
- * Blog columns re-export.
+ * Blog columns - DB schema ensured in main controller
  */
-
-export { ensureBlogColumns } from '../../features/blog/columns.js';
+// DB columns are handled in blog.controller.js

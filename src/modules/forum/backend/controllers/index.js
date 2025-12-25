@@ -1,7 +1,6 @@
 /**
  * Forum Module Controllers Index
  */
-
 export {
   submitForumTopic,
   submitForumReply,

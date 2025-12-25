@@ -1,7 +1,6 @@
 /**
  * Blog Module Controllers Index
  */
-
 export {
   listBlogPosts,
   getBlogPost,

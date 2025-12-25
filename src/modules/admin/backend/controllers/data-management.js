@@ -4,7 +4,7 @@
  */
 
 import { json } from '../../../../core/utils/response.js';
-import { CORS } from '../../config/cors.js';
+import { CORS } from '../../../../core/config/cors.js';
 import { getMimeTypeFromFilename } from '../../../../core/utils/upload-helper.js';
 
 /**

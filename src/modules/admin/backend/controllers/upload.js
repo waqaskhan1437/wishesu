@@ -6,7 +6,7 @@
 import { json } from '../../../../core/utils/response.js';
 import { getMimeTypeFromFilename, resolveContentType } from '../../../../core/utils/upload-helper.js';
 import { normalizeArchiveMetaValue } from '../../../../core/utils/formatting.js';
-import { CORS } from '../../config/cors.js';
+import { CORS } from '../../../../core/config/cors.js';
 
 /**
  * Get Archive.org credentials for direct browser upload

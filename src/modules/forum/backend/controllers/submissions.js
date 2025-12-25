@@ -1,5 +1,4 @@
 /**
- * Forum submissions re-export.
+ * Forum submissions re-export
  */
-
-export { submitForumTopic, submitForumReply } from '../../features/forum/submissions.js';
+export { submitForumTopic, submitForumReply } from './forum.controller.js';

@@ -3,7 +3,7 @@
  */
 
 import { json } from '../../../../core/utils/response.js';
-import { toISO8601 } from '../utils/formatting.js';
+import { toISO8601 } from '../../../../core/utils/formatting.js';
 
 /**
  * Get reviews with filters

@@ -1,5 +1,5 @@
 /**
- * Blog helpers re-export.
+ * Blog helpers - internal functions used by blog.controller.js
+ * These are implemented inline in the controller
  */
-
-export { slugify, escapeHtml, makeExcerpt, normalizeStatus } from '../../features/blog/helpers.js';
+// Internal helpers are in blog.controller.js

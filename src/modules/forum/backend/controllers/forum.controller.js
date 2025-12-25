@@ -3,7 +3,7 @@
  */
 
 import { json } from '../../../../core/utils/response.js';
-import { isCustomerBlocked, normalizeEmail, upsertCustomer } from '../utils/customers.js';
+import { isCustomerBlocked, normalizeEmail, upsertCustomer } from '../../../../core/utils/customers.js';
 
 function slugify(input) {
   return String(input || '')

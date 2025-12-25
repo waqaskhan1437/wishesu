@@ -1,7 +1,6 @@
 /**
- * Forum admin re-export.
+ * Forum admin re-exports
  */
-
 export {
   listForumTopics,
   listForumReplies,
@@ -11,4 +10,4 @@ export {
   updateForumReply,
   deleteForumTopic,
   deleteForumReply
-} from '../../features/forum/admin.js';
+} from './forum.controller.js';

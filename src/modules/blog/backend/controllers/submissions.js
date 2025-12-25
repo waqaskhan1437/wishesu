@@ -1,5 +1,4 @@
 /**
- * Blog submissions re-export.
+ * Blog submissions re-export
  */
-
-export { submitBlogPost } from '../../features/blog/submissions.js';
+export { submitBlogPost } from './blog.controller.js';

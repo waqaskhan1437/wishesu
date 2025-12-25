@@ -49,3 +49,21 @@ export {
   clearTempFiles,
   clearPendingCheckouts
 } from './maintenance.js';
+
+// Pages Management
+export {
+  getPages,
+  getPagesList,
+  getPage,
+  savePage,
+  savePageBuilder,
+  deletePage,
+  deletePageBySlug,
+  updatePageStatus,
+  duplicatePage,
+  loadPageBuilder,
+  serveDynamicPage
+} from './pages.js';
+
+// Control Webhook
+export { handleControlWebhook } from './control-webhook.js';

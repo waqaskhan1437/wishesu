@@ -1,11 +1,10 @@
 /**
- * Blog admin re-export.
+ * Blog admin re-exports
  */
-
 export {
   listBlogPosts,
   getBlogPost,
   saveBlogPost,
   deleteBlogPost,
   setBlogStatus
-} from '../../features/blog/admin.js';
+} from './blog.controller.js';

@@ -3,10 +3,10 @@
  */
 
 import { json } from '../../../../core/utils/response.js';
-import { createManualOrder, deliverOrder, updateOrder } from './orders.js';
-import { updateReview } from './reviews.js';
-import { setBlogStatus } from './blog.js';
-import { setForumTopicStatus, setForumReplyStatus } from './forum.js';
+import { createManualOrder, deliverOrder, updateOrder } from '../../../orders/backend/controllers/orders.controller.js';
+import { updateReview } from '../../../reviews/backend/controllers/reviews.controller.js';
+import { setBlogStatus } from '../../../blog/backend/controllers/blog.controller.js';
+import { setForumTopicStatus, setForumReplyStatus } from '../../../forum/backend/controllers/forum.controller.js';
 
 function readSecretHeader(req) {
   const auth = req.headers.get('authorization') || '';

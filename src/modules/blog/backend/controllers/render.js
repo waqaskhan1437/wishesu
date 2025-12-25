@@ -1,9 +1,8 @@
 /**
- * Blog render re-export.
+ * Blog render exports
  */
-
 export {
   renderBlogArchive,
   renderBlogPost,
   renderBlogSubmit
-} from '../../features/blog/render-index.js';
+} from './blog.controller.js';

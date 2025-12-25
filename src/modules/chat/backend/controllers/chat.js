@@ -3,10 +3,10 @@
  */
 
 import { json } from '../../../../core/utils/response.js';
-import { escapeHtml, normalizeQuickAction } from '../utils/formatting.js';
-import { enforceUserRateLimit } from '../utils/validation.js';
-import { getLatestOrderForEmail } from '../utils/order-helpers.js';
-import { getGoogleScriptUrl } from '../config/secrets.js';
+import { escapeHtml, normalizeQuickAction } from '../../../../core/utils/formatting.js';
+import { enforceUserRateLimit } from '../../../../core/utils/validation.js';
+import { getLatestOrderForEmail } from '../../../../core/utils/order-helpers.js';
+import { getGoogleScriptUrl } from '../../../../core/config/secrets.js';
 
 /**
  * Start a new chat session or reuse existing one
