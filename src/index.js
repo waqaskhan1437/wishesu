@@ -263,6 +263,21 @@ export default {
         return new Response('Not found', { status: 404 });
       }
 
+
+// ----- LEGACY PRODUCT.HTML URLS -----
+// Older links used: /product.html?slug=<slug> (or ?id=<id>)
+// Redirect them to supported routes so product pages keep working after refactors.
+if ((method === 'GET' || method === 'HEAD') && path === '/product.html') {
+  const legacySlug = url.searchParams.get('slug');
+  const legacyId = url.searchParams.get('id');
+  if (legacySlug) {
+    return Response.redirect(`${url.origin}/product/${encodeURIComponent(String(legacySlug))}`, 301);
+  }
+  if (legacyId) {
+    return Response.redirect(`${url.origin}/product?id=${encodeURIComponent(String(legacyId))}`, 301);
+  }
+}
+
       // ----- CANONICAL PRODUCT URLs -----
       if ((method === 'GET' || method === 'HEAD') && (path === '/product' || path.startsWith('/product/'))) {
         if (env.DB) {
