@@ -277,15 +277,9 @@ if ((method === 'GET' || method === 'HEAD') && path === '/product.html') {
     return Response.redirect(`${url.origin}/product?id=${encodeURIComponent(String(legacyId))}`, 301);
   }
 }
-
       // ----- CANONICAL PRODUCT URLs -----
-      if ((method === 'GET' || method === 'HEAD') && (path === '/product' || path.startsWith('/product/'))) {
-        if (env.DB) {
-          await initDB(env);
-          const redirect = await handleProductRouting(env, url, path);
-          if (redirect) return redirect;
-        }
-      }
+      // Disabled during development: do NOT force redirects.
+      // (We serve product content directly via internal rewrites in the ASSETS block.)
 
       // ----- API ROUTES -----
       if (path.startsWith('/api/') || path === '/submit-order') {
@@ -369,6 +363,15 @@ if ((method === 'GET' || method === 'HEAD') && path === '/product.html') {
             }
           }
         }
+        // NEW: Serve /product?id=<id> directly (no redirect)
+        if ((method === 'GET' || method === 'HEAD') && assetPath === '/product' && url.searchParams.has('id')) {
+          const rewritten = new URL(req.url);
+          rewritten.pathname = '/_product_template.tpl';
+          assetReq = new Request(rewritten.toString(), req);
+          assetPath = '/_product_template.tpl';
+          // fall through to existing schema injection logic below
+        }
+
 
         // Cache non-HTML static assets (js/css/images/fonts) to reduce internal subrequests
         // and improve performance. Admin HTML is still served with no-store.
