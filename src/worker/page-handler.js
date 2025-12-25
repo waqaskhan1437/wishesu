@@ -3,8 +3,9 @@
  */
 
 import { initDB } from '../config/db.js';
-import { renderBlogArchive, renderBlogPost, renderBlogSubmit } from '../controllers/blog/index.js';
-import { renderForumArchive, renderForumTopic } from '../controllers/forum/index.js';
+// Updated imports to use new modular structure
+import { renderBlogArchive, renderBlogPost, renderBlogSubmit } from '../modules/blog/backend/controllers/index.js';
+import { renderForumArchive, renderForumTopic } from '../modules/forum/backend/controllers/index.js';
 
 export async function getDefaultPages(env) {
   if (!env.DB) {

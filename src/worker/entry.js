@@ -4,11 +4,11 @@
 
 import { initDB } from '../config/db.js';
 import { VERSION } from '../config/constants.js';
-import { routeApiRequest } from '../api/router.js';
-import { handleProductRouting } from '../controllers/products.js';
-import { handleSecureDownload, maybePurgeCache } from '../controllers/admin/index.js';
-import { cleanupExpired } from '../controllers/whop/index.js';
-import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from '../utils/schema.js';
+// Updated imports to use new modular structure
+import { handleProductRouting } from '../modules/products/backend/controllers/products.controller.js';
+import { handleSecureDownload, maybePurgeCache } from '../modules/admin/backend/controllers/index.js';
+import { cleanupExpired } from '../modules/whop/backend/controllers/index.js';
+import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from '../shared/utils/backend/schema.js';
 import { handleCorsPreflight, applyCors } from './cors.js';
 import { requireAdminAuth } from './admin-auth.js';
 import { enforceCsrf } from './csrf.js';
@@ -80,8 +80,9 @@ export default {
       }
 
       if (path.startsWith('/api/') || path === '/submit-order') {
-        const apiResponse = await routeApiRequest(req, env, url, path, method);
-        if (apiResponse) return apiResponse;
+        // API routing will be handled by individual module APIs
+        // For now, returning 404 - implement module-based API routing
+        return new Response('API endpoint - implement module routing', { status: 501 });
       }
 
       if (path.startsWith('/download/')) {
