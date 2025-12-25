@@ -353,6 +353,34 @@ if ((method === 'GET' || method === 'HEAD') && path === '/product.html') {
         let assetPath = path;
         let schemaProductId = null;
 
+        // Support clean product slugs: /product/<slug>
+        // We resolve the slug to a product ID (DB lookup) and internally rewrite
+        // to the shared product template with ?id=<id>.
+        if ((method === 'GET' || method === 'HEAD') && assetPath.startsWith('/product/')) {
+          const parts = assetPath.split('/').filter(Boolean);
+          // ['/product', '<slug>']
+          if (parts.length === 2 && parts[0] === 'product') {
+            const slug = parts[1];
+            try {
+              if (env.DB) {
+                await initDB(env);
+                const row = await env.DB.prepare('SELECT id FROM products WHERE slug = ?').bind(slug).first();
+                const pid = Number(row?.id || 0);
+                if (pid > 0) {
+                  schemaProductId = pid;
+                  const rewritten = new URL(req.url);
+                  rewritten.pathname = '/_product_template.tpl';
+                  rewritten.searchParams.set('id', String(schemaProductId));
+                  assetReq = new Request(rewritten.toString(), req);
+                  assetPath = '/_product_template.tpl';
+                }
+              }
+            } catch (_) {
+              // If slug lookup fails, fall through to normal static asset handling.
+            }
+          }
+        }
+
         // Canonical product URLs: /product-<id>/<slug>
         if ((method === 'GET' || method === 'HEAD')) {
           const canonicalMatch = assetPath.match(/^\/product-(\d+)\/(.+)$/);
