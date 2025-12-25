@@ -16,7 +16,10 @@ export function DataTable({ columns, rows }) {
     columns.forEach((col) => {
       const cell = el('td');
       const val = typeof col.render === 'function' ? col.render(row) : row[col.key];
-      cell.appendChild(typeof val === 'string' ? document.createTextNode(val) : val);
+      const node = (val instanceof Node)
+        ? val
+        : document.createTextNode(val === undefined || val === null ? '' : String(val));
+      cell.appendChild(node);
       tr.appendChild(cell);
     });
     tbody.appendChild(tr);
