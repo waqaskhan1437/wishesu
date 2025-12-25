@@ -6,7 +6,7 @@ export const getAddonDisplay = (config) => {
     (field.options || []).forEach((opt) => {
       const delivery = opt.delivery || null;
       const deliveryText = delivery
-        ? (delivery.instant ? getDeliveryText(1, 0) : (delivery.text || ''))
+        ? (delivery.instant ? getDeliveryText(1, 0) : getDeliveryText(0, delivery.days || 0))
         : '';
       items.push({ label: opt.label || field.label || 'Addon', deliveryText });
     });

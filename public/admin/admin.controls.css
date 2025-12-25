@@ -139,6 +139,10 @@
   grid-template-columns: 1fr 120px auto auto auto auto auto auto auto auto auto;
 }
 
+.opt-hidden {
+  display: none;
+}
+
 .addon-config {
   display: grid;
   gap: 8px;
