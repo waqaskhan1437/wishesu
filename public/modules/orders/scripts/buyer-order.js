@@ -1,7 +1,6 @@
 /**
- * Buyer Order Page Controller (Event-Driven + ESM)
- * - Loads order data
- * - Emits events instead of passing null dependencies
+ * Buyer Order Page Main Controller
+ * Orchestrates order display, video player, reviews, and tips
  */
 
 import {
@@ -12,83 +11,64 @@ import {
   hideStatusMessage,
   showThankYouMessage,
   startCountdown
-} from './order-display.js';
+} from './buyer-order/modules/order-display.js';
 
-import { showVideo } from './order-video.js';
-import { setupReviewHandlers, updateStars } from './order-review.js';
-import { setupTipHandlers } from './order-tip.js';
+import { showVideo } from './buyer-order/modules/order-video.js';
+import { setupReviewHandlers, updateStars, hideReviewUIElements } from './buyer-order/modules/order-review.js';
+import { setupTipHandlers } from './buyer-order/modules/order-tip.js';
 
-export async function init(ctx = {}) {
-  const eventBus = ctx.eventBus;
-  const appState = ctx.appState;
-  const api = ctx.services?.api;
-  const timer = ctx.services?.timer;
-
-  const orderId = new URLSearchParams(location.search).get('id');
-  if (!orderId) return showError('Order ID not found');
-
-  let selectedRating = 5;
+(function() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const orderId = urlParams.get('id');
   let orderData = null;
+  let selectedRating = { value: 5 };
 
-  // Bind review/tip handlers AFTER data is loaded (no more null orderData)
-  function bindHandlers(order) {
-    setupReviewHandlers(order, selectedRating, loadOrder);
-    setupTipHandlers(order, orderId);
-    updateStars(selectedRating);
+  if (!orderId) {
+    showError('Order ID not found');
+    return;
   }
 
-  // Rating click handling (if present in DOM)
-  const stars = document.querySelectorAll('.rating-star');
-  stars.forEach((star) => {
-    star.addEventListener('click', () => {
-      selectedRating = Number(star.dataset.rating || 5);
-      updateStars(selectedRating);
-      eventBus?.emitSync?.('review:ratingChanged', { rating: selectedRating });
-    });
-  });
-
-  // Preload whop settings (non-fatal)
-  try {
-    const whopResp = api?.getWhopSettings ? await api.getWhopSettings() : null;
-    appState?.set?.('whop.settings', whopResp?.settings || {});
-    eventBus?.emitSync?.('whop:loaded', { settings: appState?.get?.('whop.settings') || {} });
-  } catch (e) {
-    console.warn('Whop settings load failed:', e);
-  }
-
-  // Server time offset (non-fatal)
-  try {
-    const offset = timer?.fetchServerTimeOffset ? await timer.fetchServerTimeOffset() : 0;
-    appState?.set?.('timer.offset', offset);
-  } catch (_) {}
-
-  await loadOrder();
-
-  async function loadOrder() {
+  // Load Whop settings
+  async function loadWhopSettingsForPage() {
     try {
-      const res = await fetch(`/api/order/buyer/${encodeURIComponent(orderId)}`);
-      const data = await res.json();
-      if (!res.ok || !data.order) throw new Error(data.error || 'Not found');
-
-      orderData = data.order;
-      appState?.set?.('order.current', orderData);
-
-      displayOrder(orderData);
-      bindHandlers(orderData);
-
-      eventBus?.emitSync?.('order:loaded', { orderId, order: orderData });
-    } catch (err) {
-      console.error('Order load failed', err);
-      eventBus?.emitSync?.('order:error', { err });
-      showError(err.message || 'Failed to load order');
+      if (typeof window.getWhopSettings === 'function') {
+        const whopResp = await window.getWhopSettings();
+        window.whopSettings = whopResp && whopResp.settings ? whopResp.settings : (window.whopSettings || {});
+      }
+    } catch (e) {
+      console.warn('Whop settings load failed:', e);
+      window.whopSettings = window.whopSettings || {};
     }
   }
 
+  loadWhopSettingsForPage();
+
+  // Fetch server time and load order
+  fetchServerTimeOffset().then(offset => {
+    window.timerOffset = offset;
+    loadOrder();
+  }).catch(() => {
+    window.timerOffset = 0;
+    loadOrder();
+  });
+
+  // Load order from API
+  async function loadOrder() {
+    try {
+      const res = await fetch(`/api/order/buyer/${orderId}`);
+      const data = await res.json();
+      if (!res.ok || !data.order) throw new Error(data.error || 'Not found');
+      orderData = data.order;
+      displayOrder(orderData);
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  // Display order information
   function displayOrder(o) {
-    const loading = document.getElementById('loading');
-    const content = document.getElementById('order-content');
-    if (loading) loading.style.display = 'none';
-    if (content) content.style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('order-content').style.display = 'block';
 
     displayOrderSummary(o);
     displayOrderDetails(o);
@@ -99,12 +79,16 @@ export async function init(ctx = {}) {
 
       let videoMetadata = null;
       if (o.delivered_video_metadata) {
-        try { videoMetadata = JSON.parse(o.delivered_video_metadata); } catch (_) {}
+        try {
+          videoMetadata = JSON.parse(o.delivered_video_metadata);
+        } catch (e) {
+          console.warn('Failed to parse video metadata:', e);
+        }
       }
-
       showVideo(o.delivered_video_url, videoMetadata, orderId);
 
       if (o.has_review) {
+        hideReviewUIElements();
         showThankYouMessage();
       }
     } else {
@@ -113,13 +97,15 @@ export async function init(ctx = {}) {
     }
   }
 
+  // Setup event handlers
+  setupReviewHandlers(orderData, selectedRating, loadOrder);
+  setupTipHandlers(orderData, orderId);
+  updateStars(5);
+
+  // Error display
   function showError(msg) {
-    const loading = document.getElementById('loading');
-    const errEl = document.getElementById('error');
-    if (loading) loading.style.display = 'none';
-    if (errEl) {
-      errEl.textContent = msg;
-      errEl.style.display = 'block';
-    }
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').textContent = msg;
+    document.getElementById('error').style.display = 'block';
   }
-}
+})();

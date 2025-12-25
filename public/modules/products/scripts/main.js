@@ -1,7 +1,6 @@
 /**
- * Product Form Main Logic (Event-Driven + ESM)
- * - No window globals
- * - Emits events for other modules (SEO/Addons/etc.)
+ * Product Form Main Logic
+ * Main initialization and form submission
  */
 
 import { generateSlug, setupGalleryField } from './utils.js';
@@ -10,143 +9,128 @@ import { collectBase, readMediaFields, fillBaseFields, fillDemoProduct } from '.
 import { initDeliveryTimeAddonSync } from './delivery-sync.js';
 import { addDeleteProductButton } from './delete-button.js';
 
-export async function init(ctx = {}) {
-  const eventBus = ctx.eventBus;
-  const appState = ctx.appState;
-  const api = ctx.services?.api;
-
+;(async function initProductForm() {
+  console.log('🔵 Product Form JS Loaded');
   const params = new URLSearchParams(location.search);
   const productId = params.get('id');
+  console.log('🔵 Product ID from URL:', productId);
 
   const form = document.getElementById('product-form');
-  if (!form) return;
+  console.log('🔵 Form element found:', !!form);
 
-  try {
-    appState?.set?.('productForm.ready', true);
-    eventBus?.emitSync?.('productForm:ready', { form });
-
-    setupGalleryField(form);
-
-    // Load existing product if editing
-    if (productId) {
-      const response = api?.getProduct ? await api.getProduct(productId) : await fetch(`/api/product/${encodeURIComponent(productId)}`).then(r => r.json());
-      const product = response?.product;
-      if (!product) throw new Error('Product not found');
-
-      fillBaseFields(form, product);
-
-      const hidden = form.querySelector('#addons-json');
-      if (hidden) hidden.value = JSON.stringify(Array.isArray(product.addons) ? product.addons : []);
-
-      // Let SEO/Addons/Other modules react safely
-      appState?.set?.('productForm.product', product);
-      eventBus?.emitSync?.('productForm:productLoaded', { form, product });
-
-      setTimeout(() => initDeliveryTimeAddonSync(form, { applyInitial: true }), 10);
-      addDeleteProductButton(form, productId);
-    } else {
-      fillDemoProduct(form);
-      setTimeout(() => initDeliveryTimeAddonSync(form, { applyInitial: true }), 10);
-
-      eventBus?.emitSync?.('productForm:new', { form });
-    }
-
-    // Auto-slug on title change (only when creating)
-    if (form.title && form.slug) {
-      form.title.addEventListener('input', () => {
-        if (!productId) form.slug.value = generateSlug(form.title.value);
-      });
-    }
-
-    // Save
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const btn = form.querySelector('button[type="submit"]');
-      const originalText = btn ? btn.textContent : '';
-
-      const setBtn = (text, disabled) => {
-        if (!btn) return;
-        btn.textContent = text;
-        btn.disabled = !!disabled;
-      };
-
-      try {
-        setBtn('Uploading files...', true);
-
-        const base = collectBase(form);
-        const media = readMediaFields(form);
-
-        // Allow other modules to contribute to payload using events
-        const contributions = { seo: {}, addons: null, extra: {} };
-        if (eventBus?.emit) {
-          await eventBus.emit('productForm:collect', { form, base, media, contributions });
-        }
-
-        if (media.files?.thumbnail_file) {
-          setBtn('Uploading thumbnail...', true);
-          const url = await uploadFileWithProgress(media.files.thumbnail_file, 'thumbnail', form);
-          if (url) media.meta.thumbnail_url = url;
-        }
-
-        if (media.files?.video_file) {
-          setBtn('Uploading video...', true);
-          const url = await uploadFileWithProgress(media.files.video_file, 'video', form);
-          if (url) media.meta.video_url = url;
-        }
-
-        setBtn('Saving product...', true);
-
-        const payload = {
-          ...base,
-          ...media.meta,
-          ...contributions.seo,
-          ...contributions.extra
-        };
-
-        // Addons: keep hidden JSON as default, allow override
-        if (contributions.addons) {
-          payload.addons = contributions.addons;
-        } else {
-          const hidden = form.querySelector('#addons-json');
-          if (hidden?.value) {
-            try { payload.addons = JSON.parse(hidden.value); } catch { payload.addons = []; }
-          }
-        }
-
-        if (productId) payload.id = Number(productId);
-
-        const data = api?.saveProduct
-          ? await api.saveProduct(payload)
-          : await fetch('/api/product/save', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            }).then(async (r) => {
-              const j = await r.json().catch(() => ({}));
-              if (!r.ok) throw new Error(j.error || 'Save failed');
-              return j;
-            });
-
-        if (!data || !data.success) throw new Error(data?.error || 'Save failed');
-
-        eventBus?.emitSync?.('productForm:saved', { id: data.id, payload });
-        alert('Product saved successfully! ID: ' + data.id);
-
-        if (!productId) window.location.href = `product-form.html?id=${data.id}`;
-      } catch (err) {
-        console.error('Save error', err);
-        eventBus?.emitSync?.('productForm:error', { err });
-        alert('Error saving product: ' + (err.message || 'Unknown error'));
-      } finally {
-        if (btn) {
-          btn.textContent = originalText;
-          btn.disabled = false;
-        }
-      }
-    });
-  } catch (err) {
-    console.error('Product form init failed', err);
-    eventBus?.emitSync?.('productForm:error', { err });
+  if (!form) {
+    console.error('🔴 Form not found! Exiting...');
+    return;
   }
-}
+
+  setupGalleryField(form);
+
+  if (productId) {
+    console.log('🔵 Loading product data for ID:', productId);
+    try {
+      const response = await getProduct(productId);
+      console.log('🔵 API Response:', response);
+      const { product } = response;
+      if (product) {
+        console.log('🔵 Product loaded:', product.title);
+        fillBaseFields(form, product);
+        if (typeof populateSeoForm === 'function') populateSeoForm(form, product);
+
+        const hidden = form.querySelector('#addons-json');
+        if (hidden) {
+          const addons = Array.isArray(product.addons) ? product.addons : [];
+          hidden.value = JSON.stringify(addons);
+          console.log('🔵 Addons loaded:', addons.length);
+        }
+      } else {
+        console.error('🔴 Product not found in response');
+      }
+    } catch (err) {
+      console.error('🔴 Failed to load product:', err);
+      alert('Failed to load product: ' + err.message);
+    }
+
+    if (typeof initAddonsBuilder === 'function') initAddonsBuilder(form);
+    setTimeout(() => initDeliveryTimeAddonSync(form, { applyInitial: true }), 10);
+    addDeleteProductButton(form, productId);
+  } else {
+    if (typeof initAddonsBuilder === 'function') initAddonsBuilder(form);
+    fillDemoProduct(form);
+    setTimeout(() => initDeliveryTimeAddonSync(form, { applyInitial: true }), 10);
+  }
+
+  // Auto-generate slug from title for new products
+  form.title.addEventListener('input', () => {
+    if (!productId) {
+      const suggested = generateSlug(form.title.value);
+      form.slug.value = suggested;
+    }
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = form.querySelector('button[type="submit"]');
+    const originalText = btn.textContent;
+    btn.textContent = 'Uploading files...';
+    btn.disabled = true;
+
+    try {
+      const base = collectBase(form);
+      const media = readMediaFields(form);
+      const seo = typeof readSeoFields === 'function' ? readSeoFields(form) : { meta: {} };
+      const addons = typeof readAddonsConfig === 'function' ? readAddonsConfig(form) : [];
+
+      if (media.files.thumbnail_file) {
+        btn.textContent = 'Uploading thumbnail...';
+        const uploadedUrl = await uploadFileWithProgress(media.files.thumbnail_file, 'thumbnail', form);
+        if (uploadedUrl) media.meta.thumbnail_url = uploadedUrl;
+      }
+
+      if (media.files.video_file) {
+        btn.textContent = 'Uploading video...';
+        const uploadedUrl = await uploadFileWithProgress(media.files.video_file, 'video', form);
+        if (uploadedUrl) media.meta.video_url = uploadedUrl;
+      }
+
+      if (media.files.gallery_files && media.files.gallery_files.length > 0) {
+        btn.textContent = `Uploading gallery images (0/${media.files.gallery_files.length})...`;
+        const uploadedGalleryUrls = [];
+        for (let i = 0; i < media.files.gallery_files.length; i++) {
+          btn.textContent = `Uploading gallery images (${i + 1}/${media.files.gallery_files.length})...`;
+          const file = media.files.gallery_files[i];
+          const uploadedUrl = await uploadFileWithProgress(file, `gallery-${i}`, form);
+          if (uploadedUrl) uploadedGalleryUrls.push(uploadedUrl);
+        }
+        media.meta.gallery_urls = [...uploadedGalleryUrls, ...media.meta.gallery_urls];
+      }
+
+      btn.textContent = 'Saving product...';
+
+      const payload = { ...base, ...media.meta, ...seo.meta, addons };
+      if (productId) payload.id = Number(productId);
+
+      const resp = await fetch('/api/product/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || 'Save failed');
+      }
+
+      alert('Product saved successfully! ID: ' + data.id);
+      if (!productId) {
+        window.location.href = `product-form.html?id=${data.id}`;
+      }
+    } catch (err) {
+      console.error('Save error', err);
+      alert('Error saving product: ' + (err.message || 'Unknown error'));
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  });
+})();

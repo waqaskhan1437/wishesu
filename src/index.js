@@ -277,9 +277,15 @@ if ((method === 'GET' || method === 'HEAD') && path === '/product.html') {
     return Response.redirect(`${url.origin}/product?id=${encodeURIComponent(String(legacyId))}`, 301);
   }
 }
+
       // ----- CANONICAL PRODUCT URLs -----
-      // Disabled during development: do NOT force redirects.
-      // (We serve product content directly via internal rewrites in the ASSETS block.)
+      if ((method === 'GET' || method === 'HEAD') && (path === '/product' || path.startsWith('/product/'))) {
+        if (env.DB) {
+          await initDB(env);
+          const redirect = await handleProductRouting(env, url, path);
+          if (redirect) return redirect;
+        }
+      }
 
       // ----- API ROUTES -----
       if (path.startsWith('/api/') || path === '/submit-order') {
@@ -344,42 +350,9 @@ if ((method === 'GET' || method === 'HEAD') && path === '/product.html') {
 
       // ----- STATIC ASSETS WITH SERVER-SIDE SCHEMA INJECTION & CACHING -----
       if (env.ASSETS) {
-        // IMPORTANT: always base the asset request on the (possibly) rewritten URL.
-        // Earlier in this handler we may update `path` and `url.pathname` for default page
-        // mapping (e.g., '/' -> '/index.html'). If we keep using the original `req`,
-        // ASSETS.fetch would still request '/', which doesn't exist in the assets bundle.
-        // Using `url.toString()` ensures we fetch the correct asset.
-        let assetReq = new Request(url.toString(), req);
+        let assetReq = req;
         let assetPath = path;
         let schemaProductId = null;
-
-        // Support clean product slugs: /product/<slug>
-        // We resolve the slug to a product ID (DB lookup) and internally rewrite
-        // to the shared product template with ?id=<id>.
-        if ((method === 'GET' || method === 'HEAD') && assetPath.startsWith('/product/')) {
-          const parts = assetPath.split('/').filter(Boolean);
-          // ['/product', '<slug>']
-          if (parts.length === 2 && parts[0] === 'product') {
-            const slug = parts[1];
-            try {
-              if (env.DB) {
-                await initDB(env);
-                const row = await env.DB.prepare('SELECT id FROM products WHERE slug = ?').bind(slug).first();
-                const pid = Number(row?.id || 0);
-                if (pid > 0) {
-                  schemaProductId = pid;
-                  const rewritten = new URL(req.url);
-                  rewritten.pathname = '/_product_template.tpl';
-                  rewritten.searchParams.set('id', String(schemaProductId));
-                  assetReq = new Request(rewritten.toString(), req);
-                  assetPath = '/_product_template.tpl';
-                }
-              }
-            } catch (_) {
-              // If slug lookup fails, fall through to normal static asset handling.
-            }
-          }
-        }
 
         // Canonical product URLs: /product-<id>/<slug>
         if ((method === 'GET' || method === 'HEAD')) {
@@ -396,15 +369,6 @@ if ((method === 'GET' || method === 'HEAD') && path === '/product.html') {
             }
           }
         }
-        // NEW: Serve /product?id=<id> directly (no redirect)
-        if ((method === 'GET' || method === 'HEAD') && assetPath === '/product' && url.searchParams.has('id')) {
-          const rewritten = new URL(req.url);
-          rewritten.pathname = '/_product_template.tpl';
-          assetReq = new Request(rewritten.toString(), req);
-          assetPath = '/_product_template.tpl';
-          // fall through to existing schema injection logic below
-        }
-
 
         // Cache non-HTML static assets (js/css/images/fonts) to reduce internal subrequests
         // and improve performance. Admin HTML is still served with no-store.
