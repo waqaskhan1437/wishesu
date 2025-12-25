@@ -5,7 +5,7 @@
  */
 
 import { createElement } from '../../utils/dom-helper.js';
-import eventBus from '../../core/event-bus.js';
+import eventBus from '../../scripts/event-bus.js';
 
 export class Modal {
   constructor(options = {}) {

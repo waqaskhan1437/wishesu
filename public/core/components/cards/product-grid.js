@@ -4,7 +4,7 @@
  * Replaces duplicate product-cards.js implementations
  */
 
-import apiClient from '../../core/api-client.js';
+import apiClient from '../../scripts/api-client.js';
 import { ProductCard } from './product-card.js';
 import { createElement } from '../../utils/dom-helper.js';
 import LoadingSpinner from '../shared/loading-spinner.js';

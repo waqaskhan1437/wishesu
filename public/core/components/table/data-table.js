@@ -5,7 +5,7 @@
  */
 
 import { createElement } from '../../utils/dom-helper.js';
-import eventBus from '../../core/event-bus.js';
+import eventBus from '../../scripts/event-bus.js';
 import { createHeader, updateSortIndicators } from './modules/table-header.js';
 import { createPagination, updatePagination } from './modules/table-pagination.js';
 import { renderRows } from './modules/table-renderer.js';
