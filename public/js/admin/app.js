@@ -14,6 +14,12 @@ import OrdersView from './views/orders-view.js';
 import ProductsView from './views/products-view.js';
 import ReviewsView from './views/reviews-view.js';
 import SettingsView from './views/settings-view.js';
+import ChatsView from './views/chats-view.js';
+import BlogView from './views/blog-view.js';
+import ForumView from './views/forum-view.js';
+import UsersView from './views/users-view.js';
+import PagesView from './views/pages-view.js';
+import ComponentsView from './views/components-view.js';
 
 class AdminApp {
   constructor() {
@@ -82,8 +88,12 @@ class AdminApp {
     this.views.set('products', new ProductsView(this.mainPanel));
     this.views.set('reviews', new ReviewsView(this.mainPanel));
     this.views.set('settings', new SettingsView(this.mainPanel));
-
-    // TODO: Add remaining views (chats, blog, forum, users, pages, components)
+    this.views.set('chats', new ChatsView(this.mainPanel));
+    this.views.set('blog', new BlogView(this.mainPanel));
+    this.views.set('forum', new ForumView(this.mainPanel));
+    this.views.set('users', new UsersView(this.mainPanel));
+    this.views.set('pages', new PagesView(this.mainPanel));
+    this.views.set('components', new ComponentsView(this.mainPanel));
   }
 
   /**
