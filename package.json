@@ -1,23 +1,10 @@
 {
-  "name": "wishesu-modular",
-  "version": "1.0.0",
-  "description": "Modular Cloudflare Workers E-commerce Platform",
-  "main": "src/index.js",
+  "name": "wishesu-admin-new",
+  "version": "0.1.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
-  },
-  "keywords": [
-    "cloudflare",
-    "workers",
-    "ecommerce",
-    "modular"
-  ],
-  "author": "WishesU",
-  "license": "ISC",
-  "devDependencies": {
-    "wrangler": "^3.0.0"
+    "deploy": "wrangler deploy"
   }
 }

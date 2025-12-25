@@ -1,17 +1,21 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Redirecting…</title>
-  <link rel="canonical" href="/modules/admin/views/dashboard.html">
-  <meta http-equiv="refresh" content="0; url=/modules/admin/views/dashboard.html">
-  <script>
-    // Hard redirect (avoids "confirm redirect" type weirdness in some cases)
-    window.location.replace("/modules/admin/views/dashboard.html");
-  </script>
-</head>
-<body>
-  <p>Redirecting to <a href="/modules/admin/views/dashboard.html">/modules/admin/views/dashboard.html</a>…</p>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wishesu Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/core/theme.css" />
+    <link rel="stylesheet" href="/admin/admin.layout.css" />
+    <link rel="stylesheet" href="/admin/admin.controls.css" />
+    <link rel="stylesheet" href="/admin/admin.components.css" />
+    <link rel="stylesheet" href="/admin/admin.chat.css" />
+    <link rel="stylesheet" href="/admin/admin.settings.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/admin/admin.js"></script>
+  </body>
 </html>
