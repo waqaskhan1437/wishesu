@@ -4,7 +4,7 @@
 import { Router } from 'itty-router';
 import { archiveCredentials, r2Presign, tempFile, r2File } from '../controller/controller.js';
 
-const mediaRouter = Router();
+const mediaRouter = Router({ base: '/api' });
 
 // Upload Routes
 mediaRouter.post('/upload/archive-credentials', archiveCredentials);

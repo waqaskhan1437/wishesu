@@ -65,7 +65,9 @@ export async function list(req, env) {
   return json({ results: rows.map(decorate) }, 200, CORS);
 }
 
-export async function get(req, env, id) {
+export async function get(req, env) {
+  const id = req.params?.id || req.query?.id;
+  if (!id) return json({ error: 'Product ID required' }, 400, CORS);
   const row = await getProductByIdOrSlug(env.DB, id);
   if (!row) return json({ error: 'Not found' }, 404, CORS);
   return json({ product: decorate(row) }, 200, CORS);
@@ -87,18 +89,23 @@ export async function save(req, env) {
 
     if (payload.id) {
       await updateProduct(env.DB, payload);
-      return get(req, env, payload.id);
+      const updated = await getProductByIdOrSlug(env.DB, payload.id);
+      return json({ product: decorate(updated) }, 200, CORS);
     }
 
     const res = await createProduct(env.DB, payload);
     const id = res?.meta?.last_row_id ?? res?.lastRowId;
-    return get(req, env, id);
+    const created = await getProductByIdOrSlug(env.DB, id);
+    return json({ product: decorate(created) }, 200, CORS);
   } catch (err) {
     return json({ error: err.message || 'Save failed' }, 500, CORS);
   }
 }
 
-export async function remove(req, env, id) {
+export async function remove(req, env) {
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id') || req.query?.id;
+  if (!id) return json({ error: 'id required' }, 400, CORS);
   await removeProduct(env.DB, id);
   return json({ ok: true }, 200, CORS);
 }
@@ -111,5 +118,6 @@ export async function duplicate(req, env) {
   if (!source) return json({ error: 'Not found' }, 404, CORS);
   const res = await duplicateProduct(env.DB, source);
   const newId = res?.meta?.last_row_id ?? res?.lastRowId;
-  return get(req, env, newId);
+  const created = await getProductByIdOrSlug(env.DB, newId);
+  return json({ product: decorate(created) }, 200, CORS);
 }

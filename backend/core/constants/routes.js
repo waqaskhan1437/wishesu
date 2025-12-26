@@ -5,7 +5,7 @@
 
 // Product page URL pattern: /p/:id/:slug
 export const PRODUCT_PAGE_PATTERN = '/p/:id/:slug';
-export const PRODUCT_PAGE_REGEX = /^\/p\/(\d+)\/([a-z0-9-]+)$/;
+export const PRODUCT_PAGE_REGEX = /^\/p\/(\d+)\/([a-zA-Z0-9_-]+)$/i;
 
 // Legacy product URL pattern (for backwards compatibility)
 export const LEGACY_PRODUCT_PATTERN = /^\/product-?(\d+)\/(.+)$/;

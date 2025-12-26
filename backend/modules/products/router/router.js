@@ -4,7 +4,7 @@
 import { Router } from 'itty-router';
 import { list, get, save, remove, duplicate } from '../controller/controller.js';
 
-const productRouter = Router();
+const productRouter = Router({ base: '/api' });
 
 // Routes
 productRouter.get('/products', list);

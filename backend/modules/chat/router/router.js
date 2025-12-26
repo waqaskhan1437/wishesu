@@ -4,7 +4,7 @@
 import { Router } from 'itty-router';
 import { start, send, poll } from '../controller/controller.js';
 
-const chatRouter = Router();
+const chatRouter = Router({ base: '/api' });
 
 chatRouter.post('/chat/start', start);
 chatRouter.post('/chat/send', send);

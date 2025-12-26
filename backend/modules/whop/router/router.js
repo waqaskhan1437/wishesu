@@ -4,7 +4,7 @@
 import { Router } from 'itty-router';
 import { createCheckout, createPlanCheckout, webhook } from '../controller/controller.js';
 
-const whopRouter = Router();
+const whopRouter = Router({ base: '/api' });
 
 whopRouter.post('/whop/create-checkout', (req, env) => {
   const origin = new URL(req.url).origin;

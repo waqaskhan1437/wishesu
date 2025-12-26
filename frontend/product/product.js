@@ -14,7 +14,7 @@ const root = ensureRoot();
 const params = new URLSearchParams(location.search);
 
 // New pattern: /p/:id/:slug
-const newPathMatch = location.pathname.match(/^\/p\/(\d+)\/([a-z0-9-]+)$/);
+const newPathMatch = location.pathname.match(/^\/p\/(\d+)\/([a-zA-Z0-9_-]+)$/i);
 // Legacy pattern: /product-123/...
 const legacyPathMatch = location.pathname.match(/^\/product-?(\d+)\/.*$/);
 const pathMatch = newPathMatch || legacyPathMatch;

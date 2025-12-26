@@ -75,7 +75,16 @@ export async function list(req, env) {
   return json({ results: rows.map(decorate) }, 200, CORS);
 }
 
-export async function get(req, env, id) {
+export async function get(req, env) {
+  const id = req.params?.id || req.query?.id;
+  if (!id) return json({ error: 'Order ID required' }, 400, CORS);
+  const row = await getOrderById(env.DB, id);
+  if (!row) return json({ error: 'Not found' }, 404, CORS);
+  return json({ order: decorate(row) }, 200, CORS);
+}
+
+// Helper to get order by id for internal use
+async function getOrderResponse(env, id) {
   const row = await getOrderById(env.DB, id);
   if (!row) return json({ error: 'Not found' }, 404, CORS);
   return json({ order: decorate(row) }, 200, CORS);
@@ -121,7 +130,7 @@ export async function create(req, env) {
   });
 
   const id = res?.meta?.last_row_id ?? res?.lastRowId;
-  return get(req, env, id);
+  return getOrderResponse(env, id);
 }
 
 export async function updateStatus(req, env) {
@@ -132,7 +141,7 @@ export async function updateStatus(req, env) {
     return json({ error: 'Missing order_id or status' }, 400, CORS);
   }
   await setOrderStatus(env.DB, { orderId, status });
-  return get(req, env, orderId);
+  return getOrderResponse(env, orderId);
 }
 
 export async function deliver(req, env) {
@@ -143,5 +152,5 @@ export async function deliver(req, env) {
     return json({ error: 'Missing order_id or archive_url' }, 400, CORS);
   }
   await setOrderDelivered(env.DB, { orderId, archiveUrl });
-  return get(req, env, orderId);
+  return getOrderResponse(env, orderId);
 }
