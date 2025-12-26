@@ -3,6 +3,7 @@ main = "backend/index/index.js"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Simple assets - Cloudflare handles static files automatically
 [assets]
 directory = "./frontend"
 
