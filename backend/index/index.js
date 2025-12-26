@@ -11,11 +11,16 @@ import { json } from '../core/utils/response/response.js';
 import {
   PRODUCT_PAGE_REGEX,
   LEGACY_PRODUCT_PATTERN,
-  ADMIN_ROUTES,
   SPA_FILES
 } from '../core/constants/routes.js';
 
 const router = AutoRouter();
+
+// Check if path has a static file extension
+const hasFileExtension = (path) => {
+  const ext = path.split('/').pop()?.split('.').pop()?.toLowerCase();
+  return ['js', 'css', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'eot', 'map', 'json', 'webp', 'mp4', 'webm'].includes(ext);
+};
 
 // 1. Global Middleware: CORS & DB
 router.all('*', async (req, env) => {
@@ -34,7 +39,7 @@ router.all('*', async (req, env) => {
   const url = new URL(req.url);
   const path = url.pathname;
 
-  // Serve Asset if exists
+  // Try to serve static asset first
   if (env.ASSETS) {
     try {
       const asset = await env.ASSETS.fetch(req);
@@ -42,14 +47,20 @@ router.all('*', async (req, env) => {
     } catch (e) { /* ignore */ }
   }
 
-  // Admin SPA Fallback
-  if (ADMIN_ROUTES.some(r => path.startsWith(r)) || path === '/') {
+  // If it's a file with extension and not found, return 404
+  // Don't serve SPA HTML for .js, .css, etc files
+  if (hasFileExtension(path)) {
+    return json({ error: 'File Not Found', path }, 404, CORS);
+  }
+
+  // Admin SPA Fallback (for routes without file extension)
+  if (path === '/' || path === '/admin' || path === '/admin/' || path.startsWith('/admin/')) {
     return env.ASSETS.fetch(new Request(new URL(SPA_FILES.admin, req.url), req));
   }
 
   // Product Page Rewrite
   const pMatch = path.match(PRODUCT_PAGE_REGEX) || path.match(LEGACY_PRODUCT_PATTERN);
-  if (pMatch || path === '/product') {
+  if (pMatch || path === '/product' || path === '/product/') {
     const spaUrl = new URL(SPA_FILES.product, req.url);
     if (pMatch) spaUrl.searchParams.set('id', pMatch[1]);
     return env.ASSETS.fetch(new Request(spaUrl, req));
