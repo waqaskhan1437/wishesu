@@ -1,14 +1,21 @@
+/**
+ * Whop Integration Router
+ */
+import { Router } from 'itty-router';
 import { createCheckout, createPlanCheckout, webhook } from '../controller/controller.js';
 
-export async function whopRouter(req, env, url, path, method) {
-  if (method === 'POST' && path === '/api/whop/create-checkout') {
-    return createCheckout(req, env, url.origin);
-  }
-  if (method === 'POST' && path === '/api/whop/create-plan-checkout') {
-    return createPlanCheckout(req, env, url.origin);
-  }
-  if (method === 'POST' && path === '/api/whop/webhook') {
-    return webhook(req, env);
-  }
-  return null;
-}
+const whopRouter = Router();
+
+whopRouter.post('/whop/create-checkout', (req, env) => {
+  const origin = new URL(req.url).origin;
+  return createCheckout(req, env, origin);
+});
+
+whopRouter.post('/whop/create-plan-checkout', (req, env) => {
+  const origin = new URL(req.url).origin;
+  return createPlanCheckout(req, env, origin);
+});
+
+whopRouter.post('/whop/webhook', webhook);
+
+export { whopRouter };

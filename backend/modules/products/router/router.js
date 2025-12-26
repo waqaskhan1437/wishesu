@@ -1,27 +1,17 @@
+/**
+ * Products Module Router
+ */
+import { Router } from 'itty-router';
 import { list, get, save, remove, duplicate } from '../controller/controller.js';
 
-export async function productRouter(req, env, url, path, method) {
-  if (method === 'GET' && path === '/api/products') {
-    return list(req, env);
-  }
+const productRouter = Router();
 
-  if (method === 'GET' && path.startsWith('/api/product/')) {
-    const id = path.split('/').pop();
-    return get(req, env, id);
-  }
+// Routes
+productRouter.get('/products', list);
+productRouter.get('/product/list', list);
+productRouter.get('/product/:id', get);
+productRouter.post('/product/save', save);
+productRouter.delete('/product/delete', remove);
+productRouter.post('/product/duplicate', duplicate);
 
-  if (method === 'POST' && path === '/api/product/save') {
-    return save(req, env);
-  }
-
-  if (method === 'DELETE' && path === '/api/product/delete') {
-    const id = url.searchParams.get('id');
-    return remove(req, env, id);
-  }
-
-  if (method === 'POST' && path === '/api/product/duplicate') {
-    return duplicate(req, env);
-  }
-
-  return null;
-}
+export { productRouter };

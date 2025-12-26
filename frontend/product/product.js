@@ -12,7 +12,13 @@ const ensureRoot = () => {
 };
 const root = ensureRoot();
 const params = new URLSearchParams(location.search);
-const pathMatch = location.pathname.match(/^\/product-?(\d+)\/.*$/);
+
+// New pattern: /p/:id/:slug
+const newPathMatch = location.pathname.match(/^\/p\/(\d+)\/([a-z0-9-]+)$/);
+// Legacy pattern: /product-123/...
+const legacyPathMatch = location.pathname.match(/^\/product-?(\d+)\/.*$/);
+const pathMatch = newPathMatch || legacyPathMatch;
+
 const token = params.get('id') || params.get('slug') || (pathMatch ? pathMatch[1] : '');
 
 const formatMoney = (n) => `$${Number(n || 0).toLocaleString('en-US')}`;

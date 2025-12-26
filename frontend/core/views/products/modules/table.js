@@ -18,7 +18,7 @@ export const renderProductTable = (list, items, handlers) => {
       label: 'Link',
       render: (row) => {
         const slug = row.slug || 'product';
-        const href = `/product${row.id}/${encodeURIComponent(slug)}`;
+        const href = `/p/${row.id}/${encodeURIComponent(slug)}`;
         return el('a', { href, text: 'Open', target: '_blank' });
       }
     },

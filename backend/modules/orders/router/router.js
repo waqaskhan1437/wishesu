@@ -1,26 +1,16 @@
+/**
+ * Orders Module Router
+ */
+import { Router } from 'itty-router';
 import { list, get, create, updateStatus, deliver } from '../controller/controller.js';
 
-export async function orderRouter(req, env, url, path, method) {
-  if (method === 'GET' && path === '/api/orders') {
-    return list(req, env);
-  }
+const orderRouter = Router();
 
-  if (method === 'GET' && path.startsWith('/api/order/')) {
-    const id = path.split('/').pop();
-    return get(req, env, id);
-  }
+// Routes
+orderRouter.get('/orders', list);
+orderRouter.get('/order/:id', get);
+orderRouter.post('/order/create', create);
+orderRouter.post('/order/update-status', updateStatus);
+orderRouter.post('/order/deliver', deliver);
 
-  if (method === 'POST' && path === '/api/order/create') {
-    return create(req, env);
-  }
-
-  if (method === 'POST' && path === '/api/order/update-status') {
-    return updateStatus(req, env);
-  }
-
-  if (method === 'POST' && path === '/api/order/deliver') {
-    return deliver(req, env);
-  }
-
-  return null;
-}
+export { orderRouter };
