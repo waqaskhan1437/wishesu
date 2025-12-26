@@ -1,6 +1,7 @@
 import { getDeliveryText } from '../core/delivery/delivery.js';
 import { createAddonForm } from './product.addons.js';
 import { buildMediaItems, renderMedia } from './product.media.js';
+import { handleCheckout, setCurrentTotal, setCurrentProduct } from './product.checkout.js';
 
 const ensureRoot = () => {
   const existing = document.getElementById('product');
@@ -62,8 +63,8 @@ const renderError = (message) => {
   ]));
 };
 
-
 const renderProduct = (product) => {
+  setCurrentProduct(product);
   const mediaItems = buildMediaItems(product);
   const basePrice = resolvePrice(product);
   const normalRaw = Number(product.normal_price ?? product.normalPrice ?? 0);
@@ -74,6 +75,7 @@ const renderProduct = (product) => {
   const description = String(product.description || product.seo_description || '').trim();
 
   root.innerHTML = '';
+  setCurrentTotal(basePrice);
 
   const topbar = el('div', { class: 'product-topbar' }, [
     el('a', { class: 'product-back', href: '/', text: '<- Back to home' }),
@@ -83,7 +85,9 @@ const renderProduct = (product) => {
   const totalValue = el('span', { class: 'total-amount', text: formatMoney(basePrice) });
   const checkoutBtn = el('button', { class: 'checkout-btn', text: `Checkout - ${formatMoney(basePrice)}` });
   const deliveryChip = el('span', { class: 'chip', text: deliveryText });
+  
   const setTotal = (total) => {
+    setCurrentTotal(total);
     totalValue.textContent = formatMoney(total);
     checkoutBtn.textContent = `Checkout - ${formatMoney(total)}`;
   };
@@ -94,6 +98,10 @@ const renderProduct = (product) => {
     }
     deliveryChip.textContent = getDeliveryText(delivery.instant ? 1 : 0, delivery.days ?? 0);
   };
+
+  // Checkout button handler
+  checkoutBtn.addEventListener('click', () => handleCheckout(product));
+
   const addonForm = createAddonForm({
     addons: product.addons || [],
     formatMoney,

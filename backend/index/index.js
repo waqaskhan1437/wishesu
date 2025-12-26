@@ -50,6 +50,13 @@ router.get('/p/:id/:slug', (req) => {
   return Response.redirect(`/product/?id=${id}`, 302);
 });
 
+// Buyer order redirect
+router.get('/buyer-order', (req) => {
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id') || '';
+  return Response.redirect(`/order/buyer-order.html?id=${encodeURIComponent(id)}`, 302);
+});
+
 // Legacy product patterns
 router.get('/product-:id/*', (req) => {
   const url = new URL(req.url);

@@ -2,12 +2,13 @@
  * Orders Module Router
  */
 import { Router } from 'itty-router';
-import { list, get, create, updateStatus, deliver } from '../controller/controller.js';
+import { list, get, getBuyer, create, updateStatus, deliver } from '../controller/controller.js';
 
 const orderRouter = Router({ base: '/api' });
 
 // Routes
 orderRouter.get('/orders', list);
+orderRouter.get('/order/buyer/:id', getBuyer);
 orderRouter.get('/order/:id', get);
 orderRouter.post('/order/create', create);
 orderRouter.post('/order/update-status', updateStatus);

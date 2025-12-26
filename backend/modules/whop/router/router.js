@@ -16,6 +16,9 @@ whopRouter.post('/whop/create-plan-checkout', (req, env) => {
   return createPlanCheckout(req, env, origin);
 });
 
-whopRouter.post('/whop/webhook', webhook);
+whopRouter.post('/whop/webhook', (req, env) => {
+  const origin = new URL(req.url).origin;
+  return webhook(req, env, origin);
+});
 
 export { whopRouter };

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Details</title>
+  <link rel="stylesheet" href="order.css">
+</head>
+<body>
+  <div class="order-page">
+    <header class="order-header">
+      <a href="/" class="back-link">← Back to Home</a>
+      <span class="brand">Wishesu Studio</span>
+    </header>
+
+    <main class="order-main">
+      <!-- Loading State -->
+      <div id="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading order...</p>
+      </div>
+
+      <!-- Error State -->
+      <div id="error" class="error-state" style="display:none;"></div>
+
+      <!-- Order Content -->
+      <div id="order-content" class="order-content" style="display:none;">
+        <!-- Status Message -->
+        <div id="status-message" class="status-message" style="display:none;"></div>
+
+        <!-- Order Card -->
+        <section class="order-card">
+          <h2>Order Details</h2>
+          <div class="order-details">
+            <div class="detail-row"><span class="label">Order ID:</span><span id="order-id"></span></div>
+            <div class="detail-row"><span class="label">Email:</span><span id="email"></span></div>
+            <div class="detail-row"><span class="label">Status:</span><span id="status" class="status-badge"></span></div>
+            <div class="detail-row"><span class="label">Date:</span><span id="date"></span></div>
+          </div>
+        </section>
+
+        <!-- Product Summary -->
+        <section id="product-summary" class="product-summary" style="display:none;"></section>
+
+        <!-- Requirements -->
+        <section class="requirements-card">
+          <h3>Your Requirements</h3>
+          <div id="requirements"></div>
+        </section>
+
+        <!-- Photos Section -->
+        <section id="photos-section" class="photos-section" style="display:none;">
+          <h3>Uploaded Photos</h3>
+          <div id="photos" class="photos-grid"></div>
+        </section>
+
+        <!-- Countdown Section -->
+        <section id="countdown-section" class="countdown-section">
+          <h3>Estimated Delivery</h3>
+          <div id="countdown-display" class="countdown-display">--:--:--</div>
+        </section>
+
+        <!-- Video Section -->
+        <section id="video-section" class="video-section" style="display:none;">
+          <h3>Your Video</h3>
+          <div id="player-container" class="player-container"></div>
+          <a id="download-btn" class="download-btn" href="#">⬇️ Download</a>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="buyer-order.js"></script>
+</body>
+</html>

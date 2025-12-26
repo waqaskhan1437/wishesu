@@ -5,17 +5,15 @@ import {
   createCheckoutSession,
   insertCheckout,
   updateCheckoutId,
-  insertEvent,
   getProductSnapshot
 } from '../service/service.js';
+import { webhook } from '../actions/webhook.js';
 
 const parseError = (text) => {
   try {
     const data = JSON.parse(text);
     return data.message || data.error || text;
-  } catch (_) {
-    return text || 'Whop error';
-  }
+  } catch (_) { return text || 'Whop error'; }
 };
 
 export async function createCheckout(req, env, origin) {
@@ -27,34 +25,23 @@ export async function createCheckout(req, env, origin) {
   const metadata = {
     product_id: productId ? String(productId) : '',
     product_title: body.product_title || '',
+    email: body.email || '',
     addons: body.addons || []
   };
 
-  const checkoutBody = {
+  const res = await createCheckoutSession(env, {
     plan_id: planId,
     redirect_url: `${origin}/success.html`,
-    metadata
-  };
-
-  const res = await createCheckoutSession(env, checkoutBody);
+    metadata,
+    prefill: body.email ? { email: String(body.email) } : undefined
+  });
   if (res.error) return json({ error: parseError(res.error) }, res.status || 500, CORS);
 
   const checkoutId = res.data?.id || '';
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-  await insertCheckout(env.DB, {
-    checkoutId,
-    productId,
-    planId,
-    metadata: JSON.stringify(metadata),
-    expiresAt
-  });
+  await insertCheckout(env.DB, { checkoutId, productId, planId, metadata: JSON.stringify(metadata), expiresAt });
 
-  return json({
-    success: true,
-    checkout_id: checkoutId,
-    checkout_url: res.data?.purchase_url,
-    expires_in: '15 minutes'
-  }, 200, CORS);
+  return json({ success: true, checkout_id: checkoutId, checkout_url: res.data?.purchase_url, expires_in: '15 minutes' }, 200, CORS);
 }
 
 export async function createPlanCheckout(req, env, origin) {
@@ -69,12 +56,10 @@ export async function createPlanCheckout(req, env, origin) {
   if (!product) return json({ error: 'Product not found' }, 404, CORS);
 
   const priceValue = Number(body.amount || product.price || 0);
-  if (!Number.isFinite(priceValue) || priceValue <= 0) {
-    return json({ error: 'Invalid amount' }, 400, CORS);
-  }
+  if (!Number.isFinite(priceValue) || priceValue <= 0) return json({ error: 'Invalid amount' }, 400, CORS);
 
   const currency = env.WHOP_CURRENCY || 'usd';
-  const planBody = {
+  const planRes = await createPlan(env, {
     company_id: env.WHOP_COMPANY_ID,
     product_id: whopProductId,
     plan_type: 'one_time',
@@ -86,28 +71,24 @@ export async function createPlanCheckout(req, env, origin) {
     stock: 999999,
     one_per_user: false,
     allow_multiple_quantity: true
-  };
-
-  const planRes = await createPlan(env, planBody);
+  });
   if (planRes.error) return json({ error: parseError(planRes.error) }, planRes.status || 500, CORS);
+
   const planId = planRes.data?.id;
   if (!planId) return json({ error: 'Plan ID missing' }, 500, CORS);
 
   const metadata = {
     product_id: String(product.id),
     product_title: product.title,
+    email: body.email || '',
     addons: body.addons || [],
-    amount: priceValue
+    amount: priceValue,
+    instant: product.instant || 0,
+    delivery_days: product.delivery_days || 2
   };
 
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-  await insertCheckout(env.DB, {
-    checkoutId: `plan_${planId}`,
-    productId: product.id,
-    planId,
-    metadata: JSON.stringify(metadata),
-    expiresAt
-  });
+  await insertCheckout(env.DB, { checkoutId: `plan_${planId}`, productId: product.id, planId, metadata: JSON.stringify(metadata), expiresAt });
 
   const checkoutRes = await createCheckoutSession(env, {
     plan_id: planId,
@@ -117,19 +98,11 @@ export async function createPlanCheckout(req, env, origin) {
   });
 
   if (checkoutRes.error) {
-    return json({
-      success: true,
-      plan_id: planId,
-      product_id: product.id,
-      metadata,
-      warning: parseError(checkoutRes.error)
-    }, 200, CORS);
+    return json({ success: true, plan_id: planId, product_id: product.id, metadata, warning: parseError(checkoutRes.error) }, 200, CORS);
   }
 
   const checkoutId = checkoutRes.data?.id;
-  if (checkoutId) {
-    await updateCheckoutId(env.DB, `plan_${planId}`, checkoutId);
-  }
+  if (checkoutId) await updateCheckoutId(env.DB, `plan_${planId}`, checkoutId);
 
   return json({
     success: true,
@@ -141,9 +114,4 @@ export async function createPlanCheckout(req, env, origin) {
   }, 200, CORS);
 }
 
-export async function webhook(req, env) {
-  const body = await req.json().catch(() => ({}));
-  const eventId = String(body.id || body.event_id || '');
-  await insertEvent(env.DB, eventId || 'unknown', JSON.stringify(body));
-  return json({ ok: true }, 200, CORS);
-}
+export { webhook };
