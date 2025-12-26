@@ -16,7 +16,7 @@ export async function updateProduct(db, data) {
     `UPDATE products
      SET title = ?, description = ?, slug = ?, normal_price = ?, sale_price = ?, status = ?,
          instant = ?, delivery_days = ?, instant_delivery = ?, normal_delivery_text = ?,
-         thumbnail_url = ?, video_url = ?, addons_json = ?, gallery_images = ?
+         thumbnail_url = ?, video_url = ?, addons_json = ?, gallery_images = ?, whop_product_id = ?
      WHERE id = ?`
   ).bind(
     data.title,
@@ -33,6 +33,7 @@ export async function updateProduct(db, data) {
     data.videoUrl,
     data.addonsJson,
     data.galleryImages,
+    data.whopProductId || null,
     data.id
   ).run();
 }
@@ -42,8 +43,8 @@ export async function createProduct(db, data) {
     `INSERT INTO products (
       title, description, slug, normal_price, sale_price, status,
       instant, delivery_days, instant_delivery, normal_delivery_text,
-      thumbnail_url, video_url, addons_json, gallery_images
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      thumbnail_url, video_url, addons_json, gallery_images, whop_product_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     data.title,
     data.description,
@@ -58,7 +59,8 @@ export async function createProduct(db, data) {
     data.thumbnailUrl,
     data.videoUrl,
     data.addonsJson,
-    data.galleryImages
+    data.galleryImages,
+    data.whopProductId || null
   ).run();
 }
 

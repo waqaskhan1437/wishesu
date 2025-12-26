@@ -46,7 +46,8 @@ const toPayload = (body) => {
     thumbnailUrl: String(body.thumbnail_url || body.thumbnailUrl || media[0] || ''),
     videoUrl: String(body.video_url || ''),
     addonsJson: JSON.stringify(parseJsonArray(body.addons || body.addons_json)),
-    galleryImages: JSON.stringify(media)
+    galleryImages: JSON.stringify(media),
+    whopProductId: body.whop_product_id || body.whopProductId || null
   };
 };
 

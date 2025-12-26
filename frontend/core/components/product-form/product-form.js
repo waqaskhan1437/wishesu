@@ -51,6 +51,9 @@ export function ProductForm({ onSaved }) {
         <option value="active">Active</option>
         <option value="draft">Draft</option>
       </select>
+      <label>Whop Product ID</label>
+      <input name="whop_product_id" placeholder="prod_XXXXXXX" />
+      <small style="color:var(--muted);margin-top:-8px;">Required for checkout. Get from Whop dashboard.</small>
     </div>
     <div class="tab-panel" data-panel="media">
       <label>Video URL</label>
@@ -143,6 +146,7 @@ export function ProductForm({ onSaved }) {
     form.querySelector('[name="instant"]').checked = !!product.instant;
     form.querySelector('[name="status"]').value = product.status || 'active';
     form.querySelector('[name="video_url"]').value = product.video_url || '';
+    form.querySelector('[name="whop_product_id"]').value = product.whop_product_id || '';
     mediaList.innerHTML = '';
     const media = Array.isArray(product.media) ? product.media : [];
     if (media.length === 0) addUrlRow(mediaList);
@@ -169,7 +173,8 @@ export function ProductForm({ onSaved }) {
       delivery_days: Number(data.delivery_days || 2),
       video_url: data.video_url,
       media: buildMedia(form),
-      addons: addonBuilder.read()
+      addons: addonBuilder.read(),
+      whop_product_id: data.whop_product_id || null
     };
     const msg = form.querySelector('.form-msg');
     msg.textContent = 'Saving...';
