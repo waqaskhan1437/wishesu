@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --remote",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 execute secure-shop-db --remote --file=./migrations/0001_add_whop_product_id.sql",
+    "db:set-whop": "echo 'Usage: npx wrangler d1 execute secure-shop-db --remote --command=\"UPDATE products SET whop_product_id = '\"'\"'prod_XXXXX'\"'\"' WHERE id = 29\"'"
   },
   "dependencies": {
     "itty-router": "^5.0.22"

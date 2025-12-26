@@ -1,7 +1,7 @@
 /**
  * Worker Entry Point
- * run_worker_first = true means ALL requests come here first
- * We handle API routes and forward static files to ASSETS binding
+ * Cloudflare serves static files from ./frontend automatically
+ * Worker only handles /api/* routes and redirects
  */
 
 import { api } from '../core/router/api.js';
@@ -34,7 +34,7 @@ export default {
 
     // Debug endpoint
     if (path === '/debug') {
-      return json({ ok: true, DB: !!env.DB, ASSETS: !!env.ASSETS }, 200, CORS);
+      return json({ ok: true, DB: !!env.DB, path }, 200, CORS);
     }
 
     // Pretty URL: /p/:id/:slug -> redirect to /product/?id=:id
@@ -60,52 +60,8 @@ export default {
       }
     }
 
-    // Serve static files via ASSETS binding
-    if (env.ASSETS) {
-      // Handle directory paths: /product/ or /product -> /product/index.html
-      let assetPath = path;
-      
-      if (assetPath === '/' || assetPath === '') {
-        assetPath = '/index.html';
-      } else if (assetPath.endsWith('/')) {
-        assetPath = assetPath + 'index.html';
-      } else if (!assetPath.includes('.')) {
-        // No extension - try as directory/index.html first
-        assetPath = assetPath + '/index.html';
-      }
-
-      try {
-        // Try to fetch the asset
-        const assetUrl = new URL(assetPath, url.origin);
-        const assetResponse = await env.ASSETS.fetch(assetUrl.toString());
-        
-        if (assetResponse.status === 200) {
-          return assetResponse;
-        }
-        
-        // If directory/index.html failed, try original path
-        if (assetPath !== path) {
-          const originalResponse = await env.ASSETS.fetch(new URL(path, url.origin).toString());
-          if (originalResponse.status === 200) {
-            return originalResponse;
-          }
-        }
-        
-        // Return 404 page if available
-        const notFoundResponse = await env.ASSETS.fetch(new URL('/404.html', url.origin).toString());
-        if (notFoundResponse.status === 200) {
-          return new Response(notFoundResponse.body, {
-            status: 404,
-            headers: notFoundResponse.headers
-          });
-        }
-      } catch (e) {
-        // Asset fetch failed
-        console.error('Asset fetch error:', e.message);
-      }
-    }
-
-    // Fallback: 404
+    // If we reach here, it means Cloudflare couldn't find a static file
+    // This should only happen for truly non-existent paths
     return json({ error: 'Not Found', path }, 404, CORS);
   }
 };
