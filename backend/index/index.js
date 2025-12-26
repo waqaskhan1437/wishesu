@@ -67,7 +67,28 @@ router.get('/product-:id/*', (req) => {
   return Response.redirect('/product/', 302);
 });
 
-// 6. Catch-all - return 404 for anything worker receives that's not handled
+// 6. SPA fallback routes - serve index.html for these paths
+router.get('/product', async (req, env) => {
+  if (env.ASSETS) {
+    return env.ASSETS.fetch(new Request(new URL('/product/index.html', req.url)));
+  }
+  return Response.redirect('/product/index.html' + new URL(req.url).search, 302);
+});
+
+router.get('/product/', async (req, env) => {
+  if (env.ASSETS) {
+    return env.ASSETS.fetch(new Request(new URL('/product/index.html', req.url)));
+  }
+  return Response.redirect('/product/index.html' + new URL(req.url).search, 302);
+});
+
+router.get('/order', async (req, env) => {
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id') || '';
+  return Response.redirect(`/order/buyer-order.html?id=${encodeURIComponent(id)}`, 302);
+});
+
+// 7. Catch-all - return 404 for anything worker receives that's not handled
 // Static files won't reach here - Cloudflare serves them first
 router.all('*', (req) => {
   const url = new URL(req.url);

@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = "./frontend"
+binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"
