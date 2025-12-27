@@ -390,11 +390,18 @@ export async function getPayPalSettings(env) {
  * Save PayPal settings
  */
 export async function savePayPalSettings(env, body) {
+  console.log('🅿️ Saving PayPal settings:', {
+    enabled: body.enabled,
+    client_id: body.client_id ? '***' + body.client_id.slice(-4) : 'empty',
+    secret: body.secret ? '***' + body.secret.slice(-4) : 'empty',
+    mode: body.mode
+  });
+  
   const settings = {
     client_id: body.client_id || '',
     secret: body.secret || '',
     mode: body.mode || 'sandbox',
-    enabled: body.enabled || false
+    enabled: body.enabled === true || body.enabled === 'true'
   };
   
   // If secret not provided, keep existing
@@ -404,13 +411,25 @@ export async function savePayPalSettings(env, body) {
       if (existing?.value) {
         const old = JSON.parse(existing.value);
         settings.secret = old.secret || '';
+        console.log('🅿️ Keeping existing secret');
       }
-    } catch (e) {}
+    } catch (e) {
+      console.log('🅿️ No existing settings found');
+    }
   }
+  
+  console.log('🅿️ Final settings to save:', {
+    enabled: settings.enabled,
+    client_id: settings.client_id ? '***' + settings.client_id.slice(-4) : 'empty',
+    has_secret: !!settings.secret,
+    mode: settings.mode
+  });
   
   await env.DB.prepare(
     'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
   ).bind('paypal', JSON.stringify(settings)).run();
+  
+  console.log('🅿️ PayPal settings saved successfully');
   
   return json({ success: true });
 }

@@ -433,22 +433,35 @@
       statusSpan.textContent = 'Saving...';
       statusSpan.style.color = '#6b7280';
       
+      const payload = {
+        enabled: document.getElementById('paypal-enabled').checked,
+        client_id: document.getElementById('paypal-client-id').value.trim(),
+        secret: document.getElementById('paypal-secret').value.trim(),
+        mode: document.getElementById('paypal-mode').value
+      };
+      
+      console.log('Saving PayPal settings:', {
+        enabled: payload.enabled,
+        client_id: payload.client_id ? 'yes' : 'empty',
+        secret: payload.secret ? 'yes' : 'empty',
+        mode: payload.mode
+      });
+      
       try {
         const res = await fetch('/api/settings/paypal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            enabled: document.getElementById('paypal-enabled').checked,
-            client_id: document.getElementById('paypal-client-id').value.trim(),
-            secret: document.getElementById('paypal-secret').value.trim(),
-            mode: document.getElementById('paypal-mode').value
-          })
+          body: JSON.stringify(payload)
         });
         
         const data = await res.json();
         if (data.success) {
           statusSpan.textContent = '✅ PayPal settings saved!';
           statusSpan.style.color = '#16a34a';
+          // Clear secret field after save (it's stored securely)
+          document.getElementById('paypal-secret').value = '';
+          // Reload settings to confirm
+          await loadPayPalSettings();
         } else {
           statusSpan.textContent = '❌ ' + (data.error || 'Save failed');
           statusSpan.style.color = '#ef4444';
