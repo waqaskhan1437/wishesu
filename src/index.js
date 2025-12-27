@@ -186,6 +186,29 @@ export default {
                   const reviews = reviewsResult.results || [];
                   const schemaJson = generateProductSchema(product, baseUrl, reviews);
                   html = injectSchemaIntoHTML(html, 'product-schema', schemaJson);
+                  
+                  // LCP Optimization: Preload hero image for faster rendering
+                  if (product.thumbnail_url) {
+                    let lcpImageUrl = product.thumbnail_url;
+                    // Optimize Cloudinary URLs
+                    if (lcpImageUrl.includes('res.cloudinary.com')) {
+                      lcpImageUrl = lcpImageUrl.replace(
+                        /(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)/,
+                        '$1f_auto,q_auto,w_800/$2'
+                      );
+                    }
+                    const preloadTag = `<link rel="preload" as="image" href="${lcpImageUrl}" fetchpriority="high">`;
+                    html = html.replace('</head>', `${preloadTag}\n</head>`);
+                  }
+                  
+                  // Inject SEO meta tags
+                  const safeTitle = (product.title || '').replace(/"/g, '&quot;');
+                  const safeDesc = (product.description || '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+                  html = html.replace('<title>Loading Product... | WishVideo</title>', `<title>${safeTitle} | WishVideo</title>`);
+                  html = html.replace('<meta property="og:title" content="Loading...">', `<meta property="og:title" content="${safeTitle}">`);
+                  html = html.replace('<meta property="og:description" content="">', `<meta property="og:description" content="${safeDesc}">`);
+                  html = html.replace('<meta property="og:image" content="">', `<meta property="og:image" content="${product.thumbnail_url || ''}">`);
+                  html = html.replace('<meta name="description" content="Custom personalized video greetings from Africa.">', `<meta name="description" content="${safeDesc}">`);
                 }
               }
             }

@@ -153,6 +153,8 @@
           padding: 20px;
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
           transition: all 0.3s ease;
+          min-height: 120px; /* Prevent CLS */
+          contain: layout style;
         }
 
         .review-card:hover {

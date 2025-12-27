@@ -41,9 +41,22 @@
     .loading-state{text-align:center;padding:4rem 0}
     .spinner{border:4px solid #f3f3f3;border-top:4px solid var(--primary);border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 1rem}
     @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
-    .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--radius);overflow:hidden}
+    .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;min-height:350px;background:#000;border-radius:var(--radius);overflow:hidden}
     .video-wrapper img.main-img{width:100%;height:100%;object-fit:cover;display:block}
     .site-footer{text-align:center;padding:2rem 0;color:var(--text-muted);border-top:1px solid var(--border);margin-top:3rem}
+    /* Skeleton loading to prevent CLS */
+    .skeleton-container{display:grid;grid-template-columns:55% 45%;gap:2.5rem;align-items:start}
+    .skeleton-media{aspect-ratio:16/9;min-height:350px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    .skeleton-thumbs{display:flex;gap:12px;margin-top:15px;min-height:116px}
+    .skeleton-thumb{width:140px;height:100px;background:#f0f0f0;border-radius:10px;flex-shrink:0}
+    .skeleton-info{background:#fff;border-radius:var(--radius);padding:2rem;min-height:400px}
+    .skeleton-title{height:32px;background:#f0f0f0;border-radius:4px;margin-bottom:1rem;width:80%}
+    .skeleton-rating{height:20px;background:#f0f0f0;border-radius:4px;margin-bottom:1.5rem;width:40%}
+    .skeleton-badges{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+    .skeleton-badge{height:80px;background:#f0f0f0;border-radius:var(--radius-sm)}
+    .skeleton-btn{height:50px;background:#f0f0f0;border-radius:var(--radius-sm);margin-top:1.5rem}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    @media(max-width:900px){.skeleton-container{display:flex;flex-direction:column}}
   </style>
 
   <!-- Non-critical CSS loaded asynchronously -->
@@ -80,8 +93,26 @@
     </div>
 
     <div id="product-container" class="loading-state">
-      <div class="spinner"></div>
-      <p>Loading amazing product...</p>
+      <!-- Skeleton placeholder matching final layout to prevent CLS -->
+      <div class="skeleton-container">
+        <div>
+          <div class="skeleton-media"></div>
+          <div class="skeleton-thumbs">
+            <div class="skeleton-thumb"></div>
+            <div class="skeleton-thumb"></div>
+            <div class="skeleton-thumb"></div>
+          </div>
+        </div>
+        <div class="skeleton-info">
+          <div class="skeleton-title"></div>
+          <div class="skeleton-rating"></div>
+          <div class="skeleton-badges">
+            <div class="skeleton-badge"></div>
+            <div class="skeleton-badge"></div>
+          </div>
+          <div class="skeleton-btn"></div>
+        </div>
+      </div>
     </div>
   </main>
 

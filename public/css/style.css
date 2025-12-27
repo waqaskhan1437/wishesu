@@ -41,29 +41,32 @@ main {
 /* --- PRODUCT PAGE LAYOUT --- */
 .product-page { display: flex; flex-direction: column; gap: 3rem; }
 
-/* Top Row: Media (Left) + Info (Right) */
+/* Top Row: Media (Left) + Info (Right) - Fixed min-height to prevent CLS */
 .product-main-row {
   display: grid;
   grid-template-columns: 55% 45%;
   gap: 2.5rem;
   align-items: start;
+  min-height: 500px; /* Reserve space */
 }
 
-/* Left Column: Media */
+/* Left Column: Media - CSS containment */
 .product-media-col {
   display: flex; flex-direction: column; gap: 1rem;
   position: sticky; top: 1rem; height: fit-content; z-index: 10;
+  contain: layout style;
 }
 
-/* Right Column: Info & Form */
-.product-info-col { display: flex; flex-direction: column; gap: 1.5rem; }
+/* Right Column: Info & Form - CSS containment */
+.product-info-col { display: flex; flex-direction: column; gap: 1.5rem; contain: layout style; }
 .product-desc-row { width: 100%; }
 
-/* Video Player */
+/* Video Player - Fixed dimensions to prevent CLS */
 .video-wrapper {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  min-height: 350px; /* Minimum height to prevent CLS */
   background: #000;
   border-radius: var(--radius);
   overflow: hidden;
@@ -72,6 +75,7 @@ main {
   align-items: center;
   justify-content: center;
   z-index: 1;
+  contain: layout style paint; /* CSS containment for performance */
 }
 
 .video-wrapper .plyr {
@@ -108,7 +112,7 @@ main {
 .plyr__video-wrapper video { object-fit: contain !important; }
 .video-wrapper { --plyr-color-main: var(--primary); }
 
-/* Thumbnails */
+/* Thumbnails - Fixed height to prevent CLS */
 .thumbnails {
   display: flex;
   gap: 12px;
@@ -117,6 +121,8 @@ main {
   padding: 8px 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(102, 126, 234, 0.5) rgba(0, 0, 0, 0.1);
+  min-height: 116px; /* Fixed height: 100px thumb + 8px padding top/bottom */
+  align-items: center;
 }
 
 /* Webkit scrollbar styling for thumbnail slider */
@@ -148,6 +154,8 @@ main {
   border: 3px solid transparent;
   transition: all 0.3s;
   background: #f3f4f6;
+  flex-shrink: 0; /* Prevent shrinking */
+  aspect-ratio: 14/10; /* Maintain aspect ratio */
 }
 
 .thumb:hover {
@@ -159,19 +167,21 @@ main {
   border-color: #667eea !important;
 }
 
-/* Info Panel Styling */
+/* Info Panel Styling - Fixed min-height to prevent CLS */
 .product-info-panel {
   background: #fff; padding: 2rem;
   border-radius: var(--radius); border: 1px solid var(--border);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  min-height: 400px; /* Reserve space to prevent CLS */
+  contain: layout style; /* CSS containment */
 }
 .product-title { font-size: 2rem; font-weight: 800; line-height: 1.2; margin: 0 0 0.5rem 0; letter-spacing: -0.5px; }
 .rating-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; }
 .stars { color: #fbbf24; }
 .review-count { font-size: 0.9rem; color: var(--text-muted); font-weight: 500; }
 
-.badges-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-.badge-box { padding: 1rem; border-radius: var(--radius-sm); color: #fff; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.badges-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; min-height: 80px; }
+.badge-box { padding: 1rem; border-radius: var(--radius-sm); color: #fff; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 70px; }
 .badge-delivery { background-color: var(--success); }
 .badge-delivery .icon { font-size: 1.2rem; margin-bottom: 0.25rem; }
 .badge-delivery #delivery-badge-text { font-weight: 700; font-size: 0.95rem; line-height: 1.2; }
@@ -331,7 +341,7 @@ main {
 
 
 @media (max-width: 900px) {
-  .product-main-row { display: flex; flex-direction: column; gap: 2rem; }
+  .product-main-row { display: flex; flex-direction: column; gap: 2rem; min-height: auto; }
   .product-media-col { position: static !important; width: 100% !important; max-width: 100% !important; }
   .product-info-col { width: 100%; }
   .form-grid-2 { grid-template-columns: 1fr; }
@@ -341,6 +351,7 @@ main {
   .thumbnails {
     gap: 8px;
     padding: 6px 0;
+    min-height: 97px; /* 85px thumb + padding */
   }
 
   .thumb {
@@ -348,7 +359,7 @@ main {
     width: 120px;
     height: 85px;
   }
-  .product-info-panel { padding: 0; border: none; box-shadow: none; }
+  .product-info-panel { padding: 0; border: none; box-shadow: none; min-height: auto; }
   .product-title { font-size: 1.75rem; }
 }
 
