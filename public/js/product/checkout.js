@@ -172,132 +172,101 @@
       }
     });
 
-    // 3. Whop Dynamic Checkout - Auto Plan Creation
+    // 3. Open Payment Selector Modal
+    btn.innerHTML = `
+      <span style="display: inline-flex; align-items: center; gap: 8px;">
+        <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite;"></span>
+        Loading payment options...
+      </span>
+    `;
+    
+    let email = cachedAddonEmail || '';
+    const emailInput = document.querySelector('#addons-form input[type="email"]');
+    if (emailInput && emailInput.value.includes('@')) email = emailInput.value.trim();
+    if (email) syncEmailToWhop(email);
+
+    console.log('🔵 Opening Payment Selector...');
+    console.log('🔵 Product ID:', window.productData.id);
+    console.log('🔵 Amount:', window.currentTotal);
+    console.log('🔵 Email:', email || '(none)');
+    console.log('🔵 Selected Addons:', selectedAddons);
+
+    // Store order data in localStorage as backup
+    const orderData = {
+      addons: selectedAddons,
+      email: email,
+      amount: window.currentTotal,
+      productId: window.productData.id,
+      timestamp: Date.now()
+    };
+    localStorage.setItem('pendingOrderData', JSON.stringify(orderData));
+    console.log('🔵 Stored order data in localStorage:', orderData);
+
+    // Reset button before opening modal
+    btn.disabled = false;
+    btn.textContent = originalText;
+
+    // Check if PaymentSelector is available
+    if (typeof window.PaymentSelector !== 'undefined') {
+      // Open payment selector modal
+      window.PaymentSelector.open({
+        productId: window.productData.id,
+        amount: window.currentTotal,
+        email: email,
+        addons: selectedAddons
+      });
+    } else {
+      // Fallback to direct Whop checkout
+      console.log('🔵 PaymentSelector not loaded, using direct Whop checkout...');
+      await processDirectWhopCheckout(selectedAddons, email, originalText, btn);
+    }
+  }
+
+  // Direct Whop checkout (fallback)
+  async function processDirectWhopCheckout(selectedAddons, email, originalText, btn) {
+    btn.disabled = true;
     btn.innerHTML = `
       <span style="display: inline-flex; align-items: center; gap: 8px;">
         <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite;"></span>
         Processing...
       </span>
     `;
-    let email = cachedAddonEmail || '';
-    const emailInput = document.querySelector('#addons-form input[type="email"]');
-    if (emailInput && emailInput.value.includes('@')) email = emailInput.value.trim();
-    if (email) syncEmailToWhop(email);
-
-    console.log('🔵 Creating Dynamic Whop Checkout...');
-    console.log('🔵 Product ID:', window.productData.id);
-    console.log('🔵 Amount:', window.currentTotal);
-    console.log('🔵 Email:', email || '(none)');
-    console.log('🔵 Selected Addons:', selectedAddons);
 
     try {
-      // Call dynamic plan creation endpoint
       const response = await fetch('/api/whop/create-plan-checkout', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           product_id: window.productData.id,
           amount: window.currentTotal,
           email: email,
-          metadata: {
-            addons: selectedAddons
-          }
+          metadata: { addons: selectedAddons }
         })
       });
 
-      console.log('🔵 API Response Status:', response.status);
       const data = await response.json();
-      console.log('🔵 API Response Data:', data);
 
       if (!response.ok || data.error) {
-        console.error('🔴 Checkout creation failed:', data);
-        let errorMsg = 'Failed to create checkout';
-        if (data.error) {
-          if (typeof data.error === 'string') {
-            errorMsg = data.error;
-          } else if (typeof data.error === 'object') {
-            errorMsg = JSON.stringify(data.error, null, 2);
-          }
-        }
-        alert('❌ Checkout Error:\n\n' + errorMsg);
-        btn.disabled = false;
-        btn.textContent = originalText;
-        return;
+        throw new Error(data.error || 'Failed to create checkout');
       }
 
-      if (!data.plan_id && !data.checkout_url) {
-        console.error('🔴 No plan ID or checkout URL in response');
-        alert('❌ Error: No checkout information received');
-        btn.disabled = false;
-        btn.textContent = originalText;
-        return;
-      }
-
-      console.log('✅ Checkout created successfully!');
-      console.log('🔵 Plan ID:', data.plan_id);
-      console.log('🔵 Checkout URL:', data.checkout_url);
-      console.log('🔵 Email Prefilled:', data.email_prefilled);
-
-      // Reset button
       btn.disabled = false;
       btn.textContent = originalText;
 
-      // Always use embedded popup with email prefill
-      if (typeof window.whopCheckout === 'function') {
-        console.log('🔵 Opening Whop embedded checkout modal with email prefill...');
-        console.log('🔵 Passing addons to whopCheckout:', selectedAddons);
-
-        // Show email prefill status
-        if (data.email_prefilled) {
-          btn.textContent = '✅ Email Auto-filled! Opening checkout...';
-          setTimeout(() => {
-            btn.textContent = originalText;
-          }, 2000);
-        }
-
-        // Store addons in localStorage as backup (in case Whop redirects before callback)
-        const orderData = {
-          addons: selectedAddons,
-          email: data.email || email,
-          amount: window.currentTotal,
-          productId: data.product_id || window.productData.id,
-          timestamp: Date.now()
-        };
-        localStorage.setItem('pendingOrderData', JSON.stringify(orderData));
-        console.log('🔵 Stored order data in localStorage:', orderData);
-
+      if (typeof window.whopCheckout === 'function' && data.checkout_url) {
         window.whopCheckout({
           planId: data.plan_id,
           email: data.email || email,
-          // IMPORTANT: Pass selectedAddons directly, not data.metadata
-          // data.metadata comes from backend and may not have all addons
-          metadata: {
-            ...data.metadata,
-            addons: selectedAddons,
-            product_id: window.productData.id,
-            productId: window.productData.id
-          },
-          productId: data.product_id || window.productData.id,
-          // Pass the latest calculated total so the embedded modal can display
-          // the correct price next to our sticky "Place Order" button.
+          metadata: { addons: selectedAddons, product_id: window.productData.id },
           amount: window.currentTotal,
-          checkoutUrl: data.checkout_url // Pass checkout URL for embedded popup
+          checkoutUrl: data.checkout_url
         });
-      } 
-      // Fallback to direct URL only if embedded not available
-      else if (data.checkout_url) {
-        console.log('🔵 Embedded checkout not available, using direct URL...');
+      } else if (data.checkout_url) {
         window.location.href = data.checkout_url;
-      } else {
-        console.error('🔴 No checkout method available!');
-        alert('❌ Checkout not available. Please refresh the page and try again.');
       }
-
     } catch (err) {
-      console.error('🔴 CHECKOUT ERROR:', err);
-      alert('❌ Checkout Error:\n\n' + err.message + '\n\nPlease check your internet connection and try again.');
+      console.error('Checkout error:', err);
+      alert('Checkout Error: ' + err.message);
       btn.disabled = false;
       btn.textContent = originalText;
     }

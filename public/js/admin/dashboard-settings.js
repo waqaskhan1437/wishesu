@@ -73,6 +73,57 @@
     </div>
 
     <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
+      <h3>🅿️ PayPal Settings</h3>
+      <p style="color: #6b7280; margin-bottom: 20px;">Enable PayPal as a payment option for your customers.</p>
+      
+      <div style="margin: 20px 0;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="paypal-enabled" style="width: 18px; height: 18px; cursor: pointer;">
+          <span style="font-weight: 600;">Enable PayPal Payments</span>
+        </label>
+      </div>
+      
+      <div style="margin: 20px 0;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Client ID:</label>
+        <input type="text" id="paypal-client-id" placeholder="AYxxxxxxxx..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+        <small style="color: #6b7280;">From PayPal Developer Dashboard → Apps → Your App → Client ID</small>
+      </div>
+      
+      <div style="margin: 20px 0;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Secret:</label>
+        <input type="password" id="paypal-secret" placeholder="EKxxxxxxxx..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+        <small style="color: #6b7280;">From PayPal Developer Dashboard → Apps → Your App → Secret (leave empty to keep existing)</small>
+      </div>
+      
+      <div style="margin: 20px 0;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 600;">Mode:</label>
+        <select id="paypal-mode" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+          <option value="sandbox">Sandbox (Testing)</option>
+          <option value="live">Live (Production)</option>
+        </select>
+        <small style="color: #6b7280;">Use Sandbox for testing, switch to Live when ready for real payments.</small>
+      </div>
+      
+      <div style="margin: 20px 0; padding: 15px; background: #f9fafb; border-radius: 8px;">
+        <div style="display:flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <button class="btn" id="paypal-test-btn" style="background: #0070ba; color: white;">Test PayPal Connection</button>
+          <button class="btn" id="paypal-save-btn" style="background: #16a34a; color: white;">Save PayPal Settings</button>
+          <span id="paypal-status" style="font-size: 0.9rem; color: #6b7280;"></span>
+        </div>
+      </div>
+      
+      <div style="margin-top: 15px; padding: 15px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+        <p style="margin: 0; font-size: 0.9em; color: #1e40af;"><strong>Setup Guide:</strong></p>
+        <ol style="margin: 10px 0 0; padding-left: 20px; font-size: 0.85em; color: #1e40af;">
+          <li>Go to <a href="https://developer.paypal.com" target="_blank" style="color: #2563eb;">developer.paypal.com</a></li>
+          <li>Create an App in Dashboard → Apps & Credentials</li>
+          <li>Copy Client ID and Secret</li>
+          <li>Add Webhook URL: <code style="background: #dbeafe; padding: 2px 6px; border-radius: 4px;">${window.location.origin}/api/paypal/webhook</code></li>
+        </ol>
+      </div>
+    </div>
+
+    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
       <h3>Google Sheets Integration</h3>
       <p style="color: #6b7280; margin-bottom: 20px;">Connect your Google Apps Script to fetch all orders, emails, and customer data for email marketing.</p>
       <div style="margin: 20px 0;">
@@ -172,11 +223,13 @@
     </div>`;
 
     loadWhopSettings();
+    loadPayPalSettings();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
     
     setupExportImportHandlers();
     setupGoogleSheetsHandlers();
+    setupPayPalHandlers();
     setupMaintenanceHandlers();
     setupWhopTestHandlers();
   };
@@ -342,6 +395,80 @@
         }
       } catch (err) {
         statusSpan.textContent = '❌ Test failed: ' + err.message;
+        statusSpan.style.color = '#ef4444';
+      }
+    });
+  }
+
+  // PayPal Settings Handlers
+  async function loadPayPalSettings() {
+    try {
+      const res = await fetch('/api/settings/paypal');
+      const data = await res.json();
+      if (data.settings) {
+        const enabledEl = document.getElementById('paypal-enabled');
+        const clientIdEl = document.getElementById('paypal-client-id');
+        const modeEl = document.getElementById('paypal-mode');
+        
+        if (enabledEl) enabledEl.checked = data.settings.enabled || false;
+        if (clientIdEl) clientIdEl.value = data.settings.client_id || '';
+        if (modeEl) modeEl.value = data.settings.mode || 'sandbox';
+      }
+    } catch (err) {
+      console.error('PayPal settings load error:', err);
+    }
+  }
+
+  function setupPayPalHandlers() {
+    document.getElementById('paypal-save-btn').addEventListener('click', async () => {
+      const statusSpan = document.getElementById('paypal-status');
+      statusSpan.textContent = 'Saving...';
+      statusSpan.style.color = '#6b7280';
+      
+      try {
+        const res = await fetch('/api/settings/paypal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            enabled: document.getElementById('paypal-enabled').checked,
+            client_id: document.getElementById('paypal-client-id').value.trim(),
+            secret: document.getElementById('paypal-secret').value.trim(),
+            mode: document.getElementById('paypal-mode').value
+          })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+          statusSpan.textContent = '✅ PayPal settings saved!';
+          statusSpan.style.color = '#16a34a';
+        } else {
+          statusSpan.textContent = '❌ ' + (data.error || 'Save failed');
+          statusSpan.style.color = '#ef4444';
+        }
+      } catch (err) {
+        statusSpan.textContent = '❌ ' + err.message;
+        statusSpan.style.color = '#ef4444';
+      }
+    });
+
+    document.getElementById('paypal-test-btn').addEventListener('click', async () => {
+      const statusSpan = document.getElementById('paypal-status');
+      statusSpan.textContent = 'Testing connection...';
+      statusSpan.style.color = '#6b7280';
+      
+      try {
+        const res = await fetch('/api/paypal/test');
+        const data = await res.json();
+        
+        if (data.success) {
+          statusSpan.textContent = `✅ Connected! Mode: ${data.mode}`;
+          statusSpan.style.color = '#16a34a';
+        } else {
+          statusSpan.textContent = '❌ ' + (data.error || 'Connection failed');
+          statusSpan.style.color = '#ef4444';
+        }
+      } catch (err) {
+        statusSpan.textContent = '❌ ' + err.message;
         statusSpan.style.color = '#ef4444';
       }
     });

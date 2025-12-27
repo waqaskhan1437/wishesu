@@ -170,10 +170,49 @@
     (async function() {
       const urlParams = new URLSearchParams(window.location.search);
       const productId = urlParams.get('product');
+      const provider = urlParams.get('provider');
+      const paypalToken = urlParams.get('token');
 
       console.log('🎉 Success page loaded');
+      console.log('Provider:', provider, 'PayPal Token:', paypalToken);
 
-      // Check localStorage for pending order data
+      // Handle PayPal return - capture the payment
+      if (provider === 'paypal' && paypalToken) {
+        console.log('🅿️ Capturing PayPal payment...');
+        document.getElementById('orderId').textContent = 'Processing PayPal payment...';
+        
+        try {
+          const captureRes = await fetch('/api/paypal/capture-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_id: paypalToken })
+          });
+          
+          const captureData = await captureRes.json();
+          console.log('PayPal capture result:', captureData);
+          
+          if (captureData.success && captureData.order_id) {
+            document.getElementById('orderId').textContent = captureData.order_id;
+            console.log('✅ PayPal order captured:', captureData.order_id);
+            
+            // Clean URL and redirect to buyer order page
+            window.history.replaceState({}, '', `/success.html?product=${productId}`);
+            setTimeout(() => {
+              window.location.href = `/buyer-order?id=${captureData.order_id}`;
+            }, 2000);
+            return;
+          } else {
+            console.error('PayPal capture failed:', captureData);
+            document.getElementById('orderId').textContent = 'Payment processing failed - Contact support';
+          }
+        } catch (err) {
+          console.error('PayPal capture error:', err);
+          document.getElementById('orderId').textContent = 'Error - Please contact support';
+        }
+        return;
+      }
+
+      // Check localStorage for pending order data (Whop flow)
       let orderData = null;
       try {
         const stored = localStorage.getItem('pendingOrderData');

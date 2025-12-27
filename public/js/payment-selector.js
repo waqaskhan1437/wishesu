@@ -1,0 +1,454 @@
+/**
+ * Payment Selector - Unified payment method selector
+ * Shows all available payment methods and handles checkout
+ */
+
+;(function() {
+  let paymentMethods = [];
+  let selectedMethod = null;
+  let checkoutData = null;
+  let modalElement = null;
+
+  /**
+   * Load available payment methods from API
+   */
+  async function loadPaymentMethods() {
+    try {
+      const res = await fetch('/api/payment/methods');
+      const data = await res.json();
+      paymentMethods = data.methods || [];
+      return paymentMethods;
+    } catch (e) {
+      console.error('Failed to load payment methods:', e);
+      // Fallback to Whop only
+      paymentMethods = [{
+        id: 'whop',
+        name: 'Card Payment',
+        icon: '💳',
+        description: 'Pay with Credit/Debit Card',
+        enabled: true
+      }];
+      return paymentMethods;
+    }
+  }
+
+  /**
+   * Create and show payment modal
+   */
+  function createModal() {
+    // Remove existing modal if any
+    if (modalElement) {
+      modalElement.remove();
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'payment-modal';
+    modal.innerHTML = `
+      <style>
+        #payment-modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0,0,0,0.7);
+          z-index: 99999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .payment-modal-content {
+          background: white;
+          border-radius: 16px;
+          width: 90%;
+          max-width: 450px;
+          max-height: 90vh;
+          overflow: hidden;
+          box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+          animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .payment-modal-header {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 20px;
+          text-align: center;
+          position: relative;
+        }
+        .payment-modal-header h3 {
+          margin: 0;
+          font-size: 1.3em;
+        }
+        .payment-modal-close {
+          position: absolute;
+          top: 15px;
+          right: 15px;
+          background: rgba(255,255,255,0.2);
+          border: none;
+          color: white;
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .payment-modal-close:hover {
+          background: rgba(255,255,255,0.3);
+        }
+        .payment-modal-body {
+          padding: 20px;
+        }
+        .payment-amount {
+          text-align: center;
+          margin-bottom: 20px;
+          padding: 15px;
+          background: #f3f4f6;
+          border-radius: 10px;
+        }
+        .payment-amount-label {
+          font-size: 0.9em;
+          color: #6b7280;
+        }
+        .payment-amount-value {
+          font-size: 2em;
+          font-weight: 700;
+          color: #1f2937;
+        }
+        .payment-methods-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .payment-method-btn {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          padding: 16px 20px;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          background: white;
+          cursor: pointer;
+          transition: all 0.2s;
+          text-align: left;
+        }
+        .payment-method-btn:hover {
+          border-color: #3b82f6;
+          background: #f0f7ff;
+        }
+        .payment-method-btn.selected {
+          border-color: #3b82f6;
+          background: #eff6ff;
+        }
+        .payment-method-btn.loading {
+          opacity: 0.7;
+          pointer-events: none;
+        }
+        .payment-method-icon {
+          font-size: 1.8em;
+          width: 50px;
+          height: 50px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f3f4f6;
+          border-radius: 10px;
+        }
+        .payment-method-info {
+          flex: 1;
+        }
+        .payment-method-name {
+          font-weight: 600;
+          font-size: 1.1em;
+          color: #1f2937;
+        }
+        .payment-method-desc {
+          font-size: 0.85em;
+          color: #6b7280;
+        }
+        .payment-method-arrow {
+          color: #9ca3af;
+          font-size: 1.2em;
+        }
+        .payment-loading {
+          text-align: center;
+          padding: 40px;
+          color: #6b7280;
+        }
+        .payment-loading .spinner {
+          display: inline-block;
+          width: 30px;
+          height: 30px;
+          border: 3px solid #e5e7eb;
+          border-top-color: #3b82f6;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+          margin-bottom: 10px;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .payment-iframe-container {
+          width: 100%;
+          height: 500px;
+          border: none;
+          border-radius: 8px;
+        }
+        .paypal-button-container {
+          margin-top: 15px;
+        }
+        #paypal-button-container {
+          min-height: 45px;
+        }
+      </style>
+      <div class="payment-modal-content">
+        <div class="payment-modal-header">
+          <h3>💳 Choose Payment Method</h3>
+          <button class="payment-modal-close" onclick="window.PaymentSelector.close()">&times;</button>
+        </div>
+        <div class="payment-modal-body">
+          <div class="payment-amount">
+            <div class="payment-amount-label">Total Amount</div>
+            <div class="payment-amount-value">$<span id="payment-total">0</span></div>
+          </div>
+          <div id="payment-methods-container" class="payment-methods-list">
+            <div class="payment-loading">
+              <div class="spinner"></div>
+              <p>Loading payment methods...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    modalElement = modal;
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        window.PaymentSelector.close();
+      }
+    });
+
+    // Close on escape
+    document.addEventListener('keydown', function escHandler(e) {
+      if (e.key === 'Escape') {
+        window.PaymentSelector.close();
+        document.removeEventListener('keydown', escHandler);
+      }
+    });
+
+    return modal;
+  }
+
+  /**
+   * Render payment methods in modal
+   */
+  function renderPaymentMethods() {
+    const container = document.getElementById('payment-methods-container');
+    if (!container) return;
+
+    if (paymentMethods.length === 0) {
+      container.innerHTML = '<p style="text-align:center;color:#ef4444;">No payment methods available. Please contact support.</p>';
+      return;
+    }
+
+    container.innerHTML = paymentMethods.map(method => `
+      <button class="payment-method-btn" data-method="${method.id}" onclick="window.PaymentSelector.selectMethod('${method.id}')">
+        <div class="payment-method-icon">${method.icon}</div>
+        <div class="payment-method-info">
+          <div class="payment-method-name">${method.name}</div>
+          <div class="payment-method-desc">${method.description}</div>
+        </div>
+        <div class="payment-method-arrow">→</div>
+      </button>
+    `).join('');
+
+    // Add PayPal button container if PayPal is enabled
+    const paypalMethod = paymentMethods.find(m => m.id === 'paypal');
+    if (paypalMethod) {
+      container.innerHTML += '<div id="paypal-button-container" class="paypal-button-container" style="display:none;"></div>';
+    }
+  }
+
+  /**
+   * Handle payment method selection
+   */
+  async function selectMethod(methodId) {
+    const method = paymentMethods.find(m => m.id === methodId);
+    if (!method) return;
+
+    selectedMethod = method;
+
+    // Update UI
+    document.querySelectorAll('.payment-method-btn').forEach(btn => {
+      btn.classList.remove('selected');
+      if (btn.dataset.method === methodId) {
+        btn.classList.add('selected', 'loading');
+        btn.innerHTML = `
+          <div class="payment-method-icon">${method.icon}</div>
+          <div class="payment-method-info">
+            <div class="payment-method-name">${method.name}</div>
+            <div class="payment-method-desc">Processing...</div>
+          </div>
+          <div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>
+        `;
+      }
+    });
+
+    try {
+      switch (methodId) {
+        case 'whop':
+          await processWhopCheckout();
+          break;
+        case 'paypal':
+          await processPayPalCheckout();
+          break;
+        case 'stripe':
+          await processStripeCheckout();
+          break;
+        default:
+          throw new Error('Unknown payment method');
+      }
+    } catch (err) {
+      console.error('Payment error:', err);
+      alert('Payment error: ' + err.message);
+      renderPaymentMethods(); // Reset UI
+    }
+  }
+
+  /**
+   * Process Whop checkout
+   */
+  async function processWhopCheckout() {
+    const response = await fetch('/api/whop/create-plan-checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_id: checkoutData.productId,
+        amount: checkoutData.amount,
+        email: checkoutData.email || '',
+        metadata: {
+          addons: checkoutData.addons || []
+        }
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    // Close selector modal
+    window.PaymentSelector.close();
+
+    // Use embedded Whop checkout if available
+    if (typeof window.whopCheckout === 'function' && data.checkout_url) {
+      window.whopCheckout({
+        planId: data.plan_id,
+        email: data.email || checkoutData.email,
+        metadata: {
+          addons: checkoutData.addons,
+          product_id: checkoutData.productId
+        },
+        amount: checkoutData.amount,
+        checkoutUrl: data.checkout_url
+      });
+    } else if (data.checkout_url) {
+      window.location.href = data.checkout_url;
+    }
+  }
+
+  /**
+   * Process PayPal checkout
+   */
+  async function processPayPalCheckout() {
+    const response = await fetch('/api/paypal/create-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_id: checkoutData.productId,
+        amount: checkoutData.amount,
+        email: checkoutData.email || '',
+        metadata: {
+          addons: checkoutData.addons || []
+        }
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    // Close modal and redirect to PayPal
+    window.PaymentSelector.close();
+    
+    if (data.checkout_url) {
+      window.location.href = data.checkout_url;
+    } else {
+      throw new Error('No PayPal checkout URL received');
+    }
+  }
+
+  /**
+   * Process Stripe checkout (future)
+   */
+  async function processStripeCheckout() {
+    // TODO: Implement Stripe checkout
+    throw new Error('Stripe checkout coming soon!');
+  }
+
+  /**
+   * Open payment selector modal
+   */
+  async function open(data) {
+    checkoutData = data;
+    
+    createModal();
+    
+    // Update amount display
+    const totalEl = document.getElementById('payment-total');
+    if (totalEl) {
+      totalEl.textContent = (data.amount || 0).toLocaleString();
+    }
+
+    // Load and render payment methods
+    await loadPaymentMethods();
+    renderPaymentMethods();
+  }
+
+  /**
+   * Close payment selector modal
+   */
+  function close() {
+    if (modalElement) {
+      modalElement.remove();
+      modalElement = null;
+    }
+    selectedMethod = null;
+  }
+
+  // Export to window
+  window.PaymentSelector = {
+    open,
+    close,
+    selectMethod,
+    loadPaymentMethods
+  };
+
+  console.log('✅ Payment Selector loaded');
+})();

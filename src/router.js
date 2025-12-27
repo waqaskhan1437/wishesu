@@ -61,6 +61,24 @@ import {
   cleanupExpired 
 } from './controllers/whop.js';
 
+// PayPal
+import {
+  createPayPalOrder,
+  capturePayPalOrder,
+  handlePayPalWebhook,
+  getPayPalSettings,
+  savePayPalSettings,
+  testPayPalConnection,
+  getPayPalClientId
+} from './controllers/paypal.js';
+
+// Payment Gateway
+import {
+  getPaymentMethods,
+  getAllPaymentSettings,
+  savePaymentMethodSettings
+} from './controllers/payment-gateway.js';
+
 // Pages
 import { 
   getPages, 
@@ -232,6 +250,53 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'POST' && path === '/api/whop/cleanup') {
     return cleanupExpired(env);
+  }
+
+  // ----- PAYPAL CHECKOUT -----
+  if (method === 'POST' && path === '/api/paypal/create-order') {
+    const body = await req.json();
+    return createPayPalOrder(env, body, url.origin);
+  }
+
+  if (method === 'POST' && path === '/api/paypal/capture-order') {
+    const body = await req.json();
+    return capturePayPalOrder(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/paypal/webhook') {
+    const body = await req.json();
+    return handlePayPalWebhook(env, body, req.headers);
+  }
+
+  if (method === 'GET' && path === '/api/paypal/client-id') {
+    return getPayPalClientId(env);
+  }
+
+  if (method === 'GET' && path === '/api/paypal/test') {
+    return testPayPalConnection(env);
+  }
+
+  // ----- PAYMENT GATEWAY -----
+  if (method === 'GET' && path === '/api/payment/methods') {
+    return getPaymentMethods(env);
+  }
+
+  if (method === 'GET' && path === '/api/settings/payments') {
+    return getAllPaymentSettings(env);
+  }
+
+  if (method === 'POST' && path === '/api/settings/payments') {
+    const body = await req.json();
+    return savePaymentMethodSettings(env, body);
+  }
+
+  if (method === 'GET' && path === '/api/settings/paypal') {
+    return getPayPalSettings(env);
+  }
+
+  if (method === 'POST' && path === '/api/settings/paypal') {
+    const body = await req.json();
+    return savePayPalSettings(env, body);
   }
 
   // ----- ORDERS -----
