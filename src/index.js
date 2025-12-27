@@ -84,20 +84,25 @@ export default {
       }
 
       // ----- DYNAMIC PAGES -----
+      // Skip core static pages that should always use the file system
+      const coreStaticPages = ['index', 'products-grid', 'product', 'buyer-order', 'order-detail', 'order-success', 'success', 'page-builder'];
       if (path.endsWith('.html') && !path.includes('/admin/') && !path.startsWith('/admin')) {
         const slug = path.slice(1).replace(/\.html$/, '');
-        try {
-          if (env.DB) {
-            await initDB(env);
-            const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
-            if (row && row.content) {
-              return new Response(row.content, {
-                headers: { 'Content-Type': 'text/html; charset=utf-8' }
-              });
+        // Only check database for non-core pages
+        if (!coreStaticPages.includes(slug)) {
+          try {
+            if (env.DB) {
+              await initDB(env);
+              const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
+              if (row && row.content) {
+                return new Response(row.content, {
+                  headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                });
+              }
             }
+          } catch (e) {
+            // continue to static assets
           }
-        } catch (e) {
-          // continue to static assets
         }
       }
 
