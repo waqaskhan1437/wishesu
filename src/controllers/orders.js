@@ -88,7 +88,7 @@ export async function createManualOrder(env, body) {
  */
 export async function getBuyerOrder(env, orderId) {
   const row = await env.DB.prepare(
-    'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'
+    'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail, p.whop_product_id FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'
   ).bind(orderId).first();
 
   if (!row) return json({ error: 'Order not found' }, 404);
@@ -112,7 +112,15 @@ export async function getBuyerOrder(env, orderId) {
   }
 
   // Convert SQLite datetime to ISO 8601 format
-  const orderData = { ...row, addons, email, amount, has_review: hasReview };
+  const orderData = { 
+    ...row, 
+    addons, 
+    email, 
+    amount, 
+    has_review: hasReview,
+    tip_paid: !!row.tip_paid,
+    tip_amount: row.tip_amount || 0
+  };
   if (orderData.created_at && typeof orderData.created_at === 'string') {
     orderData.created_at = toISO8601(orderData.created_at);
   }
@@ -280,5 +288,19 @@ export async function updatePortfolio(env, body) {
  */
 export async function updateArchiveLink(env, body) {
   await env.DB.prepare('UPDATE orders SET archive_url=? WHERE order_id=?').bind(body.archiveUrl, body.orderId).run();
+  return json({ success: true });
+}
+
+/**
+ * Mark tip as paid
+ */
+export async function markTipPaid(env, body) {
+  const { orderId, amount } = body;
+  if (!orderId) return json({ error: 'orderId required' }, 400);
+  
+  await env.DB.prepare(
+    'UPDATE orders SET tip_paid = 1, tip_amount = ? WHERE order_id = ?'
+  ).bind(Number(amount) || 0, orderId).run();
+  
   return json({ success: true });
 }

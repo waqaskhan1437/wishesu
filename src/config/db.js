@@ -139,6 +139,8 @@ async function runMigrations(env) {
   const migrations = [
     { table: 'products', column: 'gallery_images', type: 'TEXT' },
     { table: 'orders', column: 'delivered_video_metadata', type: 'TEXT' },
+    { table: 'orders', column: 'tip_paid', type: 'INTEGER DEFAULT 0' },
+    { table: 'orders', column: 'tip_amount', type: 'REAL' },
     { table: 'reviews', column: 'delivered_video_url', type: 'TEXT' },
     { table: 'reviews', column: 'delivered_thumbnail_url', type: 'TEXT' },
     { table: 'chat_sessions', column: 'blocked', type: 'INTEGER DEFAULT 0' },

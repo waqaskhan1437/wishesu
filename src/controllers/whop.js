@@ -431,7 +431,21 @@ export async function handleWebhook(env, webhookData) {
         }
       }
       
-      // Create order in database
+      // Handle tip payment
+      if (metadata.type === 'tip' && metadata.orderId) {
+        try {
+          await env.DB.prepare(
+            'UPDATE orders SET tip_paid = 1, tip_amount = ? WHERE order_id = ?'
+          ).bind(Number(metadata.tipAmount) || Number(metadata.amount) || 0, metadata.orderId).run();
+          console.log('✅ Tip marked as paid for order:', metadata.orderId);
+        } catch (e) {
+          console.error('Failed to update tip status:', e);
+        }
+        // Don't create a new order for tips, just mark tip as paid
+        return json({ received: true });
+      }
+      
+      // Create order in database (for regular purchases, not tips)
       if (metadata.product_id) {
         try {
           const orderId = `WHOP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;

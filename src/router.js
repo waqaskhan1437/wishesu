@@ -28,7 +28,8 @@ import {
   deliverOrder, 
   requestRevision, 
   updatePortfolio, 
-  updateArchiveLink 
+  updateArchiveLink,
+  markTipPaid
 } from './controllers/orders.js';
 
 // Reviews
@@ -281,6 +282,11 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/order/archive-link') {
     const body = await req.json();
     return updateArchiveLink(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/order/tip-paid') {
+    const body = await req.json();
+    return markTipPaid(env, body);
   }
 
   if (method === 'POST' && path === '/api/order/upload-encrypted-file') {
