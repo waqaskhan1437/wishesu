@@ -5,6 +5,19 @@
  */
 
 ;(function(){
+  // Helper to optimize image URLs for Cloudinary
+  function optimizeImageUrl(src, width) {
+    if (!src || !src.includes('res.cloudinary.com')) return src;
+    const cloudinaryRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)/;
+    const match = src.match(cloudinaryRegex);
+    if (match) {
+      const baseUrl = match[1];
+      const imagePath = match[2];
+      return `${baseUrl}f_auto,q_auto,w_${width || 400}/${imagePath}`;
+    }
+    return src;
+  }
+
   function renderProductMain(container, product, addonGroups) {
     container.className = '';
     container.innerHTML = '';
@@ -31,13 +44,48 @@
     // Helper to create main image with SEO/LCP optimizations
     const createMainImage = (src) => {
       const img = document.createElement('img');
-      img.src = src;
+      
+      // Cloudinary URL optimization - convert to WebP and add responsive sizes
+      let optimizedSrc = src;
+      let srcsetAttr = '';
+      
+      if (src && src.includes('res.cloudinary.com')) {
+        // Extract parts of Cloudinary URL and add transformations
+        const cloudinaryRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)/;
+        const match = src.match(cloudinaryRegex);
+        if (match) {
+          const baseUrl = match[1];
+          const imagePath = match[2];
+          
+          // Add WebP format and quality optimization
+          optimizedSrc = `${baseUrl}f_auto,q_auto/${imagePath}`;
+          
+          // Create srcset for responsive images
+          srcsetAttr = [
+            `${baseUrl}f_auto,q_auto,w_400/${imagePath} 400w`,
+            `${baseUrl}f_auto,q_auto,w_600/${imagePath} 600w`,
+            `${baseUrl}f_auto,q_auto,w_800/${imagePath} 800w`,
+            `${baseUrl}f_auto,q_auto,w_1200/${imagePath} 1200w`
+          ].join(', ');
+        }
+      }
+      
+      img.src = optimizedSrc;
+      if (srcsetAttr) {
+        img.srcset = srcsetAttr;
+        img.sizes = '(max-width: 600px) 100vw, (max-width: 900px) 55vw, 650px';
+      }
+      
       img.className = 'main-img';
       // Fix Accessibility: Add Alt text
       img.alt = product.title || 'Product Image';
       // Fix Performance: Prioritize loading for LCP
       img.setAttribute('fetchpriority', 'high');
-      img.loading = 'eager'; 
+      img.loading = 'eager';
+      // Add explicit dimensions to prevent layout shift
+      img.width = 650;
+      img.height = 433;
+      img.decoding = 'async';
       return img;
     };
 
@@ -143,11 +191,16 @@
       thumbWrapper.style.cssText = 'position: relative; display: inline-block;';
       
       const img = document.createElement('img');
-      img.src = product.thumbnail_url;
+      // Optimize thumbnail URL for smaller size
+      img.src = optimizeImageUrl(product.thumbnail_url, 280);
       img.className = 'thumb active';
       img.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid #667eea; transition: all 0.3s;';
       img.alt = (product.title || 'Product') + ' - Thumbnail';
       img.dataset.type = 'main';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.width = 140;
+      img.height = 100;
       
       // Add play button overlay ONLY if video exists
       if (product.video_url) {

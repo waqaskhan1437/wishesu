@@ -391,14 +391,28 @@
     if (!hasVideo) return;
     // Small delay to ensure DOM is ready
     setTimeout(function() {
-      if (document.getElementById('player') && window.Plyr) {
-        try {
-          if (window.productPlayer && typeof window.productPlayer.destroy === 'function') {
-            window.productPlayer.destroy();
-          }
-        } catch (_) {}
-
-        window.productPlayer = new window.Plyr('#player', PLAYER_OPTIONS);
+      if (document.getElementById('player')) {
+        // Lazy load Plyr only when needed
+        if (typeof window.loadPlyr === 'function') {
+          window.loadPlyr(function() {
+            if (window.Plyr) {
+              try {
+                if (window.productPlayer && typeof window.productPlayer.destroy === 'function') {
+                  window.productPlayer.destroy();
+                }
+              } catch (_) {}
+              window.productPlayer = new window.Plyr('#player', PLAYER_OPTIONS);
+            }
+          });
+        } else if (window.Plyr) {
+          // Plyr already loaded
+          try {
+            if (window.productPlayer && typeof window.productPlayer.destroy === 'function') {
+              window.productPlayer.destroy();
+            }
+          } catch (_) {}
+          window.productPlayer = new window.Plyr('#player', PLAYER_OPTIONS);
+        }
       }
     }, 100);
   }
