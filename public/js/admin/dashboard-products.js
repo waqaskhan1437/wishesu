@@ -35,7 +35,7 @@
             <td>${p.title}</td>
             <td><strong>$${p.sale_price || p.normal_price}</strong></td>
             <td>
-              <a href="/${p.slug || p.id}" target="_blank" class="btn" style="background:#e0e7ff;color:#3730a3;font-size:0.85em;padding:4px 10px;">
+              <a href="/product-${p.id}/${p.slug || p.id}" target="_blank" class="btn" style="background:#e0e7ff;color:#3730a3;font-size:0.85em;padding:4px 10px;">
                 🔗 View
               </a>
             </td>
