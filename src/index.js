@@ -64,11 +64,24 @@ export default {
       // ----- ADMIN SPA ROUTING -----
       // Handle both /admin and /admin/ and all admin sub-routes
       if ((path === '/admin' || path.startsWith('/admin/')) && !path.startsWith('/api/')) {
-        // Special handling for standalone pages that remain separate
-        if (path.endsWith('/page-builder.html') ||
-            path.endsWith('/landing-builder.html') ||
-            path.endsWith('/product-form.html')) {
-          // Let them fall through to asset serving
+        // These standalone pages should be served directly from assets
+        const standaloneAdminPages = [
+          '/admin/product-form.html',
+          '/admin/page-builder.html',
+          '/admin/landing-builder.html',
+          '/admin/migrate-reviews.html'
+        ];
+        
+        if (standaloneAdminPages.includes(path)) {
+          // Serve these pages directly from assets
+          if (env.ASSETS) {
+            const assetResp = await env.ASSETS.fetch(new Request(new URL(path, req.url)));
+            const headers = new Headers(assetResp.headers);
+            headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+            headers.set('Pragma', 'no-cache');
+            headers.set('X-Worker-Version', VERSION);
+            return new Response(assetResp.body, { status: assetResp.status, headers });
+          }
         } else {
           // Serve the main dashboard.html for all other admin routes
           // This includes: /admin, /admin/, /admin/dashboard.html, /admin/orders.html, etc.
