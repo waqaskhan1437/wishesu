@@ -1,0 +1,5 @@
+
+> cloudflare-ecommerce@1.0.1 dev
+> wrangler dev --local --port 5000 --ip 0.0.0.0
+
+sh: 1: wrangler: not found

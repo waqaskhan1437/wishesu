@@ -1,15 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm pkg:*)",
-      "Bash(npm pkg set:*)",
-      "Bash(npm install:*)",
-      "Bash(timeout 10 npx wrangler dev:*)",
-      "Bash(npx wrangler:*)",
-      "Bash(set CLOUDFLARE_API_TOKEN=13ab6630ca0c41ac34d64f181256392b)",
-      "Bash($env:CLOUDFLARE_API_TOKEN=\"13ab6630ca0c41ac34d64f181256392b\")",
-      "Bash(CLOUDFLARE_API_TOKEN=HNTukjfjOLGiRNTQfuLcfg7CgbQG8xPAZ4QLSAn4 npx wrangler deploy:*)",
-      "Bash(curl:*)"
+      "Bash(npx wrangler deploy)",
+      "Bash(node -e:*)",
+      "Bash(cat:*)"
     ]
   }
 }

@@ -1,64 +1,64 @@
-# Wishesu v2
+# WishVideo E-Commerce Platform
 
-## Setup
+A Cloudflare Workers-based e-commerce platform for selling digital video services with Archive.org integration for video delivery.
 
-### 1. Install dependencies
-```bash
-npm install
-```
+## Quick Start
 
-### 2. Run database migration (REQUIRED for checkout)
-```bash
-npx wrangler d1 execute secure-shop-db --remote --file=./migrations/0001_add_whop_product_id.sql
-```
+### Prerequisites
+- Cloudflare account with Workers and D1 database enabled
+- Archive.org account with API credentials
+- R2 storage bucket configured
 
-### 3. Set Whop Product ID for your products
-You need to set the `whop_product_id` for each product. Get this from your Whop dashboard.
+### Environment Setup
 
-**Option A: Via SQL**
-```bash
-npx wrangler d1 execute secure-shop-db --remote --command="UPDATE products SET whop_product_id = 'prod_XXXXXXX' WHERE id = 29"
-```
+Configure these bindings in your Cloudflare Workers dashboard:
 
-**Option B: Via Admin Panel**
-Update the product in admin panel and set the Whop Product ID field.
+**D1 Database:**
+- Binding name: `DB`
 
-### 4. Deploy
-```bash
-npm run deploy
-```
+**R2 Bucket:**
+- Binding name: `R2_BUCKET`
 
-## Architecture
+**Secrets:**
+- `ARCHIVE_ACCESS_KEY` - Your Archive.org access key
+- `ARCHIVE_SECRET_KEY` - Your Archive.org secret key
 
-This project uses `run_worker_first = true`:
-- ALL requests go through the Worker first
-- Worker handles API routes (`/api/*`)  
-- Worker serves static files via `env.ASSETS.fetch()`
-
-## Commands
+### Deployment
 
 ```bash
-npm run dev      # Development (uses --remote)
-npm run deploy   # Deploy to production
+wrangler deploy
 ```
 
-## Whop Integration
+The worker will automatically initialize database tables on first run.
 
-Each product needs:
-1. `whop_product_id` - Your Whop product ID (e.g., `prod_XXXXXXX`)
+### Database Schema
 
-Without this, checkout will show "Checkout not configured for this product".
+Tables are created automatically:
+- `products` - Product catalog with gallery images support
+- `orders` - Order management with delivery tracking
+- `reviews` - Customer reviews and ratings
+- `settings` - Application configuration
+- `pages` - Dynamic page content
+- `checkout_sessions` - Payment session tracking
 
-## File Structure
+### Features
 
-```
-wishesu-main/
-├── backend/
-│   ├── index/index.js     # Worker entry point
-│   ├── core/              # Shared utilities
-│   └── modules/           # API modules (products, orders, whop, etc.)
-├── frontend/              # Static files
-├── migrations/            # D1 database migrations
-├── wrangler.jsonc         # Wrangler config
-└── package.json
-```
+- Product management with gallery images
+- Order processing with delivery video uploads
+- Archive.org integration for video storage
+- Review and rating system
+- SEO-optimized with JSON-LD schemas
+- Server-side rendering for better performance
+
+### Admin Access
+
+Access the admin panel at: `https://your-domain.workers.dev/admin`
+
+### Support
+
+For issues or questions, check the Cloudflare Workers logs in your dashboard.
+
+---
+
+**Version:** 1.0.0  
+**Last Updated:** December 17, 2025
