@@ -131,7 +131,16 @@
       window.location.href = window.location.pathname + '?_=' + Date.now();
     }
   </script>
-  <script src="/js/admin/dashboard.js"></script>
+  <!-- Dashboard Modules - Modular Architecture -->
+  <script src="/js/admin/dashboard-core.js"></script>
+  <script src="/js/admin/dashboard-stats.js"></script>
+  <script src="/js/admin/dashboard-orders.js"></script>
+  <script src="/js/admin/dashboard-products.js"></script>
+  <script src="/js/admin/dashboard-reviews.js"></script>
+  <script src="/js/admin/dashboard-settings.js"></script>
+  <script src="/js/admin/dashboard-pages.js"></script>
+  <script src="/js/admin/dashboard-components.js"></script>
+  <script src="/js/admin/dashboard-chats.js"></script>
 
   <!--
     Immediately invoke a version check against the /api/debug endpoint.  If the
