@@ -12,6 +12,7 @@ import { orderRouter } from '../../modules/orders/router/router.js';
 import { mediaRouter } from '../../modules/media/router/router.js';
 import { chatRouter } from '../../modules/chat/router/router.js';
 import { whopRouter } from '../../modules/whop/router/router.js';
+import { settingsRouter } from '../../modules/settings/router/router.js';
 
 // Import Actions that are not in a module router yet
 import { listProducts } from '../../modules/products/actions/list.js';
@@ -38,6 +39,7 @@ api.all('/media/*', mediaRouter.fetch);
 api.all('/upload/*', mediaRouter.fetch);
 api.all('/chat/*', chatRouter.fetch);
 api.all('/whop/*', whopRouter.fetch);
+api.all('/settings/*', settingsRouter.fetch);
 
 // Legacy direct route fallback
 api.get('/products', listProducts);

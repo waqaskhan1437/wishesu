@@ -4,8 +4,8 @@ import { SettingsAPI } from '../../services/settings-api/settings-api.js';
 
 export function SettingsView() {
   const wrap = el('div', { class: 'section fade-in' });
-  wrap.appendChild(el('h2', { text: 'Analytics Control Room' }));
-  wrap.appendChild(el('p', { text: 'Unify tracking, funnels, and live campaign visibility.' }));
+  wrap.appendChild(el('h2', { text: 'Settings' }));
+  wrap.appendChild(el('p', { text: 'Configure payments, tracking, and integrations.' }));
 
   const cards = el('div', { class: 'grid-2' }, [
     el('div', { class: 'card glass' }, [
@@ -20,6 +20,65 @@ export function SettingsView() {
     ])
   ]);
 
+  // Whop Settings Form
+  const whopForm = el('form', { class: 'card glass' });
+  whopForm.innerHTML = `
+    <h3>Whop Payment Settings</h3>
+    <label>Default Whop Product ID</label>
+    <input name="whop_product_id" placeholder="prod_XXXXXXX" />
+    <small style="color:var(--muted);margin-top:-8px;display:block;">Used for all products without a specific Whop ID. Get from dash.whop.com</small>
+    <label>Whop API Key (optional)</label>
+    <input name="whop_api_key" type="password" placeholder="whop_XXXXXXX" />
+    <label>Whop Webhook Secret (optional)</label>
+    <input name="whop_webhook_secret" type="password" placeholder="whsec_XXXXXXX" />
+    <div class="btn-row">
+      <button class="btn" type="submit">Save Whop Settings</button>
+    </div>
+    <small class="form-msg"></small>
+  `;
+
+  whopForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(whopForm);
+    const fields = Object.fromEntries(fd.entries());
+    const msg = whopForm.querySelector('.form-msg');
+    
+    if (!fields.whop_product_id?.trim()) {
+      msg.textContent = 'Whop Product ID is required';
+      msg.style.color = '#ffb3b3';
+      return;
+    }
+    
+    msg.textContent = 'Saving...';
+    msg.style.color = 'var(--muted)';
+    
+    const res = await SettingsAPI.saveWhop({
+      whop_product_id: fields.whop_product_id.trim(),
+      whop_api_key: fields.whop_api_key?.trim() || '',
+      whop_webhook_secret: fields.whop_webhook_secret?.trim() || ''
+    });
+    
+    if (!res.ok) {
+      msg.textContent = res.error || 'Save failed';
+      msg.style.color = '#ffb3b3';
+      window.toast?.(res.error || 'Save failed');
+      return;
+    }
+    msg.textContent = 'Saved';
+    msg.style.color = '#b9ffe9';
+    window.toast?.('Whop settings saved');
+  });
+
+  // Load existing Whop settings
+  SettingsAPI.getWhop().then((res) => {
+    if (res.ok && res.data) {
+      whopForm.querySelector('[name="whop_product_id"]').value = res.data.whop_product_id || '';
+      whopForm.querySelector('[name="whop_api_key"]').value = res.data.whop_api_key || '';
+      whopForm.querySelector('[name="whop_webhook_secret"]').value = res.data.whop_webhook_secret || '';
+    }
+  });
+
+  // Analytics Form
   const form = el('form', { class: 'card glass' });
   form.innerHTML = `
     <h3>Tracking Setup</h3>
@@ -85,6 +144,7 @@ export function SettingsView() {
   ]);
 
   wrap.appendChild(cards);
+  wrap.appendChild(whopForm);
   wrap.appendChild(form);
   wrap.appendChild(insight);
   return wrap;

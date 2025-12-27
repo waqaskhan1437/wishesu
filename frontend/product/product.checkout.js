@@ -6,10 +6,25 @@ import { openWhopCheckout } from '../whop/checkout.js';
 
 let currentTotal = 0;
 let currentProduct = null;
+let globalWhopProductId = null;
 
 export const setCurrentTotal = (total) => { currentTotal = total; };
 export const getCurrentTotal = () => currentTotal;
 export const setCurrentProduct = (product) => { currentProduct = product; };
+
+// Fetch global Whop Product ID from settings
+async function getGlobalWhopProductId() {
+  if (globalWhopProductId !== null) return globalWhopProductId;
+  try {
+    const res = await fetch('/api/settings/whop');
+    const data = await res.json();
+    globalWhopProductId = data?.whop_product_id || '';
+    return globalWhopProductId;
+  } catch (e) {
+    globalWhopProductId = '';
+    return '';
+  }
+}
 
 const collectAddonValues = () => {
   const addons = [];
@@ -106,10 +121,14 @@ export async function handleCheckout(product) {
   const addons = collectAddonValues();
   const amount = currentTotal || product.price || 0;
 
-  // Get whop_product_id from product
-  const whopProductId = product.whop_product_id || '';
+  // Get whop_product_id: product-specific first, then global fallback
+  let whopProductId = product.whop_product_id || '';
   if (!whopProductId) {
-    alert('Checkout not configured for this product');
+    whopProductId = await getGlobalWhopProductId();
+  }
+  
+  if (!whopProductId) {
+    alert('Checkout not configured. Please set Whop Product ID in Settings.');
     return;
   }
 

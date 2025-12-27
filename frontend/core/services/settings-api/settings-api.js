@@ -7,6 +7,18 @@ export const SettingsAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {})
     });
+  },
+
+  async saveWhop(payload) {
+    return safeFetch('/api/settings/whop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    });
+  },
+
+  async getWhop() {
+    return safeFetch('/api/settings/whop');
   }
 };
 
