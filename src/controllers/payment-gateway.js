@@ -40,13 +40,19 @@ export async function getPaymentMethods(env) {
     console.log('Whop check failed:', e);
   }
   
-  // Check PayPal
+  // Check PayPal - only show if FULLY configured
   try {
     const paypalRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('paypal').first();
     if (paypalRow?.value) {
       const paypal = JSON.parse(paypalRow.value);
-      // Only show PayPal if enabled AND has both client_id AND secret
-      if (paypal.enabled && paypal.client_id && paypal.secret) {
+      // Only show PayPal if:
+      // 1. Enabled checkbox is checked
+      // 2. Client ID exists and is valid (starts with A or sandbox pattern)
+      // 3. Secret exists and has minimum length
+      const hasValidClientId = paypal.client_id && paypal.client_id.length > 10;
+      const hasValidSecret = paypal.secret && paypal.secret.length > 10;
+      
+      if (paypal.enabled && hasValidClientId && hasValidSecret) {
         methods.push({
           id: 'paypal',
           name: 'PayPal',
@@ -59,16 +65,22 @@ export async function getPaymentMethods(env) {
         });
       }
     } else if (env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET) {
-      methods.push({
-        id: 'paypal',
-        name: 'PayPal',
-        icon: '🅿️',
-        description: 'Pay with PayPal',
-        enabled: true,
-        priority: 2,
-        client_id: env.PAYPAL_CLIENT_ID,
-        mode: env.PAYPAL_MODE || 'sandbox'
-      });
+      // Environment variables
+      const hasValidClientId = env.PAYPAL_CLIENT_ID.length > 10;
+      const hasValidSecret = env.PAYPAL_SECRET.length > 10;
+      
+      if (hasValidClientId && hasValidSecret) {
+        methods.push({
+          id: 'paypal',
+          name: 'PayPal',
+          icon: '🅿️',
+          description: 'Pay with PayPal',
+          enabled: true,
+          priority: 2,
+          client_id: env.PAYPAL_CLIENT_ID,
+          mode: env.PAYPAL_MODE || 'sandbox'
+        });
+      }
     }
   } catch (e) {
     console.log('PayPal check failed:', e);

@@ -409,10 +409,18 @@
         const enabledEl = document.getElementById('paypal-enabled');
         const clientIdEl = document.getElementById('paypal-client-id');
         const modeEl = document.getElementById('paypal-mode');
+        const secretEl = document.getElementById('paypal-secret');
         
         if (enabledEl) enabledEl.checked = data.settings.enabled || false;
         if (clientIdEl) clientIdEl.value = data.settings.client_id || '';
         if (modeEl) modeEl.value = data.settings.mode || 'sandbox';
+        
+        // Show secret status
+        if (secretEl && data.settings.has_secret) {
+          secretEl.placeholder = '••••••••••• (Secret saved - leave empty to keep)';
+        } else if (secretEl) {
+          secretEl.placeholder = 'Enter PayPal Secret (required)';
+        }
       }
     } catch (err) {
       console.error('PayPal settings load error:', err);

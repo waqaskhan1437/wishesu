@@ -80,9 +80,23 @@ export async function createPayPalOrder(env, body, origin) {
   }
   
   const credentials = await getPayPalCredentials(env);
-  if (!credentials || !credentials.clientId || !credentials.secret) {
+  
+  // Detailed validation
+  if (!credentials) {
     return json({ 
-      error: 'PayPal not configured. Please add PayPal Client ID and Secret in Admin → Settings → PayPal Settings.' 
+      error: 'PayPal not configured. Go to Admin → Settings → PayPal and add your credentials.' 
+    }, 400);
+  }
+  
+  if (!credentials.clientId || credentials.clientId.length < 10) {
+    return json({ 
+      error: 'PayPal Client ID missing or invalid. Go to Admin → Settings → PayPal and add your Client ID from PayPal Developer Dashboard.' 
+    }, 400);
+  }
+  
+  if (!credentials.secret || credentials.secret.length < 10) {
+    return json({ 
+      error: 'PayPal Secret missing or invalid. Go to Admin → Settings → PayPal and add your Secret from PayPal Developer Dashboard.' 
     }, 400);
   }
   
@@ -101,8 +115,47 @@ export async function createPayPalOrder(env, body, origin) {
   }
   
   try {
-    const accessToken = await getAccessToken(credentials);
+    console.log('🅿️ PayPal: Getting access token...');
+    console.log('🅿️ Mode:', credentials.mode);
+    
+    let accessToken;
+    try {
+      accessToken = await getAccessToken(credentials);
+      console.log('🅿️ Access token obtained successfully');
+    } catch (authErr) {
+      console.error('🅿️ PayPal auth failed:', authErr.message);
+      return json({ error: 'PayPal authentication failed: ' + authErr.message }, 500);
+    }
+    
     const baseUrl = getPayPalBaseUrl(credentials.mode);
+    
+    // PayPal custom_id has 127 char limit - store minimal data
+    const customData = JSON.stringify({
+      pid: product_id,
+      email: (email || '').substring(0, 50)
+    });
+    
+    const orderPayload = {
+      intent: 'CAPTURE',
+      purchase_units: [{
+        reference_id: `prod_${product_id}_${Date.now()}`,
+        description: (product.title || 'Video Order').substring(0, 127),
+        amount: {
+          currency_code: 'USD',
+          value: finalAmount.toFixed(2)
+        },
+        custom_id: customData.substring(0, 127)
+      }],
+      application_context: {
+        brand_name: 'WishVideo',
+        landing_page: 'NO_PREFERENCE',
+        user_action: 'PAY_NOW',
+        return_url: `${origin}/success.html?provider=paypal&product=${product_id}`,
+        cancel_url: `${origin}/product?id=${product_id}&cancelled=1`
+      }
+    };
+    
+    console.log('🅿️ Creating PayPal order with payload:', JSON.stringify(orderPayload, null, 2));
     
     // Create order
     const orderResponse = await fetch(`${baseUrl}/v2/checkout/orders`, {
@@ -111,38 +164,26 @@ export async function createPayPalOrder(env, body, origin) {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        intent: 'CAPTURE',
-        purchase_units: [{
-          reference_id: `product_${product_id}_${Date.now()}`,
-          description: product.title || 'Video Order',
-          amount: {
-            currency_code: 'USD',
-            value: finalAmount.toFixed(2)
-          },
-          custom_id: JSON.stringify({
-            product_id,
-            email: email || '',
-            addons: metadata?.addons || []
-          })
-        }],
-        application_context: {
-          brand_name: 'WishVideo',
-          landing_page: 'NO_PREFERENCE',
-          user_action: 'PAY_NOW',
-          return_url: `${origin}/success.html?provider=paypal&product=${product_id}`,
-          cancel_url: `${origin}/product-${product_id}/${product.slug || product_id}?cancelled=1`
-        }
-      })
+      body: JSON.stringify(orderPayload)
     });
     
+    const responseText = await orderResponse.text();
+    console.log('🅿️ PayPal response status:', orderResponse.status);
+    console.log('🅿️ PayPal response:', responseText);
+    
     if (!orderResponse.ok) {
-      const error = await orderResponse.text();
-      console.error('PayPal order creation failed:', error);
-      return json({ error: 'Failed to create PayPal order' }, 500);
+      let errorMessage = 'Failed to create PayPal order';
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.message || errorData.error_description || errorData.details?.[0]?.description || errorMessage;
+      } catch (e) {
+        errorMessage = responseText || errorMessage;
+      }
+      console.error('🅿️ PayPal order creation failed:', errorMessage);
+      return json({ error: errorMessage }, 500);
     }
     
-    const orderData = await orderResponse.json();
+    const orderData = JSON.parse(responseText);
     
     // Store checkout session
     try {
@@ -191,6 +232,8 @@ export async function capturePayPalOrder(env, body) {
   }
   
   try {
+    console.log('🅿️ Capturing PayPal order:', order_id);
+    
     const accessToken = await getAccessToken(credentials);
     const baseUrl = getPayPalBaseUrl(credentials.mode);
     
@@ -203,16 +246,24 @@ export async function capturePayPalOrder(env, body) {
       }
     });
     
+    const responseText = await captureResponse.text();
+    console.log('🅿️ Capture response status:', captureResponse.status);
+    console.log('🅿️ Capture response:', responseText);
+    
     if (!captureResponse.ok) {
-      const error = await captureResponse.text();
-      console.error('PayPal capture failed:', error);
-      return json({ error: 'Payment capture failed' }, 500);
+      let errorMessage = 'Payment capture failed';
+      try {
+        const errorData = JSON.parse(responseText);
+        errorMessage = errorData.message || errorData.details?.[0]?.description || errorMessage;
+      } catch (e) {}
+      console.error('🅿️ PayPal capture failed:', errorMessage);
+      return json({ error: errorMessage }, 500);
     }
     
-    const captureData = await captureResponse.json();
+    const captureData = JSON.parse(responseText);
     
     if (captureData.status === 'COMPLETED') {
-      // Get stored metadata
+      // Get stored metadata from our checkout session
       let metadata = {};
       try {
         const sessionRow = await env.DB.prepare(
@@ -225,7 +276,7 @@ export async function capturePayPalOrder(env, body) {
         console.log('Failed to get stored metadata:', e);
       }
       
-      // Parse custom_id from PayPal response
+      // Parse custom_id from PayPal response (minimal data)
       let customData = {};
       try {
         const customId = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.custom_id;
@@ -237,11 +288,11 @@ export async function capturePayPalOrder(env, body) {
       }
       
       // Create order in database
-      const orderId = `PP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const productId = customData.product_id || metadata.product_id;
+      const orderId = `PP-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      const productId = customData.pid || metadata.product_id;
       const email = customData.email || metadata.email || captureData.payer?.email_address || '';
       const amount = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || metadata.amount || 0;
-      const addons = customData.addons || metadata.addons || [];
+      const addons = metadata.addons || [];
       
       const encryptedData = JSON.stringify({
         email,
@@ -256,11 +307,15 @@ export async function capturePayPalOrder(env, body) {
         'INSERT INTO orders (order_id, product_id, encrypted_data, status, created_at) VALUES (?, ?, ?, ?, datetime("now"))'
       ).bind(orderId, Number(productId), encryptedData, 'PAID').run();
       
+      console.log('🅿️ Order created:', orderId);
+      
       // Update checkout session
-      await env.DB.prepare(`
-        UPDATE checkout_sessions SET status = 'completed', completed_at = datetime('now')
-        WHERE checkout_id = ?
-      `).bind(order_id).run();
+      try {
+        await env.DB.prepare(`
+          UPDATE checkout_sessions SET status = 'completed', completed_at = datetime('now')
+          WHERE checkout_id = ?
+        `).bind(order_id).run();
+      } catch (e) {}
       
       return json({
         success: true,
@@ -277,7 +332,7 @@ export async function capturePayPalOrder(env, body) {
     });
     
   } catch (e) {
-    console.error('PayPal capture error:', e);
+    console.error('🅿️ PayPal capture error:', e);
     return json({ error: e.message || 'Payment capture failed' }, 500);
   }
 }
@@ -319,15 +374,16 @@ export async function getPayPalSettings(env) {
         settings: {
           client_id: settings.client_id || '',
           mode: settings.mode || 'sandbox',
-          enabled: settings.enabled || false
-          // Don't return secret
+          enabled: settings.enabled || false,
+          has_secret: !!(settings.secret && settings.secret.length > 10)
+          // Don't return actual secret
         }
       });
     }
   } catch (e) {
     console.error('Failed to load PayPal settings:', e);
   }
-  return json({ settings: { client_id: '', mode: 'sandbox', enabled: false } });
+  return json({ settings: { client_id: '', mode: 'sandbox', enabled: false, has_secret: false } });
 }
 
 /**

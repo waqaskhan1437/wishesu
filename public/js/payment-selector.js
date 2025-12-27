@@ -291,21 +291,19 @@
 
     selectedMethod = method;
 
-    // Update UI
-    document.querySelectorAll('.payment-method-btn').forEach(btn => {
-      btn.classList.remove('selected');
-      if (btn.dataset.method === methodId) {
-        btn.classList.add('selected', 'loading');
-        btn.innerHTML = `
-          <div class="payment-method-icon">${method.icon}</div>
-          <div class="payment-method-info">
-            <div class="payment-method-name">${method.name}</div>
-            <div class="payment-method-desc">Processing...</div>
-          </div>
-          <div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>
-        `;
-      }
-    });
+    // Update UI - show loading on selected button
+    const btn = document.querySelector(`.payment-method-btn[data-method="${methodId}"]`);
+    if (btn) {
+      btn.classList.add('selected', 'loading');
+      btn.innerHTML = `
+        <div class="payment-method-icon">${method.icon}</div>
+        <div class="payment-method-info">
+          <div class="payment-method-name">${method.name}</div>
+          <div class="payment-method-desc">Processing...</div>
+        </div>
+        <div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>
+      `;
+    }
 
     try {
       switch (methodId) {
@@ -323,8 +321,15 @@
       }
     } catch (err) {
       console.error('Payment error:', err);
-      alert('Payment error: ' + err.message);
-      renderPaymentMethods(); // Reset UI
+      
+      // Show error but keep modal open if there are other payment methods
+      if (paymentMethods.length > 1) {
+        alert('Payment error: ' + err.message + '\n\nPlease try another payment method.');
+        renderPaymentMethods(); // Reset UI so user can choose another method
+      } else {
+        alert('Payment error: ' + err.message);
+        window.PaymentSelector.close();
+      }
     }
   }
 
