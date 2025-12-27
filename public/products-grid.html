@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Products</title>
-  <link rel="stylesheet" href="css/style.css">
-  <!-- Structured Data for Product Collection -->
+  <title>All Products - WishesU</title>
+  <link rel="stylesheet" href="/css/style.css">
   <script type="application/ld+json" id="collection-schema">{}</script>
   <style>
     body {
@@ -14,38 +13,56 @@
       margin: 0;
       padding: 0;
     }
-    .page-container {
+    .page-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-align: center;
+      padding: 40px 20px;
+      margin-bottom: 30px;
+    }
+    .page-header h1 {
+      margin: 0;
+      font-size: 2.5rem;
+      font-weight: 700;
+    }
+    .page-header p {
+      margin: 10px 0 0;
+      opacity: 0.9;
+      font-size: 1.1rem;
+    }
+    .products-wrapper {
       max-width: 1200px;
       margin: 0 auto;
-      padding: 30px 20px;
-    }
-    .page-title {
-      text-align: center;
-      font-size: 2rem;
-      font-weight: 700;
-      color: #1f2937;
-      margin-bottom: 30px;
+      padding: 0 20px 40px;
     }
   </style>
 </head>
 <body>
-  <div class="page-container">
-    <h1 class="page-title">Our Products</h1>
-    <div id="products-container"></div>
+  <div class="page-header">
+    <h1>Our Products</h1>
+    <p>Personalized video greetings for every occasion</p>
   </div>
   
-  <!-- Use universal product-cards component for consistent design -->
-  <script src="js/product-cards.js"></script>
+  <div class="products-wrapper">
+    <div id="all-products"></div>
+  </div>
+  
+  <!-- SAME component as index.html -->
+  <script src="/js/product-cards.js"></script>
   <script>
-    // Render products using the same component as index.html
-    // 3 columns, same design, same buttons
-    ProductCards.render('products-container', { 
-      filter: 'all', 
-      columns: 3, 
-      limit: 50,  // Show more products on grid page
-      showReviews: true,
-      showDelivery: true
-    });
+    // Use exact same component as index.html
+    // 3 columns, same design, same everything
+    if (window.ProductCards) {
+      ProductCards.render('all-products', { 
+        filter: 'all', 
+        columns: 3, 
+        limit: 100,
+        showReviews: true,
+        showDelivery: true
+      });
+    } else {
+      console.error('ProductCards not loaded');
+    }
   </script>
 </body>
 </html>
