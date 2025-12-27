@@ -214,7 +214,7 @@ export default {
             }
             
             // Collection page - inject product list schema
-            if (assetPath === '/index.html' || assetPath === '/' || assetPath === '/products.html') {
+            if (assetPath === '/index.html' || assetPath === '/' || assetPath === '/products.html' || assetPath === '/products-grid.html') {
               if (env.DB) {
                 await initDB(env);
                 const productsResult = await env.DB.prepare(`
