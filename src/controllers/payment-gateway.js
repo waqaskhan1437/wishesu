@@ -45,7 +45,8 @@ export async function getPaymentMethods(env) {
     const paypalRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('paypal').first();
     if (paypalRow?.value) {
       const paypal = JSON.parse(paypalRow.value);
-      if (paypal.enabled && paypal.client_id) {
+      // Only show PayPal if enabled AND has both client_id AND secret
+      if (paypal.enabled && paypal.client_id && paypal.secret) {
         methods.push({
           id: 'paypal',
           name: 'PayPal',
@@ -57,7 +58,7 @@ export async function getPaymentMethods(env) {
           mode: paypal.mode || 'sandbox'
         });
       }
-    } else if (env.PAYPAL_CLIENT_ID) {
+    } else if (env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET) {
       methods.push({
         id: 'paypal',
         name: 'PayPal',

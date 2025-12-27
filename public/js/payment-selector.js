@@ -418,6 +418,22 @@
   async function open(data) {
     checkoutData = data;
     
+    // Load payment methods first
+    await loadPaymentMethods();
+    
+    // If only one payment method, use it directly (no modal)
+    if (paymentMethods.length === 1) {
+      console.log('🔵 Only one payment method available, using directly:', paymentMethods[0].id);
+      await selectMethod(paymentMethods[0].id);
+      return;
+    }
+    
+    // If no payment methods, show error
+    if (paymentMethods.length === 0) {
+      alert('No payment methods configured. Please contact support.');
+      return;
+    }
+    
     createModal();
     
     // Update amount display
@@ -426,8 +442,7 @@
       totalEl.textContent = (data.amount || 0).toLocaleString();
     }
 
-    // Load and render payment methods
-    await loadPaymentMethods();
+    // Render payment methods
     renderPaymentMethods();
   }
 

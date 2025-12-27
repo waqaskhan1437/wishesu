@@ -80,8 +80,10 @@ export async function createPayPalOrder(env, body, origin) {
   }
   
   const credentials = await getPayPalCredentials(env);
-  if (!credentials || !credentials.clientId) {
-    return json({ error: 'PayPal not configured. Please add PayPal credentials in Settings.' }, 400);
+  if (!credentials || !credentials.clientId || !credentials.secret) {
+    return json({ 
+      error: 'PayPal not configured. Please add PayPal Client ID and Secret in Admin → Settings → PayPal Settings.' 
+    }, 400);
   }
   
   // Get product details
@@ -93,6 +95,10 @@ export async function createPayPalOrder(env, body, origin) {
   // Calculate price
   const basePrice = product.sale_price || product.normal_price || 0;
   const finalAmount = amount || basePrice;
+  
+  if (finalAmount <= 0) {
+    return json({ error: 'Invalid amount. Price must be greater than 0.' }, 400);
+  }
   
   try {
     const accessToken = await getAccessToken(credentials);
