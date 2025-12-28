@@ -21,7 +21,46 @@
 
   AD.loadSettings = function(panel) {
     const webhookUrl = window.location.origin + '/api/whop/webhook';
-    panel.innerHTML = `<div style="background: white; padding: 30px; border-radius: 12px;"><h3>Whop Settings</h3>
+    panel.innerHTML = `
+    <!-- Payment Methods Control -->
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 12px; color: white; margin-bottom: 20px;">
+      <h3 style="margin: 0 0 10px 0; color: white;">💳 Payment Methods</h3>
+      <p style="color: rgba(255,255,255,0.85); margin-bottom: 20px;">Enable or disable payment methods for checkout.</p>
+      
+      <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <!-- PayPal Toggle -->
+        <div style="flex: 1; min-width: 200px; background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px;">
+          <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+            <input type="checkbox" id="payment-paypal-enabled" style="width: 22px; height: 22px; cursor: pointer; accent-color: #fbbf24;">
+            <div>
+              <div style="font-weight: 600; font-size: 1.1em;">🅿️ PayPal</div>
+              <div style="font-size: 0.85em; color: rgba(255,255,255,0.75);">PayPal, Cards via PayPal</div>
+            </div>
+          </label>
+        </div>
+        
+        <!-- Whop Toggle -->
+        <div style="flex: 1; min-width: 200px; background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px;">
+          <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+            <input type="checkbox" id="payment-whop-enabled" style="width: 22px; height: 22px; cursor: pointer; accent-color: #fbbf24;">
+            <div>
+              <div style="font-weight: 600; font-size: 1.1em;">🌐 Whop</div>
+              <div style="font-size: 0.85em; color: rgba(255,255,255,0.75);">GPay, Apple Pay, Cards, Bank & more</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      
+      <div style="margin-top: 15px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; font-size: 0.85em;">
+        <strong>💡 Tip:</strong> If only one method is enabled, checkout will open directly without showing selection modal.
+      </div>
+      
+      <button class="btn" id="save-payment-methods-btn" style="margin-top: 15px; background: white; color: #667eea; font-weight: 600; padding: 12px 24px;">
+        Save Payment Methods
+      </button>
+    </div>
+    
+    <div style="background: white; padding: 30px; border-radius: 12px;"><h3>Whop Settings</h3>
       <div style="margin: 20px 0;">
         <label style="display: block; margin-bottom: 5px; font-weight: 600;">API Key:</label>
         <input type="text" id="whop-api-key" placeholder="whop_sk_..." style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
@@ -224,8 +263,10 @@
 
     loadWhopSettings();
     loadPayPalSettings();
+    loadPaymentMethodsSettings();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
+    document.getElementById('save-payment-methods-btn').addEventListener('click', savePaymentMethodsSettings);
     
     setupExportImportHandlers();
     setupGoogleSheetsHandlers();
@@ -233,6 +274,71 @@
     setupMaintenanceHandlers();
     setupWhopTestHandlers();
   };
+
+  // Load payment methods enabled status
+  async function loadPaymentMethodsSettings() {
+    try {
+      const res = await fetch('/api/settings/payment-methods');
+      const data = await res.json();
+      
+      const paypalCheckbox = document.getElementById('payment-paypal-enabled');
+      const whopCheckbox = document.getElementById('payment-whop-enabled');
+      
+      if (paypalCheckbox) paypalCheckbox.checked = data.paypal_enabled !== false;
+      if (whopCheckbox) whopCheckbox.checked = data.whop_enabled !== false;
+      
+      // Show configuration status
+      updatePaymentMethodStatus('paypal', data.paypal_configured, data.paypal_enabled);
+      updatePaymentMethodStatus('whop', data.whop_configured, data.whop_enabled);
+      
+    } catch (err) {
+      console.error('Failed to load payment methods:', err);
+      // Default to both enabled
+      const paypalCheckbox = document.getElementById('payment-paypal-enabled');
+      const whopCheckbox = document.getElementById('payment-whop-enabled');
+      if (paypalCheckbox) paypalCheckbox.checked = true;
+      if (whopCheckbox) whopCheckbox.checked = true;
+    }
+  }
+  
+  // Update payment method status indicator
+  function updatePaymentMethodStatus(method, configured, enabled) {
+    // This could show visual indicators for configured/not configured status
+    // For now, just log it
+    console.log(`${method}: configured=${configured}, enabled=${enabled}`);
+  }
+
+  // Save payment methods enabled status
+  async function savePaymentMethodsSettings() {
+    const paypalEnabled = document.getElementById('payment-paypal-enabled')?.checked || false;
+    const whopEnabled = document.getElementById('payment-whop-enabled')?.checked || false;
+    
+    if (!paypalEnabled && !whopEnabled) {
+      alert('⚠️ At least one payment method must be enabled!');
+      return;
+    }
+    
+    try {
+      const res = await fetch('/api/settings/payment-methods', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paypal_enabled: paypalEnabled,
+          whop_enabled: whopEnabled
+        })
+      });
+      
+      if (res.ok) {
+        alert('✅ Payment methods saved!');
+      } else {
+        const err = await res.json();
+        alert('❌ Failed to save: ' + (err.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Save payment methods error:', err);
+      alert('❌ Failed to save payment methods');
+    }
+  }
 
   async function loadWhopSettings() {
     try {

@@ -6,84 +6,102 @@
 import { json } from '../utils/response.js';
 
 /**
+ * Get payment methods enabled status
+ */
+async function getPaymentMethodsEnabled(env) {
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('payment_methods').first();
+    if (row?.value) {
+      return JSON.parse(row.value);
+    }
+  } catch (e) {
+    console.log('Payment methods settings not found, using defaults');
+  }
+  // Default: both enabled
+  return { paypal_enabled: true, whop_enabled: true };
+}
+
+/**
  * Get all enabled payment methods
  */
 export async function getPaymentMethods(env) {
   const methods = [];
   
-  // Check Whop
-  try {
-    const whopRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
-    if (whopRow?.value) {
-      const whop = JSON.parse(whopRow.value);
-      if (whop.api_key || env.WHOP_API_KEY) {
+  // Get enabled status
+  const enabledStatus = await getPaymentMethodsEnabled(env);
+  
+  // Check Whop - only if enabled
+  if (enabledStatus.whop_enabled !== false) {
+    try {
+      const whopRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
+      if (whopRow?.value) {
+        const whop = JSON.parse(whopRow.value);
+        if (whop.api_key || env.WHOP_API_KEY) {
+          methods.push({
+            id: 'whop',
+            name: 'All Payment Methods',
+            icon: '🌐',
+            description: 'GPay, Apple Pay, Cards, Bank & more',
+            enabled: true,
+            priority: 2
+          });
+        }
+      } else if (env.WHOP_API_KEY) {
         methods.push({
           id: 'whop',
-          name: 'Card Payment',
-          icon: '💳',
-          description: 'Pay with Credit/Debit Card',
+          name: 'All Payment Methods',
+          icon: '🌐',
+          description: 'GPay, Apple Pay, Cards, Bank & more',
           enabled: true,
-          priority: 1
+          priority: 2
         });
       }
-    } else if (env.WHOP_API_KEY) {
-      methods.push({
-        id: 'whop',
-        name: 'Card Payment',
-        icon: '💳',
-        description: 'Pay with Credit/Debit Card',
-        enabled: true,
-        priority: 1
-      });
+    } catch (e) {
+      console.log('Whop check failed:', e);
     }
-  } catch (e) {
-    console.log('Whop check failed:', e);
   }
   
-  // Check PayPal - only show if FULLY configured
-  try {
-    const paypalRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('paypal').first();
-    if (paypalRow?.value) {
-      const paypal = JSON.parse(paypalRow.value);
-      // Only show PayPal if:
-      // 1. Enabled checkbox is checked
-      // 2. Client ID exists and is valid (starts with A or sandbox pattern)
-      // 3. Secret exists and has minimum length
-      const hasValidClientId = paypal.client_id && paypal.client_id.length > 10;
-      const hasValidSecret = paypal.secret && paypal.secret.length > 10;
-      
-      if (paypal.enabled && hasValidClientId && hasValidSecret) {
-        methods.push({
-          id: 'paypal',
-          name: 'PayPal',
-          icon: '🅿️',
-          description: 'Pay with PayPal',
-          enabled: true,
-          priority: 2,
-          client_id: paypal.client_id,
-          mode: paypal.mode || 'sandbox'
-        });
+  // Check PayPal - only if enabled
+  if (enabledStatus.paypal_enabled !== false) {
+    try {
+      const paypalRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('paypal').first();
+      if (paypalRow?.value) {
+        const paypal = JSON.parse(paypalRow.value);
+        const hasValidClientId = paypal.client_id && paypal.client_id.length > 10;
+        const hasValidSecret = paypal.secret && paypal.secret.length > 10;
+        
+        if (paypal.enabled && hasValidClientId && hasValidSecret) {
+          methods.push({
+            id: 'paypal',
+            name: 'PayPal',
+            icon: '🅿️',
+            description: 'Pay with PayPal',
+            enabled: true,
+            priority: 1,
+            client_id: paypal.client_id,
+            mode: paypal.mode || 'sandbox'
+          });
+        }
+      } else if (env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET) {
+        const hasValidClientId = env.PAYPAL_CLIENT_ID.length > 10;
+        const hasValidSecret = env.PAYPAL_SECRET.length > 10;
+        
+        if (hasValidClientId && hasValidSecret) {
+          methods.push({
+            id: 'paypal',
+            name: 'PayPal',
+            icon: '🅿️',
+            description: 'Pay with PayPal',
+            enabled: true,
+            priority: 1,
+            client_id: env.PAYPAL_CLIENT_ID,
+            mode: env.PAYPAL_MODE || 'sandbox'
+          });
+        }
       }
-    } else if (env.PAYPAL_CLIENT_ID && env.PAYPAL_SECRET) {
-      // Environment variables
-      const hasValidClientId = env.PAYPAL_CLIENT_ID.length > 10;
-      const hasValidSecret = env.PAYPAL_SECRET.length > 10;
-      
-      if (hasValidClientId && hasValidSecret) {
-        methods.push({
-          id: 'paypal',
-          name: 'PayPal',
-          icon: '🅿️',
-          description: 'Pay with PayPal',
-          enabled: true,
-          priority: 2,
-          client_id: env.PAYPAL_CLIENT_ID,
-          mode: env.PAYPAL_MODE || 'sandbox'
-        });
-      }
+    } catch (e) {
+      console.log('PayPal check failed:', e);
     }
-  } catch (e) {
-    console.log('PayPal check failed:', e);
   }
   
   // Check Stripe (future)
@@ -111,6 +129,74 @@ export async function getPaymentMethods(env) {
   methods.sort((a, b) => a.priority - b.priority);
   
   return json({ methods });
+}
+
+/**
+ * Save payment methods enabled/disabled status
+ */
+export async function savePaymentMethodsEnabled(env, body) {
+  const { paypal_enabled, whop_enabled } = body;
+  
+  // At least one must be enabled
+  if (!paypal_enabled && !whop_enabled) {
+    return json({ error: 'At least one payment method must be enabled' }, 400);
+  }
+  
+  const settings = {
+    paypal_enabled: !!paypal_enabled,
+    whop_enabled: !!whop_enabled
+  };
+  
+  await env.DB.prepare(
+    'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
+  ).bind('payment_methods', JSON.stringify(settings)).run();
+  
+  return json({ success: true, settings });
+}
+
+/**
+ * Get payment methods enabled/disabled status
+ */
+export async function getPaymentMethodsStatus(env) {
+  let status = { paypal_enabled: true, whop_enabled: true };
+  
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('payment_methods').first();
+    if (row?.value) {
+      status = JSON.parse(row.value);
+    }
+  } catch (e) {
+    console.log('Payment methods status not found, using defaults');
+  }
+  
+  // Also check if methods are configured
+  let paypalConfigured = false;
+  let whopConfigured = false;
+  
+  try {
+    const paypalRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('paypal').first();
+    if (paypalRow?.value) {
+      const paypal = JSON.parse(paypalRow.value);
+      paypalConfigured = !!(paypal.enabled && paypal.client_id && paypal.secret);
+    }
+  } catch (e) {}
+  
+  try {
+    const whopRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
+    if (whopRow?.value) {
+      const whop = JSON.parse(whopRow.value);
+      whopConfigured = !!whop.api_key;
+    } else if (env.WHOP_API_KEY) {
+      whopConfigured = true;
+    }
+  } catch (e) {}
+  
+  return json({
+    paypal_enabled: status.paypal_enabled !== false,
+    whop_enabled: status.whop_enabled !== false,
+    paypal_configured: paypalConfigured,
+    whop_configured: whopConfigured
+  });
 }
 
 /**

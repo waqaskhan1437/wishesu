@@ -317,10 +317,15 @@
             <p>Loading PayPal...</p>
           </div>
         </div>
-        <div style="text-align: center; font-size: 0.75em; color: #94a3b8; margin-top: -5px; margin-bottom: 10px;">
-          PayPal also accepts GPay, Apple Pay & Cards
-        </div>
       `;
+      // Only show extra text if both methods are available
+      if (whopMethod) {
+        html += `
+          <div style="text-align: center; font-size: 0.75em; color: #94a3b8; margin-top: -5px; margin-bottom: 10px;">
+            PayPal also accepts GPay, Apple Pay & Cards
+          </div>
+        `;
+      }
     }
 
     // Divider if both methods available

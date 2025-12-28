@@ -76,7 +76,9 @@ import {
 import {
   getPaymentMethods,
   getAllPaymentSettings,
-  savePaymentMethodSettings
+  savePaymentMethodSettings,
+  savePaymentMethodsEnabled,
+  getPaymentMethodsStatus
 } from './controllers/payment-gateway.js';
 
 // Pages
@@ -297,6 +299,16 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/settings/paypal') {
     const body = await req.json();
     return savePayPalSettings(env, body);
+  }
+
+  // Payment Methods Enable/Disable
+  if (method === 'GET' && path === '/api/settings/payment-methods') {
+    return getPaymentMethodsStatus(env);
+  }
+  
+  if (method === 'POST' && path === '/api/settings/payment-methods') {
+    const body = await req.json();
+    return savePaymentMethodsEnabled(env, body);
   }
 
   // ----- ORDERS -----
