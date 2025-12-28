@@ -166,6 +166,14 @@
         .payment-method-btn:hover {
           border-color: #3b82f6;
           background: #f0f7ff;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .payment-method-btn[data-method="whop"]:hover {
+          background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+          border-color: transparent;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
         .payment-method-btn.selected {
           border-color: #3b82f6;
@@ -317,38 +325,20 @@
 
     // Divider if both methods available
     if (paypalMethod && whopMethod) {
-      html += `<div class="payment-divider"><span>or pay with card</span></div>`;
+      html += `<div class="payment-divider"><span>more payment options</span></div>`;
     }
 
-    // Whop Card Payment button
+    // Whop Payment button - All methods
     if (whopMethod) {
       html += `
-        <button class="payment-method-btn" data-method="whop" onclick="window.PaymentSelector.selectMethod('whop')">
-          <div class="payment-method-icon">💳</div>
+        <button class="payment-method-btn" data-method="whop" onclick="window.PaymentSelector.selectMethod('whop')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white;">
+          <div class="payment-method-icon" style="background: rgba(255,255,255,0.2);">🌐</div>
           <div class="payment-method-info">
-            <div class="payment-method-name">Credit / Debit Card</div>
-            <div class="payment-method-desc">Secure card payment</div>
+            <div class="payment-method-name" style="color: white;">All Payment Methods</div>
+            <div class="payment-method-desc" style="color: rgba(255,255,255,0.85);">GPay • Apple Pay • Cards • Bank & 50+ more</div>
           </div>
-          <div class="payment-method-arrow">→</div>
+          <div class="payment-method-arrow" style="color: white;">→</div>
         </button>
-        <div style="text-align: center; margin-top: 15px; padding: 12px 15px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 10px; border: 1px solid #e2e8f0;">
-          <div style="font-size: 0.8em; color: #64748b; margin-bottom: 8px; font-weight: 500;">✨ Also accepts</div>
-          <div style="display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.85em; color: #1e293b; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e2e8f0;">
-              <span style="font-weight: 600; color: #4285f4;">G</span>Pay
-            </span>
-            <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.85em; color: #1e293b; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e2e8f0;">
-              🍎 Apple Pay
-            </span>
-            <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.85em; color: #1e293b; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e2e8f0;">
-              🏦 Bank
-            </span>
-            <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.85em; color: #1e293b; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e2e8f0;">
-              💳 Cards
-            </span>
-          </div>
-          <div style="font-size: 0.72em; color: #94a3b8; margin-top: 8px;">& 50+ more payment methods worldwide</div>
-        </div>
       `;
     }
 
