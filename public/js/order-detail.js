@@ -82,15 +82,25 @@
 
     displayRequirements(order.addons || []);
 
+    const statusMsg = document.getElementById('status-message');
+    
     if (order.status === 'delivered' && order.delivered_video_url) {
       showDelivery(order);
     } else {
+      // Show countdown timer for BOTH admin and buyer
+      startCountdown(order.delivery_time_minutes || 60, order.created_at);
+      
       if (isAdmin) {
+        // Admin view - show delivery upload section, hide status message
         document.getElementById('delivery-section').style.display = 'block';
+        if (statusMsg) statusMsg.style.display = 'none';
       } else {
-        startCountdown(order.delivery_time_minutes || 60, order.created_at);
-        document.getElementById('status-message').className = 'status-message status-processing';
-        document.getElementById('status-message').innerHTML = '<h3>🎬 Video Being Created</h3><p>Processing your order...</p>';
+        // Buyer view - show processing message
+        if (statusMsg) {
+          statusMsg.style.display = 'block';
+          statusMsg.className = 'status-message status-processing';
+          statusMsg.innerHTML = '<h3>🎬 Video Being Created</h3><p>Our team is working on your personalized video. You\'ll be notified when it\'s ready!</p>';
+        }
       }
     }
   }
@@ -128,6 +138,9 @@
   }
 
   function startCountdown(minutes, createdAt) {
+    // Show countdown section
+    document.getElementById('countdown-section').style.display = 'block';
+    
     // Stop any existing timer
     if (countdownTimer) {
       countdownTimer.stop();
@@ -143,6 +156,20 @@
   async function showDelivery(order) {
     document.getElementById('countdown-section').style.display = 'none';
     document.getElementById('video-player-section').style.display = 'block';
+    
+    // Show appropriate status message based on view
+    const statusMsg = document.getElementById('status-message');
+    if (statusMsg) {
+      if (isAdmin) {
+        // Admin view - hide status message
+        statusMsg.style.display = 'none';
+      } else {
+        // Buyer view - show Video Ready message
+        statusMsg.style.display = 'block';
+        statusMsg.className = 'status-message status-delivered';
+        statusMsg.innerHTML = '<h3>✅ Video Ready!</h3><p>Your video has been delivered and is ready to watch.</p>';
+      }
+    }
 
     // Initialize Universal Video Player
     const playerContainer = document.getElementById('universal-video-player');
@@ -207,7 +234,7 @@
       }
     }
 
-    // Show buttons for buyers by default
+    // Show buttons ONLY for buyers, not admin
     if (!isAdmin) {
       if (revisionBtn) revisionBtn.style.display = 'inline-flex';
       if (approveBtn) approveBtn.style.display = 'inline-flex';

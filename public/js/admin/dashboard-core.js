@@ -37,7 +37,8 @@ window.AdminDashboard = window.AdminDashboard || {};
     const created = new Date(o.created_at);
     if (isNaN(created.getTime())) return 'N/A';
     
-    const deliveryMins = parseInt(o.delivery_time) || 60;
+    // Check both field names
+    const deliveryMins = parseInt(o.delivery_time_minutes) || parseInt(o.delivery_time) || 60;
     const deadline = new Date(created.getTime() + deliveryMins * 60000);
     const now = new Date();
     const diff = deadline - now;
@@ -46,11 +47,40 @@ window.AdminDashboard = window.AdminDashboard || {};
     
     const hours = Math.floor(diff / 3600000);
     const mins = Math.floor((diff % 3600000) / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    
+    let color = '#10b981'; // green
+    if (hours === 0 && mins < 30) color = '#f59e0b'; // orange
+    if (hours === 0 && mins < 15) color = '#ef4444'; // red
     
     if (hours > 0) {
-      return `<span style="color:#f59e0b">${hours}h ${mins}m</span>`;
+      return `<span style="color:${color};font-weight:600">${hours}h ${mins}m ${secs}s</span>`;
     }
-    return `<span style="color:${mins < 15 ? '#ef4444' : '#f59e0b'}">${mins}m</span>`;
+    return `<span style="color:${color};font-weight:600">${mins}m ${secs}s</span>`;
+  };
+  
+  // Live countdown updater for orders list
+  AD.countdownInterval = null;
+  AD.startCountdownUpdater = function() {
+    if (AD.countdownInterval) clearInterval(AD.countdownInterval);
+    
+    AD.countdownInterval = setInterval(() => {
+      if (!AD.orders || AD.currentView !== 'orders') return;
+      
+      AD.orders.forEach((o, i) => {
+        const row = document.querySelector(`#orders-tbody tr:nth-child(${i + 1}) td:nth-child(5)`);
+        if (row) {
+          row.innerHTML = AD.getCountdown(o);
+        }
+      });
+    }, 1000);
+  };
+  
+  AD.stopCountdownUpdater = function() {
+    if (AD.countdownInterval) {
+      clearInterval(AD.countdownInterval);
+      AD.countdownInterval = null;
+    }
   };
 
   // Initialize dashboard
@@ -78,6 +108,11 @@ window.AdminDashboard = window.AdminDashboard || {};
 
   // Main view router
   AD.loadView = async function(view) {
+    // Stop countdown updater when leaving orders view
+    if (view !== 'orders' && AD.stopCountdownUpdater) {
+      AD.stopCountdownUpdater();
+    }
+    
     document.getElementById('page-title').textContent = view.charAt(0).toUpperCase() + view.slice(1);
     const panel = document.getElementById('main-panel');
     

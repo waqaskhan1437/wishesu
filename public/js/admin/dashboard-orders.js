@@ -158,6 +158,9 @@
             </td>
           </tr>`;
         }).join('');
+        
+        // Start live countdown updater
+        AD.startCountdownUpdater();
       }
     } catch (err) {
       document.getElementById('orders-tbody').innerHTML = '<tr><td colspan="7" style="color: red;">Error loading orders</td></tr>';
