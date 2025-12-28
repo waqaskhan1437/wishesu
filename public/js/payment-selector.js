@@ -309,6 +309,9 @@
             <p>Loading PayPal...</p>
           </div>
         </div>
+        <div style="text-align: center; font-size: 0.75em; color: #94a3b8; margin-top: -5px; margin-bottom: 10px;">
+          PayPal also accepts GPay, Apple Pay & Cards
+        </div>
       `;
     }
 
@@ -328,6 +331,24 @@
           </div>
           <div class="payment-method-arrow">→</div>
         </button>
+        <div style="text-align: center; margin-top: 15px; padding: 12px 15px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 10px; border: 1px solid #e2e8f0;">
+          <div style="font-size: 0.8em; color: #64748b; margin-bottom: 8px; font-weight: 500;">✨ Also accepts</div>
+          <div style="display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.85em; color: #1e293b; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e2e8f0;">
+              <span style="font-weight: 600; color: #4285f4;">G</span>Pay
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.85em; color: #1e293b; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e2e8f0;">
+              🍎 Apple Pay
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.85em; color: #1e293b; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e2e8f0;">
+              🏦 Bank
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 3px; font-size: 0.85em; color: #1e293b; background: white; padding: 4px 10px; border-radius: 20px; border: 1px solid #e2e8f0;">
+              💳 Cards
+            </span>
+          </div>
+          <div style="font-size: 0.72em; color: #94a3b8; margin-top: 8px;">& 50+ more payment methods worldwide</div>
+        </div>
       `;
     }
 
