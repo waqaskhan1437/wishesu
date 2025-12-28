@@ -92,7 +92,7 @@
       '<div class="addon-option-flags">',
       '  <label><input type="checkbox" class="addon-opt-file"> File Upload</label>',
       '  <label><input type="checkbox" class="addon-opt-text"> Text Field</label>',
-      '  <label><input type="checkbox" class="addon-opt-delivery"> Delivery</label>',
+      '  <label><input type="checkbox" class="addon-opt-delivery"> Delivery Time</label>',
       '  <label><input type="checkbox" class="addon-opt-default"> Default</label>',
       '  <button type="button" class="btn btn-secondary addon-remove-option">Remove</button>',
       '</div>',
@@ -106,7 +106,7 @@
       '  </div>',
       '  <div class="form-grid-2 opt-delivery-config" style="display:none">',
       '    <div class="form-field"><label><input type="checkbox" class="addon-opt-delivery-instant"> Instant Delivery</label></div>',
-      '    <div class="form-field"><label>Delivery Text<input type="text" class="addon-opt-delivery-text" placeholder="e.g. 24 Hours Delivery"></label></div>',
+      '    <div class="form-field"><label>Delivery Days<input type="number" min="1" max="30" class="addon-opt-delivery-days" value="1" placeholder="e.g. 1, 2, 3"></label></div>',
       '  </div>',
       '</div>'
     ].join('');

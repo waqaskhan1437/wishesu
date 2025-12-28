@@ -324,7 +324,7 @@ function collectBase(form){
     normal_price: parseFloat(form.normal_price.value) || 0,
     sale_price: form.sale_price.value ? parseFloat(form.sale_price.value) : null,
     instant_delivery: form.instant_delivery.checked ? 1 : 0,
-    normal_delivery_text: form.normal_delivery_text.value.trim(),
+    delivery_time_days: parseInt(form.delivery_time_days?.value) || 1,
     whop_plan: form.whop_plan ? form.whop_plan.value.trim() : '',
     whop_price_map: form.whop_price_map ? form.whop_price_map.value.trim() : ''
   };
@@ -357,7 +357,9 @@ function fillBaseFields(form, product){
   form.normal_price.value = product.normal_price || '';
   form.sale_price.value = product.sale_price || '';
   form.instant_delivery.checked = !!product.instant_delivery;
-  form.normal_delivery_text.value = product.normal_delivery_text || '';
+  if (form.delivery_time_days) {
+    form.delivery_time_days.value = product.delivery_time_days || 1;
+  }
   if(product.thumbnail_url) form.thumbnail_url.value = product.thumbnail_url;
   if(product.video_url) form.video_url.value = product.video_url;
   if (form.whop_plan && product.whop_plan) form.whop_plan.value = product.whop_plan;
@@ -377,9 +379,9 @@ function initDeliveryTimeAddonSync(form, opts = {}){
 
   const builder = form.querySelector('#addons-builder');
   const instantDeliveryInput = form.querySelector('#instant_delivery');
-  const normalDeliveryTextInput = form.querySelector('#normal_delivery_text');
+  const deliveryDaysInput = form.querySelector('#delivery_time_days');
 
-  if (!builder || !instantDeliveryInput || !normalDeliveryTextInput) return;
+  if (!builder || !instantDeliveryInput || !deliveryDaysInput) return;
   if (typeof window.buildAddonsConfig !== 'function') return;
 
   let syncing = false;
@@ -408,27 +410,23 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     const selected = deliveryField.options.find(o => o && o.default) || deliveryField.options[0];
     if (!selected) return;
 
-    const label = (selected.label || '').toString().trim();
-
     let instant = false;
-    let text = '';
+    let days = 1;
 
     if (selected.delivery && typeof selected.delivery === 'object') {
       instant = !!selected.delivery.instant;
-      text = (selected.delivery.text || '').toString().trim();
+      days = parseInt(selected.delivery.days) || 1;
     } else {
-      const v = label.toLowerCase();
-      instant = v.includes('instant') || v.includes('60');
-      text = instant ? '' : label;
+      const label = (selected.label || '').toString().trim().toLowerCase();
+      instant = label.includes('instant') || label.includes('60 min');
+      // Try to extract days from label like "2 days", "3 day delivery"
+      const daysMatch = label.match(/(\d+)\s*day/i);
+      if (daysMatch) days = parseInt(daysMatch[1]) || 1;
     }
 
     syncing = true;
     instantDeliveryInput.checked = instant;
-    if (instant) {
-      normalDeliveryTextInput.value = '';
-    } else {
-      normalDeliveryTextInput.value = text || label;
-    }
+    deliveryDaysInput.value = days;
     syncing = false;
   };
 
@@ -450,14 +448,14 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     if (!rows.length) return;
 
     const wantInstant = !!instantDeliveryInput.checked;
-    const wantText = (normalDeliveryTextInput.value || '').trim().toLowerCase();
+    const wantDays = parseInt(deliveryDaysInput.value) || 1;
 
     const getRowMeta = (row) => {
       const hasDelivery = !!row.querySelector('.addon-opt-delivery')?.checked;
       const rowInstant = !!row.querySelector('.addon-opt-delivery-instant')?.checked;
-      const rowText = (row.querySelector('.addon-opt-delivery-text')?.value || '').trim().toLowerCase();
+      const rowDays = parseInt(row.querySelector('.addon-opt-delivery-days')?.value) || 1;
       const rowLabel = (row.querySelector('.addon-opt-label')?.value || '').trim().toLowerCase();
-      return { hasDelivery, rowInstant, rowText, rowLabel };
+      return { hasDelivery, rowInstant, rowDays, rowLabel };
     };
 
     let targetRow = null;
@@ -466,18 +464,16 @@ function initDeliveryTimeAddonSync(form, opts = {}){
       targetRow = rows.find(r => {
         const { hasDelivery, rowInstant, rowLabel } = getRowMeta(r);
         if (hasDelivery) return rowInstant;
-        return rowLabel.includes('instant') || rowLabel.includes('60');
+        return rowLabel.includes('instant') || rowLabel.includes('60 min');
       });
     } else {
       targetRow = rows.find(r => {
-        const { hasDelivery, rowInstant, rowText, rowLabel } = getRowMeta(r);
+        const { hasDelivery, rowInstant, rowDays, rowLabel } = getRowMeta(r);
         if (hasDelivery) {
           if (rowInstant) return false;
-          if (wantText) return rowText === wantText || rowLabel === wantText;
-          return true;
+          return rowDays === wantDays;
         }
-        if (wantText) return rowLabel === wantText;
-        return !(rowLabel.includes('instant') || rowLabel.includes('60'));
+        return false;
       });
     }
 
@@ -506,24 +502,24 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     const t = e.target;
     if (!t) return;
 
-    if (t.matches('.addon-opt-label') || t.matches('.addon-opt-delivery-text') || t.matches('.addon-opt-price')) {
+    if (t.matches('.addon-opt-label') || t.matches('.addon-opt-delivery-days') || t.matches('.addon-opt-price')) {
       applyFromAddons();
     }
   });
 
   instantDeliveryInput.addEventListener('change', applyToAddons);
-  normalDeliveryTextInput.addEventListener('input', applyToAddons);
+  deliveryDaysInput.addEventListener('input', applyToAddons);
 
   window.syncDeliveryTimeFromAddon = function(dataset) {
     if (syncing) return;
     
     syncing = true;
     
-    const instant = dataset.needsInstant === 'true' || (dataset.price && parseInt(dataset.price, 10) === 0);
-    const text = dataset.deliveryText || '';
+    const instant = dataset.needsInstant === 'true';
+    const days = parseInt(dataset.deliveryDays) || 1;
     
     instantDeliveryInput.checked = instant;
-    normalDeliveryTextInput.value = instant ? '' : text;
+    deliveryDaysInput.value = days;
     
     syncing = false;
     

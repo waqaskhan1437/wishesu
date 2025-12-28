@@ -172,7 +172,43 @@
       }
     });
 
-    // 3. Open Payment Selector Modal
+    // 4. Determine delivery time from selected addon or product default
+    let deliveryDays = window.productData?.delivery_time_days || 1;
+    let isInstant = window.productData?.instant_delivery || false;
+    
+    // Check if any addon has delivery time setting
+    const deliveryAddon = selectedAddons.find(a => {
+      const fieldId = (a.field || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      return fieldId.includes('delivery') || fieldId === 'delivery-time';
+    });
+    
+    if (deliveryAddon && window.productData?.addons_config) {
+      try {
+        const config = JSON.parse(window.productData.addons_config);
+        const deliveryField = config.find(f => {
+          const fid = (f.id || '').toLowerCase();
+          return fid.includes('delivery') || fid === 'delivery-time';
+        });
+        
+        if (deliveryField && deliveryField.options) {
+          const selectedOption = deliveryField.options.find(o => o.label === deliveryAddon.value);
+          if (selectedOption && selectedOption.delivery) {
+            isInstant = !!selectedOption.delivery.instant;
+            if (!isInstant && selectedOption.delivery.days) {
+              deliveryDays = parseInt(selectedOption.delivery.days) || 1;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Could not parse addon delivery config:', e);
+      }
+    }
+    
+    // Convert days to minutes for order (instant = 60 minutes)
+    const deliveryTimeMinutes = isInstant ? 60 : (deliveryDays * 24 * 60);
+    console.log('📦 Delivery:', isInstant ? 'Instant (60min)' : `${deliveryDays} day(s) (${deliveryTimeMinutes} min)`);
+
+    // 5. Open Payment Selector Modal
     btn.innerHTML = `
       <span style="display: inline-flex; align-items: center; gap: 8px;">
         <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite;"></span>
@@ -197,6 +233,7 @@
       email: email,
       amount: window.currentTotal,
       productId: window.productData.id,
+      deliveryTimeMinutes: deliveryTimeMinutes,
       timestamp: Date.now()
     };
     localStorage.setItem('pendingOrderData', JSON.stringify(orderData));
@@ -213,17 +250,18 @@
         productId: window.productData.id,
         amount: window.currentTotal,
         email: email,
-        addons: selectedAddons
+        addons: selectedAddons,
+        deliveryTimeMinutes: deliveryTimeMinutes
       });
     } else {
       // Fallback to direct Whop checkout
       console.log('🔵 PaymentSelector not loaded, using direct Whop checkout...');
-      await processDirectWhopCheckout(selectedAddons, email, originalText, btn);
+      await processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes);
     }
   }
 
   // Direct Whop checkout (fallback)
-  async function processDirectWhopCheckout(selectedAddons, email, originalText, btn) {
+  async function processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes) {
     btn.disabled = true;
     btn.innerHTML = `
       <span style="display: inline-flex; align-items: center; gap: 8px;">
@@ -240,7 +278,10 @@
           product_id: window.productData.id,
           amount: window.currentTotal,
           email: email,
-          metadata: { addons: selectedAddons }
+          metadata: { 
+            addons: selectedAddons,
+            deliveryTimeMinutes: deliveryTimeMinutes || 60
+          }
         })
       });
 
@@ -257,7 +298,11 @@
         window.whopCheckout({
           planId: data.plan_id,
           email: data.email || email,
-          metadata: { addons: selectedAddons, product_id: window.productData.id },
+          metadata: { 
+            addons: selectedAddons, 
+            product_id: window.productData.id,
+            deliveryTimeMinutes: deliveryTimeMinutes || 60
+          },
           amount: window.currentTotal,
           checkoutUrl: data.checkout_url
         });

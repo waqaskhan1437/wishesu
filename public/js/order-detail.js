@@ -78,7 +78,17 @@
     document.getElementById('email-display').textContent = order.email || 'N/A';
     document.getElementById('amount-display').textContent = '$' + (order.amount || 0);
     document.getElementById('status-display').textContent = order.status;
-    document.getElementById('delivery-time-display').textContent = (order.delivery_time_minutes || 60) + ' minutes';
+    
+    // Show delivery time in days format
+    const deliveryMins = order.delivery_time_minutes || 60;
+    let deliveryText = '';
+    if (deliveryMins <= 60) {
+      deliveryText = 'Instant (60 min)';
+    } else {
+      const days = Math.ceil(deliveryMins / (24 * 60));
+      deliveryText = days === 1 ? '1 Day' : `${days} Days`;
+    }
+    document.getElementById('delivery-time-display').textContent = deliveryText;
 
     displayRequirements(order.addons || []);
 

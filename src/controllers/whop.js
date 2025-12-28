@@ -449,6 +449,24 @@ export async function handleWebhook(env, webhookData) {
       if (metadata.product_id) {
         try {
           const orderId = `WHOP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          
+          // Get delivery time from metadata or product default
+          let deliveryTimeMinutes = metadata.deliveryTimeMinutes || 60;
+          if (!metadata.deliveryTimeMinutes) {
+            try {
+              const product = await env.DB.prepare('SELECT instant_delivery, delivery_time_days FROM products WHERE id = ?')
+                .bind(Number(metadata.product_id)).first();
+              if (product) {
+                if (product.instant_delivery) {
+                  deliveryTimeMinutes = 60;
+                } else {
+                  deliveryTimeMinutes = (product.delivery_time_days || 1) * 24 * 60;
+                }
+              }
+            } catch (e) {
+              console.log('Could not get product delivery time:', e);
+            }
+          }
 
           // Build encrypted_data with addons and other details
           const encryptedData = JSON.stringify({
@@ -459,10 +477,10 @@ export async function handleWebhook(env, webhookData) {
           });
 
           await env.DB.prepare(
-            'INSERT INTO orders (order_id, product_id, encrypted_data, status, created_at) VALUES (?, ?, ?, ?, datetime("now"))'
-          ).bind(orderId, Number(metadata.product_id), encryptedData, 'completed').run();
+            'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, created_at) VALUES (?, ?, ?, ?, ?, datetime("now"))'
+          ).bind(orderId, Number(metadata.product_id), encryptedData, 'completed', deliveryTimeMinutes).run();
 
-          console.log('Order created with addons:', orderId, 'Addons count:', (metadata.addons || []).length);
+          console.log('Order created:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes');
         } catch (e) {
           console.error('Failed to create order:', e);
         }

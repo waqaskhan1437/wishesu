@@ -61,7 +61,7 @@
           if (hasDelivery) {
             o.delivery = {
               instant: !!row.querySelector('.addon-opt-delivery-instant')?.checked,
-              text: (row.querySelector('.addon-opt-delivery-text')?.value || '').trim()
+              days: parseInt(row.querySelector('.addon-opt-delivery-days')?.value) || 1
             };
           }
 
@@ -130,11 +130,11 @@
           if (opt.textField) row.querySelector('.addon-opt-text').checked = true;
           if (opt.default) row.querySelector('.addon-opt-default').checked = true;
 
-          const delivery = opt.delivery || ((opt.deliveryInstant !== undefined || opt.deliveryText !== undefined) ? { instant: opt.deliveryInstant, text: opt.deliveryText } : null);
+          const delivery = opt.delivery || ((opt.deliveryInstant !== undefined || opt.deliveryDays !== undefined || opt.deliveryText !== undefined) ? { instant: opt.deliveryInstant, days: opt.deliveryDays || opt.deliveryText } : null);
           if (delivery) {
             row.querySelector('.addon-opt-delivery').checked = true;
             if (delivery.instant) row.querySelector('.addon-opt-delivery-instant').checked = true;
-            if (delivery.text) row.querySelector('.addon-opt-delivery-text').value = delivery.text;
+            if (delivery.days) row.querySelector('.addon-opt-delivery-days').value = delivery.days;
           }
 
           window.updateOptionVisibility(row);

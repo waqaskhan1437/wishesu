@@ -73,7 +73,7 @@ async function getAccessToken(credentials) {
  * Create PayPal order
  */
 export async function createPayPalOrder(env, body, origin) {
-  const { product_id, amount, email, metadata } = body;
+  const { product_id, amount, email, metadata, deliveryTimeMinutes } = body;
   
   if (!product_id) {
     return json({ error: 'Product ID required' }, 400);
@@ -187,6 +187,18 @@ export async function createPayPalOrder(env, body, origin) {
     
     // Store checkout session
     try {
+      // Calculate delivery time: use provided or fallback to product default
+      let finalDeliveryTime = deliveryTimeMinutes || metadata?.deliveryTimeMinutes;
+      if (!finalDeliveryTime) {
+        // Fallback to product delivery time (convert days to minutes)
+        if (product.instant_delivery) {
+          finalDeliveryTime = 60;
+        } else {
+          const days = product.delivery_time_days || 1;
+          finalDeliveryTime = days * 24 * 60;
+        }
+      }
+      
       await env.DB.prepare(`
         INSERT INTO checkout_sessions (checkout_id, product_id, plan_id, metadata, expires_at, status, created_at)
         VALUES (?, ?, ?, ?, datetime('now', '+30 minutes'), 'pending', datetime('now'))
@@ -194,7 +206,12 @@ export async function createPayPalOrder(env, body, origin) {
         orderData.id,
         product_id,
         'paypal',
-        JSON.stringify({ email, addons: metadata?.addons || [], amount: finalAmount })
+        JSON.stringify({ 
+          email, 
+          addons: metadata?.addons || [], 
+          amount: finalAmount,
+          deliveryTimeMinutes: finalDeliveryTime
+        })
       ).run();
     } catch (e) {
       console.log('Checkout session storage skipped:', e.message);
@@ -293,6 +310,7 @@ export async function capturePayPalOrder(env, body) {
       const email = customData.email || metadata.email || captureData.payer?.email_address || '';
       const amount = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || metadata.amount || 0;
       const addons = metadata.addons || [];
+      const deliveryTimeMinutes = metadata.deliveryTimeMinutes || 60;
       
       const encryptedData = JSON.stringify({
         email,
@@ -304,10 +322,10 @@ export async function capturePayPalOrder(env, body) {
       });
       
       await env.DB.prepare(
-        'INSERT INTO orders (order_id, product_id, encrypted_data, status, created_at) VALUES (?, ?, ?, ?, datetime("now"))'
-      ).bind(orderId, Number(productId), encryptedData, 'PAID').run();
+        'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, created_at) VALUES (?, ?, ?, ?, ?, datetime("now"))'
+      ).bind(orderId, Number(productId), encryptedData, 'PAID', deliveryTimeMinutes).run();
       
-      console.log('🅿️ Order created:', orderId);
+      console.log('🅿️ Order created:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes');
       
       // Update checkout session
       try {

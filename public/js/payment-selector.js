@@ -371,8 +371,10 @@
               product_id: checkoutData.productId,
               amount: checkoutData.amount,
               email: checkoutData.email || '',
+              deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
               metadata: {
-                addons: checkoutData.addons || []
+                addons: checkoutData.addons || [],
+                deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60
               }
             })
           });
@@ -490,8 +492,10 @@
         product_id: checkoutData.productId,
         amount: checkoutData.amount,
         email: checkoutData.email || '',
+        deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
         metadata: {
-          addons: checkoutData.addons || []
+          addons: checkoutData.addons || [],
+          deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60
         }
       })
     });
@@ -512,7 +516,8 @@
         email: data.email || checkoutData.email,
         metadata: {
           addons: checkoutData.addons,
-          product_id: checkoutData.productId
+          product_id: checkoutData.productId,
+          deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60
         },
         amount: checkoutData.amount,
         checkoutUrl: data.checkout_url
@@ -533,8 +538,10 @@
         product_id: checkoutData.productId,
         amount: checkoutData.amount,
         email: checkoutData.email || '',
+        deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
         metadata: {
-          addons: checkoutData.addons || []
+          addons: checkoutData.addons || [],
+          deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60
         }
       })
     });

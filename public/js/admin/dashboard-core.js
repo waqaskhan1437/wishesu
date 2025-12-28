@@ -45,15 +45,18 @@ window.AdminDashboard = window.AdminDashboard || {};
     
     if (diff <= 0) return '<span style="color:#ef4444;font-weight:700">⏰ OVERDUE</span>';
     
-    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
     const mins = Math.floor((diff % 3600000) / 60000);
     const secs = Math.floor((diff % 60000) / 1000);
     
     let color = '#10b981'; // green
-    if (hours === 0 && mins < 30) color = '#f59e0b'; // orange
-    if (hours === 0 && mins < 15) color = '#ef4444'; // red
+    if (days === 0 && hours < 12) color = '#f59e0b'; // orange
+    if (days === 0 && hours < 6) color = '#ef4444'; // red
     
-    if (hours > 0) {
+    if (days > 0) {
+      return `<span style="color:${color};font-weight:600">${days}d ${hours}h ${mins}m</span>`;
+    } else if (hours > 0) {
       return `<span style="color:${color};font-weight:600">${hours}h ${mins}m ${secs}s</span>`;
     }
     return `<span style="color:${color};font-weight:600">${mins}m ${secs}s</span>`;

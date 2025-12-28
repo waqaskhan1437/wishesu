@@ -13,7 +13,7 @@ export async function getProducts(env) {
   const r = await env.DB.prepare(`
     SELECT
       p.id, p.title, p.slug, p.normal_price, p.sale_price,
-      p.thumbnail_url, p.normal_delivery_text,
+      p.thumbnail_url, p.normal_delivery_text, p.instant_delivery,
       COUNT(r.id) as review_count,
       AVG(r.rating) as rating_average
     FROM products p
@@ -25,6 +25,7 @@ export async function getProducts(env) {
 
   const products = (r.results || []).map(product => ({
     ...product,
+    delivery_time_days: parseInt(product.normal_delivery_text) || 1,
     review_count: product.review_count || 0,
     rating_average: product.rating_average ? Math.round(product.rating_average * 10) / 10 : 0
   }));
@@ -37,9 +38,15 @@ export async function getProducts(env) {
  */
 export async function getProductsList(env) {
   const r = await env.DB.prepare(
-    'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text, status FROM products ORDER BY id DESC'
+    'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text, instant_delivery, status FROM products ORDER BY id DESC'
   ).all();
-  return json({ products: r.results || [] });
+  
+  const products = (r.results || []).map(product => ({
+    ...product,
+    delivery_time_days: parseInt(product.normal_delivery_text) || 1
+  }));
+  
+  return json({ products });
 }
 
 /**
@@ -85,9 +92,13 @@ export async function getProduct(env, id) {
     return review;
   });
   
+  // Extract delivery_time_days from normal_delivery_text (stores days as number string)
+  const deliveryTimeDays = parseInt(row.normal_delivery_text) || 1;
+  
   return json({
     product: {
       ...row,
+      delivery_time_days: deliveryTimeDays,
       addons,
       review_count: stats?.cnt || 0,
       rating_average: stats?.avg ? Math.round(stats.avg * 10) / 10 : 5.0,
@@ -112,6 +123,9 @@ export async function saveProduct(env, body) {
       ? JSON.stringify(body.gallery_images) 
       : (body.gallery_images || '[]');
     
+    // Store delivery_time_days in normal_delivery_text field as days number
+    const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';
+    
     await env.DB.prepare(`
       UPDATE products SET title=?, slug=?, description=?, normal_price=?, sale_price=?,
       instant_delivery=?, normal_delivery_text=?, thumbnail_url=?, video_url=?,
@@ -119,7 +133,7 @@ export async function saveProduct(env, body) {
       whop_plan=?, whop_price_map=?, whop_product_id=? WHERE id=?
     `).bind(
       title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
-      body.instant_delivery ? 1 : 0, body.normal_delivery_text || '',
+      body.instant_delivery ? 1 : 0, String(deliveryDays),
       body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
       body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
       body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || '', Number(body.id)
@@ -131,6 +145,9 @@ export async function saveProduct(env, body) {
     ? JSON.stringify(body.gallery_images) 
     : (body.gallery_images || '[]');
   
+  // Store delivery_time_days in normal_delivery_text field as days number
+  const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';
+  
   const r = await env.DB.prepare(`
     INSERT INTO products (title, slug, description, normal_price, sale_price,
     instant_delivery, normal_delivery_text, thumbnail_url, video_url,
@@ -139,7 +156,7 @@ export async function saveProduct(env, body) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0)
   `).bind(
     title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
-    body.instant_delivery ? 1 : 0, body.normal_delivery_text || '',
+    body.instant_delivery ? 1 : 0, String(deliveryDays),
     body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
     body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
     body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || ''
