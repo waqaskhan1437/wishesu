@@ -79,14 +79,18 @@
     document.getElementById('amount-display').textContent = '$' + (order.amount || 0);
     document.getElementById('status-display').textContent = order.status;
     
-    // Show delivery time in days format
+    // Show delivery time in proper format
     const deliveryMins = order.delivery_time_minutes || 60;
     let deliveryText = '';
     if (deliveryMins <= 60) {
-      deliveryText = 'Instant (60 min)';
+      deliveryText = 'Instant Delivery In 60 Minutes';
     } else {
       const days = Math.ceil(deliveryMins / (24 * 60));
-      deliveryText = days === 1 ? '1 Day' : `${days} Days`;
+      if (days === 1) {
+        deliveryText = '24 Hour Express Delivery';
+      } else {
+        deliveryText = `${days} Days Delivery`;
+      }
     }
     document.getElementById('delivery-time-display').textContent = deliveryText;
 

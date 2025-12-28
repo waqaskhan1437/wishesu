@@ -29,6 +29,24 @@
         el.dataset.fileQty = opt.fileQuantity || 1; 
       }
       if (opt.textField) el.dataset.needsText = 'true';
+      // Store delivery info
+      if (opt.delivery && typeof opt.delivery === 'object') {
+        el.dataset.deliveryInstant = opt.delivery.instant ? 'true' : 'false';
+        el.dataset.deliveryDays = opt.delivery.days || 1;
+      }
+    };
+    
+    // Helper to get delivery text from option
+    const getDeliveryTextFromOpt = (opt) => {
+      if (opt.delivery && typeof opt.delivery === 'object') {
+        const isInstant = !!opt.delivery.instant;
+        const days = parseInt(opt.delivery.days) || 1;
+        if (isInstant) return 'Instant Delivery In 60 Minutes';
+        if (days === 1) return '24 Hour Express Delivery';
+        return `${days} Days Delivery`;
+      }
+      // Fallback to option label
+      return opt.label || '';
     };
 
     if (field.type === 'select') {
@@ -51,8 +69,24 @@
         if (field.id === 'delivery-time' && typeof window.updateDeliveryBadge === 'function') {
           const selectedOpt = input.selectedOptions[0];
           if (selectedOpt) {
-            const selectedLabel = selectedOpt.text.replace(/\s*\(\+\$[\d.]+\)\s*$/, '').trim();
-            window.updateDeliveryBadge(selectedLabel);
+            // Check if delivery info is in dataset
+            const ds = selectedOpt.dataset;
+            let deliveryText = '';
+            if (ds.deliveryInstant !== undefined) {
+              const isInstant = ds.deliveryInstant === 'true';
+              const days = parseInt(ds.deliveryDays) || 1;
+              if (isInstant) {
+                deliveryText = 'Instant Delivery In 60 Minutes';
+              } else if (days === 1) {
+                deliveryText = '24 Hour Express Delivery';
+              } else {
+                deliveryText = `${days} Days Delivery`;
+              }
+            } else {
+              // Fallback to option label
+              deliveryText = selectedOpt.text.replace(/\s*\(\+\$[\d.]+\)\s*$/, '').trim();
+            }
+            window.updateDeliveryBadge(deliveryText);
           }
         }
 
@@ -89,8 +123,24 @@
             renderExtras(extras, inp.dataset, field.id);
 
             if (field.id === 'delivery-time' && inp.checked && typeof window.updateDeliveryBadge === 'function') {
-              const selectedLabel = opt.label;
-              window.updateDeliveryBadge(selectedLabel);
+              // Check if delivery info is in dataset
+              const ds = inp.dataset;
+              let deliveryText = '';
+              if (ds.deliveryInstant !== undefined) {
+                const isInstant = ds.deliveryInstant === 'true';
+                const days = parseInt(ds.deliveryDays) || 1;
+                if (isInstant) {
+                  deliveryText = 'Instant Delivery In 60 Minutes';
+                } else if (days === 1) {
+                  deliveryText = '24 Hour Express Delivery';
+                } else {
+                  deliveryText = `${days} Days Delivery`;
+                }
+              } else {
+                // Fallback to option label
+                deliveryText = opt.label;
+              }
+              window.updateDeliveryBadge(deliveryText);
             }
           } else {
             l.classList.toggle('selected', inp.checked);

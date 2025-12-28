@@ -3,6 +3,49 @@
  * Fix: Corrected API URL to remove '/admin'
  */
 
+/**
+ * Get delivery badge text based on settings
+ * @param {boolean} isInstant - Whether instant delivery is enabled
+ * @param {number} days - Number of days for delivery
+ * @returns {string} Formatted delivery text
+ */
+function getDeliveryBadgeText(isInstant, days) {
+  if (isInstant) {
+    return 'Instant Delivery In 60 Minutes';
+  }
+  days = parseInt(days) || 1;
+  if (days === 1) {
+    return '24 Hour Express Delivery';
+  }
+  return `${days} Days Delivery`;
+}
+
+/**
+ * Update delivery preview badge
+ */
+function updateDeliveryPreview() {
+  const preview = document.getElementById('delivery-preview');
+  if (!preview) return;
+  
+  const isInstant = document.getElementById('instant_delivery')?.checked || false;
+  const days = parseInt(document.getElementById('delivery_time_days')?.value) || 1;
+  
+  preview.textContent = getDeliveryBadgeText(isInstant, days);
+  
+  // Update badge color based on type
+  if (isInstant) {
+    preview.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+  } else if (days === 1) {
+    preview.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+  } else {
+    preview.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+  }
+}
+
+// Make functions globally available
+window.getDeliveryBadgeText = getDeliveryBadgeText;
+window.updateDeliveryPreview = updateDeliveryPreview;
+
 ;(async function initProductForm(){
   console.log('🔵 Product Form JS Loaded');
   const params = new URLSearchParams(location.search);
@@ -50,11 +93,28 @@
 
     // Add a Delete button in edit mode
     addDeleteProductButton(form, productId);
+    
+    // Initialize delivery preview
+    setTimeout(updateDeliveryPreview, 20);
     } else {
     if (typeof initAddonsBuilder === 'function') initAddonsBuilder(form);
     fillDemoProduct(form);
     // Wait a tick for builder to fully initialize before syncing
     setTimeout(() => initDeliveryTimeAddonSync(form, { applyInitial: true }), 10);
+    
+    // Initialize delivery preview
+    setTimeout(updateDeliveryPreview, 20);
+    }
+    
+    // Add event listeners for delivery preview update
+    const instantDeliveryCheckbox = document.getElementById('instant_delivery');
+    const deliveryDaysInput = document.getElementById('delivery_time_days');
+    
+    if (instantDeliveryCheckbox) {
+      instantDeliveryCheckbox.addEventListener('change', updateDeliveryPreview);
+    }
+    if (deliveryDaysInput) {
+      deliveryDaysInput.addEventListener('input', updateDeliveryPreview);
     }
 
     // Auto‑generate slug from title for new products.  When the title field
@@ -428,6 +488,11 @@ function initDeliveryTimeAddonSync(form, opts = {}){
     instantDeliveryInput.checked = instant;
     deliveryDaysInput.value = days;
     syncing = false;
+    
+    // Update delivery preview badge
+    if (typeof updateDeliveryPreview === 'function') {
+      updateDeliveryPreview();
+    }
   };
 
   const applyToAddons = () => {

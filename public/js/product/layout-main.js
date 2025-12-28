@@ -375,6 +375,14 @@
     const badgeRow = document.createElement('div');
     badgeRow.className = 'badges-row';
 
+    // Helper function to get delivery text from instant/days
+    const getDeliveryText = (isInstant, days) => {
+      if (isInstant) return 'Instant Delivery In 60 Minutes';
+      days = parseInt(days) || 1;
+      if (days === 1) return '24 Hour Express Delivery';
+      return `${days} Days Delivery`;
+    };
+
     const computeDeliveryBadge = (label) => {
       const raw = (label || '').toString();
       const v = raw.toLowerCase();
@@ -383,13 +391,19 @@
         return { icon: '⚡', text: raw || 'Instant Delivery In 60 Minutes' };
       }
       if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) {
-        return { icon: '🚀', text: raw || '24 Hours Express Delivery' };
+        return { icon: '🚀', text: raw || '24 Hour Express Delivery' };
       }
       if (v.includes('48') || v.includes('2 day')) {
         return { icon: '📦', text: raw || '2 Days Delivery' };
       }
       if (v.includes('3 day') || v.includes('72')) {
         return { icon: '📅', text: raw || '3 Days Delivery' };
+      }
+      // Check for any number of days pattern
+      const daysMatch = v.match(/(\d+)\s*day/i);
+      if (daysMatch) {
+        const numDays = parseInt(daysMatch[1]) || 2;
+        return { icon: '📦', text: raw || `${numDays} Days Delivery` };
       }
       return { icon: '🚚', text: raw || '2 Days Delivery' };
     };
@@ -410,18 +424,29 @@
     `;
 
     let initialDeliveryLabel = '';
+    
+    // First check if addon has delivery time field with default selected
     const deliveryField = (addonGroups || []).find(g => g && g.id === 'delivery-time' && (g.type === 'radio' || g.type === 'select') && Array.isArray(g.options));
     if (deliveryField) {
-      initialDeliveryLabel = deliveryField.options.find(o => o && o.default)?.label || deliveryField.options[0]?.label || '';
+      const defaultOption = deliveryField.options.find(o => o && o.default) || deliveryField.options[0];
+      if (defaultOption) {
+        // Check if option has delivery settings
+        if (defaultOption.delivery && typeof defaultOption.delivery === 'object') {
+          const isInstant = !!defaultOption.delivery.instant;
+          const days = parseInt(defaultOption.delivery.days) || 1;
+          initialDeliveryLabel = getDeliveryText(isInstant, days);
+        } else {
+          // Use option label as fallback
+          initialDeliveryLabel = defaultOption.label || '';
+        }
+      }
     }
 
+    // If no addon delivery field, use product settings
     if (!initialDeliveryLabel) {
-      const normText = (product.normal_delivery_text || '').toLowerCase();
-      if (product.instant_delivery) initialDeliveryLabel = 'Instant Delivery In 60 Minutes';
-      else if (normText.includes('1 day') || normText.includes('24 hour')) initialDeliveryLabel = '24 Hours Express Delivery';
-      else if (normText.includes('48') || normText.includes('2 day')) initialDeliveryLabel = '2 Days Delivery';
-      else if (normText.includes('3 day') || normText.includes('72')) initialDeliveryLabel = '3 Days Delivery';
-      else initialDeliveryLabel = product.normal_delivery_text || '2 Days Delivery';
+      const isInstant = !!product.instant_delivery;
+      const days = parseInt(product.delivery_time_days) || parseInt(product.normal_delivery_text) || 1;
+      initialDeliveryLabel = getDeliveryText(isInstant, days);
     }
 
     setDeliveryBadge(initialDeliveryLabel);
