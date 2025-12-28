@@ -1,6 +1,7 @@
 /**
  * Payment Selector - Unified payment method selector
  * Shows all available payment methods and handles checkout
+ * Supports PayPal Smart Buttons for embedded checkout
  */
 
 ;(function() {
@@ -8,6 +9,7 @@
   let selectedMethod = null;
   let checkoutData = null;
   let modalElement = null;
+  let paypalButtonsRendered = false;
 
   /**
    * Load available payment methods from API
@@ -30,6 +32,24 @@
       }];
       return paymentMethods;
     }
+  }
+
+  /**
+   * Load PayPal SDK dynamically
+   */
+  function loadPayPalSDK(clientId) {
+    return new Promise((resolve, reject) => {
+      if (window.paypal) {
+        resolve(window.paypal);
+        return;
+      }
+      
+      const script = document.createElement('script');
+      script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&intent=capture`;
+      script.onload = () => resolve(window.paypal);
+      script.onerror = () => reject(new Error('Failed to load PayPal SDK'));
+      document.head.appendChild(script);
+    });
   }
 
   /**
@@ -68,7 +88,7 @@
           width: 90%;
           max-width: 450px;
           max-height: 90vh;
-          overflow: hidden;
+          overflow-y: auto;
           box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
           animation: slideUp 0.3s ease-out;
         }
@@ -82,6 +102,7 @@
           padding: 20px;
           text-align: center;
           position: relative;
+          border-radius: 16px 16px 0 0;
         }
         .payment-modal-header h3 {
           margin: 0;
@@ -198,22 +219,31 @@
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
-        .payment-iframe-container {
-          width: 100%;
-          height: 500px;
-          border: none;
-          border-radius: 8px;
-        }
-        .paypal-button-container {
+        .paypal-buttons-container {
           margin-top: 15px;
+          min-height: 150px;
         }
-        #paypal-button-container {
-          min-height: 45px;
+        .payment-divider {
+          display: flex;
+          align-items: center;
+          margin: 20px 0;
+          color: #9ca3af;
+          font-size: 0.9em;
+        }
+        .payment-divider::before,
+        .payment-divider::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: #e5e7eb;
+        }
+        .payment-divider span {
+          padding: 0 15px;
         }
       </style>
       <div class="payment-modal-content">
         <div class="payment-modal-header">
-          <h3>💳 Choose Payment Method</h3>
+          <h3>💳 Complete Payment</h3>
           <button class="payment-modal-close" onclick="window.PaymentSelector.close()">&times;</button>
         </div>
         <div class="payment-modal-body">
@@ -221,10 +251,10 @@
             <div class="payment-amount-label">Total Amount</div>
             <div class="payment-amount-value">$<span id="payment-total">0</span></div>
           </div>
-          <div id="payment-methods-container" class="payment-methods-list">
+          <div id="payment-methods-container">
             <div class="payment-loading">
               <div class="spinner"></div>
-              <p>Loading payment methods...</p>
+              <p>Loading payment options...</p>
             </div>
           </div>
         </div>
@@ -255,7 +285,7 @@
   /**
    * Render payment methods in modal
    */
-  function renderPaymentMethods() {
+  async function renderPaymentMethods() {
     const container = document.getElementById('payment-methods-container');
     if (!container) return;
 
@@ -264,21 +294,137 @@
       return;
     }
 
-    container.innerHTML = paymentMethods.map(method => `
-      <button class="payment-method-btn" data-method="${method.id}" onclick="window.PaymentSelector.selectMethod('${method.id}')">
-        <div class="payment-method-icon">${method.icon}</div>
-        <div class="payment-method-info">
-          <div class="payment-method-name">${method.name}</div>
-          <div class="payment-method-desc">${method.description}</div>
-        </div>
-        <div class="payment-method-arrow">→</div>
-      </button>
-    `).join('');
-
-    // Add PayPal button container if PayPal is enabled
+    // Check if PayPal is available
     const paypalMethod = paymentMethods.find(m => m.id === 'paypal');
-    if (paypalMethod) {
-      container.innerHTML += '<div id="paypal-button-container" class="paypal-button-container" style="display:none;"></div>';
+    const whopMethod = paymentMethods.find(m => m.id === 'whop');
+
+    let html = '';
+
+    // PayPal Smart Buttons (if available)
+    if (paypalMethod && paypalMethod.client_id) {
+      html += `
+        <div id="paypal-buttons-container" class="paypal-buttons-container">
+          <div class="payment-loading">
+            <div class="spinner"></div>
+            <p>Loading PayPal...</p>
+          </div>
+        </div>
+      `;
+    }
+
+    // Divider if both methods available
+    if (paypalMethod && whopMethod) {
+      html += `<div class="payment-divider"><span>or pay with card</span></div>`;
+    }
+
+    // Whop Card Payment button
+    if (whopMethod) {
+      html += `
+        <button class="payment-method-btn" data-method="whop" onclick="window.PaymentSelector.selectMethod('whop')">
+          <div class="payment-method-icon">💳</div>
+          <div class="payment-method-info">
+            <div class="payment-method-name">Credit / Debit Card</div>
+            <div class="payment-method-desc">Secure card payment</div>
+          </div>
+          <div class="payment-method-arrow">→</div>
+        </button>
+      `;
+    }
+
+    container.innerHTML = html;
+
+    // Initialize PayPal Smart Buttons
+    if (paypalMethod && paypalMethod.client_id) {
+      await initPayPalButtons(paypalMethod.client_id);
+    }
+  }
+
+  /**
+   * Initialize PayPal Smart Buttons
+   */
+  async function initPayPalButtons(clientId) {
+    const container = document.getElementById('paypal-buttons-container');
+    if (!container || paypalButtonsRendered) return;
+
+    try {
+      const paypal = await loadPayPalSDK(clientId);
+      
+      container.innerHTML = ''; // Clear loading
+      
+      paypal.Buttons({
+        style: {
+          layout: 'vertical',
+          color: 'gold',
+          shape: 'rect',
+          label: 'paypal',
+          height: 45
+        },
+        
+        // Create order on PayPal
+        createOrder: async (data, actions) => {
+          console.log('🅿️ Creating PayPal order...');
+          
+          const response = await fetch('/api/paypal/create-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              product_id: checkoutData.productId,
+              amount: checkoutData.amount,
+              email: checkoutData.email || '',
+              metadata: {
+                addons: checkoutData.addons || []
+              }
+            })
+          });
+          
+          const orderData = await response.json();
+          
+          if (orderData.error) {
+            throw new Error(orderData.error);
+          }
+          
+          console.log('🅿️ PayPal order created:', orderData.order_id);
+          return orderData.order_id;
+        },
+        
+        // Capture payment after approval
+        onApprove: async (data, actions) => {
+          console.log('🅿️ Payment approved, capturing...');
+          
+          const response = await fetch('/api/paypal/capture-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_id: data.orderID })
+          });
+          
+          const captureData = await response.json();
+          
+          if (captureData.success && captureData.order_id) {
+            console.log('✅ Payment captured:', captureData.order_id);
+            window.PaymentSelector.close();
+            // Redirect to success page
+            window.location.href = `/success.html?provider=paypal_direct&order_id=${captureData.order_id}&product=${checkoutData.productId}`;
+          } else {
+            alert('Payment capture failed. Please contact support.');
+          }
+        },
+        
+        onError: (err) => {
+          console.error('🅿️ PayPal error:', err);
+          alert('Payment error: ' + err.message);
+        },
+        
+        onCancel: () => {
+          console.log('🅿️ Payment cancelled');
+        }
+        
+      }).render('#paypal-buttons-container');
+      
+      paypalButtonsRendered = true;
+      
+    } catch (err) {
+      console.error('Failed to load PayPal:', err);
+      container.innerHTML = `<p style="color:#ef4444;text-align:center;">Failed to load PayPal. <a href="#" onclick="window.PaymentSelector.selectMethod('paypal_redirect')">Click here</a> to try redirect method.</p>`;
     }
   }
 
@@ -287,7 +433,7 @@
    */
   async function selectMethod(methodId) {
     const method = paymentMethods.find(m => m.id === methodId);
-    if (!method) return;
+    if (!method && methodId !== 'paypal_redirect') return;
 
     selectedMethod = method;
 
@@ -296,9 +442,9 @@
     if (btn) {
       btn.classList.add('selected', 'loading');
       btn.innerHTML = `
-        <div class="payment-method-icon">${method.icon}</div>
+        <div class="payment-method-icon">${method?.icon || '💳'}</div>
         <div class="payment-method-info">
-          <div class="payment-method-name">${method.name}</div>
+          <div class="payment-method-name">${method?.name || 'Processing'}</div>
           <div class="payment-method-desc">Processing...</div>
         </div>
         <div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>
@@ -310,8 +456,8 @@
         case 'whop':
           await processWhopCheckout();
           break;
-        case 'paypal':
-          await processPayPalCheckout();
+        case 'paypal_redirect':
+          await processPayPalRedirect();
           break;
         case 'stripe':
           await processStripeCheckout();
@@ -377,9 +523,9 @@
   }
 
   /**
-   * Process PayPal checkout
+   * Process PayPal redirect checkout (fallback)
    */
-  async function processPayPalCheckout() {
+  async function processPayPalRedirect() {
     const response = await fetch('/api/paypal/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -413,7 +559,6 @@
    * Process Stripe checkout (future)
    */
   async function processStripeCheckout() {
-    // TODO: Implement Stripe checkout
     throw new Error('Stripe checkout coming soon!');
   }
 
@@ -422,14 +567,15 @@
    */
   async function open(data) {
     checkoutData = data;
+    paypalButtonsRendered = false;
     
     // Load payment methods first
     await loadPaymentMethods();
     
-    // If only one payment method, use it directly (no modal)
-    if (paymentMethods.length === 1) {
-      console.log('🔵 Only one payment method available, using directly:', paymentMethods[0].id);
-      await selectMethod(paymentMethods[0].id);
+    // If only Whop available, use it directly (no modal)
+    if (paymentMethods.length === 1 && paymentMethods[0].id === 'whop') {
+      console.log('🔵 Only Whop available, using directly');
+      await selectMethod('whop');
       return;
     }
     
@@ -447,8 +593,8 @@
       totalEl.textContent = (data.amount || 0).toLocaleString();
     }
 
-    // Render payment methods
-    renderPaymentMethods();
+    // Render payment methods with PayPal Smart Buttons
+    await renderPaymentMethods();
   }
 
   /**
@@ -460,6 +606,7 @@
       modalElement = null;
     }
     selectedMethod = null;
+    paypalButtonsRendered = false;
   }
 
   // Export to window
