@@ -141,6 +141,9 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'blog-comments': 
         if (AD.loadBlogComments) await AD.loadBlogComments(panel); 
         break;
+      case 'forum': 
+        if (AD.loadForum) await AD.loadForum(panel); 
+        break;
       case 'chats': 
         if (AD.loadChats) await AD.loadChats(panel); 
         break;

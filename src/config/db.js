@@ -148,6 +148,34 @@ export async function initDB(env) {
           created_at INTEGER,
           FOREIGN KEY (blog_id) REFERENCES blogs(id)
         )
+      `),
+      // Forum questions table
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS forum_questions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          slug TEXT UNIQUE,
+          content TEXT NOT NULL,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL,
+          status TEXT DEFAULT 'pending',
+          reply_count INTEGER DEFAULT 0,
+          created_at INTEGER,
+          updated_at INTEGER
+        )
+      `),
+      // Forum replies table
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS forum_replies (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          question_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL,
+          content TEXT NOT NULL,
+          status TEXT DEFAULT 'pending',
+          created_at INTEGER,
+          FOREIGN KEY (question_id) REFERENCES forum_questions(id)
+        )
       `)
     ]);
 

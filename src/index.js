@@ -604,6 +604,579 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
 </html>`;
 }
 
+// Forum question page HTML template generator
+function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
+  const date = question.created_at ? new Date(question.created_at).toLocaleDateString('en-US', { 
+    year: 'numeric', month: 'long', day: 'numeric' 
+  }) : '';
+  
+  const safeTitle = (question.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const safeContent = (question.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+  
+  // Generate replies HTML
+  const repliesHTML = replies.map(r => {
+    const replyDate = r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric'
+    }) : '';
+    const safeName = (r.name || 'Anonymous').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const safeReply = (r.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    return `
+      <div class="reply-item">
+        <div class="reply-header">
+          <div class="reply-avatar">${safeName.charAt(0).toUpperCase()}</div>
+          <div class="reply-info">
+            <div class="reply-name">${safeName}</div>
+            <div class="reply-date">${replyDate}</div>
+          </div>
+        </div>
+        <div class="reply-content">${safeReply}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Sidebar products
+  const productsHTML = (sidebar.products || []).map(p => `
+    <a href="/product-${p.id}/${p.slug || p.id}" class="sidebar-card">
+      <img src="${p.thumbnail_url || 'https://via.placeholder.com/150x84?text=Product'}" alt="${p.title}">
+      <div class="sidebar-card-info">
+        <div class="sidebar-card-title">${(p.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+        <div class="sidebar-card-price">$${p.sale_price || p.normal_price || 0}</div>
+      </div>
+    </a>
+  `).join('');
+
+  // Sidebar blogs
+  const blogsHTML = (sidebar.blogs || []).map(b => `
+    <a href="/blog/${b.slug}" class="sidebar-card">
+      <img src="${b.thumbnail_url || 'https://via.placeholder.com/150x84?text=Blog'}" alt="${b.title}">
+      <div class="sidebar-card-info">
+        <div class="sidebar-card-title">${(b.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+      </div>
+    </a>
+  `).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${safeTitle} - Forum - WishesU</title>
+  <meta name="description" content="${safeTitle}">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; line-height: 1.6; }
+    
+    .forum-hero {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      padding: 40px 20px;
+    }
+    .forum-hero-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255,255,255,0.9);
+      text-decoration: none;
+      font-weight: 500;
+      margin-bottom: 20px;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: white; }
+    .forum-hero h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 15px;
+      line-height: 1.3;
+    }
+    .forum-meta {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      opacity: 0.9;
+      font-size: 0.95rem;
+    }
+    
+    .forum-layout {
+      max-width: 1200px;
+      margin: -40px auto 0;
+      padding: 0 20px 60px;
+      display: grid;
+      grid-template-columns: 200px 1fr 200px;
+      gap: 30px;
+      position: relative;
+      z-index: 10;
+    }
+    
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .sidebar-section h4 {
+      font-size: 0.9rem;
+      color: #6b7280;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .sidebar-card {
+      display: block;
+      background: white;
+      border-radius: 10px;
+      overflow: hidden;
+      text-decoration: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: all 0.3s;
+      margin-bottom: 12px;
+    }
+    .sidebar-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+    }
+    .sidebar-card img {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+    }
+    .sidebar-card-info {
+      padding: 12px;
+    }
+    .sidebar-card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #1f2937;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .sidebar-card-price {
+      color: #10b981;
+      font-weight: 700;
+      margin-top: 5px;
+    }
+    
+    .main-content {
+      min-width: 0;
+    }
+    
+    .question-card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    
+    .question-body {
+      padding: 35px;
+    }
+    
+    .question-author {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 25px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+    .author-avatar {
+      width: 50px;
+      height: 50px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 1.3rem;
+    }
+    .author-info { flex: 1; }
+    .author-name {
+      font-weight: 600;
+      color: #1f2937;
+      font-size: 1.1rem;
+    }
+    .author-date {
+      font-size: 0.9rem;
+      color: #6b7280;
+    }
+    
+    .question-content {
+      font-size: 1.1rem;
+      color: #374151;
+      line-height: 1.8;
+    }
+    
+    /* Replies Section */
+    .replies-section {
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 2px solid #e5e7eb;
+    }
+    .replies-section h3 {
+      font-size: 1.3rem;
+      color: #1f2937;
+      margin-bottom: 25px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .reply-count-badge {
+      background: #10b981;
+      color: white;
+      font-size: 0.85rem;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+    
+    .replies-list {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-bottom: 35px;
+    }
+    .reply-item {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 20px;
+      border-left: 4px solid #10b981;
+    }
+    .reply-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .reply-avatar {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .reply-info { flex: 1; }
+    .reply-name {
+      font-weight: 600;
+      color: #1f2937;
+    }
+    .reply-date {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+    .reply-content {
+      color: #374151;
+      line-height: 1.6;
+    }
+    
+    .no-replies {
+      text-align: center;
+      padding: 30px;
+      color: #6b7280;
+      background: #f9fafb;
+      border-radius: 12px;
+    }
+    
+    /* Reply Form */
+    .reply-form-card {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 25px;
+    }
+    .reply-form-card h4 {
+      font-size: 1.1rem;
+      color: #1f2937;
+      margin-bottom: 20px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-group.full { grid-column: span 2; }
+    .form-group label {
+      font-weight: 600;
+      color: #374151;
+      font-size: 0.9rem;
+    }
+    .form-group input,
+    .form-group textarea {
+      padding: 12px 15px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #10b981;
+    }
+    .form-group textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .submit-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(16, 185, 129, 0.4);
+    }
+    .submit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    .form-message {
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .form-message.success { background: #d1fae5; color: #065f46; display: block; }
+    .form-message.error { background: #fee2e2; color: #991b1b; display: block; }
+    
+    .pending-notice {
+      background: #fef3c7;
+      color: #92400e;
+      padding: 15px 20px;
+      border-radius: 8px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    @media (max-width: 1024px) {
+      .forum-layout {
+        grid-template-columns: 1fr;
+      }
+      .sidebar { display: none; }
+    }
+    
+    @media (max-width: 768px) {
+      .forum-hero h1 { font-size: 1.5rem; }
+      .question-body { padding: 25px; }
+      .form-row { grid-template-columns: 1fr; }
+      .form-group.full { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="forum-hero">
+    <div class="forum-hero-inner">
+      <a href="/forum/" class="back-link">← Back to Forum</a>
+      <h1>${safeTitle}</h1>
+      <div class="forum-meta">
+        <span>👤 ${(question.name || 'Anonymous').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
+        ${date ? `<span>📅 ${date}</span>` : ''}
+        <span>💬 ${replies.length} ${replies.length === 1 ? 'Reply' : 'Replies'}</span>
+      </div>
+    </div>
+  </div>
+  
+  <div class="forum-layout">
+    <!-- Left Sidebar - Products -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <h4>📦 Products</h4>
+        ${productsHTML || '<p style="color:#9ca3af;font-size:0.9rem;">No products</p>'}
+      </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+      <div class="question-card">
+        <div class="question-body">
+          <div class="question-author">
+            <div class="author-avatar">${(question.name || 'A').charAt(0).toUpperCase()}</div>
+            <div class="author-info">
+              <div class="author-name">${(question.name || 'Anonymous').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+              <div class="author-date">${date}</div>
+            </div>
+          </div>
+          
+          <div class="question-content">${safeContent}</div>
+          
+          <!-- Replies Section -->
+          <div class="replies-section">
+            <h3>💬 Replies <span class="reply-count-badge">${replies.length}</span></h3>
+            
+            ${replies.length > 0 ? `
+              <div class="replies-list">${repliesHTML}</div>
+            ` : `
+              <div class="no-replies">
+                <p>No replies yet. Be the first to help!</p>
+              </div>
+            `}
+            
+            <!-- Reply Form -->
+            <div class="reply-form-card">
+              <h4>Post a Reply</h4>
+              <div id="form-message" class="form-message"></div>
+              <div id="pending-notice" class="pending-notice" style="display:none;">
+                ⏳ You have a pending question or reply awaiting approval. Please wait for it to be approved.
+              </div>
+              <form id="reply-form">
+                <input type="hidden" id="question-id" value="${question.id}">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="reply-name">Name *</label>
+                    <input type="text" id="reply-name" placeholder="Your name" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="reply-email">Email *</label>
+                    <input type="email" id="reply-email" placeholder="your@email.com" required>
+                  </div>
+                </div>
+                <div class="form-group full">
+                  <label for="reply-content">Your Reply *</label>
+                  <textarea id="reply-content" placeholder="Write your helpful reply..." required></textarea>
+                </div>
+                <button type="submit" class="submit-btn" id="submit-btn">Submit Reply</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Right Sidebar - Blogs -->
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <h4>📝 Blog Posts</h4>
+        ${blogsHTML || '<p style="color:#9ca3af;font-size:0.9rem;">No posts</p>'}
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const questionId = ${question.id};
+    const form = document.getElementById('reply-form');
+    const formMessage = document.getElementById('form-message');
+    const pendingNotice = document.getElementById('pending-notice');
+    const submitBtn = document.getElementById('submit-btn');
+    const emailInput = document.getElementById('reply-email');
+    
+    // Check for pending when email entered
+    let checkTimeout;
+    emailInput.addEventListener('blur', async function() {
+      const email = this.value.trim();
+      if (!email) return;
+      
+      clearTimeout(checkTimeout);
+      checkTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch('/api/forum/check-pending', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email })
+          });
+          const data = await res.json();
+          
+          if (data.hasPending) {
+            pendingNotice.style.display = 'block';
+            submitBtn.disabled = true;
+          } else {
+            pendingNotice.style.display = 'none';
+            submitBtn.disabled = false;
+          }
+        } catch (err) {
+          console.error('Check pending error:', err);
+        }
+      }, 500);
+    });
+    
+    // Submit reply
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const name = document.getElementById('reply-name').value.trim();
+      const email = document.getElementById('reply-email').value.trim();
+      const content = document.getElementById('reply-content').value.trim();
+      
+      if (!name || !email || !content) {
+        showMessage('Please fill in all fields.', 'error');
+        return;
+      }
+      
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+      
+      try {
+        const res = await fetch('/api/forum/submit-reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question_id: questionId,
+            name: name,
+            email: email,
+            content: content
+          })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          showMessage(data.message || 'Reply submitted! It will appear after admin approval.', 'success');
+          form.reset();
+          pendingNotice.style.display = 'block';
+          submitBtn.disabled = true;
+        } else {
+          if (data.hasPending) {
+            pendingNotice.style.display = 'block';
+            submitBtn.disabled = true;
+          }
+          showMessage(data.error || 'Failed to submit reply.', 'error');
+        }
+      } catch (err) {
+        console.error('Submit error:', err);
+        showMessage('An error occurred. Please try again.', 'error');
+      }
+      
+      submitBtn.textContent = 'Submit Reply';
+    });
+    
+    function showMessage(msg, type) {
+      formMessage.textContent = msg;
+      formMessage.className = 'form-message ' + type;
+      formMessage.style.display = 'block';
+      
+      if (type === 'success') {
+        setTimeout(() => { formMessage.style.display = 'none'; }, 5000);
+      }
+    }
+  </script>
+</body>
+</html>`;
+}
+
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
@@ -682,6 +1255,65 @@ export default {
             }
           } catch (e) {
             console.error('Blog fetch error:', e);
+          }
+        }
+      }
+
+      // ----- FORUM QUESTION PAGES -----
+      if ((method === 'GET' || method === 'HEAD') && path.startsWith('/forum/') && path !== '/forum/' && !path.includes('.')) {
+        const slug = path.replace('/forum/', '').replace(/\/$/, '');
+        if (slug && env.DB) {
+          try {
+            await initDB(env);
+            const question = await env.DB.prepare(`
+              SELECT * FROM forum_questions WHERE slug = ? AND status = 'approved'
+            `).bind(slug).first();
+            
+            if (question) {
+              // Get approved replies
+              const repliesResult = await env.DB.prepare(`
+                SELECT id, name, content, created_at
+                FROM forum_replies 
+                WHERE question_id = ? AND status = 'approved'
+                ORDER BY created_at ASC
+              `).bind(question.id).all();
+              
+              // Get sidebar content - products and blogs based on question id for internal linking
+              // Older questions show older products/blogs
+              const productsResult = await env.DB.prepare(`
+                SELECT id, title, slug, thumbnail_url, sale_price, normal_price
+                FROM products 
+                WHERE status = 'active'
+                ORDER BY id DESC
+                LIMIT 2 OFFSET ?
+              `).bind(Math.max(0, question.id - 1)).all();
+              
+              const blogsResult = await env.DB.prepare(`
+                SELECT id, title, slug, thumbnail_url, description
+                FROM blogs 
+                WHERE status = 'published'
+                ORDER BY id DESC
+                LIMIT 2 OFFSET ?
+              `).bind(Math.max(0, question.id - 1)).all();
+              
+              const replies = repliesResult.results || [];
+              const sidebar = {
+                products: productsResult.results || [],
+                blogs: blogsResult.results || []
+              };
+              
+              const html = generateForumQuestionHTML(question, replies, sidebar);
+              
+              return new Response(html, {
+                status: 200,
+                headers: {
+                  'Content-Type': 'text/html; charset=utf-8',
+                  'X-Worker-Version': VERSION
+                }
+              });
+            }
+          } catch (e) {
+            console.error('Forum question fetch error:', e);
           }
         }
       }

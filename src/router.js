@@ -120,6 +120,22 @@ import {
   bulkUpdateComments
 } from './controllers/blog-comments.js';
 
+// Forum
+import {
+  getPublishedQuestions,
+  getQuestion,
+  checkPendingForum,
+  submitQuestion,
+  submitReply,
+  getAdminQuestions,
+  getAdminReplies,
+  updateQuestionStatus,
+  updateReplyStatus,
+  deleteQuestion,
+  deleteReply,
+  getForumSidebar
+} from './controllers/forum.js';
+
 // Admin
 import {
   getDebugInfo,
@@ -573,10 +589,9 @@ export async function routeApiRequest(req, env, url, path, method) {
   // ----- ADMIN USERS -----
   if (method === 'GET' && path === '/api/admin/users') {
     try {
-      // Get all unique emails from orders (using encrypted_data to extract email)
-      // and blog_comments, with counts
+      // Get all unique emails from orders, blog_comments, and forum
       
-      // First, get emails from blog_comments with counts
+      // Get emails from blog_comments with counts
       const commentUsers = await env.DB.prepare(`
         SELECT 
           LOWER(email) as email,
@@ -587,13 +602,34 @@ export async function routeApiRequest(req, env, url, path, method) {
         GROUP BY LOWER(email)
       `).all();
       
-      // Get order counts by email (orders table has encrypted_data, we need to check archive_data for email)
-      // Since orders are encrypted, we'll try to get emails from archive_data JSON
+      // Get emails from forum_questions
+      const forumQUsers = await env.DB.prepare(`
+        SELECT 
+          LOWER(email) as email,
+          MAX(name) as name,
+          COUNT(*) as question_count,
+          MAX(created_at) as last_activity
+        FROM forum_questions
+        GROUP BY LOWER(email)
+      `).all();
+      
+      // Get emails from forum_replies
+      const forumRUsers = await env.DB.prepare(`
+        SELECT 
+          LOWER(email) as email,
+          MAX(name) as name,
+          COUNT(*) as reply_count,
+          MAX(created_at) as last_activity
+        FROM forum_replies
+        GROUP BY LOWER(email)
+      `).all();
+      
+      // Get orders for email extraction
       const orders = await env.DB.prepare(`
         SELECT id, order_id, archive_data, created_at FROM orders
       `).all();
       
-      // Build a map of emails
+      // Build user map
       const userMap = new Map();
       
       // Add comment users
@@ -606,15 +642,54 @@ export async function routeApiRequest(req, env, url, path, method) {
             name: u.name || '',
             order_count: 0,
             comment_count: 0,
+            forum_count: 0,
             last_activity: 0
           });
         }
         const user = userMap.get(email);
         user.comment_count = u.comment_count || 0;
         user.name = user.name || u.name || '';
-        if (u.last_activity > user.last_activity) {
-          user.last_activity = u.last_activity;
+        if (u.last_activity > user.last_activity) user.last_activity = u.last_activity;
+      }
+      
+      // Add forum question users
+      for (const u of (forumQUsers.results || [])) {
+        if (!u.email) continue;
+        const email = u.email.toLowerCase().trim();
+        if (!userMap.has(email)) {
+          userMap.set(email, {
+            email: email,
+            name: u.name || '',
+            order_count: 0,
+            comment_count: 0,
+            forum_count: 0,
+            last_activity: 0
+          });
         }
+        const user = userMap.get(email);
+        user.forum_count = (user.forum_count || 0) + (u.question_count || 0);
+        user.name = user.name || u.name || '';
+        if (u.last_activity > user.last_activity) user.last_activity = u.last_activity;
+      }
+      
+      // Add forum reply users
+      for (const u of (forumRUsers.results || [])) {
+        if (!u.email) continue;
+        const email = u.email.toLowerCase().trim();
+        if (!userMap.has(email)) {
+          userMap.set(email, {
+            email: email,
+            name: u.name || '',
+            order_count: 0,
+            comment_count: 0,
+            forum_count: 0,
+            last_activity: 0
+          });
+        }
+        const user = userMap.get(email);
+        user.forum_count = (user.forum_count || 0) + (u.reply_count || 0);
+        user.name = user.name || u.name || '';
+        if (u.last_activity > user.last_activity) user.last_activity = u.last_activity;
       }
       
       // Extract emails from orders archive_data
@@ -631,6 +706,7 @@ export async function routeApiRequest(req, env, url, path, method) {
                   name: name,
                   order_count: 0,
                   comment_count: 0,
+                  forum_count: 0,
                   last_activity: 0
                 });
               }
@@ -638,17 +714,13 @@ export async function routeApiRequest(req, env, url, path, method) {
               user.order_count = (user.order_count || 0) + 1;
               user.name = user.name || name;
               const orderTime = new Date(o.created_at).getTime() || 0;
-              if (orderTime > user.last_activity) {
-                user.last_activity = orderTime;
-              }
+              if (orderTime > user.last_activity) user.last_activity = orderTime;
             }
           }
-        } catch (e) {
-          // Skip invalid JSON
-        }
+        } catch (e) {}
       }
       
-      // Convert to array and sort by last activity
+      // Convert to array and sort
       const users = Array.from(userMap.values())
         .filter(u => u.email)
         .sort((a, b) => (b.last_activity || 0) - (a.last_activity || 0));
@@ -663,7 +735,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     }
   }
 
-  // Get user details (orders and comments for specific email)
+  // Get user details (orders, comments, forum activity for specific email)
   if (method === 'GET' && path === '/api/admin/user-details') {
     try {
       const email = (url.searchParams.get('email') || '').toLowerCase().trim();
@@ -671,13 +743,29 @@ export async function routeApiRequest(req, env, url, path, method) {
         return json({ error: 'Email required' }, 400);
       }
       
-      // Get comments
+      // Get blog comments
       const comments = await env.DB.prepare(`
         SELECT c.*, b.title as blog_title, b.slug as blog_slug
         FROM blog_comments c
         LEFT JOIN blogs b ON c.blog_id = b.id
         WHERE LOWER(c.email) = ?
         ORDER BY c.created_at DESC
+      `).bind(email).all();
+      
+      // Get forum questions
+      const forumQuestions = await env.DB.prepare(`
+        SELECT * FROM forum_questions
+        WHERE LOWER(email) = ?
+        ORDER BY created_at DESC
+      `).bind(email).all();
+      
+      // Get forum replies
+      const forumReplies = await env.DB.prepare(`
+        SELECT r.*, q.title as question_title, q.slug as question_slug
+        FROM forum_replies r
+        LEFT JOIN forum_questions q ON r.question_id = q.id
+        WHERE LOWER(r.email) = ?
+        ORDER BY r.created_at DESC
       `).bind(email).all();
       
       // Get orders
@@ -707,11 +795,83 @@ export async function routeApiRequest(req, env, url, path, method) {
         success: true,
         email: email,
         orders: userOrders,
-        comments: comments.results || []
+        comments: comments.results || [],
+        forumQuestions: forumQuestions.results || [],
+        forumReplies: forumReplies.results || []
       });
     } catch (err) {
       return json({ error: err.message }, 500);
     }
+  }
+
+  // ----- FORUM -----
+  // Public: Get published questions
+  if (method === 'GET' && path === '/api/forum/questions') {
+    return getPublishedQuestions(env, url);
+  }
+
+  // Public: Get single question with replies
+  if (method === 'GET' && path.startsWith('/api/forum/question/')) {
+    const slug = path.split('/').pop();
+    return getQuestion(env, slug);
+  }
+
+  // Public: Check pending for user
+  if (method === 'POST' && path === '/api/forum/check-pending') {
+    const body = await req.json().catch(() => ({}));
+    return checkPendingForum(env, (body.email || '').toLowerCase());
+  }
+
+  // Public: Submit question
+  if (method === 'POST' && path === '/api/forum/submit-question') {
+    const body = await req.json();
+    return submitQuestion(env, body);
+  }
+
+  // Public: Submit reply
+  if (method === 'POST' && path === '/api/forum/submit-reply') {
+    const body = await req.json();
+    return submitReply(env, body);
+  }
+
+  // Public: Get sidebar content
+  if (method === 'GET' && path === '/api/forum/sidebar') {
+    const questionId = parseInt(url.searchParams.get('question_id') || '1');
+    return getForumSidebar(env, questionId);
+  }
+
+  // Admin: Get all questions
+  if (method === 'GET' && path === '/api/admin/forum/questions') {
+    return getAdminQuestions(env, url);
+  }
+
+  // Admin: Get all replies
+  if (method === 'GET' && path === '/api/admin/forum/replies') {
+    return getAdminReplies(env, url);
+  }
+
+  // Admin: Update question status
+  if (method === 'POST' && path === '/api/admin/forum/question-status') {
+    const body = await req.json().catch(() => ({}));
+    return updateQuestionStatus(env, body);
+  }
+
+  // Admin: Update reply status
+  if (method === 'POST' && path === '/api/admin/forum/reply-status') {
+    const body = await req.json().catch(() => ({}));
+    return updateReplyStatus(env, body);
+  }
+
+  // Admin: Delete question
+  if (method === 'DELETE' && path === '/api/admin/forum/question') {
+    const id = url.searchParams.get('id');
+    return deleteQuestion(env, id);
+  }
+
+  // Admin: Delete reply
+  if (method === 'DELETE' && path === '/api/admin/forum/reply') {
+    const id = url.searchParams.get('id');
+    return deleteReply(env, id);
   }
 
   // ----- R2 FILE ACCESS -----

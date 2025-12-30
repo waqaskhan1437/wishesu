@@ -16,6 +16,7 @@
               <option value="all">All Users</option>
               <option value="orders">With Orders</option>
               <option value="comments">With Comments</option>
+              <option value="forum">Forum Active</option>
               <option value="both">Orders & Comments</option>
             </select>
           </div>
@@ -29,11 +30,15 @@
         </div>
         <div class="stat-card">
           <div class="stat-value" id="users-with-orders">-</div>
-          <div class="stat-label">Users with Orders</div>
+          <div class="stat-label">With Orders</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="users-with-comments">-</div>
-          <div class="stat-label">Users with Comments</div>
+          <div class="stat-label">With Comments</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="users-with-forum">-</div>
+          <div class="stat-label">Forum Active</div>
         </div>
       </div>
       
@@ -46,6 +51,7 @@
               <th>Email</th>
               <th style="text-align:center;">📦 Orders</th>
               <th style="text-align:center;">💬 Comments</th>
+              <th style="text-align:center;">🗣️ Forum</th>
               <th>Last Activity</th>
               <th>Actions</th>
             </tr>
@@ -172,6 +178,10 @@
         .comment-status.approved { background: #d1fae5; color: #065f46; }
         .comment-status.pending { background: #fef3c7; color: #92400e; }
         .comment-status.rejected { background: #fee2e2; color: #991b1b; }
+        .forum-status { padding: 3px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; }
+        .forum-status.approved { background: #d1fae5; color: #065f46; }
+        .forum-status.pending { background: #fef3c7; color: #92400e; }
+        .forum-status.rejected { background: #fee2e2; color: #991b1b; }
         .no-data {
           text-align: center;
           padding: 20px;
@@ -220,6 +230,10 @@
           background: #fef3c7;
           color: #92400e;
         }
+        .count-badge.forum {
+          background: #d1fae5;
+          color: #065f46;
+        }
         .count-badge.zero {
           background: #f3f4f6;
           color: #9ca3af;
@@ -245,17 +259,19 @@
         // Update stats
         const withOrders = allUsers.filter(u => u.order_count > 0).length;
         const withComments = allUsers.filter(u => u.comment_count > 0).length;
+        const withForum = allUsers.filter(u => (u.forum_count || 0) > 0).length;
         
         document.getElementById('total-users').textContent = allUsers.length;
         document.getElementById('users-with-orders').textContent = withOrders;
         document.getElementById('users-with-comments').textContent = withComments;
+        document.getElementById('users-with-forum').textContent = withForum;
         
         renderUsersTable(allUsers);
       }
     } catch (err) {
       console.error('Users error:', err);
       document.getElementById('users-tbody').innerHTML = 
-        '<tr><td colspan="7" style="text-align:center;padding:40px;color:#ef4444;">Error loading users</td></tr>';
+        '<tr><td colspan="8" style="text-align:center;padding:40px;color:#ef4444;">Error loading users</td></tr>';
     }
   }
 
@@ -263,7 +279,7 @@
     const tbody = document.getElementById('users-tbody');
     
     if (!users || users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#6b7280;">No users found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#6b7280;">No users found</td></tr>';
       return;
     }
     
@@ -274,6 +290,7 @@
       
       const orderBadgeClass = u.order_count > 0 ? 'orders' : 'zero';
       const commentBadgeClass = u.comment_count > 0 ? 'comments' : 'zero';
+      const forumBadgeClass = u.forum_count > 0 ? 'forum' : 'zero';
       
       return `
         <tr>
@@ -290,6 +307,9 @@
           </td>
           <td style="text-align:center;">
             <span class="count-badge ${commentBadgeClass}">${u.comment_count}</span>
+          </td>
+          <td style="text-align:center;">
+            <span class="count-badge ${forumBadgeClass}">${u.forum_count || 0}</span>
           </td>
           <td>${lastActivity}</td>
           <td>
@@ -321,6 +341,8 @@
       filtered = filtered.filter(u => u.order_count > 0);
     } else if (filter === 'comments') {
       filtered = filtered.filter(u => u.comment_count > 0);
+    } else if (filter === 'forum') {
+      filtered = filtered.filter(u => (u.forum_count || 0) > 0);
     } else if (filter === 'both') {
       filtered = filtered.filter(u => u.order_count > 0 && u.comment_count > 0);
     }
@@ -369,7 +391,7 @@
       }
       html += '</div>';
       
-      // Comments section
+      // Blog Comments section
       html += `
         <div class="user-section">
           <h4>💬 Blog Comments <span class="user-section-count">${data.comments?.length || 0}</span></h4>
@@ -395,6 +417,62 @@
         }).join('');
       } else {
         html += '<div class="no-data">No comments found</div>';
+      }
+      html += '</div>';
+      
+      // Forum Questions section
+      html += `
+        <div class="user-section">
+          <h4>❓ Forum Questions <span class="user-section-count">${data.forumQuestions?.length || 0}</span></h4>
+      `;
+      
+      if (data.forumQuestions && data.forumQuestions.length > 0) {
+        html += data.forumQuestions.map(q => {
+          const date = q.created_at ? formatDate(q.created_at) : '-';
+          const statusClass = (q.status || 'pending').toLowerCase();
+          return `
+            <div class="mini-card">
+              <div class="mini-card-header">
+                <span class="mini-card-title">${escapeHtml(q.title)}</span>
+                <span class="forum-status ${statusClass}">${q.status || 'pending'}</span>
+              </div>
+              <div class="mini-card-content">
+                <div style="font-size:0.85rem;color:#6b7280;">📅 ${date} • 💬 ${q.reply_count || 0} replies</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        html += '<div class="no-data">No questions found</div>';
+      }
+      html += '</div>';
+      
+      // Forum Replies section
+      html += `
+        <div class="user-section">
+          <h4>💬 Forum Replies <span class="user-section-count">${data.forumReplies?.length || 0}</span></h4>
+      `;
+      
+      if (data.forumReplies && data.forumReplies.length > 0) {
+        html += data.forumReplies.map(r => {
+          const date = r.created_at ? formatDate(r.created_at) : '-';
+          const statusClass = (r.status || 'pending').toLowerCase();
+          const shortContent = r.content.length > 100 ? r.content.substring(0, 100) + '...' : r.content;
+          return `
+            <div class="mini-card">
+              <div class="mini-card-header">
+                <span class="mini-card-title">${r.question_title ? escapeHtml(r.question_title) : 'Question #' + r.question_id}</span>
+                <span class="forum-status ${statusClass}">${r.status || 'pending'}</span>
+              </div>
+              <div class="mini-card-content">
+                <div style="margin-bottom:8px;">"${escapeHtml(shortContent)}"</div>
+                <div style="font-size:0.85rem;color:#6b7280;">📅 ${date}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        html += '<div class="no-data">No replies found</div>';
       }
       html += '</div>';
       
