@@ -116,6 +116,34 @@ export async function getQuestion(env, slug) {
 }
 
 /**
+ * Get replies for a question by ID (for expandable questions)
+ */
+export async function getQuestionReplies(env, questionId) {
+  try {
+    await ensureForumTables(env);
+    
+    if (!questionId) {
+      return json({ replies: [] });
+    }
+
+    const replies = await env.DB.prepare(`
+      SELECT id, name, content, created_at
+      FROM forum_replies 
+      WHERE question_id = ? AND status = 'approved'
+      ORDER BY created_at ASC
+    `).bind(questionId).all();
+
+    return json({
+      success: true,
+      replies: replies.results || []
+    });
+  } catch (err) {
+    console.error('getQuestionReplies error:', err);
+    return json({ replies: [] });
+  }
+}
+
+/**
  * Check if user has pending question or reply
  */
 export async function checkPendingForum(env, email) {
