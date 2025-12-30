@@ -5,12 +5,21 @@
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
 
+// Page type constants
+const PAGE_TYPES = {
+  CUSTOM: 'custom',
+  HOME: 'home',
+  BLOG_ARCHIVE: 'blog_archive',
+  FORUM_ARCHIVE: 'forum_archive',
+  PRODUCT_GRID: 'product_grid'
+};
+
 /**
  * Get active pages (public)
  */
 export async function getPages(env) {
   const r = await env.DB.prepare(
-    'SELECT id, slug, title, meta_description, created_at, updated_at FROM pages WHERE status = ? ORDER BY id DESC'
+    'SELECT id, slug, title, meta_description, page_type, is_default, created_at, updated_at FROM pages WHERE status = ? ORDER BY id DESC'
   ).bind('published').all();
   
   const pages = (r.results || []).map(page => {
@@ -24,11 +33,11 @@ export async function getPages(env) {
 
 /**
  * Get all pages (admin) - Returns format expected by dashboard.js
- * Maps to: { name, url, size, uploaded, id, status }
+ * Maps to: { name, url, size, uploaded, id, status, page_type, is_default }
  */
 export async function getPagesList(env) {
   const r = await env.DB.prepare(
-    'SELECT id, slug, title, content, status, created_at, updated_at FROM pages ORDER BY id DESC'
+    'SELECT id, slug, title, content, status, page_type, is_default, created_at, updated_at FROM pages ORDER BY id DESC'
   ).all();
   
   const pages = (r.results || []).map(page => {
@@ -57,7 +66,9 @@ export async function getPagesList(env) {
       url: `/${page.slug}.html`,
       size: sizeStr,
       uploaded: uploaded,
-      status: page.status || 'draft'
+      status: page.status || 'draft',
+      page_type: page.page_type || 'custom',
+      is_default: page.is_default || 0
     };
   });
 
@@ -78,21 +89,87 @@ export async function getPage(env, slug) {
 }
 
 /**
+ * Get default page by type
+ */
+export async function getDefaultPage(env, pageType) {
+  const row = await env.DB.prepare(
+    'SELECT * FROM pages WHERE page_type = ? AND is_default = 1 AND status = ?'
+  ).bind(pageType, 'published').first();
+  
+  if (!row) return json({ page: null });
+  
+  if (row.created_at) row.created_at = toISO8601(row.created_at);
+  if (row.updated_at) row.updated_at = toISO8601(row.updated_at);
+  
+  return json({ page: row });
+}
+
+/**
+ * Set page as default for its type
+ */
+export async function setDefaultPage(env, body) {
+  const { id, page_type } = body;
+  
+  if (!id || !page_type) {
+    return json({ error: 'id and page_type required' }, 400);
+  }
+  
+  // First, unset any existing default for this type
+  await env.DB.prepare(
+    'UPDATE pages SET is_default = 0 WHERE page_type = ?'
+  ).bind(page_type).run();
+  
+  // Then set the new default
+  await env.DB.prepare(
+    'UPDATE pages SET is_default = 1, page_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+  ).bind(page_type, Number(id)).run();
+  
+  return json({ success: true });
+}
+
+/**
+ * Clear default page for a type
+ */
+export async function clearDefaultPage(env, body) {
+  const { page_type } = body;
+  
+  if (!page_type) {
+    return json({ error: 'page_type required' }, 400);
+  }
+  
+  await env.DB.prepare(
+    'UPDATE pages SET is_default = 0 WHERE page_type = ?'
+  ).bind(page_type).run();
+  
+  return json({ success: true });
+}
+
+/**
  * Save page (create or update)
  */
 export async function savePage(env, body) {
   if (!body.slug || !body.title) return json({ error: 'slug and title required' }, 400);
   
+  const pageType = body.page_type || 'custom';
+  const isDefault = body.is_default ? 1 : 0;
+  
+  // If setting as default, clear other defaults first
+  if (isDefault && pageType !== 'custom') {
+    await env.DB.prepare(
+      'UPDATE pages SET is_default = 0 WHERE page_type = ?'
+    ).bind(pageType).run();
+  }
+  
   if (body.id) {
     await env.DB.prepare(
-      'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-    ).bind(body.slug, body.title, body.content || '', body.meta_description || '', body.status || 'published', Number(body.id)).run();
+      'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+    ).bind(body.slug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.status || 'published', Number(body.id)).run();
     return json({ success: true, id: body.id });
   }
   
   const r = await env.DB.prepare(
-    'INSERT INTO pages (slug, title, content, meta_description, status) VALUES (?, ?, ?, ?, ?)'
-  ).bind(body.slug, body.title, body.content || '', body.meta_description || '', body.status || 'published').run();
+    'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(body.slug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.status || 'published').run();
   return json({ success: true, id: r.meta?.last_row_id });
 }
 
@@ -102,21 +179,30 @@ export async function savePage(env, body) {
 export async function savePageBuilder(env, body) {
   const name = (body.name || '').trim();
   const content = body.content || '';
+  const pageType = body.page_type || 'custom';
+  const isDefault = body.is_default ? 1 : 0;
   
   if (!name) return json({ error: 'name required' }, 400);
+
+  // If setting as default, clear other defaults first
+  if (isDefault && pageType !== 'custom') {
+    await env.DB.prepare(
+      'UPDATE pages SET is_default = 0 WHERE page_type = ?'
+    ).bind(pageType).run();
+  }
 
   const existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(name).first();
   
   if (existing) {
     await env.DB.prepare(
-      'UPDATE pages SET content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-    ).bind(content, existing.id).run();
+      'UPDATE pages SET content=?, page_type=?, is_default=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+    ).bind(content, pageType, isDefault, existing.id).run();
     return json({ success: true, id: existing.id });
   }
   
   const r = await env.DB.prepare(
-    'INSERT INTO pages (slug, title, content, status) VALUES (?, ?, ?, ?)'
-  ).bind(name, name, content, 'published').run();
+    'INSERT INTO pages (slug, title, content, page_type, is_default, status) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(name, name, content, pageType, isDefault, 'published').run();
   return json({ success: true, id: r.meta?.last_row_id });
 }
 
@@ -156,6 +242,32 @@ export async function updatePageStatus(env, body) {
 }
 
 /**
+ * Update page type
+ */
+export async function updatePageType(env, body) {
+  const { id, page_type, is_default } = body;
+  
+  if (!id || !page_type) {
+    return json({ error: 'id and page_type required' }, 400);
+  }
+  
+  const setDefault = is_default ? 1 : 0;
+  
+  // If setting as default, clear other defaults first
+  if (setDefault && page_type !== 'custom') {
+    await env.DB.prepare(
+      'UPDATE pages SET is_default = 0 WHERE page_type = ?'
+    ).bind(page_type).run();
+  }
+  
+  await env.DB.prepare(
+    'UPDATE pages SET page_type = ?, is_default = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+  ).bind(page_type, setDefault, Number(id)).run();
+  
+  return json({ success: true });
+}
+
+/**
  * Duplicate page
  */
 export async function duplicatePage(env, body) {
@@ -179,12 +291,14 @@ export async function duplicatePage(env, body) {
   }
   
   const r = await env.DB.prepare(
-    'INSERT INTO pages (slug, title, content, meta_description, status) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     newSlug,
     (row.title || '') + ' Copy',
     row.content || '',
     row.meta_description || '',
+    row.page_type || 'custom',
+    0, // Never copy default status
     'draft'
   ).run();
   
@@ -197,10 +311,14 @@ export async function duplicatePage(env, body) {
 export async function loadPageBuilder(env, name) {
   if (!name) return json({ error: 'name required' }, 400);
   
-  const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ?').bind(name).first();
-  if (!row) return json({ content: '' });
+  const row = await env.DB.prepare('SELECT content, page_type, is_default FROM pages WHERE slug = ?').bind(name).first();
+  if (!row) return json({ content: '', page_type: 'custom', is_default: 0 });
   
-  return json({ content: row.content || '' });
+  return json({ 
+    content: row.content || '', 
+    page_type: row.page_type || 'custom',
+    is_default: row.is_default || 0
+  });
 }
 
 /**
@@ -221,7 +339,7 @@ export async function serveDynamicPage(env, slug) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${row.title || slug}</title>
   ${row.meta_description ? `<meta name="description" content="${row.meta_description}">` : ''}
-  <style>body{font-family:-apple-system,system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;}</style>
+  <style>body{font-family:-apple-system,system-ui,sans-serif;margin:0;padding:0;}</style>
 </head>
 <body>
   ${row.content || ''}

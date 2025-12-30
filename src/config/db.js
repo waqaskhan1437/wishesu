@@ -70,7 +70,10 @@ export async function initDB(env) {
         CREATE TABLE IF NOT EXISTS pages (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           slug TEXT UNIQUE, title TEXT, content TEXT,
-          meta_description TEXT, status TEXT DEFAULT 'published',
+          meta_description TEXT, 
+          page_type TEXT DEFAULT 'custom',
+          is_default INTEGER DEFAULT 0,
+          status TEXT DEFAULT 'published',
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )

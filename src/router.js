@@ -86,11 +86,15 @@ import {
   getPages, 
   getPagesList, 
   getPage, 
+  getDefaultPage,
+  setDefaultPage,
+  clearDefaultPage,
   savePage, 
   savePageBuilder, 
   deletePage, 
   deletePageBySlug, 
-  updatePageStatus, 
+  updatePageStatus,
+  updatePageType,
   duplicatePage, 
   loadPageBuilder 
 } from './controllers/pages.js';
@@ -493,6 +497,30 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'GET' && path === '/api/pages/load') {
     const name = url.searchParams.get('name');
     return loadPageBuilder(env, name);
+  }
+
+  // Get default page by type
+  if (method === 'GET' && path === '/api/pages/default') {
+    const pageType = url.searchParams.get('type');
+    return getDefaultPage(env, pageType);
+  }
+
+  // Set page as default
+  if (method === 'POST' && path === '/api/pages/set-default') {
+    const body = await req.json().catch(() => ({}));
+    return setDefaultPage(env, body);
+  }
+
+  // Clear default page for type
+  if (method === 'POST' && path === '/api/pages/clear-default') {
+    const body = await req.json().catch(() => ({}));
+    return clearDefaultPage(env, body);
+  }
+
+  // Update page type
+  if (method === 'POST' && path === '/api/pages/type') {
+    const body = await req.json().catch(() => ({}));
+    return updatePageType(env, body);
   }
 
   // ----- BLOGS -----
