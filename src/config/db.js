@@ -116,6 +116,38 @@ export async function initDB(env) {
       env.DB.prepare(`
         CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id_id
         ON chat_messages(session_id, id)
+      `),
+      // Blogs table
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS blogs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL,
+          slug TEXT UNIQUE,
+          description TEXT,
+          content TEXT,
+          thumbnail_url TEXT,
+          custom_css TEXT,
+          custom_js TEXT,
+          seo_title TEXT,
+          seo_description TEXT,
+          seo_keywords TEXT,
+          status TEXT DEFAULT 'draft',
+          created_at INTEGER,
+          updated_at INTEGER
+        )
+      `),
+      // Blog comments table
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS blog_comments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          blog_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL,
+          comment TEXT NOT NULL,
+          status TEXT DEFAULT 'pending',
+          created_at INTEGER,
+          FOREIGN KEY (blog_id) REFERENCES blogs(id)
+        )
       `)
     ]);
 

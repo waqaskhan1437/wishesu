@@ -126,11 +126,20 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'orders': 
         if (AD.loadOrders) await AD.loadOrders(panel); 
         break;
+      case 'users': 
+        if (AD.loadUsers) await AD.loadUsers(panel); 
+        break;
       case 'products': 
         if (AD.loadProducts) await AD.loadProducts(panel); 
         break;
       case 'reviews': 
         if (AD.loadReviews) await AD.loadReviews(panel); 
+        break;
+      case 'blog': 
+        if (AD.loadBlog) await AD.loadBlog(panel); 
+        break;
+      case 'blog-comments': 
+        if (AD.loadBlogComments) await AD.loadBlogComments(panel); 
         break;
       case 'chats': 
         if (AD.loadChats) await AD.loadChats(panel); 

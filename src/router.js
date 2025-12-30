@@ -95,6 +95,31 @@ import {
   loadPageBuilder 
 } from './controllers/pages.js';
 
+// Blog
+import {
+  getBlogs,
+  getBlogsList,
+  getPublishedBlogs,
+  getBlog,
+  getPublishedBlog,
+  getPreviousBlogs,
+  saveBlog,
+  deleteBlog,
+  updateBlogStatus,
+  duplicateBlog
+} from './controllers/blog.js';
+
+// Blog Comments
+import {
+  getBlogComments,
+  checkPendingComment,
+  addBlogComment,
+  getAdminComments,
+  updateCommentStatus,
+  deleteComment,
+  bulkUpdateComments
+} from './controllers/blog-comments.js';
+
 // Admin
 import {
   getDebugInfo,
@@ -454,6 +479,241 @@ export async function routeApiRequest(req, env, url, path, method) {
     return loadPageBuilder(env, name);
   }
 
+  // ----- BLOGS -----
+  if (method === 'GET' && path === '/api/blogs') {
+    return getBlogs(env);
+  }
+
+  if (method === 'GET' && path === '/api/blogs/list') {
+    return getBlogsList(env);
+  }
+
+  if (method === 'GET' && path === '/api/blogs/published') {
+    return getPublishedBlogs(env, url);
+  }
+
+  if (method === 'GET' && path.startsWith('/api/blog/previous/')) {
+    const id = parseInt(path.split('/').pop());
+    const limit = parseInt(url.searchParams.get('limit') || '2');
+    return getPreviousBlogs(env, id, limit);
+  }
+
+  if (method === 'GET' && path.startsWith('/api/blog/public/')) {
+    const slug = path.split('/').pop();
+    return getPublishedBlog(env, slug);
+  }
+
+  if (method === 'GET' && path.startsWith('/api/blog/')) {
+    const idOrSlug = path.split('/').pop();
+    return getBlog(env, idOrSlug);
+  }
+
+  if (method === 'POST' && path === '/api/blog/save') {
+    const body = await req.json();
+    return saveBlog(env, body);
+  }
+
+  if (method === 'DELETE' && path === '/api/blog/delete') {
+    const id = url.searchParams.get('id');
+    return deleteBlog(env, id);
+  }
+
+  if (method === 'POST' && path === '/api/blogs/status') {
+    const body = await req.json().catch(() => ({}));
+    return updateBlogStatus(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/blogs/duplicate') {
+    const body = await req.json().catch(() => ({}));
+    return duplicateBlog(env, body);
+  }
+
+  // ----- BLOG COMMENTS -----
+  // Public: Get approved comments for a blog
+  if (method === 'GET' && path.startsWith('/api/blog/comments/')) {
+    const blogId = parseInt(path.split('/').pop());
+    return getBlogComments(env, blogId);
+  }
+
+  // Public: Check if user has pending comment
+  if (method === 'POST' && path === '/api/blog/comments/check-pending') {
+    const body = await req.json().catch(() => ({}));
+    return checkPendingComment(env, body.blog_id, body.email);
+  }
+
+  // Public: Add new comment
+  if (method === 'POST' && path === '/api/blog/comments/add') {
+    const body = await req.json();
+    return addBlogComment(env, body);
+  }
+
+  // Admin: Get all comments
+  if (method === 'GET' && path === '/api/admin/blog-comments') {
+    return getAdminComments(env, url);
+  }
+
+  // Admin: Update comment status
+  if (method === 'POST' && path === '/api/admin/blog-comments/status') {
+    const body = await req.json().catch(() => ({}));
+    return updateCommentStatus(env, body);
+  }
+
+  // Admin: Delete comment
+  if (method === 'DELETE' && path === '/api/admin/blog-comments/delete') {
+    const id = url.searchParams.get('id');
+    return deleteComment(env, id);
+  }
+
+  // Admin: Bulk update comments
+  if (method === 'POST' && path === '/api/admin/blog-comments/bulk') {
+    const body = await req.json().catch(() => ({}));
+    return bulkUpdateComments(env, body);
+  }
+
+  // ----- ADMIN USERS -----
+  if (method === 'GET' && path === '/api/admin/users') {
+    try {
+      // Get all unique emails from orders (using encrypted_data to extract email)
+      // and blog_comments, with counts
+      
+      // First, get emails from blog_comments with counts
+      const commentUsers = await env.DB.prepare(`
+        SELECT 
+          LOWER(email) as email,
+          MAX(name) as name,
+          COUNT(*) as comment_count,
+          MAX(created_at) as last_activity
+        FROM blog_comments
+        GROUP BY LOWER(email)
+      `).all();
+      
+      // Get order counts by email (orders table has encrypted_data, we need to check archive_data for email)
+      // Since orders are encrypted, we'll try to get emails from archive_data JSON
+      const orders = await env.DB.prepare(`
+        SELECT id, order_id, archive_data, created_at FROM orders
+      `).all();
+      
+      // Build a map of emails
+      const userMap = new Map();
+      
+      // Add comment users
+      for (const u of (commentUsers.results || [])) {
+        if (!u.email) continue;
+        const email = u.email.toLowerCase().trim();
+        if (!userMap.has(email)) {
+          userMap.set(email, {
+            email: email,
+            name: u.name || '',
+            order_count: 0,
+            comment_count: 0,
+            last_activity: 0
+          });
+        }
+        const user = userMap.get(email);
+        user.comment_count = u.comment_count || 0;
+        user.name = user.name || u.name || '';
+        if (u.last_activity > user.last_activity) {
+          user.last_activity = u.last_activity;
+        }
+      }
+      
+      // Extract emails from orders archive_data
+      for (const o of (orders.results || [])) {
+        try {
+          if (o.archive_data) {
+            const data = JSON.parse(o.archive_data);
+            const email = (data.email || data.buyerEmail || '').toLowerCase().trim();
+            const name = data.name || data.buyerName || '';
+            if (email) {
+              if (!userMap.has(email)) {
+                userMap.set(email, {
+                  email: email,
+                  name: name,
+                  order_count: 0,
+                  comment_count: 0,
+                  last_activity: 0
+                });
+              }
+              const user = userMap.get(email);
+              user.order_count = (user.order_count || 0) + 1;
+              user.name = user.name || name;
+              const orderTime = new Date(o.created_at).getTime() || 0;
+              if (orderTime > user.last_activity) {
+                user.last_activity = orderTime;
+              }
+            }
+          }
+        } catch (e) {
+          // Skip invalid JSON
+        }
+      }
+      
+      // Convert to array and sort by last activity
+      const users = Array.from(userMap.values())
+        .filter(u => u.email)
+        .sort((a, b) => (b.last_activity || 0) - (a.last_activity || 0));
+      
+      return json({
+        success: true,
+        users: users,
+        total: users.length
+      });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
+  // Get user details (orders and comments for specific email)
+  if (method === 'GET' && path === '/api/admin/user-details') {
+    try {
+      const email = (url.searchParams.get('email') || '').toLowerCase().trim();
+      if (!email) {
+        return json({ error: 'Email required' }, 400);
+      }
+      
+      // Get comments
+      const comments = await env.DB.prepare(`
+        SELECT c.*, b.title as blog_title, b.slug as blog_slug
+        FROM blog_comments c
+        LEFT JOIN blogs b ON c.blog_id = b.id
+        WHERE LOWER(c.email) = ?
+        ORDER BY c.created_at DESC
+      `).bind(email).all();
+      
+      // Get orders
+      const allOrders = await env.DB.prepare(`
+        SELECT * FROM orders ORDER BY created_at DESC
+      `).all();
+      
+      // Filter orders by email
+      const userOrders = [];
+      for (const o of (allOrders.results || [])) {
+        try {
+          if (o.archive_data) {
+            const data = JSON.parse(o.archive_data);
+            const orderEmail = (data.email || data.buyerEmail || '').toLowerCase().trim();
+            if (orderEmail === email) {
+              userOrders.push({
+                ...o,
+                buyer_name: data.name || data.buyerName || '',
+                buyer_email: orderEmail
+              });
+            }
+          }
+        } catch (e) {}
+      }
+      
+      return json({
+        success: true,
+        email: email,
+        orders: userOrders,
+        comments: comments.results || []
+      });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
   // ----- R2 FILE ACCESS -----
   if (method === 'GET' && path === '/api/r2/file') {
     const key = url.searchParams.get('key');
@@ -468,6 +728,7 @@ export async function routeApiRequest(req, env, url, path, method) {
       const reviews = await env.DB.prepare('SELECT * FROM reviews').all();
       const orders = await env.DB.prepare('SELECT * FROM orders').all();
       const settings = await env.DB.prepare('SELECT * FROM settings').all();
+      const blogs = await env.DB.prepare('SELECT * FROM blogs').all();
       return json({
         success: true,
         data: {
@@ -476,6 +737,7 @@ export async function routeApiRequest(req, env, url, path, method) {
           reviews: reviews.results || [],
           orders: orders.results || [],
           settings: settings.results || [],
+          blogs: blogs.results || [],
           exportedAt: new Date().toISOString()
         }
       });
@@ -497,6 +759,43 @@ export async function routeApiRequest(req, env, url, path, method) {
     try {
       const pages = await env.DB.prepare('SELECT * FROM pages').all();
       return json({ success: true, data: pages.results || [] });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
+  if (method === 'GET' && path === '/api/admin/export/blogs') {
+    try {
+      const blogs = await env.DB.prepare('SELECT * FROM blogs').all();
+      return json({ success: true, data: blogs.results || [] });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
+  if (method === 'POST' && path === '/api/admin/import/blogs') {
+    try {
+      const body = await req.json();
+      const blogs = body.blogs || body;
+      if (!Array.isArray(blogs)) {
+        return json({ error: 'Invalid data format' }, 400);
+      }
+      let imported = 0;
+      const now = Date.now();
+      for (const b of blogs) {
+        if (!b.title) continue;
+        await env.DB.prepare(`
+          INSERT OR REPLACE INTO blogs (id, title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          b.id || null, b.title, b.slug || '', b.description || '', b.content || '',
+          b.thumbnail_url || '', b.custom_css || '', b.custom_js || '',
+          b.seo_title || '', b.seo_description || '', b.seo_keywords || '',
+          b.status || 'draft', b.created_at || now, b.updated_at || now
+        ).run();
+        imported++;
+      }
+      return json({ success: true, imported });
     } catch (err) {
       return json({ error: err.message }, 500);
     }
