@@ -209,7 +209,10 @@ async function runMigrations(env) {
     { table: 'chat_sessions', column: 'blocked', type: 'INTEGER DEFAULT 0' },
     { table: 'chat_sessions', column: 'last_message_content', type: 'TEXT' },
     { table: 'chat_sessions', column: 'last_message_at', type: 'DATETIME' },
-    { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' }
+    { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' },
+    // Pages table - page type and default support
+    { table: 'pages', column: 'page_type', type: "TEXT DEFAULT 'custom'" },
+    { table: 'pages', column: 'is_default', type: 'INTEGER DEFAULT 0' }
   ];
 
   for (const m of migrations) {
