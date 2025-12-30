@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Forum - WishesU Community</title>
+  <title>Forum - Community</title>
   <meta name="description" content="Ask questions, share knowledge, and get help from our community.">
   <link rel="stylesheet" href="/css/style.css">
   <style>
@@ -16,16 +16,8 @@
       padding: 50px 20px;
       text-align: center;
     }
-    .forum-header h1 {
-      font-size: 2.5rem;
-      margin-bottom: 10px;
-    }
-    .forum-header p {
-      opacity: 0.9;
-      font-size: 1.1rem;
-      max-width: 600px;
-      margin: 0 auto;
-    }
+    .forum-header h1 { font-size: 2.5rem; margin-bottom: 10px; }
+    .forum-header p { opacity: 0.9; font-size: 1.1rem; max-width: 600px; margin: 0 auto; }
     .back-home {
       display: inline-block;
       color: rgba(255,255,255,0.9);
@@ -43,33 +35,60 @@
       z-index: 10;
     }
     
-    /* Ask Question Card */
-    .ask-question-card {
-      background: white;
-      border-radius: 16px;
-      padding: 30px;
-      margin-bottom: 30px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-    }
-    .ask-question-card h3 {
-      font-size: 1.3rem;
-      color: #1f2937;
-      margin-bottom: 20px;
+    /* Ask Question Button */
+    .ask-btn {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 10px;
+      width: 100%;
+      padding: 18px 24px;
+      background: white;
+      border: 2px dashed #10b981;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #10b981;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 25px;
     }
+    .ask-btn:hover {
+      background: #10b981;
+      color: white;
+      border-style: solid;
+    }
+    .ask-btn.active {
+      background: #10b981;
+      color: white;
+      border-style: solid;
+      border-radius: 12px 12px 0 0;
+      margin-bottom: 0;
+    }
+    
+    /* Ask Question Form */
+    .ask-form-container {
+      background: white;
+      border-radius: 0 0 12px 12px;
+      padding: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      margin-bottom: 25px;
+    }
+    .ask-form-container.open {
+      max-height: 600px;
+      padding: 25px;
+    }
+    
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 15px;
       margin-bottom: 15px;
     }
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
     .form-group.full { grid-column: span 2; }
     .form-group label {
       font-weight: 600;
@@ -115,20 +134,22 @@
       cursor: not-allowed;
     }
     .form-message {
-      padding: 15px;
+      padding: 12px 15px;
       border-radius: 8px;
       margin-bottom: 15px;
       display: none;
+      font-size: 0.95rem;
     }
     .form-message.success { background: #d1fae5; color: #065f46; display: block; }
     .form-message.error { background: #fee2e2; color: #991b1b; display: block; }
     .pending-notice {
       background: #fef3c7;
       color: #92400e;
-      padding: 15px 20px;
+      padding: 12px 15px;
       border-radius: 8px;
       text-align: center;
       margin-bottom: 15px;
+      font-size: 0.9rem;
     }
     
     /* Questions List */
@@ -138,10 +159,7 @@
       align-items: center;
       margin-bottom: 20px;
     }
-    .questions-header h2 {
-      font-size: 1.5rem;
-      color: #1f2937;
-    }
+    .questions-header h2 { font-size: 1.5rem; color: #1f2937; }
     .questions-count {
       background: #10b981;
       color: white;
@@ -150,16 +168,12 @@
       font-weight: 600;
     }
     
-    .questions-list {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-    }
+    .questions-list { display: flex; flex-direction: column; gap: 15px; }
     
     .question-card {
       background: white;
       border-radius: 12px;
-      padding: 25px;
+      padding: 20px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.08);
       transition: all 0.3s;
       text-decoration: none;
@@ -173,11 +187,11 @@
       display: flex;
       align-items: flex-start;
       gap: 15px;
-      margin-bottom: 15px;
+      margin-bottom: 12px;
     }
     .question-avatar {
-      width: 50px;
-      height: 50px;
+      width: 45px;
+      height: 45px;
       background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       border-radius: 50%;
       display: flex;
@@ -185,12 +199,12 @@
       justify-content: center;
       color: white;
       font-weight: 700;
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       flex-shrink: 0;
     }
     .question-info { flex: 1; }
     .question-title {
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       font-weight: 600;
       color: #1f2937;
       margin-bottom: 5px;
@@ -199,12 +213,12 @@
     .question-meta {
       display: flex;
       gap: 15px;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       color: #6b7280;
     }
     .question-preview {
       color: #4b5563;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       line-height: 1.5;
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -215,22 +229,22 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 15px;
-      padding-top: 15px;
+      margin-top: 12px;
+      padding-top: 12px;
       border-top: 1px solid #e5e7eb;
     }
     .reply-badge {
       background: #e0f2fe;
       color: #0369a1;
-      padding: 6px 14px;
+      padding: 5px 12px;
       border-radius: 20px;
       font-weight: 600;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
     }
     .view-btn {
       color: #10b981;
       font-weight: 600;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
     }
     
     /* Pagination */
@@ -260,16 +274,25 @@
       border-color: #10b981;
       color: white;
     }
-    .page-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+    .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     
-    .loading {
+    /* No Questions */
+    .no-questions {
       text-align: center;
-      padding: 60px;
-      color: #6b7280;
+      padding: 60px 20px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08);
     }
+    .no-questions h3 {
+      font-size: 1.3rem;
+      color: #1f2937;
+      margin-bottom: 10px;
+    }
+    .no-questions p { color: #6b7280; }
+    
+    /* Loading */
+    .loading { text-align: center; padding: 40px 20px; color: #6b7280; }
     .loading-spinner {
       width: 40px;
       height: 40px;
@@ -279,19 +302,9 @@
       animation: spin 1s linear infinite;
       margin: 0 auto 15px;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     
-    .no-questions {
-      text-align: center;
-      padding: 60px;
-      background: white;
-      border-radius: 12px;
-      color: #6b7280;
-    }
-    
-    @media (max-width: 768px) {
+    @media (max-width: 600px) {
       .forum-header h1 { font-size: 1.8rem; }
       .form-row { grid-template-columns: 1fr; }
       .form-group.full { grid-column: span 1; }
@@ -308,31 +321,35 @@
   </div>
   
   <div class="forum-container">
-    <!-- Ask Question Form -->
-    <div class="ask-question-card">
-      <h3>❓ Ask a Question</h3>
+    <!-- Ask Question Button -->
+    <button class="ask-btn" id="ask-btn" onclick="toggleForm()">
+      <span>❓</span> Ask a Question
+    </button>
+    
+    <!-- Collapsible Form -->
+    <div class="ask-form-container" id="ask-form-container">
       <div id="form-message" class="form-message"></div>
       <div id="pending-notice" class="pending-notice" style="display:none;">
-        ⏳ You have a pending question or reply awaiting approval. Please wait for it to be approved before posting.
+        ⏳ You have a pending question or reply awaiting approval.
       </div>
       <form id="question-form">
         <div class="form-row">
           <div class="form-group">
-            <label for="q-name">Name *</label>
+            <label>Name *</label>
             <input type="text" id="q-name" placeholder="Your name" required>
           </div>
           <div class="form-group">
-            <label for="q-email">Email *</label>
+            <label>Email *</label>
             <input type="email" id="q-email" placeholder="your@email.com" required>
           </div>
         </div>
         <div class="form-group full">
-          <label for="q-title">Question Title *</label>
+          <label>Question Title *</label>
           <input type="text" id="q-title" placeholder="What's your question?" required>
         </div>
         <div class="form-group full">
-          <label for="q-content">Details *</label>
-          <textarea id="q-content" placeholder="Provide more details about your question..." required></textarea>
+          <label>Details *</label>
+          <textarea id="q-content" placeholder="Provide more details..." required></textarea>
         </div>
         <button type="submit" class="submit-btn" id="submit-btn">Submit Question</button>
       </form>
@@ -357,6 +374,24 @@
   <script>
     let currentPage = 1;
     const limit = 20;
+    let formOpen = false;
+    
+    // Toggle form
+    function toggleForm() {
+      formOpen = !formOpen;
+      const btn = document.getElementById('ask-btn');
+      const container = document.getElementById('ask-form-container');
+      
+      if (formOpen) {
+        btn.classList.add('active');
+        btn.innerHTML = '<span>✕</span> Close';
+        container.classList.add('open');
+      } else {
+        btn.classList.remove('active');
+        btn.innerHTML = '<span>❓</span> Ask a Question';
+        container.classList.remove('open');
+      }
+    }
     
     // Load questions on page load
     loadQuestions();
@@ -369,6 +404,11 @@
         const res = await fetch(`/api/forum/questions?page=${page}&limit=${limit}`);
         const data = await res.json();
         
+        if (data.error) {
+          container.innerHTML = `<div class="no-questions" style="color:#ef4444;"><p>${data.error}</p></div>`;
+          return;
+        }
+        
         if (data.questions && data.questions.length > 0) {
           document.getElementById('total-count').textContent = data.pagination.total;
           
@@ -379,7 +419,7 @@
                   year: 'numeric', month: 'short', day: 'numeric'
                 }) : '';
                 const initial = (q.name || 'A').charAt(0).toUpperCase();
-                const preview = q.content.length > 150 ? q.content.substring(0, 150) + '...' : q.content;
+                const preview = q.content.length > 120 ? q.content.substring(0, 120) + '...' : q.content;
                 
                 return `
                   <a href="/forum/${q.slug}" class="question-card">
@@ -396,7 +436,7 @@
                     <div class="question-preview">${escapeHtml(preview)}</div>
                     <div class="question-footer">
                       <span class="reply-badge">💬 ${q.reply_count || 0} Replies</span>
-                      <span class="view-btn">View Question →</span>
+                      <span class="view-btn">View →</span>
                     </div>
                   </a>
                 `;
@@ -415,12 +455,8 @@
           document.getElementById('pagination').innerHTML = '';
         }
       } catch (err) {
-        console.error('Load questions error:', err);
-        container.innerHTML = `
-          <div class="no-questions" style="color:#ef4444;">
-            <p>Error loading questions. Please refresh the page.</p>
-          </div>
-        `;
+        console.error('Load error:', err);
+        container.innerHTML = `<div class="no-questions"><p style="color:#ef4444;">Error loading questions</p></div>`;
       }
     }
     
@@ -432,11 +468,8 @@
       }
       
       let html = '';
-      
-      // Previous button
       html += `<button class="page-btn" onclick="loadQuestions(${pagination.page - 1})" ${!pagination.hasPrev ? 'disabled' : ''}>← Prev</button>`;
       
-      // Page numbers
       const start = Math.max(1, pagination.page - 2);
       const end = Math.min(pagination.totalPages, pagination.page + 2);
       
@@ -454,7 +487,6 @@
         html += `<button class="page-btn" onclick="loadQuestions(${pagination.totalPages})">${pagination.totalPages}</button>`;
       }
       
-      // Next button
       html += `<button class="page-btn" onclick="loadQuestions(${pagination.page + 1})" ${!pagination.hasNext ? 'disabled' : ''}>Next →</button>`;
       
       container.innerHTML = html;
@@ -467,7 +499,7 @@
     const submitBtn = document.getElementById('submit-btn');
     const emailInput = document.getElementById('q-email');
     
-    // Check pending when email entered
+    // Check pending when email blur
     let checkTimeout;
     emailInput.addEventListener('blur', async function() {
       const email = this.value.trim();
@@ -479,7 +511,7 @@
           const res = await fetch('/api/forum/check-pending', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email })
+            body: JSON.stringify({ email })
           });
           const data = await res.json();
           
@@ -491,9 +523,9 @@
             submitBtn.disabled = false;
           }
         } catch (err) {
-          console.error('Check pending error:', err);
+          console.error('Check error:', err);
         }
-      }, 500);
+      }, 300);
     });
     
     // Submit question
@@ -522,20 +554,25 @@
         const data = await res.json();
         
         if (data.success) {
-          showMessage(data.message || 'Question submitted! It will appear after admin approval.', 'success');
+          showMessage('✅ Question submitted! It will appear after admin approval.', 'success');
           form.reset();
           pendingNotice.style.display = 'block';
           submitBtn.disabled = true;
+          
+          // Close form after success
+          setTimeout(() => {
+            toggleForm();
+          }, 2000);
         } else {
           if (data.hasPending) {
             pendingNotice.style.display = 'block';
             submitBtn.disabled = true;
           }
-          showMessage(data.error || 'Failed to submit question.', 'error');
+          showMessage(data.error || 'Failed to submit.', 'error');
         }
       } catch (err) {
         console.error('Submit error:', err);
-        showMessage('An error occurred. Please try again.', 'error');
+        showMessage('Error submitting. Please try again.', 'error');
       }
       
       submitBtn.textContent = 'Submit Question';
