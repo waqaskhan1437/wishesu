@@ -5,6 +5,7 @@
 
 let dbReady = false;
 let migrationsDone = false;
+let pagesMigrationDone = false;  // Separate flag for pages migration
 
 /**
  * Initialize database schema - creates all required tables
@@ -189,8 +190,34 @@ export async function initDB(env) {
       runMigrations(env).catch(e => console.error('Migration error:', e));
       migrationsDone = true;
     }
+    
+    // Always try to add pages columns if not done yet (critical for page builder)
+    // This runs synchronously to ensure columns exist before any page operations
+    if (!pagesMigrationDone) {
+      await runPagesMigration(env);
+      pagesMigrationDone = true;
+    }
   } catch (e) {
     console.error('DB init error:', e);
+  }
+}
+
+/**
+ * Run pages-specific migrations (ensures page_type and is_default exist)
+ */
+async function runPagesMigration(env) {
+  const pagesMigrations = [
+    { column: 'page_type', type: "TEXT DEFAULT 'custom'" },
+    { column: 'is_default', type: 'INTEGER DEFAULT 0' }
+  ];
+  
+  for (const m of pagesMigrations) {
+    try {
+      await env.DB.prepare(`ALTER TABLE pages ADD COLUMN ${m.column} ${m.type}`).run();
+      console.log(`Added pages.${m.column}`);
+    } catch (e) {
+      // Column already exists - this is expected
+    }
   }
 }
 
@@ -209,10 +236,7 @@ async function runMigrations(env) {
     { table: 'chat_sessions', column: 'blocked', type: 'INTEGER DEFAULT 0' },
     { table: 'chat_sessions', column: 'last_message_content', type: 'TEXT' },
     { table: 'chat_sessions', column: 'last_message_at', type: 'DATETIME' },
-    { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' },
-    // Pages table - page type and default support
-    { table: 'pages', column: 'page_type', type: "TEXT DEFAULT 'custom'" },
-    { table: 'pages', column: 'is_default', type: 'INTEGER DEFAULT 0' }
+    { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' }
   ];
 
   for (const m of migrations) {

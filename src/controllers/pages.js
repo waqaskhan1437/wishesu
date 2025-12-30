@@ -36,9 +36,20 @@ export async function getPages(env) {
  * Maps to: { name, url, size, uploaded, id, status, page_type, is_default }
  */
 export async function getPagesList(env) {
-  const r = await env.DB.prepare(
-    'SELECT id, slug, title, content, status, page_type, is_default, created_at, updated_at FROM pages ORDER BY id DESC'
-  ).all();
+  let r;
+  let hasNewColumns = true;
+  
+  try {
+    r = await env.DB.prepare(
+      'SELECT id, slug, title, content, status, page_type, is_default, created_at, updated_at FROM pages ORDER BY id DESC'
+    ).all();
+  } catch (e) {
+    // Fallback: new columns don't exist
+    hasNewColumns = false;
+    r = await env.DB.prepare(
+      'SELECT id, slug, title, content, status, created_at, updated_at FROM pages ORDER BY id DESC'
+    ).all();
+  }
   
   const pages = (r.results || []).map(page => {
     // Calculate approximate size of content
@@ -67,8 +78,8 @@ export async function getPagesList(env) {
       size: sizeStr,
       uploaded: uploaded,
       status: page.status || 'draft',
-      page_type: page.page_type || 'custom',
-      is_default: page.is_default || 0
+      page_type: hasNewColumns ? (page.page_type || 'custom') : 'custom',
+      is_default: hasNewColumns ? (page.is_default || 0) : 0
     };
   });
 
@@ -92,16 +103,21 @@ export async function getPage(env, slug) {
  * Get default page by type
  */
 export async function getDefaultPage(env, pageType) {
-  const row = await env.DB.prepare(
-    'SELECT * FROM pages WHERE page_type = ? AND is_default = 1 AND status = ?'
-  ).bind(pageType, 'published').first();
-  
-  if (!row) return json({ page: null });
-  
-  if (row.created_at) row.created_at = toISO8601(row.created_at);
-  if (row.updated_at) row.updated_at = toISO8601(row.updated_at);
-  
-  return json({ page: row });
+  try {
+    const row = await env.DB.prepare(
+      'SELECT * FROM pages WHERE page_type = ? AND is_default = 1 AND status = ?'
+    ).bind(pageType, 'published').first();
+    
+    if (!row) return json({ page: null });
+    
+    if (row.created_at) row.created_at = toISO8601(row.created_at);
+    if (row.updated_at) row.updated_at = toISO8601(row.updated_at);
+    
+    return json({ page: row });
+  } catch (e) {
+    // Columns might not exist yet
+    return json({ page: null });
+  }
 }
 
 /**
@@ -114,17 +130,21 @@ export async function setDefaultPage(env, body) {
     return json({ error: 'id and page_type required' }, 400);
   }
   
-  // First, unset any existing default for this type
-  await env.DB.prepare(
-    'UPDATE pages SET is_default = 0 WHERE page_type = ?'
-  ).bind(page_type).run();
-  
-  // Then set the new default
-  await env.DB.prepare(
-    'UPDATE pages SET is_default = 1, page_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-  ).bind(page_type, Number(id)).run();
-  
-  return json({ success: true });
+  try {
+    // First, unset any existing default for this type
+    await env.DB.prepare(
+      'UPDATE pages SET is_default = 0 WHERE page_type = ?'
+    ).bind(page_type).run();
+    
+    // Then set the new default
+    await env.DB.prepare(
+      'UPDATE pages SET is_default = 1, page_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).bind(page_type, Number(id)).run();
+    
+    return json({ success: true });
+  } catch (e) {
+    return json({ error: 'Columns not available. Please redeploy to add page_type support.' }, 500);
+  }
 }
 
 /**
@@ -186,24 +206,45 @@ export async function savePageBuilder(env, body) {
 
   // If setting as default, clear other defaults first
   if (isDefault && pageType !== 'custom') {
-    await env.DB.prepare(
-      'UPDATE pages SET is_default = 0 WHERE page_type = ?'
-    ).bind(pageType).run();
+    try {
+      await env.DB.prepare(
+        'UPDATE pages SET is_default = 0 WHERE page_type = ?'
+      ).bind(pageType).run();
+    } catch (e) {
+      // Column might not exist yet, ignore
+    }
   }
 
   const existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(name).first();
   
   if (existing) {
-    await env.DB.prepare(
-      'UPDATE pages SET content=?, page_type=?, is_default=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-    ).bind(content, pageType, isDefault, existing.id).run();
+    // Try with new columns first, fallback to old schema
+    try {
+      await env.DB.prepare(
+        'UPDATE pages SET content=?, page_type=?, is_default=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(content, pageType, isDefault, existing.id).run();
+    } catch (e) {
+      // Fallback: columns don't exist, use basic update
+      await env.DB.prepare(
+        'UPDATE pages SET content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(content, existing.id).run();
+    }
     return json({ success: true, id: existing.id });
   }
   
-  const r = await env.DB.prepare(
-    'INSERT INTO pages (slug, title, content, page_type, is_default, status) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(name, name, content, pageType, isDefault, 'published').run();
-  return json({ success: true, id: r.meta?.last_row_id });
+  // Try with new columns first, fallback to old schema
+  try {
+    const r = await env.DB.prepare(
+      'INSERT INTO pages (slug, title, content, page_type, is_default, status) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(name, name, content, pageType, isDefault, 'published').run();
+    return json({ success: true, id: r.meta?.last_row_id });
+  } catch (e) {
+    // Fallback: columns don't exist, use basic insert
+    const r = await env.DB.prepare(
+      'INSERT INTO pages (slug, title, content, status) VALUES (?, ?, ?, ?)'
+    ).bind(name, name, content, 'published').run();
+    return json({ success: true, id: r.meta?.last_row_id });
+  }
 }
 
 /**
