@@ -94,31 +94,64 @@
           const setPlayerSource = (videoUrl, posterUrl) => {
             if (!videoUrl) return;
             
-            // Find or create player container
-            let playerContainer = document.getElementById('universal-player-container');
+            const videoWrapper = document.querySelector('.video-wrapper');
+            if (!videoWrapper) return;
             
-            // If container doesn't exist (main video not clicked yet), create it
-            if (!playerContainer) {
-              const videoWrapper = document.querySelector('.video-wrapper');
-              if (videoWrapper) {
-                // Clear the facade/thumbnail
-                videoWrapper.innerHTML = '';
-                
-                // Create player container
-                playerContainer = document.createElement('div');
-                playerContainer.id = 'universal-player-container';
-                playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: 400px; border-radius: 12px; overflow: hidden; background: #000;';
-                videoWrapper.appendChild(playerContainer);
-              }
-            }
+            // Always clear the wrapper first for clean state
+            videoWrapper.innerHTML = '';
             
-            // Now render the video
-            if (playerContainer && typeof window.UniversalVideoPlayer !== 'undefined') {
-              window.UniversalVideoPlayer.render('universal-player-container', videoUrl, {
-                poster: posterUrl || '',
-                thumbnailUrl: posterUrl || '',
-                autoplay: true
+            // Check if mobile
+            const isMobile = window.innerWidth <= 768;
+            
+            // Create player container
+            const playerContainer = document.createElement('div');
+            playerContainer.id = 'universal-player-container';
+            playerContainer.style.cssText = `width: 100%; height: 100%; min-height: ${isMobile ? '200px' : '300px'}; border-radius: 12px; overflow: visible; background: #000;`;
+            videoWrapper.appendChild(playerContainer);
+            
+            // On mobile, use simple HTML5 video for better compatibility
+            if (isMobile) {
+              const videoEl = document.createElement('video');
+              videoEl.src = videoUrl;
+              videoEl.controls = true;
+              videoEl.autoplay = true;
+              videoEl.playsInline = true;
+              videoEl.setAttribute('playsinline', '');
+              videoEl.setAttribute('webkit-playsinline', '');
+              videoEl.muted = false;
+              videoEl.style.cssText = 'width:100%; height:100%; min-height:200px; border-radius:12px; background:#000;';
+              videoEl.controlsList = 'nodownload';
+              if (posterUrl) videoEl.poster = posterUrl;
+              
+              playerContainer.appendChild(videoEl);
+              
+              // Try to play
+              videoEl.play().catch(e => {
+                console.warn('Mobile autoplay blocked:', e);
+                // Show play button if autoplay fails
+                videoEl.controls = true;
               });
+            } else {
+              // Desktop - use UniversalVideoPlayer
+              if (typeof window.UniversalVideoPlayer !== 'undefined') {
+                window.UniversalVideoPlayer.render('universal-player-container', videoUrl, {
+                  poster: posterUrl || '',
+                  thumbnailUrl: posterUrl || '',
+                  autoplay: true
+                });
+              } else {
+                // Fallback
+                playerContainer.innerHTML = `
+                  <video 
+                    src="${videoUrl}" 
+                    controls 
+                    autoplay 
+                    playsinline 
+                    style="width:100%; height:100%; min-height:200px; border-radius:12px; background:#000;"
+                    ${posterUrl ? `poster="${posterUrl}"` : ''}
+                  ></video>
+                `;
+              }
             }
           };
 

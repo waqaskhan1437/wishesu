@@ -147,22 +147,43 @@
         // Clear the facade
         videoWrapper.innerHTML = '';
         
+        // Check if mobile
+        const isMobile = window.innerWidth <= 768;
+        
         // Create container for the player
         const playerContainer = document.createElement('div');
         playerContainer.id = 'universal-player-container';
-        playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: 250px; border-radius: 12px; overflow: visible; background: #000;';
+        playerContainer.style.cssText = `width: 100%; height: 100%; min-height: ${isMobile ? '200px' : '300px'}; border-radius: 12px; overflow: visible; background: #000;`;
         videoWrapper.appendChild(playerContainer);
 
-        // Initialize Player
-        if (typeof window.UniversalVideoPlayer !== 'undefined') {
-          window.UniversalVideoPlayer.render('universal-player-container', product.video_url, {
-            poster: null, // Don't pass poster here, we already handled the thumbnail
-            thumbnailUrl: null,
-            autoplay: true // Attempt autoplay since user interacted
-          });
+        // On mobile, use simple HTML5 video for better compatibility
+        if (isMobile) {
+          const videoEl = document.createElement('video');
+          videoEl.src = product.video_url;
+          videoEl.controls = true;
+          videoEl.autoplay = true;
+          videoEl.playsInline = true;
+          videoEl.setAttribute('playsinline', '');
+          videoEl.setAttribute('webkit-playsinline', '');
+          videoEl.style.cssText = 'width:100%; height:100%; min-height:200px; border-radius:12px; background:#000;';
+          videoEl.controlsList = 'nodownload';
+          
+          playerContainer.appendChild(videoEl);
+          
+          // Try to play
+          videoEl.play().catch(e => console.warn('Autoplay blocked:', e));
         } else {
-          // Fallback - ensure controls are visible
-          playerContainer.innerHTML = `<video src="${product.video_url}" controls autoplay playsinline style="width:100%;height:100%;min-height:200px;"></video>`;
+          // Desktop - use UniversalVideoPlayer
+          if (typeof window.UniversalVideoPlayer !== 'undefined') {
+            window.UniversalVideoPlayer.render('universal-player-container', product.video_url, {
+              poster: null,
+              thumbnailUrl: null,
+              autoplay: true
+            });
+          } else {
+            // Fallback
+            playerContainer.innerHTML = `<video src="${product.video_url}" controls autoplay playsinline style="width:100%;height:100%;min-height:200px;"></video>`;
+          }
         }
       };
 
