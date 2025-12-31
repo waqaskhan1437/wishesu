@@ -518,15 +518,6 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
       clearTimeout(checkTimeout);
       checkTimeout = setTimeout(async () => {
         try {
-
-function forceNoStore(resp) {
-  const h = new Headers(resp.headers);
-  h.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  h.set('Pragma', 'no-cache');
-  h.set('Expires', '0');
-  return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
-}
-
           const res = await fetch('/api/blog/comments/check-pending', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1205,11 +1196,18 @@ export default {
 //   ADMIN_SESSION_SECRET (secret)  -> used to sign session cookie
 const ADMIN_COOKIE = 'admin_session';
 const ADMIN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
+function noStoreHeaders(extra = {}) {
+  return {
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
+    ...extra
+  };
+}
 
 const isAdminUI = (path === '/admin' || path === '/admin/' || path.startsWith('/admin/'));
 const isAdminAPI = path.startsWith('/api/admin/');
-const isLoginRoute = (path === '/admin/login');
-const isLogoutRoute = (path === '/admin/logout');
+const isLoginRoute = (path === '/admin/login' || path === '/admin/login/');
+const isLogoutRoute = (path === '/admin/logout' || path === '/admin/logout/');
 
 function base64url(bytes) {
   const b64 = btoa(String.fromCharCode(...bytes));
@@ -1277,9 +1275,13 @@ async function requireAdmin() {
 // Serve login page (GET)
 if (isLoginRoute && method === 'GET') {
   if (env.ASSETS) {
-    { const r = await env.ASSETS.fetch(new Request(new URL('/admin/login.html', req.url))); return forceNoStore(r); }
+    const r = await env.ASSETS.fetch(new Request(new URL('/admin/login.html', req.url)));
+    const h = new Headers(r.headers);
+    h.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    h.set('Pragma', 'no-cache');
+    return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
   }
-  return new Response('Login page not found', { status: 404 });
+  return new Response('Login page not found', { status: 404, headers: noStoreHeaders() });
 }
 
 // Handle login (POST)
@@ -1288,31 +1290,36 @@ if (isLoginRoute && method === 'POST') {
   const email = (form.get('email') || '').toString().trim();
   const password = (form.get('password') || '').toString();
 
+  if (!env.ADMIN_EMAIL || !env.ADMIN_PASSWORD || !env.ADMIN_SESSION_SECRET) {
+    return new Response('Admin login is not configured (missing secrets).', { status: 500, headers: noStoreHeaders() });
+  }
+
+
   if (email === (env.ADMIN_EMAIL || '') && password === (env.ADMIN_PASSWORD || '')) {
     const tsStr = String(Date.now());
     const sig = await hmacSha256(env.ADMIN_SESSION_SECRET || 'missing', tsStr);
     const cookieVal = `${tsStr}.${sig}`;
 
     return new Response(null, {
-      status: 302,
-      headers: {
-        'Set-Cookie': `${ADMIN_COOKIE}=${cookieVal}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${ADMIN_MAX_AGE_SECONDS}`,
-        'Location': '/admin'
-      }
-    });
+  status: 302,
+  headers: noStoreHeaders({
+    'Set-Cookie': `${ADMIN_COOKIE}=${cookieVal}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${ADMIN_MAX_AGE_SECONDS}`,
+    'Location': new URL('/admin', req.url).toString()
+  })
+});
   }
 
-  return new Response('Invalid login', { status: 401 });
+  return new Response('Invalid login', { status: 401, headers: noStoreHeaders() });
 }
 
 // Handle logout
 if (isLogoutRoute) {
   return new Response(null, {
     status: 302,
-    headers: {
+    headers: noStoreHeaders({
       'Set-Cookie': `${ADMIN_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`,
-      'Location': '/admin/login'
-    }
+      'Location': new URL('/admin/login', req.url).toString()
+    })
   });
 }
 
