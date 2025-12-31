@@ -1190,10 +1190,10 @@ export default {
 // =========================
 // ADMIN AUTH (ENV/SECRETS)
 // =========================
-// Set in Cloudflare Worker:
+// Required:
 //   ADMIN_EMAIL (variable)
 //   ADMIN_PASSWORD (secret)
-//   ADMIN_SESSION_SECRET (secret)
+//   ADMIN_SESSION_SECRET (secret)  -> used to sign session cookie
 const ADMIN_COOKIE = 'admin_session';
 const ADMIN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
@@ -1258,7 +1258,7 @@ async function requireAdmin() {
   if (isAdminAPI) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...CORS, 'Content-Type': 'application/json' }
     });
   }
 
