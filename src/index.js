@@ -518,6 +518,15 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
       clearTimeout(checkTimeout);
       checkTimeout = setTimeout(async () => {
         try {
+
+function forceNoStore(resp) {
+  const h = new Headers(resp.headers);
+  h.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  h.set('Pragma', 'no-cache');
+  h.set('Expires', '0');
+  return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
+}
+
           const res = await fetch('/api/blog/comments/check-pending', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1268,7 +1277,7 @@ async function requireAdmin() {
 // Serve login page (GET)
 if (isLoginRoute && method === 'GET') {
   if (env.ASSETS) {
-    return env.ASSETS.fetch(new Request(new URL('/admin/login.html', req.url)));
+    { const r = await env.ASSETS.fetch(new Request(new URL('/admin/login.html', req.url))); return forceNoStore(r); }
   }
   return new Response('Login page not found', { status: 404 });
 }
