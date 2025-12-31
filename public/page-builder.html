@@ -705,25 +705,101 @@
           </section>
           <section style="padding:40px 20px;">
             <div style="max-width:1000px;margin:0 auto;">
-              <div style="background:white;border-radius:16px;padding:30px;margin-bottom:30px;box-shadow:0 4px 15px rgba(0,0,0,0.08);">
+              <div id="ask-question-box" style="background:white;border-radius:16px;padding:30px;margin-bottom:30px;box-shadow:0 4px 15px rgba(0,0,0,0.08);">
                 <h3 style="margin-bottom:20px;">❓ Ask a Question</h3>
-                <p style="color:#6b7280;">Visit <a href="/forum/" style="color:#10b981;">the full forum page</a> to ask questions and participate.</p>
+                <form id="quick-ask-form" style="display:flex;flex-direction:column;gap:15px;">
+                  <input type="text" id="q-name" placeholder="Your Name" required style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:1rem;">
+                  <input type="email" id="q-email" placeholder="Your Email" required style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:1rem;">
+                  <input type="text" id="q-title" placeholder="Question Title" required style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:1rem;">
+                  <textarea id="q-content" placeholder="Describe your question in detail..." rows="4" required style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:1rem;resize:vertical;"></textarea>
+                  <button type="submit" style="background:#10b981;color:white;padding:14px;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;">Submit Question</button>
+                  <div id="ask-message" style="display:none;padding:12px;border-radius:8px;text-align:center;"></div>
+                </form>
               </div>
               <div id="forum-questions-container"></div>
             </div>
           </section>
           <script>
+            document.getElementById('quick-ask-form').addEventListener('submit', async function(e) {
+              e.preventDefault();
+              const msg = document.getElementById('ask-message');
+              const btn = this.querySelector('button[type="submit"]');
+              const data = {
+                name: document.getElementById('q-name').value.trim(),
+                email: document.getElementById('q-email').value.trim(),
+                title: document.getElementById('q-title').value.trim(),
+                content: document.getElementById('q-content').value.trim()
+              };
+              if (!data.name || !data.email || !data.title || !data.content) {
+                msg.style.display = 'block';
+                msg.style.background = '#fee2e2';
+                msg.style.color = '#991b1b';
+                msg.textContent = 'Please fill all fields';
+                return;
+              }
+              btn.disabled = true;
+              btn.textContent = 'Submitting...';
+              try {
+                const res = await fetch('/api/forum/submit-question', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (result.success) {
+                  msg.style.display = 'block';
+                  msg.style.background = '#d1fae5';
+                  msg.style.color = '#065f46';
+                  msg.textContent = '✅ Question submitted! It will appear after approval.';
+                  this.reset();
+                } else {
+                  msg.style.display = 'block';
+                  msg.style.background = '#fee2e2';
+                  msg.style.color = '#991b1b';
+                  msg.textContent = result.error || 'Failed to submit';
+                }
+              } catch (err) {
+                msg.style.display = 'block';
+                msg.style.background = '#fee2e2';
+                msg.style.color = '#991b1b';
+                msg.textContent = 'Error. Please try again.';
+              }
+              btn.disabled = false;
+              btn.textContent = 'Submit Question';
+            });
             async function loadForumQuestions() {
               const container = document.getElementById('forum-questions-container');
               try {
                 const res = await fetch('/api/forum/questions?limit=20');
                 const data = await res.json();
                 if (data.questions && data.questions.length > 0) {
-                  container.innerHTML = data.questions.map(q => '<a href="/forum/' + q.slug + '" style="display:block;background:white;border-radius:12px;padding:20px;margin-bottom:15px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,0.06);"><h4 style="color:#1f2937;margin-bottom:8px;">' + q.title + '</h4><div style="display:flex;gap:15px;font-size:0.9rem;color:#6b7280;"><span>👤 ' + q.name + '</span><span>💬 ' + (q.reply_count || 0) + ' replies</span></div></a>').join('');
+                  container.innerHTML = '<h3 style="margin-bottom:20px;color:#1f2937;">Recent Questions</h3>' + data.questions.map(q => '<div class="forum-q-card" style="background:white;border-radius:12px;padding:20px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,0.06);cursor:pointer;" onclick="toggleAnswer(this,' + q.id + ')"><h4 style="color:#1f2937;margin-bottom:8px;">' + escapeHtml(q.title) + '</h4><div style="display:flex;gap:15px;font-size:0.9rem;color:#6b7280;"><span>👤 ' + escapeHtml(q.name) + '</span><span>💬 ' + (q.reply_count || 0) + ' replies</span></div><div class="q-expanded" id="q-exp-' + q.id + '" style="display:none;margin-top:15px;padding-top:15px;border-top:1px solid #e5e7eb;"><div style="color:#374151;white-space:pre-wrap;margin-bottom:15px;">' + escapeHtml(q.content) + '</div><div id="replies-' + q.id + '"><p style="color:#9ca3af;">Loading replies...</p></div></div></div>').join('');
                 } else {
-                  container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:40px;">No questions yet</p>';
+                  container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:40px;">No questions yet. Be the first to ask!</p>';
                 }
-              } catch (e) { container.innerHTML = '<p style="text-align:center;color:#ef4444;">Error loading</p>'; }
+              } catch (e) { container.innerHTML = '<p style="text-align:center;color:#ef4444;">Error loading questions</p>'; }
+            }
+            function escapeHtml(t) { if(!t)return ''; var d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+            async function toggleAnswer(el, qid) {
+              var exp = document.getElementById('q-exp-' + qid);
+              if (exp.style.display === 'none') {
+                exp.style.display = 'block';
+                loadReplies(qid);
+              } else {
+                exp.style.display = 'none';
+              }
+            }
+            async function loadReplies(qid) {
+              var container = document.getElementById('replies-' + qid);
+              try {
+                const res = await fetch('/api/forum/question-replies?question_id=' + qid);
+                const data = await res.json();
+                if (data.replies && data.replies.length > 0) {
+                  container.innerHTML = '<div style="font-weight:600;margin-bottom:10px;">💬 ' + data.replies.length + ' Replies</div>' + data.replies.map(r => '<div style="background:#f9fafb;padding:12px;border-radius:8px;margin-bottom:8px;border-left:3px solid #10b981;"><div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px;"><span style="font-weight:600;">' + escapeHtml(r.name) + '</span><span style="color:#9ca3af;">' + (r.created_at ? new Date(r.created_at).toLocaleDateString() : '') + '</span></div><div style="color:#4b5563;font-size:0.9rem;">' + escapeHtml(r.content) + '</div></div>').join('');
+                } else {
+                  container.innerHTML = '<p style="color:#9ca3af;font-size:0.9rem;">No replies yet.</p>';
+                }
+              } catch (e) { container.innerHTML = '<p style="color:#ef4444;">Error loading replies</p>'; }
             }
             loadForumQuestions();
           <\/script>

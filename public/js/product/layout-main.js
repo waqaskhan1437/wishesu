@@ -39,6 +39,7 @@
     
     const videoWrapper = document.createElement('div');
     videoWrapper.className = 'video-wrapper';
+    videoWrapper.style.cssText = 'aspect-ratio: 16/9; width: 100%;';
     let hasVideo = false;
 
     // Helper to create main image with SEO/LCP optimizations
@@ -96,7 +97,7 @@
       
       const facade = document.createElement('div');
       facade.className = 'video-facade';
-      facade.style.cssText = 'position: relative; width: 100%; height: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #000;';
+      facade.style.cssText = 'position: relative; width: 100%; height: 100%; cursor: pointer; display: flex; align-items: center; justify-content: center; background: #000; aspect-ratio: 16/9;';
       
       // 1. The Image
       const img = createMainImage(product.thumbnail_url || 'https://via.placeholder.com/600');
