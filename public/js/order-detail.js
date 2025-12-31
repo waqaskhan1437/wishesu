@@ -39,9 +39,11 @@
 
   // Approve button
   document.getElementById('approve-btn')?.addEventListener('click', () => {
-    document.getElementById('review-section').style.display = 'block';
-    document.getElementById('tip-section').style.display = 'block';
-    document.getElementById('review-section').scrollIntoView({ behavior: 'smooth' });
+    const reviewSection = document.getElementById('review-section');
+    if (reviewSection) {
+      reviewSection.style.display = 'block';
+      reviewSection.scrollIntoView({ behavior: 'smooth' });
+    }
   });
 
   // Revision button
@@ -277,6 +279,11 @@
       if (approveBtn) approveBtn.style.display = 'none';
     }
 
+    // Tip stays visible until paid (even if review is already submitted)
+    if (!isAdmin) {
+      updateTipUI(order);
+    }
+
     document.getElementById('status-message').className = 'status-message status-delivered';
     document.getElementById('status-message').innerHTML = '<h3>✅ Video Ready!</h3><p>Your video has been delivered and is ready to watch</p>';
   }
@@ -493,18 +500,131 @@
     }
   }
 
-  function processTip(amount) {
-    if (!window.whopCheckout) {
+  function setTipButtonsDisabled(disabled) {
+    document.querySelectorAll('.tip-btn').forEach(btn => {
+      btn.disabled = !!disabled;
+      btn.style.opacity = disabled ? '0.65' : '1';
+      btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+    });
+  }
+
+  function updateTipUI(order) {
+    const tipSection = document.getElementById('tip-section');
+    if (!tipSection) return;
+
+    const tipped = !!(order && order.tip_paid);
+    if (tipped) {
+      tipSection.style.display = 'none';
+      const amt = order.tip_amount || 0;
+      if (amt) showTipThankYou(amt);
+      return;
+    }
+
+    tipSection.style.display = 'block';
+  }
+
+  function showTipThankYou(amount) {
+    const container = document.getElementById('video-player-section') || document.getElementById('order-actions');
+    if (!container) return;
+
+    if (document.getElementById('tip-thankyou')) return;
+
+    const box = document.createElement('div');
+    box.id = 'tip-thankyou';
+    box.style.cssText = 'background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #fbbf24; padding: 18px; border-radius: 12px; text-align: center; margin-top: 18px;';
+    const safe = Number(amount);
+    const shown = Number.isFinite(safe) ? safe : 0;
+    box.innerHTML = `<h3 style="color:#92400e;margin:0;">💝 Thank you for your $${shown} tip!</h3><p style="color:#78350f;margin:10px 0 0;">We really appreciate it.</p>`;
+    container.appendChild(box);
+  }
+
+  async function markTipPaid(amount) {
+    const tipAmount = Number(amount);
+    if (!Number.isFinite(tipAmount) || tipAmount <= 0) return;
+
+    await fetch('/api/order/tip-paid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, amount: tipAmount })
+    });
+
+    if (orderData) {
+      orderData.tip_paid = 1;
+      orderData.tip_amount = tipAmount;
+    }
+
+    const tipSection = document.getElementById('tip-section');
+    if (tipSection) tipSection.style.display = 'none';
+    showTipThankYou(tipAmount);
+  }
+
+  async function processTip(amount) {
+    const tipAmount = Number(amount);
+    if (!orderData || !Number.isFinite(tipAmount) || tipAmount <= 0) return;
+
+    if (orderData.tip_paid) {
+      showTipThankYou(orderData.tip_amount || tipAmount);
+      return;
+    }
+
+    if (typeof window.whopCheckout !== 'function') {
       alert('Payment system not available');
       return;
     }
-    window.whopCheckout({
-      amount: parseFloat(amount),
-      email: orderData.email || '',
-      metadata: { type: 'tip', orderId: orderData.order_id },
-      productPlan: orderData.whop_plan || '',
-      productPriceMap: orderData.whop_price_map || ''
-    });
+
+    setTipButtonsDisabled(true);
+
+    try {
+      const res = await fetch('/api/whop/create-plan-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: orderData.product_id,
+          amount: tipAmount,
+          email: orderData.email || '',
+          metadata: {
+            type: 'tip',
+            orderId: orderData.order_id,
+            tipAmount: tipAmount
+          }
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to create tip checkout');
+
+      if (data.plan_id) {
+        window.whopCheckout({
+          planId: data.plan_id,
+          amount: tipAmount,
+          email: orderData.email || '',
+          metadata: {
+            type: 'tip',
+            orderId: orderData.order_id,
+            tipAmount: tipAmount
+          },
+          onComplete: async () => {
+            await markTipPaid(tipAmount);
+            if (typeof window.whopCheckoutClose === 'function') {
+              window.whopCheckoutClose();
+            }
+          }
+        });
+        return;
+      }
+
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+
+      throw new Error('Payment system not available');
+
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      setTipButtonsDisabled(false);
+    }
   }
 
   function updateStars(rating) {

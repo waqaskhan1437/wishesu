@@ -102,7 +102,15 @@
         </div>
       `;
       document.body.appendChild(overlay);
-      const close = () => { overlay.style.display = 'none'; };
+      const close = () => {
+        overlay.style.display = 'none';
+        const c = overlay.querySelector('.whop-container');
+        if (c) c.innerHTML = '';
+      };
+
+      // Expose a programmatic closer (useful for tip flows that stay on-page)
+      window.whopCheckoutClose = close;
+
       overlay.querySelector('.whop-close').addEventListener('click', close);
       overlay.querySelector('.whop-backdrop').addEventListener('click', close);
     }
@@ -339,9 +347,38 @@
     overlay.style.display = 'flex';
     console.log('🟢 Overlay displayed');
 
-    // Attach our custom save handler to the global scope
-    window.whopCheckoutComplete = handleComplete;
+    // Attach completion handler. For tips, callers can pass opts.onComplete
+    // so the page can update UI and close the popup without redirecting.
+    const userOnComplete = typeof opts.onComplete === 'function' ? opts.onComplete : null;
+    const isTip = !!(metadataObj && metadataObj.type === 'tip');
+
+    window.whopCheckoutComplete = async (checkoutData) => {
+      try {
+        if (userOnComplete) {
+          await userOnComplete(checkoutData);
+          return;
+        }
+
+        // Default tip behavior: close the popup and broadcast an event.
+        if (isTip) {
+          try {
+            window.dispatchEvent(new CustomEvent('whopTipPaid', {
+              detail: { checkoutData, metadata: metadataObj, amount: opts.amount }
+            }));
+          } catch (e) {}
+          if (typeof window.whopCheckoutClose === 'function') window.whopCheckoutClose();
+          return;
+        }
+
+        await handleComplete(checkoutData);
+      } catch (err) {
+        console.error('Whop completion handler error:', err);
+        alert('Payment completed, but we could not finish processing. Please contact support.');
+        if (typeof window.whopCheckoutClose === 'function') window.whopCheckoutClose();
+      }
+    };
     console.log('🟢 Completion handler attached');
+
 
     console.log('🟢 Loading Whop script...');
     try {
