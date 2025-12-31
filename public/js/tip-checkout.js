@@ -38,31 +38,110 @@
     }
   }
 
-  function openModal(title) {
+  function formatUSD(amount) {
+    const n = Number(amount);
+    if (!Number.isFinite(n)) return '';
+    return `$${n.toFixed(2)}`;
+  }
+
+  function openModal(title, amount) {
     closeModal();
+
+    const amountText = formatUSD(amount);
 
     const wrap = document.createElement('div');
     wrap.id = 'tip-payment-modal';
+
     wrap.innerHTML = `
       <style>
-        #tip-payment-modal{position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px}
-        .tip-modal{width:100%;max-width:460px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,.25)}
-        .tip-modal-head{padding:16px 18px;background:#111827;color:#fff;display:flex;align-items:center;justify-content:space-between}
-        .tip-modal-head h3{margin:0;font-size:16px;font-weight:700}
-        .tip-modal-close{border:none;background:rgba(255,255,255,.15);color:#fff;width:34px;height:34px;border-radius:10px;cursor:pointer;font-size:18px;line-height:1}
+        #tip-payment-modal{
+          position:fixed;
+          inset:0;
+          z-index:100000;
+          background:rgba(0,0,0,0.55);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          padding:16px;
+        }
+        .tip-modal{
+          width:100%;
+          max-width:460px;
+          background:#fff;
+          border-radius:16px;
+          overflow:hidden;
+          box-shadow:0 25px 50px -12px rgba(0,0,0,.25);
+        }
+        .tip-modal-head{
+          padding:16px 18px;
+          background:#111827;
+          color:#fff;
+          display:flex;
+          align-items:flex-start;
+          justify-content:space-between;
+          gap:12px;
+        }
+        .tip-modal-head-left{
+          display:flex;
+          flex-direction:column;
+          gap:4px;
+          min-width:0;
+        }
+        .tip-modal-head h3{
+          margin:0;
+          font-size:16px;
+          font-weight:700;
+          line-height:1.2;
+        }
+        .tip-modal-amount{
+          font-size:13px;
+          color:rgba(255,255,255,0.85);
+          line-height:1.2;
+          white-space:nowrap;
+          overflow:hidden;
+          text-overflow:ellipsis;
+        }
+        .tip-modal-close{
+          border:none;
+          background:rgba(255,255,255,0.12);
+          color:#fff;
+          width:36px;
+          height:36px;
+          border-radius:10px;
+          cursor:pointer;
+          font-size:20px;
+          line-height:1;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          flex:0 0 auto;
+        }
         .tip-modal-body{padding:18px}
         .tip-note{margin:0 0 12px;color:#374151;font-size:14px}
         .tip-paypal-box{border:1px solid #e5e7eb;border-radius:12px;padding:14px}
+        .tip-paypal-loading{
+          min-height:120px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          color:#6b7280;
+        }
       </style>
+
       <div class="tip-modal" role="dialog" aria-modal="true">
         <div class="tip-modal-head">
-          <h3>${title || 'Leave a tip'}</h3>
+          <div class="tip-modal-head-left">
+            <h3>${title || 'Leave a tip'}</h3>
+            ${amountText ? `<div class="tip-modal-amount">Amount: <strong>${amountText}</strong></div>` : ``}
+          </div>
           <button class="tip-modal-close" type="button" aria-label="Close">×</button>
         </div>
+
         <div class="tip-modal-body">
           <p class="tip-note">Complete the payment and this popup will close automatically.</p>
+
           <div class="tip-paypal-box">
-            <div id="tip-paypal-buttons" style="min-height:52px;display:flex;align-items:center;justify-content:center;color:#6b7280;">Loading...</div>
+            <div id="tip-paypal-buttons" class="tip-paypal-loading">Loading...</div>
           </div>
         </div>
       </div>
@@ -93,7 +172,7 @@
       throw new Error('Missing required PayPal tip fields');
     }
 
-    const modal = openModal('Tip with PayPal');
+    const modal = openModal('Tip with PayPal', amount);
     const buttonsEl = modal.querySelector('#tip-paypal-buttons');
 
     const closeAndNotify = () => {
