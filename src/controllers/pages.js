@@ -5,10 +5,12 @@
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
 
-// Page type constants - blog and forum are now built-in system pages
+// Page type constants
 const PAGE_TYPES = {
   CUSTOM: 'custom',
   HOME: 'home',
+  BLOG_ARCHIVE: 'blog_archive',
+  FORUM_ARCHIVE: 'forum_archive',
   PRODUCT_GRID: 'product_grid'
 };
 

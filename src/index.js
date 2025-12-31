@@ -1368,8 +1368,7 @@ export default {
 
       // ----- DYNAMIC PAGES -----
       // Skip core static pages that should always use the file system
-      // blog and forum are built-in pages with their own static files
-      const coreStaticPages = ['index', 'products-grid', 'product', 'buyer-order', 'order-detail', 'order-success', 'success', 'page-builder', 'blog', 'forum'];
+      const coreStaticPages = ['index', 'products-grid', 'product', 'buyer-order', 'order-detail', 'order-success', 'success', 'page-builder'];
       if (path.endsWith('.html') && !path.includes('/admin/') && !path.startsWith('/admin')) {
         const slug = path.slice(1).replace(/\.html$/, '');
         // Only check database for non-core pages
@@ -1392,13 +1391,20 @@ export default {
 
       // ----- DEFAULT PAGE ROUTING -----
       // Check for default pages and serve them instead of static files
-      // Note: /blog/ and /forum/ are built-in pages - they always use static files
       if ((method === 'GET' || method === 'HEAD') && env.DB) {
         let defaultPageType = null;
         
         // Home page
         if (path === '/' || path === '/index.html') {
           defaultPageType = 'home';
+        }
+        // Blog archive
+        else if (path === '/blog/' || path === '/blog/index.html' || path === '/blog') {
+          defaultPageType = 'blog_archive';
+        }
+        // Forum archive
+        else if (path === '/forum/' || path === '/forum/index.html' || path === '/forum') {
+          defaultPageType = 'forum_archive';
         }
         // Product grid
         else if (path === '/products/' || path === '/products/index.html' || path === '/products' || path === '/products-grid.html') {

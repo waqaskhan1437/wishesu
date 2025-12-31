@@ -6,6 +6,8 @@
   const PAGE_TYPE_LABELS = {
     custom: { icon: '📄', label: 'Custom' },
     home: { icon: '🏠', label: 'Home' },
+    blog_archive: { icon: '📝', label: 'Blog Archive' },
+    forum_archive: { icon: '💬', label: 'Forum' },
     product_grid: { icon: '🛒', label: 'Products' }
   };
 
@@ -113,7 +115,7 @@
     const container = document.getElementById('defaults-grid');
     if (!container) return;
     
-    const types = ['home', 'product_grid'];
+    const types = ['home', 'blog_archive', 'forum_archive', 'product_grid'];
     let html = '';
     
     for (const type of types) {
@@ -139,19 +141,6 @@
         console.error('Error loading default:', type, e);
       }
     }
-    
-    // Add links to built-in pages
-    html += `<a href="/blog/" target="_blank" style="background:white;border-radius:8px;padding:12px;text-align:center;text-decoration:none;display:block;">
-      <div style="font-size:1.5rem;margin-bottom:5px;">📝</div>
-      <div style="font-weight:600;color:#1f2937;font-size:0.85rem;">Blog</div>
-      <div style="color:#3b82f6;font-size:0.75rem;margin-top:3px;">Built-in →</div>
-    </a>`;
-    
-    html += `<a href="/forum/" target="_blank" style="background:white;border-radius:8px;padding:12px;text-align:center;text-decoration:none;display:block;">
-      <div style="font-size:1.5rem;margin-bottom:5px;">💬</div>
-      <div style="font-weight:600;color:#1f2937;font-size:0.85rem;">Forum</div>
-      <div style="color:#3b82f6;font-size:0.75rem;margin-top:3px;">Built-in →</div>
-    </a>`;
     
     container.innerHTML = html;
   }

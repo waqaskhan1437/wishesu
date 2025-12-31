@@ -153,9 +153,6 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'pages':
         if (AD.loadPages) await AD.loadPages(panel);
         break;
-      case 'system-pages':
-        if (AD.loadSystemPages) await AD.loadSystemPages(panel);
-        break;
       case 'components':
         if (AD.loadComponents) await AD.loadComponents(panel);
         break;

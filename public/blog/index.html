@@ -3,11 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title id="page-title">Blog - WishesU</title>
-  <meta name="description" id="page-description" content="Tips, tutorials, and updates from our team">
-  <meta name="keywords" id="page-keywords" content="">
+  <title>Blog - WishesU</title>
   <link rel="stylesheet" href="/css/style.css">
-  <style id="custom-css"></style>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -70,37 +67,6 @@
   
   <script src="/js/blog-cards.js"></script>
   <script>
-    // Load SEO settings from system pages
-    async function loadBlogSEO() {
-      try {
-        const res = await fetch('/api/system-page?type=blog_archive');
-        const data = await res.json();
-        if (data.page) {
-          if (data.page.seo_title) {
-            document.getElementById('page-title').textContent = data.page.seo_title;
-            document.title = data.page.seo_title;
-          }
-          if (data.page.seo_description) {
-            document.getElementById('page-description').setAttribute('content', data.page.seo_description);
-          }
-          if (data.page.seo_keywords) {
-            document.getElementById('page-keywords').setAttribute('content', data.page.seo_keywords);
-          }
-          if (data.page.custom_css) {
-            document.getElementById('custom-css').textContent = data.page.custom_css;
-          }
-          if (data.page.custom_js) {
-            const script = document.createElement('script');
-            script.textContent = data.page.custom_js;
-            document.body.appendChild(script);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load SEO settings:', e);
-      }
-    }
-    loadBlogSEO();
-    
     if (window.BlogCards) {
       BlogCards.render('blog-archive', { 
         limit: 30,

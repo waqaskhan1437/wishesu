@@ -431,13 +431,18 @@
             <div class="icon">🏠</div>
             <div class="label">Home Page</div>
           </div>
+          <div class="template-card" onclick="loadTemplate('blog_archive')">
+            <div class="icon">📝</div>
+            <div class="label">Blog Archive</div>
+          </div>
+          <div class="template-card" onclick="loadTemplate('forum_archive')">
+            <div class="icon">💬</div>
+            <div class="label">Forum Page</div>
+          </div>
           <div class="template-card" onclick="loadTemplate('product_grid')">
             <div class="icon">🛒</div>
             <div class="label">Product Grid</div>
           </div>
-        </div>
-        <div style="margin-top:10px;padding:10px;background:#fef3c7;border-radius:8px;font-size:0.8em;color:#92400e;">
-          ℹ️ Blog & Forum are built-in pages. Edit their SEO in Admin → Built-in Pages.
         </div>
       </div>
       
@@ -509,6 +514,14 @@
           <div class="type-option" data-type="home" onclick="setPageType('home')">
             <div class="icon">🏠</div>
             <div class="label">Home</div>
+          </div>
+          <div class="type-option" data-type="blog_archive" onclick="setPageType('blog_archive')">
+            <div class="icon">📝</div>
+            <div class="label">Blog</div>
+          </div>
+          <div class="type-option" data-type="forum_archive" onclick="setPageType('forum_archive')">
+            <div class="icon">💬</div>
+            <div class="label">Forum</div>
           </div>
           <div class="type-option" data-type="product_grid" onclick="setPageType('product_grid')">
             <div class="icon">🛒</div>
@@ -659,6 +672,62 @@
         slug: 'home',
         type: 'home',
         sections: ['hero', 'features', 'products', 'cta', 'footer']
+      },
+      blog_archive: {
+        title: 'Blog',
+        slug: 'blog',
+        type: 'blog_archive',
+        content: `
+          <section style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:50px 20px;text-align:center;">
+            <h1 style="font-size:2.5rem;margin-bottom:10px;">📝 Blog</h1>
+            <p style="opacity:0.9;">Latest articles and updates</p>
+          </section>
+          <section style="padding:40px 20px;">
+            <div style="max-width:1200px;margin:0 auto;">
+              <div id="blog-archive-container"></div>
+            </div>
+          </section>
+          <script>
+            if (typeof BlogCards !== 'undefined') {
+              BlogCards.render('blog-archive-container', { limit: 30, pagination: true });
+            }
+          <\/script>
+        `
+      },
+      forum_archive: {
+        title: 'Forum',
+        slug: 'forum',
+        type: 'forum_archive',
+        content: `
+          <section style="background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:white;padding:50px 20px;text-align:center;">
+            <h1 style="font-size:2.5rem;margin-bottom:10px;">💬 Community Forum</h1>
+            <p style="opacity:0.9;">Ask questions and share knowledge</p>
+          </section>
+          <section style="padding:40px 20px;">
+            <div style="max-width:1000px;margin:0 auto;">
+              <div style="background:white;border-radius:16px;padding:30px;margin-bottom:30px;box-shadow:0 4px 15px rgba(0,0,0,0.08);">
+                <h3 style="margin-bottom:20px;">❓ Ask a Question</h3>
+                <p style="color:#6b7280;">Visit <a href="/forum/" style="color:#10b981;">the full forum page</a> to ask questions and participate.</p>
+              </div>
+              <div id="forum-questions-container"></div>
+            </div>
+          </section>
+          <script>
+            async function loadForumQuestions() {
+              const container = document.getElementById('forum-questions-container');
+              try {
+                const res = await fetch('/api/forum/questions?limit=20');
+                const data = await res.json();
+                if (data.questions && data.questions.length > 0) {
+                  container.innerHTML = data.questions.map(q => '<a href="/forum/' + q.slug + '" style="display:block;background:white;border-radius:12px;padding:20px;margin-bottom:15px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,0.06);"><h4 style="color:#1f2937;margin-bottom:8px;">' + q.title + '</h4><div style="display:flex;gap:15px;font-size:0.9rem;color:#6b7280;"><span>👤 ' + q.name + '</span><span>💬 ' + (q.reply_count || 0) + ' replies</span></div></a>').join('');
+                } else {
+                  container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:40px;">No questions yet</p>';
+                }
+              } catch (e) { container.innerHTML = '<p style="text-align:center;color:#ef4444;">Error loading</p>'; }
+            }
+            loadForumQuestions();
+          <\/script>
+        `
       },
       product_grid: {
         title: 'Products',
@@ -838,14 +907,14 @@
     // Load Current Defaults
     async function loadCurrentDefaults() {
       const container = document.getElementById('defaults-list');
-      const types = ['home', 'product_grid'];
+      const types = ['home', 'blog_archive', 'forum_archive', 'product_grid'];
       let html = '';
       for (const type of types) {
         try {
           const res = await fetch(`/api/pages/default?type=${type}`);
           const data = await res.json();
           const label = type.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
-          const icon = type === 'home' ? '🏠' : '🛒';
+          const icon = type === 'home' ? '🏠' : type === 'blog_archive' ? '📝' : type === 'forum_archive' ? '💬' : '🛒';
           if (data.page) {
             html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
               <span>${icon}</span><span style="flex:1;font-weight:600;">${label}</span>
@@ -859,15 +928,6 @@
           }
         } catch (e) { console.error('Error loading default for', type); }
       }
-      // Add built-in pages info
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
-        <span>📝</span><span style="flex:1;">Blog</span>
-        <span style="color:var(--primary);font-size:0.8rem;">Built-in</span>
-      </div>`;
-      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;">
-        <span>💬</span><span style="flex:1;">Forum</span>
-        <span style="color:var(--primary);font-size:0.8rem;">Built-in</span>
-      </div>`;
       container.innerHTML = html || '<p style="color:var(--gray);">No defaults set</p>';
     }
 
