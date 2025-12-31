@@ -413,7 +413,7 @@ main {
     margin-left: 4px;
   }
   
-  /* Ensure video controls are visible on mobile */
+  /* Ensure video controls are visible on mobile - ONLY for player, NOT thumbnails */
   #universal-player-container {
     overflow: visible !important;
     min-height: 250px !important;
@@ -421,19 +421,33 @@ main {
   #universal-player-container video {
     min-height: 200px !important;
   }
-  video::-webkit-media-controls {
+  #universal-player-container video::-webkit-media-controls {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  video::-webkit-media-controls-panel {
+  #universal-player-container video::-webkit-media-controls-panel {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
-  video::-webkit-media-controls-enclosure {
+  #universal-player-container video::-webkit-media-controls-enclosure {
     visibility: visible !important;
     opacity: 1 !important;
+  }
+  
+  /* HIDE controls on thumbnail videos in slider */
+  #thumbnails-slider video {
+    pointer-events: none !important;
+  }
+  #thumbnails-slider video::-webkit-media-controls,
+  #thumbnails-slider video::-webkit-media-controls-panel,
+  #thumbnails-slider video::-webkit-media-controls-enclosure,
+  #thumbnails-slider video::-webkit-media-controls-start-playback-button {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    -webkit-appearance: none !important;
   }
 
   /* Review section - Watch Video button below thumbnail on mobile */
@@ -493,6 +507,25 @@ main {
   display: inline-block;
   overflow: visible;
   z-index: 1;
+}
+
+/* Hide controls on thumbnail videos */
+#thumbnails-slider video {
+  pointer-events: none !important;
+}
+#thumbnails-slider video::-webkit-media-controls {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+#thumbnails-slider video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+#thumbnails-slider video::-webkit-media-controls-panel {
+  display: none !important;
+}
+#thumbnails-slider video::-moz-media-controls {
+  display: none !important;
 }
 
 /* Keep play button visible on thumbnail hover - always visible */

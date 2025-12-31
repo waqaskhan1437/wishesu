@@ -46,6 +46,8 @@
     .video-wrapper img.main-img{width:100%;height:100%;object-fit:cover;display:block;border-radius:var(--radius)}
     .video-facade{position:relative;width:100%;height:100%;aspect-ratio:16/9}
     .play-btn-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80px;height:80px;background:rgba(0,0,0,0.7);border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:100}
+    #thumbnails-slider video{pointer-events:none}
+    #thumbnails-slider video::-webkit-media-controls,#thumbnails-slider video::-webkit-media-controls-panel,#thumbnails-slider video::-webkit-media-controls-enclosure{display:none !important;opacity:0 !important;visibility:hidden !important}
     .site-footer{text-align:center;padding:2rem 0;color:var(--text-muted);border-top:1px solid var(--border);margin-top:3rem}
     /* Skeleton loading to prevent CLS */
     .skeleton-container{display:grid;grid-template-columns:55% 45%;gap:2.5rem;align-items:start}
@@ -59,7 +61,7 @@
     .skeleton-badge{height:80px;background:#f0f0f0;border-radius:var(--radius-sm)}
     .skeleton-btn{height:50px;background:#f0f0f0;border-radius:var(--radius-sm);margin-top:1.5rem}
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-    @media(max-width:900px){.skeleton-container{display:flex;flex-direction:column}.skeleton-media{min-height:auto}.video-wrapper{overflow:visible !important}.video-wrapper video{min-height:200px}}
+    @media(max-width:900px){.skeleton-container{display:flex;flex-direction:column}.skeleton-media{min-height:auto}.video-wrapper{overflow:visible !important}.video-wrapper video{min-height:200px}#thumbnails-slider video::-webkit-media-controls{display:none !important}}
   </style>
 
   <!-- Non-critical CSS loaded asynchronously -->

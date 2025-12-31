@@ -329,17 +329,21 @@
 
             if (window.productThumbnailsSlider) {
               const galleryThumb = document.createElement('div');
-              galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);';
+              galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s; background:#000;';
 
-              // Use thumbnail image if available, otherwise use gradient background
-              const thumbUrl = review.thumbnail_url || product.thumbnail_url;
-              if (thumbUrl) {
-                const imgThumb = document.createElement('img');
-                imgThumb.src = thumbUrl;
-                imgThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover; display: block;';
-                imgThumb.alt = 'Review Video';
-                galleryThumb.appendChild(imgThumb);
-              }
+              // Use actual video as thumbnail source - browser shows video frame automatically
+              // NO controls attribute - just shows first frame
+              const videoThumb = document.createElement('video');
+              videoThumb.src = portfolioVideoUrl;
+              videoThumb.preload = 'metadata'; // Load just first frame
+              videoThumb.muted = true;
+              videoThumb.playsInline = true;
+              videoThumb.setAttribute('playsinline', '');
+              videoThumb.setAttribute('webkit-playsinline', '');
+              // IMPORTANT: No controls attribute - this is just for thumbnail display
+              videoThumb.controls = false;
+              videoThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover; pointer-events: none;';
+              galleryThumb.appendChild(videoThumb);
 
               // Add review badge to gallery thumbnail
               const badge = document.createElement('div');
@@ -349,7 +353,7 @@
               const playIcon = document.createElement('div');
               playIcon.className = 'thumb-play-btn';
               playIcon.innerHTML = '▶';
-              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px; opacity:1 !important; z-index:100;';
+              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px; opacity:1 !important; z-index:100; pointer-events:none;';
 
               galleryThumb.appendChild(badge);
               galleryThumb.appendChild(playIcon);
