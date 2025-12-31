@@ -149,7 +149,7 @@
         // Create container for the player
         const playerContainer = document.createElement('div');
         playerContainer.id = 'universal-player-container';
-        playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: 250px; border-radius: 12px; overflow: visible; background: #000;';
+        playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: 400px; border-radius: 12px; overflow: hidden; background: #000;';
         videoWrapper.appendChild(playerContainer);
 
         // Initialize Player
@@ -160,8 +160,8 @@
             autoplay: true // Attempt autoplay since user interacted
           });
         } else {
-          // Fallback - ensure controls are visible
-          playerContainer.innerHTML = `<video src="${product.video_url}" controls autoplay playsinline style="width:100%;height:100%;min-height:200px;"></video>`;
+          // Fallback
+          playerContainer.innerHTML = `<video src="${product.video_url}" controls autoplay style="width:100%;height:100%"></video>`;
         }
       };
 

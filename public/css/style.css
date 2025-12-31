@@ -372,14 +372,12 @@ main {
     min-height: auto;
     max-height: none;
     width: 100%;
-    overflow: visible !important;
   }
   .video-wrapper video { 
     object-fit: contain !important;
-    width: 100% !important;
-    height: 100% !important;
+    width: 100%;
+    height: 100%;
     max-height: none;
-    min-height: 200px;
   }
   .video-wrapper img.main-img {
     object-fit: cover;
@@ -388,29 +386,6 @@ main {
   }
   .video-facade {
     aspect-ratio: 16 / 9 !important;
-  }
-  
-  /* Ensure video controls are visible on mobile */
-  #universal-player-container {
-    overflow: visible !important;
-    min-height: 250px !important;
-  }
-  #universal-player-container video {
-    min-height: 200px !important;
-  }
-  video::-webkit-media-controls {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  }
-  video::-webkit-media-controls-panel {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  }
-  video::-webkit-media-controls-enclosure {
-    visibility: visible !important;
-    opacity: 1 !important;
   }
 
   /* Review section - Watch Video button below thumbnail on mobile */

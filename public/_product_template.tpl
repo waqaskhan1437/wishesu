@@ -41,9 +41,8 @@
     .loading-state{text-align:center;padding:4rem 0}
     .spinner{border:4px solid #f3f3f3;border-top:4px solid var(--primary);border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 1rem}
     @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
-    .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;min-height:200px;background:#000;border-radius:var(--radius);overflow:visible}
-    .video-wrapper video{border-radius:var(--radius)}
-    .video-wrapper img.main-img{width:100%;height:100%;object-fit:cover;display:block;border-radius:var(--radius)}
+    .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;min-height:200px;background:#000;border-radius:var(--radius);overflow:hidden}
+    .video-wrapper img.main-img{width:100%;height:100%;object-fit:cover;display:block}
     .site-footer{text-align:center;padding:2rem 0;color:var(--text-muted);border-top:1px solid var(--border);margin-top:3rem}
     /* Skeleton loading to prevent CLS */
     .skeleton-container{display:grid;grid-template-columns:55% 45%;gap:2.5rem;align-items:start}
@@ -57,7 +56,7 @@
     .skeleton-badge{height:80px;background:#f0f0f0;border-radius:var(--radius-sm)}
     .skeleton-btn{height:50px;background:#f0f0f0;border-radius:var(--radius-sm);margin-top:1.5rem}
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-    @media(max-width:900px){.skeleton-container{display:flex;flex-direction:column}.skeleton-media{min-height:auto}.video-wrapper{overflow:visible !important}.video-wrapper video{min-height:200px}}
+    @media(max-width:900px){.skeleton-container{display:flex;flex-direction:column}.skeleton-media{min-height:auto}}
   </style>
 
   <!-- Non-critical CSS loaded asynchronously -->

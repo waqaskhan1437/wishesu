@@ -500,13 +500,10 @@
             videoEl.controls = true;
             // FIXED: Set preload to auto if autoplay is on, otherwise none
             videoEl.preload = video.autoplay ? 'auto' : 'none';
-            videoEl.playsInline = true;
-            videoEl.setAttribute('playsinline', '');
-            videoEl.setAttribute('webkit-playsinline', '');
-            videoEl.style.cssText = 'width: 100%; height: 100%; min-height: 200px; background: #000; border-radius: 12px;';
+            videoEl.style.cssText = 'width: 100%; height: 100%; background: #000; border-radius: 12px;';
             
-            // Disable download button but keep other controls
-            videoEl.controlsList = 'nodownload';
+            // Disable download button and right-click
+            videoEl.controlsList = 'nodownload noplaybackrate';
             videoEl.disablePictureInPicture = true;
             videoEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
             
@@ -624,16 +621,13 @@
             // FIXED: Set preload to auto if autoplay is on, otherwise auto
             videoEl.preload = autoplay ? 'auto' : 'auto';
             videoEl.playsInline = true;
-            videoEl.setAttribute('playsinline', '');
-            videoEl.setAttribute('webkit-playsinline', '');
             videoEl.style.width = '100%';
             videoEl.style.height = '100%';
-            videoEl.style.minHeight = '200px';
             videoEl.style.borderRadius = '12px';
             videoEl.style.background = '#000';
             
-            // Disable download button but keep other controls visible
-            videoEl.controlsList = 'nodownload';
+            // Disable download button and right-click
+            videoEl.controlsList = 'nodownload noplaybackrate';
             videoEl.disablePictureInPicture = true;
             videoEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
 
