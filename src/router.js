@@ -622,37 +622,48 @@ export async function routeApiRequest(req, env, url, path, method) {
       // Get all unique emails from orders, blog_comments, and forum
       
       // Get emails from blog_comments with counts
-      const commentUsers = await env.DB.prepare(`
-        SELECT 
-          LOWER(email) as email,
-          MAX(name) as name,
-          COUNT(*) as comment_count,
-          MAX(created_at) as last_activity
-        FROM blog_comments
-        GROUP BY LOWER(email)
-      `).all();
+      let commentUsers = { results: [] };
+      try {
+        commentUsers = await env.DB.prepare(`
+          SELECT 
+            LOWER(email) as email,
+            MAX(name) as name,
+            COUNT(*) as comment_count,
+            MAX(created_at) as last_activity
+          FROM blog_comments
+          GROUP BY LOWER(email)
+        `).all();
+      } catch (e) { console.log('blog_comments query error:', e.message); }
       
       // Get emails from forum_questions
-      const forumQUsers = await env.DB.prepare(`
-        SELECT 
-          LOWER(email) as email,
-          MAX(name) as name,
-          COUNT(*) as question_count,
-          MAX(created_at) as last_activity
-        FROM forum_questions
-        GROUP BY LOWER(email)
-      `).all();
+      let forumQUsers = { results: [] };
+      try {
+        forumQUsers = await env.DB.prepare(`
+          SELECT 
+            LOWER(email) as email,
+            MAX(name) as name,
+            COUNT(*) as question_count,
+            MAX(created_at) as last_activity
+          FROM forum_questions
+          WHERE email IS NOT NULL AND email != ''
+          GROUP BY LOWER(email)
+        `).all();
+      } catch (e) { console.log('forum_questions query error:', e.message); }
       
       // Get emails from forum_replies
-      const forumRUsers = await env.DB.prepare(`
-        SELECT 
-          LOWER(email) as email,
-          MAX(name) as name,
-          COUNT(*) as reply_count,
-          MAX(created_at) as last_activity
-        FROM forum_replies
-        GROUP BY LOWER(email)
-      `).all();
+      let forumRUsers = { results: [] };
+      try {
+        forumRUsers = await env.DB.prepare(`
+          SELECT 
+            LOWER(email) as email,
+            MAX(name) as name,
+            COUNT(*) as reply_count,
+            MAX(created_at) as last_activity
+          FROM forum_replies
+          WHERE email IS NOT NULL AND email != ''
+          GROUP BY LOWER(email)
+        `).all();
+      } catch (e) { console.log('forum_replies query error:', e.message); }
       
       // Get orders for email extraction
       const orders = await env.DB.prepare(`
@@ -774,29 +785,38 @@ export async function routeApiRequest(req, env, url, path, method) {
       }
       
       // Get blog comments
-      const comments = await env.DB.prepare(`
-        SELECT c.*, b.title as blog_title, b.slug as blog_slug
-        FROM blog_comments c
-        LEFT JOIN blogs b ON c.blog_id = b.id
-        WHERE LOWER(c.email) = ?
-        ORDER BY c.created_at DESC
-      `).bind(email).all();
+      let comments = { results: [] };
+      try {
+        comments = await env.DB.prepare(`
+          SELECT c.*, b.title as blog_title, b.slug as blog_slug
+          FROM blog_comments c
+          LEFT JOIN blogs b ON c.blog_id = b.id
+          WHERE LOWER(c.email) = ?
+          ORDER BY c.created_at DESC
+        `).bind(email).all();
+      } catch (e) { console.log('comments query error:', e.message); }
       
       // Get forum questions
-      const forumQuestions = await env.DB.prepare(`
-        SELECT * FROM forum_questions
-        WHERE LOWER(email) = ?
-        ORDER BY created_at DESC
-      `).bind(email).all();
+      let forumQuestions = { results: [] };
+      try {
+        forumQuestions = await env.DB.prepare(`
+          SELECT * FROM forum_questions
+          WHERE LOWER(email) = ?
+          ORDER BY created_at DESC
+        `).bind(email).all();
+      } catch (e) { console.log('forumQuestions query error:', e.message); }
       
       // Get forum replies
-      const forumReplies = await env.DB.prepare(`
-        SELECT r.*, q.title as question_title, q.slug as question_slug
-        FROM forum_replies r
-        LEFT JOIN forum_questions q ON r.question_id = q.id
-        WHERE LOWER(r.email) = ?
-        ORDER BY r.created_at DESC
-      `).bind(email).all();
+      let forumReplies = { results: [] };
+      try {
+        forumReplies = await env.DB.prepare(`
+          SELECT r.*, q.title as question_title, q.slug as question_slug
+          FROM forum_replies r
+          LEFT JOIN forum_questions q ON r.question_id = q.id
+          WHERE LOWER(r.email) = ?
+          ORDER BY r.created_at DESC
+        `).bind(email).all();
+      } catch (e) { console.log('forumReplies query error:', e.message); }
       
       // Get orders
       const allOrders = await env.DB.prepare(`
@@ -885,6 +905,106 @@ export async function routeApiRequest(req, env, url, path, method) {
   // Admin: Get all questions
   if (method === 'GET' && path === '/api/admin/forum/questions') {
     return getAdminQuestions(env, url);
+  }
+
+  // Admin: Migrate/fix forum tables
+  if (method === 'POST' && path === '/api/admin/forum/migrate') {
+    try {
+      // Force recreate forum_replies table with proper schema
+      let existingReplies = [];
+      try {
+        const result = await env.DB.prepare(`SELECT * FROM forum_replies`).all();
+        existingReplies = result.results || [];
+      } catch (e) { /* table might not exist */ }
+
+      await env.DB.prepare(`DROP TABLE IF EXISTS forum_replies`).run();
+      await env.DB.prepare(`
+        CREATE TABLE forum_replies (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          question_id INTEGER NOT NULL DEFAULT 0,
+          name TEXT NOT NULL DEFAULT '',
+          email TEXT DEFAULT '',
+          content TEXT NOT NULL DEFAULT '',
+          status TEXT DEFAULT 'pending',
+          created_at INTEGER
+        )
+      `).run();
+
+      // Restore data
+      let restoredReplies = 0;
+      for (const r of existingReplies) {
+        try {
+          await env.DB.prepare(`
+            INSERT INTO forum_replies (question_id, name, email, content, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(
+            r.question_id || 0,
+            r.name || '',
+            r.email || '',
+            r.content || '',
+            r.status || 'pending',
+            r.created_at || Date.now()
+          ).run();
+          restoredReplies++;
+        } catch (e) { /* skip */ }
+      }
+
+      // Force recreate forum_questions table
+      let existingQuestions = [];
+      try {
+        const result = await env.DB.prepare(`SELECT * FROM forum_questions`).all();
+        existingQuestions = result.results || [];
+      } catch (e) { /* table might not exist */ }
+
+      await env.DB.prepare(`DROP TABLE IF EXISTS forum_questions`).run();
+      await env.DB.prepare(`
+        CREATE TABLE forum_questions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL DEFAULT '',
+          slug TEXT,
+          content TEXT NOT NULL DEFAULT '',
+          name TEXT NOT NULL DEFAULT '',
+          email TEXT DEFAULT '',
+          status TEXT DEFAULT 'pending',
+          reply_count INTEGER DEFAULT 0,
+          created_at INTEGER,
+          updated_at INTEGER
+        )
+      `).run();
+
+      // Restore data
+      let restoredQuestions = 0;
+      for (const q of existingQuestions) {
+        try {
+          await env.DB.prepare(`
+            INSERT INTO forum_questions (title, slug, content, name, email, status, reply_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            q.title || '',
+            q.slug || '',
+            q.content || '',
+            q.name || '',
+            q.email || '',
+            q.status || 'pending',
+            q.reply_count || 0,
+            q.created_at || Date.now(),
+            q.updated_at || Date.now()
+          ).run();
+          restoredQuestions++;
+        } catch (e) { /* skip */ }
+      }
+
+      return json({
+        success: true,
+        message: 'Forum tables migrated successfully',
+        restored: {
+          questions: restoredQuestions,
+          replies: restoredReplies
+        }
+      });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
   }
 
   // Admin: Get all replies
