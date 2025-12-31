@@ -1209,6 +1209,13 @@ const isAdminAPI = path.startsWith('/api/admin/');
 const isLoginRoute = (path === '/admin/login' || path === '/admin/login/');
 const isLogoutRoute = (path === '/admin/logout' || path === '/admin/logout/');
 
+// Some admin-only pages live outside /admin (legacy routes used by dashboard links)
+const isAdminProtectedPage = (
+  path === '/order-detail' ||
+  path === '/order-detail/' ||
+  path === '/order-detail.html'
+);
+
 function base64url(bytes) {
   const b64 = btoa(String.fromCharCode(...bytes));
   return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
@@ -1333,8 +1340,8 @@ if (isLogoutRoute) {
   });
 }
 
-// Protect admin UI + APIs
-if ((isAdminUI || isAdminAPI) && !isLoginRoute) {
+// Protect admin UI + APIs + admin-only pages
+if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
   const gate = await requireAdmin();
   if (gate) return gate;
 }
