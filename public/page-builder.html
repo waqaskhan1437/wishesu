@@ -705,7 +705,11 @@
           </section>
           <section style="padding:40px 20px;">
             <div style="max-width:1000px;margin:0 auto;">
-              <div id="ask-question-box" style="background:white;border-radius:16px;padding:30px;margin-bottom:30px;box-shadow:0 4px 15px rgba(0,0,0,0.08);">
+              <!-- Questions List First -->
+              <div id="forum-questions-container" style="margin-bottom:40px;"></div>
+              
+              <!-- Ask Question Form at Bottom -->
+              <div id="ask-question-box" style="background:white;border-radius:16px;padding:30px;box-shadow:0 4px 15px rgba(0,0,0,0.08);">
                 <h3 style="margin-bottom:20px;">❓ Ask a Question</h3>
                 <form id="quick-ask-form" style="display:flex;flex-direction:column;gap:15px;">
                   <input type="text" id="q-name" placeholder="Your Name" required style="padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:1rem;">
@@ -716,7 +720,6 @@
                   <div id="ask-message" style="display:none;padding:12px;border-radius:8px;text-align:center;"></div>
                 </form>
               </div>
-              <div id="forum-questions-container"></div>
             </div>
           </section>
           <script>
@@ -769,13 +772,14 @@
             });
             async function loadForumQuestions() {
               const container = document.getElementById('forum-questions-container');
+              container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading questions...</p>';
               try {
                 const res = await fetch('/api/forum/questions?limit=20');
                 const data = await res.json();
                 if (data.questions && data.questions.length > 0) {
                   container.innerHTML = '<h3 style="margin-bottom:20px;color:#1f2937;">Recent Questions</h3>' + data.questions.map(q => '<div class="forum-q-card" style="background:white;border-radius:12px;padding:20px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,0.06);cursor:pointer;" onclick="toggleAnswer(this,' + q.id + ')"><h4 style="color:#1f2937;margin-bottom:8px;">' + escapeHtml(q.title) + '</h4><div style="display:flex;gap:15px;font-size:0.9rem;color:#6b7280;"><span>👤 ' + escapeHtml(q.name) + '</span><span>💬 ' + (q.reply_count || 0) + ' replies</span></div><div class="q-expanded" id="q-exp-' + q.id + '" style="display:none;margin-top:15px;padding-top:15px;border-top:1px solid #e5e7eb;"><div style="color:#374151;white-space:pre-wrap;margin-bottom:15px;">' + escapeHtml(q.content) + '</div><div id="replies-' + q.id + '"><p style="color:#9ca3af;">Loading replies...</p></div></div></div>').join('');
                 } else {
-                  container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:40px;">No questions yet. Be the first to ask!</p>';
+                  container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:40px;background:white;border-radius:12px;">No questions yet. Be the first to ask!</p>';
                 }
               } catch (e) { container.innerHTML = '<p style="text-align:center;color:#ef4444;">Error loading questions</p>'; }
             }

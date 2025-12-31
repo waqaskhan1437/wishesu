@@ -16,7 +16,7 @@ async function ensureForumTables(env) {
         slug TEXT UNIQUE,
         content TEXT NOT NULL,
         name TEXT NOT NULL,
-        email TEXT NOT NULL,
+        email TEXT,
         status TEXT DEFAULT 'pending',
         reply_count INTEGER DEFAULT 0,
         created_at INTEGER,
@@ -29,12 +29,25 @@ async function ensureForumTables(env) {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         question_id INTEGER NOT NULL,
         name TEXT NOT NULL,
-        email TEXT NOT NULL,
+        email TEXT,
         content TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
         created_at INTEGER
       )
     `).run();
+
+    // Add email column if it doesn't exist (for existing tables)
+    try {
+      await env.DB.prepare(`ALTER TABLE forum_questions ADD COLUMN email TEXT DEFAULT ''`).run();
+    } catch (e) {
+      // Column already exists, ignore
+    }
+    
+    try {
+      await env.DB.prepare(`ALTER TABLE forum_replies ADD COLUMN email TEXT DEFAULT ''`).run();
+    } catch (e) {
+      // Column already exists, ignore
+    }
   } catch (e) {
     console.error('Forum table creation error:', e);
   }
