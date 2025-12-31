@@ -150,6 +150,9 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'settings': 
         if (AD.loadSettings) AD.loadSettings(panel); 
         break;
+      case 'seo':
+        if (AD.loadSEO) await AD.loadSEO(panel);
+        break;
       case 'pages':
         if (AD.loadPages) await AD.loadPages(panel);
         break;

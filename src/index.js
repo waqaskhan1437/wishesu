@@ -12,6 +12,7 @@ import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
 import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
+import { buildRobotsTxt, buildSitemapXml, getSeoForRequest, applySeoToHtml } from './controllers/seo.js';
 
 // Blog post HTML template generator
 function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
@@ -1359,6 +1360,35 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       return handleOptions(req);
     }
 
+    // Dynamic robots.txt + sitemap.xml (SEO settings controlled from Admin)
+    if ((method === 'GET' || method === 'HEAD')) {
+      if (path === '/robots.txt') {
+        if (env.DB) await initDB(env);
+        const txt = await buildRobotsTxt(env, req);
+        return new Response(txt, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'public, max-age=300'
+          }
+        });
+      }
+
+      if (path === '/sitemap.xml' || /^\/sitemap-(\d+)\.xml$/.test(path)) {
+        if (env.DB) await initDB(env);
+        const m = path.match(/^\/sitemap-(\d+)\.xml$/);
+        const part = m ? m[1] : null;
+        const sm = await buildSitemapXml(env, req, part);
+        return new Response(sm.body, {
+          status: sm.status || 200,
+          headers: {
+            'Content-Type': (sm.contentType || 'application/xml') + '; charset=utf-8',
+            'Cache-Control': 'public, max-age=300'
+          }
+        });
+      }
+    }
+
     try {
       // Private asset: never serve the raw product template directly
       if ((method === 'GET' || method === 'HEAD') && (path === '/_product_template.tpl' || path === '/_product_template' || path === '/_product_template.html')) {
@@ -1404,13 +1434,16 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               
               const previousBlogs = prevResult.results || [];
               const comments = commentsResult.results || [];
-              const html = generateBlogPostHTML(blog, previousBlogs, comments);
+              const htmlRaw = generateBlogPostHTML(blog, previousBlogs, comments);
+              const seo = await getSeoForRequest(env, req, { path });
+              const html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
               
               return new Response(html, {
                 status: 200,
                 headers: {
                   'Content-Type': 'text/html; charset=utf-8',
-                  'X-Worker-Version': VERSION
+                  'X-Worker-Version': VERSION,
+                  'X-Robots-Tag': seo.robots
                 }
               });
             }
@@ -1463,13 +1496,16 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 blogs: blogsResult.results || []
               };
               
-              const html = generateForumQuestionHTML(question, replies, sidebar);
+              const htmlRaw = generateForumQuestionHTML(question, replies, sidebar);
+              const seo = await getSeoForRequest(env, req, { path });
+              const html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
               
               return new Response(html, {
                 status: 200,
                 headers: {
                   'Content-Type': 'text/html; charset=utf-8',
-                  'X-Worker-Version': VERSION
+                  'X-Worker-Version': VERSION,
+                  'X-Robots-Tag': seo.robots
                 }
               });
             }
@@ -1601,6 +1637,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         let assetReq = req;
         let assetPath = path;
         let schemaProductId = null;
+        let schemaProduct = null;
 
         // Canonical product URLs: /product-<id>/<slug>
         if ((method === 'GET' || method === 'HEAD')) {
@@ -1673,6 +1710,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 `).bind(Number(productId)).first();
                 
                 if (product) {
+                  schemaProduct = product;
                   // Fetch reviews for schema
                   const reviewsResult = await env.DB.prepare(
                     'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC LIMIT 5'
@@ -1735,6 +1773,17 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             headers.set('Content-Type', 'text/html; charset=utf-8');
             headers.set('X-Worker-Version', VERSION);
             headers.set('X-Cache', 'MISS');
+
+            // Apply Robots + Canonical (admin controlled)
+            if (!isAdminUI && !isAdminAPI) {
+              try {
+                const seo = await getSeoForRequest(env, req, schemaProduct ? { product: schemaProduct } : { path });
+                html = applySeoToHtml(html, seo.robots, seo.canonical);
+                headers.set('X-Robots-Tag', seo.robots);
+              } catch (e) {
+                // ignore SEO injection errors
+              }
+            }
             
             const response = new Response(html, { status: 200, headers });
             

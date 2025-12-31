@@ -154,6 +154,17 @@ import {
   getArchiveCredentials
 } from './controllers/admin.js';
 
+// SEO (admin controls + robots/sitemap)
+import {
+  adminGetSeoSettings,
+  adminSaveSeoSettings,
+  adminListPageRules,
+  adminUpsertPageRules,
+  adminDeletePageRule,
+  adminListProductsWithRules,
+  adminPatchProductRule
+} from './controllers/seo.js';
+
 /**
  * Route API requests to appropriate handlers
  * @param {Request} req - Request object
@@ -236,6 +247,35 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (path === '/api/admin/chats/sessions' && method === 'GET') {
     return getSessions(env);
+  }
+
+  // ----- ADMIN SEO APIs -----
+  if (method === 'GET' && path === '/api/admin/seo/settings') {
+    return adminGetSeoSettings(env, req);
+  }
+
+  if (method === 'POST' && path === '/api/admin/seo/settings') {
+    return adminSaveSeoSettings(env, req);
+  }
+
+  if (method === 'GET' && path === '/api/admin/seo/pages') {
+    return adminListPageRules(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/seo/pages') {
+    return adminUpsertPageRules(env, req);
+  }
+
+  if (method === 'DELETE' && path === '/api/admin/seo/pages') {
+    return adminDeletePageRule(env, req);
+  }
+
+  if (method === 'GET' && path === '/api/admin/seo/products') {
+    return adminListProductsWithRules(env, req);
+  }
+
+  if (method === 'POST' && path === '/api/admin/seo/products') {
+    return adminPatchProductRule(env, req);
   }
 
   // ----- CACHE PURGE -----

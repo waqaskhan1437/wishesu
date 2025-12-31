@@ -59,6 +59,21 @@
         Save Payment Methods
       </button>
     </div>
+
+    <div style="background: white; padding: 30px; border-radius: 12px; margin-bottom: 20px;">
+      <h3>🔎 SEO Settings</h3>
+      <p style="color: #6b7280; margin-bottom: 15px;">Control indexing, robots.txt, sitemap.xml, and per-page / per-product noindex rules.</p>
+      <div style="display:flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-primary" id="open-seo-settings">Open SEO Panel</button>
+        <a class="btn" href="/robots.txt" target="_blank" style="background:#6b7280;color:white;text-decoration:none;">View robots.txt</a>
+        <a class="btn" href="/sitemap.xml" target="_blank" style="background:#6b7280;color:white;text-decoration:none;">View sitemap.xml</a>
+      </div>
+      <div style="margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+        <small style="color: #6b7280;">
+          Tip: If you set a page or product to <strong>noindex</strong>, it stays hidden from search until you enable it again.
+        </small>
+      </div>
+    </div>
     
     <div style="background: white; padding: 30px; border-radius: 12px;"><h3>Whop Settings</h3>
       <div style="margin: 20px 0;">
@@ -267,6 +282,19 @@
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
     document.getElementById('save-payment-methods-btn').addEventListener('click', savePaymentMethodsSettings);
+
+    const openSeoBtn = document.getElementById('open-seo-settings');
+    if (openSeoBtn) {
+      openSeoBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const item = document.querySelector('.menu-item[data-view="seo"]');
+        if (item) {
+          item.click();
+        } else if (AD.loadView) {
+          AD.loadView('seo');
+        }
+      });
+    }
     
     setupExportImportHandlers();
     setupGoogleSheetsHandlers();
