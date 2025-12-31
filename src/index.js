@@ -1274,6 +1274,11 @@ async function requireAdmin() {
 
 // Serve login page (GET)
 if (isLoginRoute && method === 'GET') {
+  // Already logged in? Send to admin.
+  if (await isAdminAuthed()) {
+    return Response.redirect(new URL('/admin', req.url).toString(), 302);
+  }
+
   if (env.ASSETS) {
     const r = await env.ASSETS.fetch(new Request(new URL('/admin/login.html', req.url)));
     const h = new Headers(r.headers);
@@ -1309,7 +1314,12 @@ if (isLoginRoute && method === 'POST') {
 });
   }
 
-  return new Response('Invalid login', { status: 401, headers: noStoreHeaders() });
+  return new Response('Invalid login', {
+  status: 401,
+  headers: noStoreHeaders({
+    'Set-Cookie': `${ADMIN_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
+  })
+});
 }
 
 // Handle logout
@@ -1332,7 +1342,7 @@ if ((isAdminUI || isAdminAPI) && !isLoginRoute) {
 
 
     // Auto-purge cache on version change (only for admin/webhook routes)
-    const shouldPurgeCache = path.startsWith('/admin') || path.startsWith('/api/admin/') || path.startsWith('/api/whop/webhook');
+    const shouldPurgeCache = (path.startsWith('/admin') || path.startsWith('/api/admin/') || path.startsWith('/api/whop/webhook')) && !path.startsWith('/admin/login') && !path.startsWith('/admin/logout');
     if (shouldPurgeCache) {
       await maybePurgeCache(env, initDB);
     }
