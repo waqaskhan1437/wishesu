@@ -141,6 +141,14 @@ import {
   getForumSidebar
 } from './controllers/forum.js';
 
+// System Pages (Built-in pages like Blog, Forum)
+import {
+  getSystemPages,
+  getSystemPage,
+  updateSystemPage,
+  toggleSystemPage
+} from './controllers/system-pages.js';
+
 // Admin
 import {
   getDebugInfo,
@@ -831,6 +839,30 @@ export async function routeApiRequest(req, env, url, path, method) {
     } catch (err) {
       return json({ error: err.message }, 500);
     }
+  }
+
+  // ----- SYSTEM PAGES (Built-in Blog, Forum pages with SEO) -----
+  // Get all system pages (admin)
+  if (method === 'GET' && path === '/api/admin/system-pages') {
+    return getSystemPages(env);
+  }
+
+  // Get single system page by type
+  if (method === 'GET' && path === '/api/system-page') {
+    const pageType = url.searchParams.get('type');
+    return getSystemPage(env, pageType);
+  }
+
+  // Update system page SEO settings
+  if (method === 'POST' && path === '/api/admin/system-pages/update') {
+    const body = await req.json().catch(() => ({}));
+    return updateSystemPage(env, body);
+  }
+
+  // Toggle system page enabled/disabled
+  if (method === 'POST' && path === '/api/admin/system-pages/toggle') {
+    const body = await req.json().catch(() => ({}));
+    return toggleSystemPage(env, body);
   }
 
   // ----- FORUM -----

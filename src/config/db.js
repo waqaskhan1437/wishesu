@@ -180,6 +180,24 @@ export async function initDB(env) {
           created_at INTEGER,
           FOREIGN KEY (question_id) REFERENCES forum_questions(id)
         )
+      `),
+      // System pages table (built-in pages SEO settings)
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS system_pages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          page_type TEXT UNIQUE NOT NULL,
+          slug TEXT NOT NULL,
+          seo_title TEXT,
+          seo_description TEXT,
+          seo_keywords TEXT,
+          custom_css TEXT,
+          custom_js TEXT,
+          header_content TEXT,
+          footer_content TEXT,
+          enabled INTEGER DEFAULT 1,
+          created_at INTEGER,
+          updated_at INTEGER
+        )
       `)
     ]);
 
