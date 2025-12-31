@@ -330,6 +330,7 @@
 
   logoutBtn.addEventListener('click', async () => {
     clearSessionLocal();
+    updateLoginStateUI();
     // Keep panel open; show modal again
     await ensureSession();
   });
@@ -345,6 +346,26 @@
   addQuickAction('🚚 Shipping Info', 'Shipping Info');
   addQuickAction('💬 Talk to Human', 'Talk to Human');
   addQuickAction('🚚 Check Delivery Status', 'Check Delivery Status');
+
+  // ---- Update UI based on login state ----
+  function updateLoginStateUI() {
+    if (sessionId) {
+      // User is logged in - show logout button and quick actions
+      logoutBtn.style.display = 'inline-block';
+      quickRow.style.display = 'flex';
+      inputBar.style.display = 'grid';
+      hint.style.display = 'block';
+    } else {
+      // User is NOT logged in - hide logout button, quick actions, input bar
+      logoutBtn.style.display = 'none';
+      quickRow.style.display = 'none';
+      inputBar.style.display = 'none';
+      hint.style.display = 'none';
+    }
+  }
+
+  // Initial state
+  updateLoginStateUI();
 
   // ---- Message rendering ----
   function appendMessage(role, content, created_at) {
@@ -367,6 +388,7 @@
   function showSessionModal() {
     input.disabled = true;
     sendBtn.disabled = true;
+    updateLoginStateUI(); // Hide quick actions and input bar when showing login modal
 
     const modal = el('div', { class: 'wc-modal', id: 'wc-modal' }, [
       el('div', { style: 'font-weight:800; margin-bottom:8px;' }, ['Start chat']),
@@ -387,6 +409,7 @@
 
           await startSession();
           modal.remove();
+          updateLoginStateUI(); // Show quick actions and input bar after login
           input.disabled = false;
           sendBtn.disabled = false;
           input.focus();
