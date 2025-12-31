@@ -24,6 +24,9 @@
       <h1>Admin Login</h1>
       <p>Enter your admin email and password.</p>
 
+      <div id="loginError" class="err" style="display:none;margin:10px 0 0;padding:10px 12px;border:1px solid #ffd0d0;background:#fff3f3;color:#8a1c1c;border-radius:10px;font-size:13px;">Invalid email or password.</div>
+      <input type="hidden" name="next" id="nextField" value="" />
+
       <label>Email</label>
       <input name="email" type="email" autocomplete="email" required />
 
@@ -37,5 +40,21 @@
       </div>
     </form>
   </div>
+
+  <script>
+    (function(){
+      try{
+        var u = new URL(window.location.href);
+        var next = u.searchParams.get('next') || '';
+        var e = u.searchParams.get('e') || '';
+        var nextField = document.getElementById('nextField');
+        if (nextField) nextField.value = next;
+        if (e === '1') {
+          var err = document.getElementById('loginError');
+          if (err) err.style.display = 'block';
+        }
+      }catch(_){}
+    })();
+  </script>
 </body>
 </html>

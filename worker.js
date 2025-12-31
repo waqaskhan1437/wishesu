@@ -20,6 +20,191 @@ const CORS = {
 // are being served.  You can set VERSION in wrangler.toml under [vars].
 const VERSION = globalThis.VERSION || "15";
 
+// ===== ADMIN AUTH (server-side) =====
+function parseCookies(cookieHeader) {
+  const out = {};
+  const raw = String(cookieHeader || '');
+  if (!raw) return out;
+  raw.split(';').forEach(part => {
+    const idx = part.indexOf('=');
+    if (idx === -1) return;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    if (k) out[k] = v;
+  });
+  return out;
+}
+
+function base64UrlEncode(bytes) {
+  let str = '';
+  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  for (let i = 0; i < arr.length; i++) str += String.fromCharCode(arr[i]);
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function base64UrlDecodeToBytes(b64url) {
+  const s = String(b64url || '').replace(/-/g, '+').replace(/_/g, '/');
+  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
+  const bin = atob(s + pad);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function constantTimeEqual(aBytes, bBytes) {
+  if (!aBytes || !bBytes || aBytes.length !== bBytes.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aBytes.length; i++) diff |= (aBytes[i] ^ bBytes[i]);
+  return diff === 0;
+}
+
+function getAdminSigningSecret(env) {
+  // Prefer a dedicated session secret; fall back to ADMIN_PASSWORD to avoid lockout.
+  return String(env.ADMIN_SESSION_SECRET || env.ADMIN_PASSWORD || '').trim();
+}
+
+async function hmacSha256(secret, message) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return new Uint8Array(sig);
+}
+
+async function createAdminSessionToken(env, email) {
+  const secret = getAdminSigningSecret(env);
+  if (!secret) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    e: String(email || '').trim().toLowerCase(),
+    iat: now,
+    exp: now + (7 * 24 * 60 * 60) // 7 days
+  };
+  const payloadJson = JSON.stringify(payload);
+  const payloadB64 = base64UrlEncode(new TextEncoder().encode(payloadJson));
+  const sig = await hmacSha256(secret, payloadB64);
+  const sigB64 = base64UrlEncode(sig);
+  return `${payloadB64}.${sigB64}`;
+}
+
+async function verifyAdminSessionToken(env, token) {
+  const secret = getAdminSigningSecret(env);
+  if (!secret) return null;
+
+  const t = String(token || '');
+  const parts = t.split('.');
+  if (parts.length !== 2) return null;
+
+  const [payloadB64, sigB64] = parts;
+  if (!payloadB64 || !sigB64) return null;
+
+  let payloadBytes;
+  try {
+    payloadBytes = base64UrlDecodeToBytes(payloadB64);
+  } catch (_) {
+    return null;
+  }
+
+  const expectedSig = await hmacSha256(secret, payloadB64);
+  let providedSig;
+  try {
+    providedSig = base64UrlDecodeToBytes(sigB64);
+  } catch (_) {
+    return null;
+  }
+  if (!constantTimeEqual(expectedSig, providedSig)) return null;
+
+  let payload;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(payloadBytes));
+  } catch (_) {
+    return null;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (!payload || !payload.exp || payload.exp < now) return null;
+
+  return payload;
+}
+
+function makeSetCookie(name, value, opts = {}) {
+  const parts = [];
+  parts.push(`${name}=${value}`);
+  parts.push(`Path=${opts.path || '/'}`);
+  if (opts.maxAge !== undefined) parts.push(`Max-Age=${opts.maxAge}`);
+  if (opts.httpOnly !== false) parts.push('HttpOnly');
+  if (opts.sameSite) parts.push(`SameSite=${opts.sameSite}`);
+  else parts.push('SameSite=Strict');
+  // Cloudflare Workers is always HTTPS on workers.dev and custom domains usually too.
+  if (opts.secure !== false) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function redirectTo(urlStr, status = 302, extraHeaders) {
+  const headers = new Headers(extraHeaders || {});
+  headers.set('Location', urlStr);
+  return new Response(null, { status, headers });
+}
+
+async function serveAdminLoginPage(req, env) {
+  if (!env.ASSETS) return new Response('Not Found', { status: 404 });
+
+  const assetResp = await env.ASSETS.fetch(new Request(new URL('/admin/login.html', req.url)));
+  const headers = new Headers(assetResp.headers);
+  headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  headers.set('Pragma', 'no-cache');
+  headers.set('X-Worker-Version', VERSION);
+  return new Response(assetResp.body, { status: assetResp.status, headers });
+}
+
+async function handleAdminLogin(req, env, url) {
+  const form = await req.formData();
+  const email = String(form.get('email') || '').trim().toLowerCase();
+  const password = String(form.get('password') || '').trim();
+  const nextRaw = String(form.get('next') || '').trim();
+
+  const okEmail = String(env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const okPass = String(env.ADMIN_PASSWORD || '').trim();
+
+  if (!okEmail || !okPass) {
+    // Misconfigured server; refuse login rather than leaving admin open.
+    return new Response('Admin login is not configured (ADMIN_EMAIL / ADMIN_PASSWORD).', { status: 500 });
+  }
+
+  if (email !== okEmail || password !== okPass) {
+    const back = new URL('/admin/login.html', url.origin);
+    back.searchParams.set('e', '1');
+    if (nextRaw) back.searchParams.set('next', nextRaw);
+    return redirectTo(back.toString(), 302);
+  }
+
+  const token = await createAdminSessionToken(env, email);
+  if (!token) return new Response('Admin session secret missing (ADMIN_SESSION_SECRET).', { status: 500 });
+
+  // Only allow redirecting inside /admin to prevent open redirects.
+  let nextPath = '/admin/';
+  if (nextRaw && nextRaw.startsWith('/admin')) nextPath = nextRaw;
+
+  const dest = new URL(nextPath, url.origin);
+  const resp = redirectTo(dest.toString(), 302);
+  resp.headers.set('Set-Cookie', makeSetCookie('admin_session', token, { maxAge: 7 * 24 * 60 * 60 }));
+  return resp;
+}
+
+function handleAdminLogout(url) {
+  const dest = new URL('/admin/login.html', url.origin);
+  const resp = redirectTo(dest.toString(), 302);
+  resp.headers.set('Set-Cookie', makeSetCookie('admin_session', '', { maxAge: 0 }));
+  return resp;
+}
+
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -723,6 +908,50 @@ export default {
       path = '/' + path;
     }
     const method = req.method;
+
+    // ===== ADMIN AUTH GATE =====
+    const cookieMap = parseCookies(req.headers.get('Cookie') || '');
+    const sessionToken = cookieMap.admin_session || '';
+    const adminClaims = sessionToken ? await verifyAdminSessionToken(env, sessionToken) : null;
+
+    const isAdminApi = path.startsWith('/api/admin/');
+    const isAdminLogin = (path === '/admin/login' || path === '/admin/login.html');
+    const isAdminLogout = (path === '/admin/logout');
+
+    // Login / Logout endpoints (always allowed)
+    if (isAdminLogout) {
+      return handleAdminLogout(url);
+    }
+
+    if (isAdminLogin) {
+      if (method === 'POST') {
+        return handleAdminLogin(req, env, url);
+      }
+      // If already logged in, skip login page
+      if (adminClaims) {
+        return redirectTo(new URL('/admin/', url.origin).toString(), 302);
+      }
+      return serveAdminLoginPage(req, env);
+    }
+
+    // Protect admin APIs
+    if (isAdminApi && !adminClaims) {
+      return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS }
+      });
+    }
+
+    // Protect admin HTML routes (SPA paths too), but allow static assets to load
+    const isAdminSurface = path === '/admin' || path === '/admin/' || path.startsWith('/admin/');
+    const isStaticAsset = /\.(js|css|png|jpg|jpeg|webp|svg|ico|map|woff2|woff|ttf|eot|json)$/i.test(path);
+
+    if (isAdminSurface && !isStaticAsset && !adminClaims) {
+      const loginUrl = new URL('/admin/login.html', url.origin);
+      loginUrl.searchParams.set('next', path + (url.search || ''));
+      return redirectTo(loginUrl.toString(), 302);
+    }
+
 
     // Before processing any request, trigger a cache purge if this is the
     // first request on a new version.  The purge will run only once per
