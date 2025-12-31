@@ -1262,7 +1262,7 @@ async function requireAdmin() {
     });
   }
 
-  return Response.redirect('/admin/login', 302);
+  return Response.redirect(new URL('/admin/login', req.url).toString(), 302);
 }
 
 // Serve login page (GET)
