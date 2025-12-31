@@ -567,12 +567,57 @@
       return;
     }
 
-    if (typeof window.whopCheckout !== 'function') {
+    setTipButtonsDisabled(true);
+
+    // 1) Check admin-enabled gateways
+    let methods = [];
+    try {
+      if (window.TipCheckout && typeof window.TipCheckout.loadPaymentMethods === 'function') {
+        methods = await window.TipCheckout.loadPaymentMethods();
+      }
+    } catch (e) {
+      methods = [];
+    }
+
+    const paypalMethod = methods.find(m => m && m.id === 'paypal' && m.enabled !== false && m.client_id);
+    const whopMethod = methods.find(m => m && m.id === 'whop' && m.enabled !== false);
+
+    // 2) PayPal has priority if enabled
+    if (paypalMethod && window.TipCheckout && typeof window.TipCheckout.openPayPalTip === 'function') {
+      try {
+        window.TipCheckout.openPayPalTip({
+          clientId: paypalMethod.client_id,
+          productId: orderData.product_id,
+          amount: tipAmount,
+          email: orderData.email || '',
+          orderId: orderData.order_id,
+          onSuccess: async () => {
+            await markTipPaid(tipAmount);
+          },
+          onClose: () => {
+            setTipButtonsDisabled(false);
+          }
+        });
+        return;
+      } catch (err) {
+        alert('Error: ' + (err.message || 'PayPal checkout failed'));
+        setTipButtonsDisabled(false);
+        return;
+      }
+    }
+
+    // 3) Fallback to Whop
+    if (!whopMethod) {
       alert('Payment system not available');
+      setTipButtonsDisabled(false);
       return;
     }
 
-    setTipButtonsDisabled(true);
+    if (typeof window.whopCheckout !== 'function') {
+      alert('Payment system not available');
+      setTipButtonsDisabled(false);
+      return;
+    }
 
     try {
       const res = await fetch('/api/whop/create-plan-checkout', {
@@ -619,7 +664,6 @@
       }
 
       throw new Error('Payment system not available');
-
     } catch (err) {
       alert('Error: ' + err.message);
     } finally {

@@ -199,6 +199,21 @@ export async function createPayPalOrder(env, body, origin) {
         }
       }
       
+      const metaType = (metadata && metadata.type) ? metadata.type : 'order';
+      const metaOrderId = (metadata && (metadata.orderId || metadata.order_id)) ? (metadata.orderId || metadata.order_id) : null;
+      const metaTipAmount = (metadata && (metadata.tipAmount || metadata.tip_amount)) ? (metadata.tipAmount || metadata.tip_amount) : null;
+
+      const sessionMetadata = {
+        email,
+        addons: metadata?.addons || [],
+        amount: finalAmount,
+        deliveryTimeMinutes: finalDeliveryTime,
+        product_id,
+        type: metaType,
+        orderId: metaOrderId,
+        tipAmount: metaTipAmount
+      };
+
       await env.DB.prepare(`
         INSERT INTO checkout_sessions (checkout_id, product_id, plan_id, metadata, expires_at, status, created_at)
         VALUES (?, ?, ?, ?, datetime('now', '+30 minutes'), 'pending', datetime('now'))
@@ -206,12 +221,7 @@ export async function createPayPalOrder(env, body, origin) {
         orderData.id,
         product_id,
         'paypal',
-        JSON.stringify({ 
-          email, 
-          addons: metadata?.addons || [], 
-          amount: finalAmount,
-          deliveryTimeMinutes: finalDeliveryTime
-        })
+        JSON.stringify(sessionMetadata)
       ).run();
     } catch (e) {
       console.log('Checkout session storage skipped:', e.message);
@@ -305,15 +315,56 @@ export async function capturePayPalOrder(env, body) {
       }
       
       // Create order in database
+      const amount = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || metadata.amount || 0;
+
+      // TIP FLOW: do not create a new order, just mark tip paid on existing order
+      if (metadata && metadata.type === 'tip') {
+        const targetOrderId = metadata.orderId || metadata.order_id;
+        const tipAmount = parseFloat(amount) || parseFloat(metadata.tipAmount) || 0;
+
+        if (!targetOrderId) {
+          return json({ error: 'Tip orderId missing' }, 400);
+        }
+
+        if (!Number.isFinite(tipAmount) || tipAmount <= 0) {
+          return json({ error: 'Invalid tip amount' }, 400);
+        }
+
+        const existing = await env.DB.prepare('SELECT order_id, tip_paid FROM orders WHERE order_id = ?').bind(targetOrderId).first();
+        if (!existing) {
+          return json({ error: 'Order not found for tip' }, 404);
+        }
+
+        await env.DB.prepare(
+          'UPDATE orders SET tip_paid = 1, tip_amount = ? WHERE order_id = ?'
+        ).bind(tipAmount, targetOrderId).run();
+
+        // Update checkout session
+        try {
+          await env.DB.prepare(`
+            UPDATE checkout_sessions SET status = 'completed', completed_at = datetime('now')
+            WHERE checkout_id = ?
+          `).bind(order_id).run();
+        } catch (e) {}
+
+        return json({
+          success: true,
+          tip_updated: true,
+          order_id: targetOrderId,
+          tip_amount: tipAmount,
+          paypal_order_id: order_id
+        });
+      }
+
+      // NORMAL ORDER FLOW
       const orderId = `PP-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
       const productId = customData.pid || metadata.product_id;
-      const email = customData.email || metadata.email || captureData.payer?.email_address || '';
-      const amount = captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || metadata.amount || 0;
+      const buyerEmail = customData.email || metadata.email || captureData.payer?.email_address || '';
       const addons = metadata.addons || [];
       const deliveryTimeMinutes = metadata.deliveryTimeMinutes || 60;
       
       const encryptedData = JSON.stringify({
-        email,
+        email: buyerEmail,
         amount: parseFloat(amount),
         productId,
         addons,
