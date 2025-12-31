@@ -388,6 +388,29 @@ main {
   }
   .video-facade {
     aspect-ratio: 16 / 9 !important;
+    position: relative !important;
+  }
+  
+  /* Main play button overlay on video */
+  .play-btn-overlay {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 70px !important;
+    height: 70px !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 100 !important;
+    pointer-events: auto !important;
+  }
+  .play-btn-overlay svg {
+    width: 32px !important;
+    height: 32px !important;
+    margin-left: 4px;
   }
   
   /* Ensure video controls are visible on mobile */
@@ -434,6 +457,34 @@ main {
 .plyr--video:hover .plyr__control--overlaid {
   opacity: 1 !important;
   visibility: visible !important;
+}
+
+/* Video facade play button - main video area */
+.video-facade {
+  position: relative;
+  cursor: pointer;
+}
+
+.play-btn-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  pointer-events: none;
+  transition: all 0.2s ease;
+}
+
+.video-facade:hover .play-btn-overlay {
+  background: rgba(79, 70, 229, 0.9);
+  transform: translate(-50%, -50%) scale(1.1);
 }
 
 /* Thumb wrapper - ensure stacking context */
