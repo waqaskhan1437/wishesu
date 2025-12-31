@@ -4,6 +4,7 @@
 
 (function(AD) {
   AD.loadOrders = async function(panel) {
+    AD._ordersPanel = panel;
     panel.innerHTML = `
       <!-- Create Order Modal -->
       <div id="create-order-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
@@ -154,6 +155,7 @@
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <a href="/order-detail.html?id=${o.order_id}&admin=1" class="btn btn-primary" onclick="event.stopPropagation()" style="font-size: 12px; padding: 6px 12px;">👁️ Admin View</a>
                 <a href="/buyer-order.html?id=${o.order_id}" class="btn" onclick="event.stopPropagation()" target="_blank" style="background: #10b981; color: white; font-size: 12px; padding: 6px 12px;">👤 Buyer Link</a>
+                <button class="btn" onclick="event.stopPropagation(); deleteOrder(\'${o.order_id}\')" style="background:#ef4444;color:white;font-size:12px;padding:6px 12px;">🗑️ Delete</button>
               </div>
             </td>
           </tr>`;
@@ -170,6 +172,22 @@
   // Show order detail
   window.showOrderDetail = function(orderId) {
     window.location.href = `/order-detail.html?id=${orderId}&admin=1`;
+  };
+
+  // Delete order
+  window.deleteOrder = async function(orderId) {
+    if (!orderId) return;
+    if (!confirm(`Delete order #${orderId}? This cannot be undone.`)) return;
+    try {
+      const result = await AD.apiFetch('/api/order/delete?id=' + encodeURIComponent(orderId), { method: 'DELETE' });
+      if (result && result.success) {
+        if (AD._ordersPanel) AD.loadOrders(AD._ordersPanel);
+      } else {
+        alert('Delete failed: ' + (result.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
+    }
   };
 
   console.log('✅ Dashboard Orders loaded');

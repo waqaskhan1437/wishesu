@@ -132,7 +132,19 @@ export async function getBuyerOrder(env, orderId) {
  * Delete order
  */
 export async function deleteOrder(env, id) {
-  await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(Number(id)).run();
+  if (!id) return json({ error: 'Missing id' }, 400);
+
+  // Support deleting by numeric row id OR by public order_id
+  const asNumber = Number(id);
+  if (!Number.isNaN(asNumber) && String(id).trim() === String(asNumber)) {
+    await env.DB.prepare('DELETE FROM reviews WHERE order_id IN (SELECT order_id FROM orders WHERE id = ?)').bind(asNumber).run();
+    await env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(asNumber).run();
+    return json({ success: true });
+  }
+
+  const orderId = String(id).trim();
+  await env.DB.prepare('DELETE FROM reviews WHERE order_id = ?').bind(orderId).run();
+  await env.DB.prepare('DELETE FROM orders WHERE order_id = ?').bind(orderId).run();
   return json({ success: true });
 }
 
