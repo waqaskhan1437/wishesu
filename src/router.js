@@ -128,6 +128,7 @@ import {
 import {
   getPublishedQuestions,
   getQuestion,
+  getQuestionById,
   getQuestionReplies,
   checkPendingForum,
   submitQuestion,
@@ -849,6 +850,12 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'GET' && path === '/api/forum/question-replies') {
     const questionId = parseInt(url.searchParams.get('question_id') || '0');
     return getQuestionReplies(env, questionId);
+  }
+
+  // Public: Get question by ID
+  if (method === 'GET' && path === '/api/forum/question-by-id') {
+    const id = url.searchParams.get('id');
+    return getQuestionById(env, id);
   }
 
   // Public: Check pending for user

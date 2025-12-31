@@ -129,6 +129,34 @@ export async function getQuestion(env, slug) {
 }
 
 /**
+ * Get single question by ID
+ */
+export async function getQuestionById(env, id) {
+  try {
+    await ensureForumTables(env);
+    
+    if (!id) {
+      return json({ error: 'Question ID required' }, 400);
+    }
+
+    const question = await env.DB.prepare(`
+      SELECT * FROM forum_questions WHERE id = ? AND status = 'approved'
+    `).bind(parseInt(id)).first();
+
+    if (!question) {
+      return json({ error: 'Question not found' }, 404);
+    }
+
+    return json({
+      success: true,
+      question
+    });
+  } catch (err) {
+    return json({ error: err.message }, 500);
+  }
+}
+
+/**
  * Get replies for a question by ID (for expandable questions)
  */
 export async function getQuestionReplies(env, questionId) {
