@@ -56,8 +56,8 @@
     navSection.className = 'product-navigation-section';
     navSection.innerHTML = `
       <div style="display: flex; justify-content: center; align-items: center; padding: 30px 0; gap: 20px; flex-wrap: wrap;">
-        <div id="prev-product-btn" style="flex: 1; max-width: 300px; min-width: 200px;"></div>
-        <div id="next-product-btn" style="flex: 1; max-width: 300px; min-width: 200px;"></div>
+        <div id="prev-product-btn" style="flex: 1; max-width: 300px; min-width: 200px; display: none;"></div>
+        <div id="next-product-btn" style="flex: 1; max-width: 300px; min-width: 200px; display: none;"></div>
       </div>
     `;
     wrapper.appendChild(navSection);
@@ -69,6 +69,7 @@
         const nextContainer = document.getElementById('next-product-btn');
         
         if (data.previous && prevContainer) {
+          prevContainer.style.display = 'block';
           prevContainer.innerHTML = `
             <a href="${data.previous.url}" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border: 2px solid #e5e7eb; border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.05);" 
                onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
@@ -85,6 +86,7 @@
         }
         
         if (data.next && nextContainer) {
+          nextContainer.style.display = 'block';
           nextContainer.innerHTML = `
             <a href="${data.next.url}" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border: 2px solid #e5e7eb; border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-direction: row-reverse; text-align: right;" 
                onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
@@ -100,7 +102,7 @@
           `;
         }
         
-        // Hide section if no navigation available
+        // Hide entire section if no navigation available
         if (!data.previous && !data.next) {
           navSection.style.display = 'none';
         }

@@ -282,44 +282,20 @@ export async function getAdjacentProducts(env, id) {
     LIMIT 1
   `).bind(current.sort_order, current.sort_order, productId).first();
   
-  // If no prev, wrap around to last product
-  let prevProduct = prev;
-  if (!prevProduct) {
-    prevProduct = await env.DB.prepare(`
-      SELECT id, title, slug, thumbnail_url 
-      FROM products 
-      WHERE status = 'active' AND id != ?
-      ORDER BY sort_order DESC, id ASC
-      LIMIT 1
-    `).bind(productId).first();
-  }
-  
-  // If no next, wrap around to first product
-  let nextProduct = next;
-  if (!nextProduct) {
-    nextProduct = await env.DB.prepare(`
-      SELECT id, title, slug, thumbnail_url 
-      FROM products 
-      WHERE status = 'active' AND id != ?
-      ORDER BY sort_order ASC, id DESC
-      LIMIT 1
-    `).bind(productId).first();
-  }
-  
   return json({
-    previous: prevProduct ? {
-      id: prevProduct.id,
-      title: prevProduct.title,
-      slug: prevProduct.slug,
-      thumbnail_url: prevProduct.thumbnail_url,
-      url: `/product-${prevProduct.id}/${encodeURIComponent(prevProduct.slug || '')}`
+    previous: prev ? {
+      id: prev.id,
+      title: prev.title,
+      slug: prev.slug,
+      thumbnail_url: prev.thumbnail_url,
+      url: `/product-${prev.id}/${encodeURIComponent(prev.slug || '')}`
     } : null,
-    next: nextProduct ? {
-      id: nextProduct.id,
-      title: nextProduct.title,
-      slug: nextProduct.slug,
-      thumbnail_url: nextProduct.thumbnail_url,
-      url: `/product-${nextProduct.id}/${encodeURIComponent(nextProduct.slug || '')}`
+    next: next ? {
+      id: next.id,
+      title: next.title,
+      slug: next.slug,
+      thumbnail_url: next.thumbnail_url,
+      url: `/product-${next.id}/${encodeURIComponent(next.slug || '')}`
     } : null
   });
 }
