@@ -410,16 +410,123 @@
           <strong>💡 Tips:</strong> Use CSS variables in Global for consistent theming. Product/Blog/Forum CSS only loads on those specific pages for better performance.
         </small>
       </div>
+    </div>
+    
+    <!-- Universal Code Editor Section -->
+    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
+      <h3>📝 Universal Code Editor</h3>
+      <p style="color: #6b7280; margin-bottom: 20px;">Add custom JavaScript, HTML, or tracking codes (Google Analytics, Ads, etc.). Manage multiple snippets and control where they load.</p>
+      
+      <!-- Quick Add Presets -->
+      <div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #667eea15, #764ba215); border-radius: 10px; border: 1px solid #667eea30;">
+        <label style="display: block; margin-bottom: 10px; font-weight: 600; color: #667eea;">⚡ Quick Add Presets</label>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn preset-btn" data-preset="gtag" style="background: #4285f4; color: white; font-size: 0.85rem; padding: 8px 12px;">
+            📊 Google Analytics
+          </button>
+          <button type="button" class="btn preset-btn" data-preset="gads" style="background: #fbbc04; color: #1a1a1a; font-size: 0.85rem; padding: 8px 12px;">
+            📢 Google Ads
+          </button>
+          <button type="button" class="btn preset-btn" data-preset="gtm" style="background: #246fdb; color: white; font-size: 0.85rem; padding: 8px 12px;">
+            🏷️ Tag Manager
+          </button>
+          <button type="button" class="btn preset-btn" data-preset="fbpixel" style="background: #1877f2; color: white; font-size: 0.85rem; padding: 8px 12px;">
+            📘 Facebook Pixel
+          </button>
+          <button type="button" class="btn preset-btn" data-preset="custom" style="background: #6b7280; color: white; font-size: 0.85rem; padding: 8px 12px;">
+            ✏️ Custom Code
+          </button>
+        </div>
+      </div>
+      
+      <!-- Add New Snippet Form (Hidden by default) -->
+      <div id="snippet-form-container" style="display: none; margin-bottom: 25px; padding: 20px; background: #f9fafb; border-radius: 10px; border: 2px dashed #d1d5db;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h4 style="margin: 0; color: #374151;">➕ Add New Code Snippet</h4>
+          <button type="button" id="close-snippet-form" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6b7280;">×</button>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem;">Snippet Name *</label>
+            <input type="text" id="snippet-name" placeholder="e.g., Google Analytics" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem;">Code Type</label>
+            <select id="snippet-type" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+              <option value="js">JavaScript</option>
+              <option value="html">HTML</option>
+              <option value="css">CSS</option>
+            </select>
+          </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem;">Load Position</label>
+            <select id="snippet-position" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+              <option value="head">Head (Before </head>)</option>
+              <option value="body-start">Body Start (After <body>)</option>
+              <option value="body-end">Body End (Before </body>)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem;">Load On Pages</label>
+            <select id="snippet-pages" multiple style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; min-height: 80px;">
+              <option value="all" selected>All Pages</option>
+              <option value="home">Home Page</option>
+              <option value="product">Product Pages</option>
+              <option value="blog">Blog Pages</option>
+              <option value="forum">Forum Pages</option>
+              <option value="checkout">Checkout/Order Pages</option>
+            </select>
+            <small style="color: #6b7280;">Hold Ctrl/Cmd to select multiple</small>
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem;">Code *</label>
+          <textarea id="snippet-code" rows="10" placeholder="Paste your code here..." style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: 'Fira Code', 'Monaco', monospace; font-size: 13px; line-height: 1.5; resize: vertical;"></textarea>
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+          <button type="button" id="save-snippet-btn" class="btn btn-primary">💾 Save Snippet</button>
+          <button type="button" id="cancel-snippet-btn" class="btn" style="background: #6b7280; color: white;">Cancel</button>
+        </div>
+        <input type="hidden" id="editing-snippet-id" value="">
+      </div>
+      
+      <!-- Snippets List -->
+      <div id="snippets-list" style="margin-bottom: 20px;">
+        <div style="text-align: center; padding: 40px; color: #9ca3af;">
+          <div style="font-size: 3rem; margin-bottom: 10px;">📭</div>
+          <p>No code snippets yet. Click a preset above to add one.</p>
+        </div>
+      </div>
+      
+      <!-- Info Box -->
+      <div style="padding: 15px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+        <p style="margin: 0 0 10px; font-weight: 600; color: #1e40af;">💡 Common Use Cases:</p>
+        <ul style="margin: 0; padding-left: 20px; font-size: 0.9rem; color: #1e40af;">
+          <li><strong>Google Analytics:</strong> Track visitors, page views, conversions</li>
+          <li><strong>Google Ads:</strong> Conversion tracking, remarketing tags</li>
+          <li><strong>Custom JS:</strong> Page redesign, animations, custom features</li>
+          <li><strong>Custom HTML:</strong> Badges, banners, widgets</li>
+          <li><strong>Facebook Pixel:</strong> Track social conversions</li>
+        </ul>
+      </div>
     </div>`;
 
     loadWhopSettings();
     loadPayPalSettings();
     loadPaymentMethodsSettings();
     loadCustomCssSettings();
+    loadCodeSnippets();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
     document.getElementById('save-payment-methods-btn').addEventListener('click', savePaymentMethodsSettings);
     setupCustomCssHandlers();
+    setupCodeSnippetsHandlers();
 
     const openSeoBtn = document.getElementById('open-seo-settings');
     if (openSeoBtn) {
@@ -1241,6 +1348,374 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ==================== UNIVERSAL CODE EDITOR ====================
+  
+  let codeSnippets = [];
+  
+  // Presets for common tracking codes
+  const CODE_PRESETS = {
+    gtag: {
+      name: 'Google Analytics (GA4)',
+      type: 'js',
+      position: 'head',
+      pages: ['all'],
+      code: `<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-XXXXXXXXXX');
+</script>`
+    },
+    gads: {
+      name: 'Google Ads Conversion',
+      type: 'js',
+      position: 'head',
+      pages: ['all'],
+      code: `<!-- Google Ads Conversion Tracking -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-XXXXXXXXXX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'AW-XXXXXXXXXX');
+</script>
+
+<!-- Event snippet for conversion - Add to checkout/thank you page -->
+<!-- 
+<script>
+  gtag('event', 'conversion', {
+    'send_to': 'AW-XXXXXXXXXX/XXXXXXXXXXXX',
+    'value': 1.0,
+    'currency': 'USD'
+  });
+</script>
+-->`
+    },
+    gtm: {
+      name: 'Google Tag Manager',
+      type: 'html',
+      position: 'head',
+      pages: ['all'],
+      code: `<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-XXXXXXX');</script>
+<!-- End Google Tag Manager -->
+
+<!-- Also add this right after opening <body> tag (use Body Start position) -->
+<!-- 
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-XXXXXXX"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+-->`
+    },
+    fbpixel: {
+      name: 'Facebook Pixel',
+      type: 'js',
+      position: 'head',
+      pages: ['all'],
+      code: `<!-- Facebook Pixel Code -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', 'XXXXXXXXXXXXXXXXX');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=XXXXXXXXXXXXXXXXX&ev=PageView&noscript=1"
+/></noscript>
+<!-- End Facebook Pixel Code -->`
+    },
+    custom: {
+      name: 'Custom Code',
+      type: 'js',
+      position: 'body-end',
+      pages: ['all'],
+      code: `// Your custom JavaScript code here
+// This will run on all pages
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Your code here
+  console.log('Custom code loaded!');
+});`
+    }
+  };
+
+  // Load code snippets
+  async function loadCodeSnippets() {
+    try {
+      const res = await fetch('/api/settings/code-snippets');
+      const data = await res.json();
+      
+      if (data.success && data.snippets) {
+        codeSnippets = data.snippets;
+        renderSnippetsList();
+      }
+    } catch (err) {
+      console.error('Failed to load code snippets:', err);
+    }
+  }
+
+  // Save all snippets
+  async function saveAllSnippets() {
+    try {
+      const res = await fetch('/api/settings/code-snippets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snippets: codeSnippets })
+      });
+      return await res.json();
+    } catch (err) {
+      console.error('Failed to save snippets:', err);
+      return { error: err.message };
+    }
+  }
+
+  // Render snippets list
+  function renderSnippetsList() {
+    const container = document.getElementById('snippets-list');
+    
+    if (!codeSnippets || codeSnippets.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #9ca3af;">
+          <div style="font-size: 3rem; margin-bottom: 10px;">📭</div>
+          <p>No code snippets yet. Click a preset above to add one.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    const typeColors = {
+      js: { bg: '#fef3c7', color: '#92400e', icon: '⚡' },
+      html: { bg: '#fee2e2', color: '#991b1b', icon: '🏷️' },
+      css: { bg: '#dbeafe', color: '#1e40af', icon: '🎨' }
+    };
+    
+    const positionLabels = {
+      'head': '📍 Head',
+      'body-start': '📍 Body Start',
+      'body-end': '📍 Body End'
+    };
+    
+    container.innerHTML = codeSnippets.map((snippet, index) => {
+      const typeStyle = typeColors[snippet.type] || typeColors.js;
+      const pages = snippet.pages.join(', ');
+      
+      return `
+        <div class="snippet-card" style="background: white; border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 12px; overflow: hidden; ${!snippet.enabled ? 'opacity: 0.6;' : ''}">
+          <div style="padding: 15px; display: flex; align-items: center; gap: 15px;">
+            <!-- Enable/Disable Toggle -->
+            <label style="cursor: pointer; display: flex; align-items: center;">
+              <input type="checkbox" class="snippet-toggle" data-index="${index}" ${snippet.enabled ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+            </label>
+            
+            <!-- Type Badge -->
+            <span style="background: ${typeStyle.bg}; color: ${typeStyle.color}; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600;">
+              ${typeStyle.icon} ${snippet.type.toUpperCase()}
+            </span>
+            
+            <!-- Name -->
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-weight: 600; color: #1f2937; margin-bottom: 2px;">${escapeHtml(snippet.name)}</div>
+              <div style="font-size: 0.8rem; color: #6b7280;">
+                ${positionLabels[snippet.position] || snippet.position} • Pages: ${escapeHtml(pages)}
+              </div>
+            </div>
+            
+            <!-- Actions -->
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="snippet-edit-btn" data-index="${index}" style="background: #eff6ff; color: #2563eb; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+                ✏️ Edit
+              </button>
+              <button type="button" class="snippet-delete-btn" data-index="${index}" style="background: #fef2f2; color: #dc2626; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+                🗑️
+              </button>
+            </div>
+          </div>
+          
+          <!-- Code Preview (Collapsed) -->
+          <div style="background: #1f2937; padding: 10px 15px; max-height: 60px; overflow: hidden; position: relative;">
+            <pre style="margin: 0; color: #9ca3af; font-size: 11px; font-family: 'Fira Code', monospace; white-space: pre-wrap; word-break: break-all;">${escapeHtml(snippet.code.substring(0, 200))}${snippet.code.length > 200 ? '...' : ''}</pre>
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: linear-gradient(transparent, #1f2937);"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    // Attach event listeners
+    attachSnippetEventListeners();
+  }
+
+  // Attach event listeners to snippet cards
+  function attachSnippetEventListeners() {
+    // Toggle enable/disable
+    document.querySelectorAll('.snippet-toggle').forEach(toggle => {
+      toggle.addEventListener('change', async (e) => {
+        const index = parseInt(e.target.dataset.index);
+        codeSnippets[index].enabled = e.target.checked;
+        const result = await saveAllSnippets();
+        if (result.success) {
+          renderSnippetsList();
+        }
+      });
+    });
+    
+    // Edit button
+    document.querySelectorAll('.snippet-edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt(e.target.dataset.index);
+        editSnippet(index);
+      });
+    });
+    
+    // Delete button
+    document.querySelectorAll('.snippet-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const index = parseInt(e.target.dataset.index);
+        if (confirm('Delete this code snippet?')) {
+          codeSnippets.splice(index, 1);
+          const result = await saveAllSnippets();
+          if (result.success) {
+            renderSnippetsList();
+          }
+        }
+      });
+    });
+  }
+
+  // Show form with preset or empty
+  function showSnippetForm(preset = null) {
+    const form = document.getElementById('snippet-form-container');
+    form.style.display = 'block';
+    
+    if (preset && CODE_PRESETS[preset]) {
+      const p = CODE_PRESETS[preset];
+      document.getElementById('snippet-name').value = p.name;
+      document.getElementById('snippet-type').value = p.type;
+      document.getElementById('snippet-position').value = p.position;
+      document.getElementById('snippet-code').value = p.code;
+      
+      // Set pages selection
+      const pagesSelect = document.getElementById('snippet-pages');
+      Array.from(pagesSelect.options).forEach(opt => {
+        opt.selected = p.pages.includes(opt.value);
+      });
+    } else {
+      // Clear form
+      document.getElementById('snippet-name').value = '';
+      document.getElementById('snippet-type').value = 'js';
+      document.getElementById('snippet-position').value = 'head';
+      document.getElementById('snippet-code').value = '';
+      
+      const pagesSelect = document.getElementById('snippet-pages');
+      Array.from(pagesSelect.options).forEach(opt => {
+        opt.selected = opt.value === 'all';
+      });
+    }
+    
+    document.getElementById('editing-snippet-id').value = '';
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // Edit existing snippet
+  function editSnippet(index) {
+    const snippet = codeSnippets[index];
+    const form = document.getElementById('snippet-form-container');
+    form.style.display = 'block';
+    
+    document.getElementById('snippet-name').value = snippet.name;
+    document.getElementById('snippet-type').value = snippet.type;
+    document.getElementById('snippet-position').value = snippet.position;
+    document.getElementById('snippet-code').value = snippet.code;
+    document.getElementById('editing-snippet-id').value = index;
+    
+    // Set pages selection
+    const pagesSelect = document.getElementById('snippet-pages');
+    Array.from(pagesSelect.options).forEach(opt => {
+      opt.selected = snippet.pages.includes(opt.value);
+    });
+    
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  // Hide form
+  function hideSnippetForm() {
+    document.getElementById('snippet-form-container').style.display = 'none';
+    document.getElementById('editing-snippet-id').value = '';
+  }
+
+  // Setup code snippets handlers
+  function setupCodeSnippetsHandlers() {
+    // Preset buttons
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const preset = btn.dataset.preset;
+        showSnippetForm(preset);
+      });
+    });
+    
+    // Close form button
+    document.getElementById('close-snippet-form').addEventListener('click', hideSnippetForm);
+    document.getElementById('cancel-snippet-btn').addEventListener('click', hideSnippetForm);
+    
+    // Save snippet
+    document.getElementById('save-snippet-btn').addEventListener('click', async () => {
+      const name = document.getElementById('snippet-name').value.trim();
+      const type = document.getElementById('snippet-type').value;
+      const position = document.getElementById('snippet-position').value;
+      const code = document.getElementById('snippet-code').value.trim();
+      const editingId = document.getElementById('editing-snippet-id').value;
+      
+      // Get selected pages
+      const pagesSelect = document.getElementById('snippet-pages');
+      const pages = Array.from(pagesSelect.selectedOptions).map(opt => opt.value);
+      
+      if (!name || !code) {
+        alert('Please fill in snippet name and code');
+        return;
+      }
+      
+      const snippet = {
+        id: editingId ? parseInt(editingId) : Date.now(),
+        name,
+        type,
+        position,
+        pages,
+        code,
+        enabled: true,
+        createdAt: editingId ? codeSnippets[parseInt(editingId)]?.createdAt : Date.now(),
+        updatedAt: Date.now()
+      };
+      
+      if (editingId !== '') {
+        // Update existing
+        codeSnippets[parseInt(editingId)] = snippet;
+      } else {
+        // Add new
+        codeSnippets.push(snippet);
+      }
+      
+      const result = await saveAllSnippets();
+      
+      if (result.success) {
+        hideSnippetForm();
+        renderSnippetsList();
+        alert('✅ Code snippet saved!');
+      } else {
+        alert('❌ Failed to save: ' + (result.error || 'Unknown error'));
+      }
+    });
   }
 
   console.log('✅ Dashboard Settings loaded');

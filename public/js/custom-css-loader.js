@@ -1,6 +1,6 @@
 /**
- * Custom CSS Loader - Loads and injects custom CSS from admin settings
- * Auto-detects page type and loads appropriate CSS sections
+ * Custom CSS & Code Loader - Loads and injects custom CSS and code snippets from admin settings
+ * Auto-detects page type and loads appropriate CSS/code sections
  */
 
 (function() {
@@ -19,6 +19,12 @@
     if (path.startsWith('/forum/') || path.startsWith('/forum')) {
       return 'forum';
     }
+    if (path === '/' || path === '/index.html') {
+      return 'home';
+    }
+    if (path.includes('/order') || path.includes('/checkout') || path.includes('/success')) {
+      return 'checkout';
+    }
     return 'page'; // generic page
   }
 
@@ -27,7 +33,6 @@
     const pageType = detectPageType();
     
     try {
-      // Fetch CSS settings
       const res = await fetch('/api/settings/custom-css');
       const data = await res.json();
       
@@ -80,10 +85,143 @@
     document.head.appendChild(style);
   }
 
+  // Load and inject code snippets
+  async function loadCodeSnippets() {
+    const pageType = detectPageType();
+    
+    try {
+      const res = await fetch('/api/settings/code-snippets');
+      const data = await res.json();
+      
+      if (!data.success || !data.snippets || data.snippets.length === 0) {
+        return;
+      }
+      
+      const snippets = data.snippets;
+      
+      // Filter and inject snippets based on page type and position
+      snippets.forEach(snippet => {
+        if (!snippet.enabled) return;
+        
+        // Check if this snippet should load on current page
+        const shouldLoad = snippet.pages.includes('all') || 
+                          snippet.pages.includes(pageType) ||
+                          (pageType === 'page' && snippet.pages.includes('all'));
+        
+        if (!shouldLoad) return;
+        
+        // Inject based on type and position
+        injectSnippet(snippet);
+      });
+    } catch (err) {
+      console.warn('Code snippets loader: Could not load snippets', err);
+    }
+  }
+
+  // Inject a single snippet
+  function injectSnippet(snippet) {
+    const id = 'snippet-' + snippet.id;
+    
+    // Remove existing if any
+    const existing = document.getElementById(id);
+    if (existing) {
+      existing.remove();
+    }
+    
+    let element;
+    
+    if (snippet.type === 'css') {
+      // CSS - inject as style tag
+      element = document.createElement('style');
+      element.id = id;
+      element.setAttribute('data-snippet', snippet.name);
+      element.textContent = snippet.code;
+      document.head.appendChild(element);
+      return;
+    }
+    
+    if (snippet.type === 'js') {
+      // JavaScript - could be inline script or script with src
+      // Check if code contains <script> tags
+      if (snippet.code.includes('<script')) {
+        // Has script tags, inject as HTML
+        injectHTML(snippet, id);
+      } else {
+        // Plain JS code
+        element = document.createElement('script');
+        element.id = id;
+        element.setAttribute('data-snippet', snippet.name);
+        element.textContent = snippet.code;
+        injectByPosition(element, snippet.position);
+      }
+      return;
+    }
+    
+    if (snippet.type === 'html') {
+      injectHTML(snippet, id);
+    }
+  }
+
+  // Inject HTML content
+  function injectHTML(snippet, id) {
+    const container = document.createElement('div');
+    container.id = id;
+    container.setAttribute('data-snippet', snippet.name);
+    container.innerHTML = snippet.code;
+    
+    // Execute any scripts within the HTML
+    const scripts = container.querySelectorAll('script');
+    scripts.forEach(oldScript => {
+      const newScript = document.createElement('script');
+      
+      // Copy attributes
+      Array.from(oldScript.attributes).forEach(attr => {
+        newScript.setAttribute(attr.name, attr.value);
+      });
+      
+      // Copy content or src
+      if (oldScript.src) {
+        newScript.src = oldScript.src;
+      } else {
+        newScript.textContent = oldScript.textContent;
+      }
+      
+      oldScript.parentNode.replaceChild(newScript, oldScript);
+    });
+    
+    injectByPosition(container, snippet.position);
+  }
+
+  // Inject element by position
+  function injectByPosition(element, position) {
+    switch (position) {
+      case 'head':
+        document.head.appendChild(element);
+        break;
+      case 'body-start':
+        if (document.body.firstChild) {
+          document.body.insertBefore(element, document.body.firstChild);
+        } else {
+          document.body.appendChild(element);
+        }
+        break;
+      case 'body-end':
+      default:
+        document.body.appendChild(element);
+        break;
+    }
+  }
+
+  // Initialize
+  function init() {
+    loadCustomCSS();
+    loadCodeSnippets();
+  }
+
   // Run when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadCustomCSS);
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    loadCustomCSS();
+    init();
   }
 })();

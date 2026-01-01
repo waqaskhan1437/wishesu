@@ -424,6 +424,57 @@ export async function routeApiRequest(req, env, url, path, method) {
     }
   }
 
+  // ----- UNIVERSAL CODE EDITOR -----
+  if (method === 'GET' && path === '/api/settings/code-snippets') {
+    try {
+      const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('code_snippets').first();
+      if (row && row.value) {
+        const snippets = JSON.parse(row.value);
+        return json({ success: true, snippets });
+      }
+      return json({ success: true, snippets: [] });
+    } catch (err) {
+      return json({ success: true, snippets: [] });
+    }
+  }
+
+  if (method === 'POST' && path === '/api/settings/code-snippets') {
+    try {
+      const body = await req.json();
+      const value = JSON.stringify(body.snippets || []);
+      await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('code_snippets', value).run();
+      return json({ success: true });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
+  // Public endpoint to get active code snippets for frontend
+  if (method === 'GET' && path === '/api/public/code-snippets') {
+    try {
+      const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('code_snippets').first();
+      if (row && row.value) {
+        const snippets = JSON.parse(row.value);
+        const pageType = url.searchParams.get('page') || 'all';
+        const position = url.searchParams.get('position') || 'all';
+        
+        // Filter active snippets for the requested page and position
+        const filtered = snippets.filter(s => {
+          if (!s.enabled) return false;
+          if (position !== 'all' && s.position !== position) return false;
+          if (s.pages.includes('all')) return true;
+          if (pageType !== 'all' && s.pages.includes(pageType)) return true;
+          return false;
+        });
+        
+        return json({ success: true, snippets: filtered });
+      }
+      return json({ success: true, snippets: [] });
+    } catch (err) {
+      return json({ success: true, snippets: [] });
+    }
+  }
+
   // Public endpoint to get CSS for frontend injection
   if (method === 'GET' && path === '/api/public/custom-css') {
     try {
