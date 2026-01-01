@@ -1216,6 +1216,11 @@
         const data = await res.json();
         
         if (data.success) {
+          // Clear frontend cache so changes take effect immediately
+          try {
+            localStorage.removeItem('wishesu_custom_css');
+          } catch(e) {}
+          
           statusEl.textContent = '✅ CSS saved successfully!';
           statusEl.style.color = '#16a34a';
           setTimeout(() => { statusEl.textContent = ''; }, 3000);
@@ -1332,6 +1337,11 @@
         const data = await res.json();
         
         if (data.success) {
+          // Clear frontend cache
+          try {
+            localStorage.removeItem('wishesu_custom_css');
+          } catch(e) {}
+          
           statusEl.textContent = '🗑️ CSS reset successfully!';
           statusEl.style.color = '#6b7280';
           setTimeout(() => { statusEl.textContent = ''; }, 3000);
@@ -1475,7 +1485,16 @@ document.addEventListener('DOMContentLoaded', function() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ snippets: codeSnippets })
       });
-      return await res.json();
+      const result = await res.json();
+      
+      // Clear frontend cache so changes take effect immediately
+      if (result.success) {
+        try {
+          localStorage.removeItem('wishesu_code_snippets');
+        } catch(e) {}
+      }
+      
+      return result;
     } catch (err) {
       console.error('Failed to save snippets:', err);
       return { error: err.message };

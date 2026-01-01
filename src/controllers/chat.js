@@ -155,7 +155,7 @@ export async function sendMessage(env, body, reqUrl) {
     console.error('Failed to update chat_sessions last-message fields:', e);
   }
 
-  // Trigger email alert webhook on first customer message
+  // Trigger email alert webhook on first customer message (NON-BLOCKING)
   if (isFirstUserMessage) {
     try {
       const setting = await env.DB.prepare(
@@ -169,7 +169,8 @@ export async function sendMessage(env, body, reqUrl) {
           `SELECT id, name, email, created_at FROM chat_sessions WHERE id = ?`
         ).bind(sessionId).first();
 
-        await fetch(scriptUrl, {
+        // Fire-and-forget: don't await, use ctx.waitUntil if available
+        const webhookPromise = fetch(scriptUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -180,7 +181,12 @@ export async function sendMessage(env, body, reqUrl) {
             created_at: session?.created_at || null,
             message: trimmed
           })
-        });
+        }).catch(e => console.error('Chat webhook failed:', e));
+        
+        // Use waitUntil if context available, otherwise fire-and-forget
+        if (ctx && typeof ctx.waitUntil === 'function') {
+          ctx.waitUntil(webhookPromise);
+        }
       }
     } catch (e) {
       console.error('Chat webhook trigger failed:', e);

@@ -1,10 +1,14 @@
 /**
- * Custom CSS & Code Loader - Loads and injects custom CSS and code snippets from admin settings
- * Auto-detects page type and loads appropriate CSS/code sections
+ * Custom CSS & Code Loader - OPTIMIZED with localStorage caching
+ * Reduces API calls by caching data for 5 minutes
  */
 
 (function() {
   'use strict';
+
+  const CACHE_KEY_CSS = 'wishesu_custom_css';
+  const CACHE_KEY_SNIPPETS = 'wishesu_code_snippets';
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   // Detect current page type
   function detectPageType() {
@@ -25,63 +29,92 @@
     if (path.includes('/order') || path.includes('/checkout') || path.includes('/success')) {
       return 'checkout';
     }
-    return 'page'; // generic page
+    return 'page';
+  }
+
+  // Get cached data
+  function getCached(key) {
+    try {
+      const cached = localStorage.getItem(key);
+      if (!cached) return null;
+      
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        localStorage.removeItem(key);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Set cache
+  function setCache(key, data) {
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        data: data,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      // localStorage full or disabled
+    }
   }
 
   // Load and inject custom CSS
   async function loadCustomCSS() {
     const pageType = detectPageType();
     
-    try {
-      const res = await fetch('/api/settings/custom-css');
-      const data = await res.json();
-      
-      if (!data.success || !data.settings) {
-        return;
+    // Try cache first
+    let settings = getCached(CACHE_KEY_CSS);
+    
+    if (!settings) {
+      try {
+        const res = await fetch('/api/settings/custom-css');
+        const data = await res.json();
+        
+        if (data.success && data.settings) {
+          settings = data.settings;
+          setCache(CACHE_KEY_CSS, settings);
+        }
+      } catch (err) {
+        return; // Silently fail
       }
-      
-      const settings = data.settings;
-      let cssToInject = '';
-      
-      // Always include global CSS
-      if (settings.global) {
-        cssToInject += settings.global + '\n';
-      }
-      
-      // Add page-specific CSS
-      if (pageType === 'product' && settings.product) {
-        cssToInject += settings.product + '\n';
-      }
-      if (pageType === 'blog' && settings.blog) {
-        cssToInject += settings.blog + '\n';
-      }
-      if (pageType === 'forum' && settings.forum) {
-        cssToInject += settings.forum + '\n';
-      }
-      
-      // Inject CSS if there's any
-      if (cssToInject.trim()) {
-        injectCSS(cssToInject);
-      }
-    } catch (err) {
-      console.warn('Custom CSS loader: Could not load settings', err);
+    }
+    
+    if (!settings) return;
+    
+    let cssToInject = '';
+    
+    // Always include global CSS
+    if (settings.global) {
+      cssToInject += settings.global + '\n';
+    }
+    
+    // Add page-specific CSS
+    if (pageType === 'product' && settings.product) {
+      cssToInject += settings.product + '\n';
+    }
+    if (pageType === 'blog' && settings.blog) {
+      cssToInject += settings.blog + '\n';
+    }
+    if (pageType === 'forum' && settings.forum) {
+      cssToInject += settings.forum + '\n';
+    }
+    
+    if (cssToInject.trim()) {
+      injectCSS(cssToInject);
     }
   }
 
   // Inject CSS into page
   function injectCSS(css) {
+    const existing = document.getElementById('custom-css-injected');
+    if (existing) existing.remove();
+    
     const style = document.createElement('style');
     style.id = 'custom-css-injected';
-    style.setAttribute('data-source', 'admin-settings');
     style.textContent = css;
-    
-    // Remove existing custom CSS if any
-    const existing = document.getElementById('custom-css-injected');
-    if (existing) {
-      existing.remove();
-    }
-    
-    // Append to head
     document.head.appendChild(style);
   }
 
@@ -89,70 +122,60 @@
   async function loadCodeSnippets() {
     const pageType = detectPageType();
     
-    try {
-      const res = await fetch('/api/settings/code-snippets');
-      const data = await res.json();
-      
-      if (!data.success || !data.snippets || data.snippets.length === 0) {
-        return;
+    // Try cache first
+    let snippets = getCached(CACHE_KEY_SNIPPETS);
+    
+    if (!snippets) {
+      try {
+        const res = await fetch('/api/settings/code-snippets');
+        const data = await res.json();
+        
+        if (data.success && data.snippets) {
+          snippets = data.snippets;
+          setCache(CACHE_KEY_SNIPPETS, snippets);
+        }
+      } catch (err) {
+        return; // Silently fail
       }
-      
-      const snippets = data.snippets;
-      
-      // Filter and inject snippets based on page type and position
-      snippets.forEach(snippet => {
-        if (!snippet.enabled) return;
-        
-        // Check if this snippet should load on current page
-        const shouldLoad = snippet.pages.includes('all') || 
-                          snippet.pages.includes(pageType) ||
-                          (pageType === 'page' && snippet.pages.includes('all'));
-        
-        if (!shouldLoad) return;
-        
-        // Inject based on type and position
-        injectSnippet(snippet);
-      });
-    } catch (err) {
-      console.warn('Code snippets loader: Could not load snippets', err);
     }
+    
+    if (!snippets || snippets.length === 0) return;
+    
+    // Filter and inject snippets
+    snippets.forEach(snippet => {
+      if (!snippet.enabled) return;
+      
+      const shouldLoad = snippet.pages.includes('all') || 
+                        snippet.pages.includes(pageType);
+      
+      if (shouldLoad) {
+        injectSnippet(snippet);
+      }
+    });
   }
 
   // Inject a single snippet
   function injectSnippet(snippet) {
     const id = 'snippet-' + snippet.id;
-    
-    // Remove existing if any
     const existing = document.getElementById(id);
-    if (existing) {
-      existing.remove();
-    }
-    
-    let element;
+    if (existing) existing.remove();
     
     if (snippet.type === 'css') {
-      // CSS - inject as style tag
-      element = document.createElement('style');
-      element.id = id;
-      element.setAttribute('data-snippet', snippet.name);
-      element.textContent = snippet.code;
-      document.head.appendChild(element);
+      const style = document.createElement('style');
+      style.id = id;
+      style.textContent = snippet.code;
+      document.head.appendChild(style);
       return;
     }
     
     if (snippet.type === 'js') {
-      // JavaScript - could be inline script or script with src
-      // Check if code contains <script> tags
       if (snippet.code.includes('<script')) {
-        // Has script tags, inject as HTML
         injectHTML(snippet, id);
       } else {
-        // Plain JS code
-        element = document.createElement('script');
-        element.id = id;
-        element.setAttribute('data-snippet', snippet.name);
-        element.textContent = snippet.code;
-        injectByPosition(element, snippet.position);
+        const script = document.createElement('script');
+        script.id = id;
+        script.textContent = snippet.code;
+        injectByPosition(script, snippet.position);
       }
       return;
     }
@@ -166,56 +189,53 @@
   function injectHTML(snippet, id) {
     const container = document.createElement('div');
     container.id = id;
-    container.setAttribute('data-snippet', snippet.name);
     container.innerHTML = snippet.code;
     
-    // Execute any scripts within the HTML
-    const scripts = container.querySelectorAll('script');
-    scripts.forEach(oldScript => {
+    // Execute scripts
+    container.querySelectorAll('script').forEach(oldScript => {
       const newScript = document.createElement('script');
-      
-      // Copy attributes
       Array.from(oldScript.attributes).forEach(attr => {
         newScript.setAttribute(attr.name, attr.value);
       });
-      
-      // Copy content or src
       if (oldScript.src) {
         newScript.src = oldScript.src;
       } else {
         newScript.textContent = oldScript.textContent;
       }
-      
       oldScript.parentNode.replaceChild(newScript, oldScript);
     });
     
     injectByPosition(container, snippet.position);
   }
 
-  // Inject element by position
+  // Inject by position
   function injectByPosition(element, position) {
     switch (position) {
       case 'head':
         document.head.appendChild(element);
         break;
       case 'body-start':
-        if (document.body.firstChild) {
-          document.body.insertBefore(element, document.body.firstChild);
-        } else {
-          document.body.appendChild(element);
-        }
+        document.body.insertBefore(element, document.body.firstChild);
         break;
-      case 'body-end':
       default:
         document.body.appendChild(element);
-        break;
     }
   }
 
-  // Initialize
+  // Initialize - run in background, don't block page
   function init() {
-    loadCustomCSS();
-    loadCodeSnippets();
+    // Use requestIdleCallback for non-critical loading
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        loadCustomCSS();
+        loadCodeSnippets();
+      }, { timeout: 2000 });
+    } else {
+      setTimeout(() => {
+        loadCustomCSS();
+        loadCodeSnippets();
+      }, 100);
+    }
   }
 
   // Run when DOM is ready

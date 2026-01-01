@@ -405,9 +405,19 @@ export async function routeApiRequest(req, env, url, path, method) {
       const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('custom_css').first();
       if (row && row.value) {
         const settings = JSON.parse(row.value);
-        return json({ success: true, settings });
+        return new Response(JSON.stringify({ success: true, settings }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=60, s-maxage=300'
+          }
+        });
       }
-      return json({ success: true, settings: {} });
+      return new Response(JSON.stringify({ success: true, settings: {} }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=60, s-maxage=300'
+        }
+      });
     } catch (err) {
       return json({ success: true, settings: {} });
     }
@@ -418,7 +428,7 @@ export async function routeApiRequest(req, env, url, path, method) {
       const body = await req.json();
       const value = JSON.stringify(body);
       await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('custom_css', value).run();
-      return json({ success: true });
+      return json({ success: true, cacheCleared: true });
     } catch (err) {
       return json({ error: err.message }, 500);
     }
@@ -449,7 +459,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     }
   }
 
-  // Public endpoint to get active code snippets for frontend
+  // Public endpoint to get active code snippets - CACHED for performance
   if (method === 'GET' && path === '/api/public/code-snippets') {
     try {
       const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('code_snippets').first();
@@ -467,15 +477,28 @@ export async function routeApiRequest(req, env, url, path, method) {
           return false;
         });
         
-        return json({ success: true, snippets: filtered });
+        return new Response(JSON.stringify({ success: true, snippets: filtered }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=300, s-maxage=600',
+            'CDN-Cache-Control': 'public, max-age=600'
+          }
+        });
       }
-      return json({ success: true, snippets: [] });
+      return new Response(JSON.stringify({ success: true, snippets: [] }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=300, s-maxage=600'
+        }
+      });
     } catch (err) {
-      return json({ success: true, snippets: [] });
+      return new Response(JSON.stringify({ success: true, snippets: [] }), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' }
+      });
     }
   }
 
-  // Public endpoint to get CSS for frontend injection
+  // Public endpoint to get CSS for frontend injection - CACHED for performance
   if (method === 'GET' && path === '/api/public/custom-css') {
     try {
       const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('custom_css').first();
@@ -500,13 +523,24 @@ export async function routeApiRequest(req, env, url, path, method) {
         return new Response(css.trim(), {
           headers: {
             'Content-Type': 'text/css',
-            'Cache-Control': 'public, max-age=300'
+            'Cache-Control': 'public, max-age=300, s-maxage=600',
+            'CDN-Cache-Control': 'public, max-age=600'
           }
         });
       }
-      return new Response('', { headers: { 'Content-Type': 'text/css' } });
+      return new Response('', { 
+        headers: { 
+          'Content-Type': 'text/css',
+          'Cache-Control': 'public, max-age=300, s-maxage=600'
+        } 
+      });
     } catch (err) {
-      return new Response('', { headers: { 'Content-Type': 'text/css' } });
+      return new Response('', { 
+        headers: { 
+          'Content-Type': 'text/css',
+          'Cache-Control': 'public, max-age=60'
+        } 
+      });
     }
   }
   
