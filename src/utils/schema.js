@@ -16,11 +16,18 @@ export function generateOfferObject(product, baseUrl) {
   date.setFullYear(date.getFullYear() + 1);
   const priceValidUntil = date.toISOString().split('T')[0];
   
-  // Check if product is digital (instant_delivery = 1 means digital/no shipping)
-  const isDigital = product.instant_delivery === 1;
+  // Check if product is digital - handle various data types from database
+  const instantDelivery = product.instant_delivery;
+  const isDigital = instantDelivery === 1 || instantDelivery === '1' || instantDelivery === true;
   
-  // Get delivery time in days
-  const deliveryDays = parseInt(product.normal_delivery_text) || parseInt(product.delivery_time_days) || 1;
+  // Get delivery time in days - parse from various possible formats
+  let deliveryDays = 1;
+  if (product.normal_delivery_text) {
+    const match = String(product.normal_delivery_text).match(/\d+/);
+    if (match) deliveryDays = parseInt(match[0]) || 1;
+  } else if (product.delivery_time_days) {
+    deliveryDays = parseInt(product.delivery_time_days) || 1;
+  }
 
   const offer = {
     "@type": "Offer",
@@ -36,81 +43,41 @@ export function generateOfferObject(product, baseUrl) {
     }
   };
 
-  // Add shippingDetails for all products (required for Rich Results)
-  if (isDigital) {
-    // Digital product - indicate digital delivery (no physical shipping)
-    offer.shippingDetails = {
-      "@type": "OfferShippingDetails",
-      "shippingDestination": {
-        "@type": "DefinedRegion",
-        "addressCountry": "US"
+  // ALWAYS add shippingDetails - required for Google Rich Results
+  offer.shippingDetails = {
+    "@type": "OfferShippingDetails",
+    "shippingDestination": {
+      "@type": "DefinedRegion",
+      "addressCountry": "US"
+    },
+    "shippingRate": {
+      "@type": "MonetaryAmount",
+      "currency": "USD",
+      "value": "0"
+    },
+    "deliveryTime": {
+      "@type": "ShippingDeliveryTime",
+      "handlingTime": {
+        "@type": "QuantitativeValue",
+        "minValue": 0,
+        "maxValue": 1,
+        "unitCode": "DAY"
       },
-      "shippingRate": {
-        "@type": "MonetaryAmount",
-        "currency": "USD",
-        "value": "0"
-      },
-      "deliveryTime": {
-        "@type": "ShippingDeliveryTime",
-        "handlingTime": {
-          "@type": "QuantitativeValue",
-          "minValue": 0,
-          "maxValue": 0,
-          "unitCode": "DAY"
-        },
-        "transitTime": {
-          "@type": "QuantitativeValue",
-          "minValue": 0,
-          "maxValue": 0,
-          "unitCode": "DAY"
-        }
+      "transitTime": {
+        "@type": "QuantitativeValue",
+        "minValue": isDigital ? 0 : 1,
+        "maxValue": isDigital ? 0 : Math.max(1, deliveryDays),
+        "unitCode": "DAY"
       }
-    };
-  } else {
-    // Physical or custom delivery product
-    offer.shippingDetails = {
-      "@type": "OfferShippingDetails",
-      "shippingDestination": [
-        { "@type": "DefinedRegion", "addressCountry": "US" },
-        { "@type": "DefinedRegion", "addressCountry": "GB" },
-        { "@type": "DefinedRegion", "addressCountry": "CA" },
-        { "@type": "DefinedRegion", "addressCountry": "AU" },
-        { "@type": "DefinedRegion", "addressCountry": "DE" },
-        { "@type": "DefinedRegion", "addressCountry": "FR" },
-        { "@type": "DefinedRegion", "addressCountry": "NL" },
-        { "@type": "DefinedRegion", "addressCountry": "PK" }
-      ],
-      "shippingRate": {
-        "@type": "MonetaryAmount",
-        "currency": "USD",
-        "value": "0"
-      },
-      "deliveryTime": {
-        "@type": "ShippingDeliveryTime",
-        "handlingTime": {
-          "@type": "QuantitativeValue",
-          "minValue": 0,
-          "maxValue": 1,
-          "unitCode": "DAY"
-        },
-        "transitTime": {
-          "@type": "QuantitativeValue",
-          "minValue": 1,
-          "maxValue": deliveryDays,
-          "unitCode": "DAY"
-        }
-      }
-    };
-  }
+    }
+  };
   
-  // Add hasMerchantReturnPolicy for all products (required for Rich Results)
+  // ALWAYS add hasMerchantReturnPolicy - required for Google Rich Results
   offer.hasMerchantReturnPolicy = {
     "@type": "MerchantReturnPolicy",
-    "applicableCountry": ["US", "GB", "CA", "AU", "DE", "FR", "NL", "PK"],
+    "applicableCountry": "US",
     "returnPolicyCategory": "https://schema.org/MerchantReturnNotPermitted",
-    "merchantReturnDays": 0,
-    "returnMethod": "https://schema.org/ReturnByMail",
-    "returnFees": "https://schema.org/FreeReturn"
+    "merchantReturnDays": 0
   };
 
   return offer;
