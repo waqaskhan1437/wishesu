@@ -1564,25 +1564,73 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       }
 
       // ----- DYNAMIC PAGES -----
-      // Skip core static pages that should always use the file system
+      // Support both clean URLs (/forum) and .html URLs (/forum.html)
+      // Redirect .html to clean URL for SEO
       const coreStaticPages = ['index', 'products-grid', 'product', 'buyer-order', 'order-detail', 'order-success', 'success', 'page-builder'];
-      if (path.endsWith('.html') && !path.includes('/admin/') && !path.startsWith('/admin')) {
+      
+      // Check for .html extension and redirect to clean URL
+      if (path.endsWith('.html') && !path.includes('/admin/') && !path.startsWith('/admin') && !path.startsWith('/blog/') && !path.startsWith('/forum/')) {
         const slug = path.slice(1).replace(/\.html$/, '');
-        // Only check database for non-core pages
+        // Only redirect non-core pages to clean URLs
         if (!coreStaticPages.includes(slug)) {
+          try {
+            if (env.DB) {
+              await initDB(env);
+              const row = await env.DB.prepare('SELECT slug FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
+              if (row) {
+                // 301 redirect to clean URL
+                return Response.redirect(`${url.origin}/${slug}`, 301);
+              }
+            }
+          } catch (e) {
+            // continue to static assets
+          }
+        }
+      }
+      
+      // Serve dynamic pages with clean URLs (no .html)
+      if (!path.includes('.') && !path.includes('/admin') && !path.startsWith('/api/') && path !== '/' && !path.startsWith('/blog/') && !path.startsWith('/forum/') && !path.startsWith('/product-') && !path.startsWith('/download/')) {
+        const slug = path.slice(1).replace(/\/$/, ''); // Remove leading slash and trailing slash
+        if (slug && !coreStaticPages.includes(slug)) {
           try {
             if (env.DB) {
               await initDB(env);
               const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
               if (row && row.content) {
-                return new Response(row.content, {
-                  headers: { 'Content-Type': 'text/html; charset=utf-8' }
+                // Apply SEO
+                let html = row.content;
+                try {
+                  const seo = await getSeoForRequest(env, req, { path: '/' + slug });
+                  html = applySeoToHtml(html, seo.robots, seo.canonical);
+                } catch (e) {}
+                
+                return new Response(html, {
+                  status: 200,
+                  headers: { 
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'X-Worker-Version': VERSION
+                  }
                 });
               }
             }
           } catch (e) {
             // continue to static assets
           }
+        }
+      }
+
+      // ----- CLEAN URL REDIRECTS -----
+      // Redirect .html URLs to clean URLs for better SEO
+      if (method === 'GET') {
+        const htmlRedirects = {
+          '/forum.html': '/forum',
+          '/blog.html': '/blog',
+          '/products.html': '/products',
+          '/products-grid.html': '/products'
+        };
+        
+        if (htmlRedirects[path]) {
+          return Response.redirect(`${url.origin}${htmlRedirects[path]}`, 301);
         }
       }
 
@@ -1596,15 +1644,15 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
           defaultPageType = 'home';
         }
         // Blog archive
-        else if (path === '/blog/' || path === '/blog/index.html' || path === '/blog') {
+        else if (path === '/blog/' || path === '/blog/index.html' || path === '/blog' || path === '/blog.html') {
           defaultPageType = 'blog_archive';
         }
         // Forum archive
-        else if (path === '/forum/' || path === '/forum/index.html' || path === '/forum') {
+        else if (path === '/forum/' || path === '/forum/index.html' || path === '/forum' || path === '/forum.html') {
           defaultPageType = 'forum_archive';
         }
         // Product grid
-        else if (path === '/products/' || path === '/products/index.html' || path === '/products' || path === '/products-grid.html') {
+        else if (path === '/products/' || path === '/products/index.html' || path === '/products' || path === '/products-grid.html' || path === '/products.html') {
           defaultPageType = 'product_grid';
         }
         

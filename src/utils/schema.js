@@ -18,6 +18,9 @@ export function generateOfferObject(product, baseUrl) {
   
   // Check if product is digital (instant_delivery = 1 means digital/no shipping)
   const isDigital = product.instant_delivery === 1;
+  
+  // Get delivery time in days
+  const deliveryDays = parseInt(product.normal_delivery_text) || parseInt(product.delivery_time_days) || 1;
 
   const offer = {
     "@type": "Offer",
@@ -33,8 +36,38 @@ export function generateOfferObject(product, baseUrl) {
     }
   };
 
-  // Only add shipping details for physical products (non-digital)
-  if (!isDigital) {
+  // Add shippingDetails for all products (required for Rich Results)
+  if (isDigital) {
+    // Digital product - indicate digital delivery (no physical shipping)
+    offer.shippingDetails = {
+      "@type": "OfferShippingDetails",
+      "shippingDestination": {
+        "@type": "DefinedRegion",
+        "addressCountry": "US"
+      },
+      "shippingRate": {
+        "@type": "MonetaryAmount",
+        "currency": "USD",
+        "value": "0"
+      },
+      "deliveryTime": {
+        "@type": "ShippingDeliveryTime",
+        "handlingTime": {
+          "@type": "QuantitativeValue",
+          "minValue": 0,
+          "maxValue": 0,
+          "unitCode": "DAY"
+        },
+        "transitTime": {
+          "@type": "QuantitativeValue",
+          "minValue": 0,
+          "maxValue": 0,
+          "unitCode": "DAY"
+        }
+      }
+    };
+  } else {
+    // Physical or custom delivery product
     offer.shippingDetails = {
       "@type": "OfferShippingDetails",
       "shippingDestination": [
@@ -43,7 +76,9 @@ export function generateOfferObject(product, baseUrl) {
         { "@type": "DefinedRegion", "addressCountry": "CA" },
         { "@type": "DefinedRegion", "addressCountry": "AU" },
         { "@type": "DefinedRegion", "addressCountry": "DE" },
-        { "@type": "DefinedRegion", "addressCountry": "FR" }
+        { "@type": "DefinedRegion", "addressCountry": "FR" },
+        { "@type": "DefinedRegion", "addressCountry": "NL" },
+        { "@type": "DefinedRegion", "addressCountry": "PK" }
       ],
       "shippingRate": {
         "@type": "MonetaryAmount",
@@ -52,18 +87,31 @@ export function generateOfferObject(product, baseUrl) {
       },
       "deliveryTime": {
         "@type": "ShippingDeliveryTime",
-        "handlingTime": { "@type": "QuantitativeValue", "minValue": 0, "maxValue": 1, "unitCode": "DAY" },
-        "transitTime": { "@type": "QuantitativeValue", "minValue": 1, "maxValue": 3, "unitCode": "DAY" }
+        "handlingTime": {
+          "@type": "QuantitativeValue",
+          "minValue": 0,
+          "maxValue": 1,
+          "unitCode": "DAY"
+        },
+        "transitTime": {
+          "@type": "QuantitativeValue",
+          "minValue": 1,
+          "maxValue": deliveryDays,
+          "unitCode": "DAY"
+        }
       }
     };
-    
-    offer.hasMerchantReturnPolicy = {
-      "@type": "MerchantReturnPolicy",
-      "applicableCountry": "US",
-      "returnPolicyCategory": "MerchantReturnNotPermitted",
-      "merchantReturnDays": 0
-    };
   }
+  
+  // Add hasMerchantReturnPolicy for all products (required for Rich Results)
+  offer.hasMerchantReturnPolicy = {
+    "@type": "MerchantReturnPolicy",
+    "applicableCountry": ["US", "GB", "CA", "AU", "DE", "FR", "NL", "PK"],
+    "returnPolicyCategory": "https://schema.org/MerchantReturnNotPermitted",
+    "merchantReturnDays": 0,
+    "returnMethod": "https://schema.org/ReturnByMail",
+    "returnFees": "https://schema.org/FreeReturn"
+  };
 
   return offer;
 }

@@ -20,19 +20,17 @@ const DEFAULT_SETTINGS = {
 
 // Seed rules only once if empty (keeps sensitive pages safe by default but still editable)
 const DEFAULT_PAGE_RULES = [
-  // Main pages
+  // Main pages - clean URLs
   { path: '/', allow_index: 1, allow_follow: 1, include_in_sitemap: 1, canonical_override: '', changefreq: 'daily', priority: 1.0 },
-  { path: '/products/', allow_index: 1, allow_follow: 1, include_in_sitemap: 1, canonical_override: '', changefreq: 'daily', priority: 0.8 },
-  { path: '/blog/', allow_index: 1, allow_follow: 1, include_in_sitemap: 1, canonical_override: '', changefreq: 'daily', priority: 0.7 },
-  { path: '/forum/', allow_index: 1, allow_follow: 1, include_in_sitemap: 1, canonical_override: '', changefreq: 'daily', priority: 0.6 },
+  { path: '/products', allow_index: 1, allow_follow: 1, include_in_sitemap: 1, canonical_override: '', changefreq: 'daily', priority: 0.8 },
+  { path: '/blog', allow_index: 1, allow_follow: 1, include_in_sitemap: 1, canonical_override: '', changefreq: 'daily', priority: 0.7 },
+  { path: '/forum', allow_index: 1, allow_follow: 1, include_in_sitemap: 1, canonical_override: '', changefreq: 'daily', priority: 0.6 },
 
-  // Sensitive/system pages
+  // Sensitive/system pages - noindex
   { path: '/buyer-order', allow_index: 0, allow_follow: 0, include_in_sitemap: 0, canonical_override: '', changefreq: 'never', priority: 0.0 },
-  { path: '/buyer-order.html', allow_index: 0, allow_follow: 0, include_in_sitemap: 0, canonical_override: '', changefreq: 'never', priority: 0.0 },
   { path: '/order-detail', allow_index: 0, allow_follow: 0, include_in_sitemap: 0, canonical_override: '', changefreq: 'never', priority: 0.0 },
-  { path: '/order-detail.html', allow_index: 0, allow_follow: 0, include_in_sitemap: 0, canonical_override: '', changefreq: 'never', priority: 0.0 },
-  { path: '/order-success.html', allow_index: 0, allow_follow: 0, include_in_sitemap: 0, canonical_override: '', changefreq: 'never', priority: 0.0 },
-  { path: '/success.html', allow_index: 0, allow_follow: 0, include_in_sitemap: 0, canonical_override: '', changefreq: 'never', priority: 0.0 }
+  { path: '/order-success', allow_index: 0, allow_follow: 0, include_in_sitemap: 0, canonical_override: '', changefreq: 'never', priority: 0.0 },
+  { path: '/success', allow_index: 0, allow_follow: 0, include_in_sitemap: 0, canonical_override: '', changefreq: 'never', priority: 0.0 }
 ];
 
 function normalizePath(p) {
@@ -581,10 +579,10 @@ export async function buildSitemapXml(env, request, partIndex = null) {
 
   // Pages: include default main routes + published custom pages from DB
   if (s.sitemap_include_pages) {
-    // include default routes only if not blocked by rules
-    const defaultPaths = ['/', '/products/', '/blog/', '/forum/'];
+    // include default routes only if not blocked by rules - use clean URLs
+    const defaultPaths = ['/', '/products', '/blog', '/forum'];
     for (const p of defaultPaths) {
-      const rule = getPR(p);
+      const rule = getPR(p) || getPR(p + '/'); // Check both clean and trailing slash rules
       const allowIndex = rule ? (rule.allow_index !== 0) : true;
       const inSitemap = rule ? (rule.include_in_sitemap !== 0) : true;
       if (allowIndex && inSitemap) {
@@ -595,7 +593,7 @@ export async function buildSitemapXml(env, request, partIndex = null) {
       }
     }
 
-    // custom pages from pages table
+    // custom pages from pages table - use clean URLs (no .html)
     const pagesRes = await env.DB.prepare(
       `SELECT slug, updated_at, created_at, status FROM pages WHERE status = 'published'`
     ).all();
@@ -606,8 +604,9 @@ export async function buildSitemapXml(env, request, partIndex = null) {
       // avoid duplicates: default pages are handled above
       if (slug === 'index' || slug === 'home') continue;
 
-      const path = normalizePath(`/${slug}.html`);
-      const rule = getPR(path);
+      // Use clean URL without .html extension
+      const path = normalizePath(`/${slug}`);
+      const rule = getPR(path) || getPR(`/${slug}.html`); // Check both clean and .html rules
       const allowIndex = rule ? (rule.allow_index !== 0) : true;
       const inSitemap = rule ? (rule.include_in_sitemap !== 0) : true;
       if (!allowIndex || !inSitemap) continue;

@@ -74,7 +74,7 @@ export async function getPagesList(env) {
       id: page.id,
       name: page.slug || page.title || 'Untitled',
       title: page.title || page.slug || 'Untitled',
-      url: `/${page.slug}.html`,
+      url: `/${page.slug}`,
       size: sizeStr,
       uploaded: uploaded,
       status: page.status || 'draft',
