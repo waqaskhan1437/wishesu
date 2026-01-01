@@ -10,7 +10,7 @@ import { routeApiRequest } from './router.js';
 import { handleProductRouting } from './controllers/products.js';
 import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
-import { generateProductSchema, generateCollectionSchema, injectSchemaIntoHTML } from './utils/schema.js';
+import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildRobotsTxt, buildSitemapXml, getSeoForRequest, applySeoToHtml } from './controllers/seo.js';
 
@@ -1767,6 +1767,31 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                   const reviews = reviewsResult.results || [];
                   const schemaJson = generateProductSchema(product, baseUrl, reviews);
                   html = injectSchemaIntoHTML(html, 'product-schema', schemaJson);
+                  
+                  // Inject VideoObject schema for video rich results
+                  const videoSchemaJson = generateVideoSchema(product, baseUrl);
+                  if (videoSchemaJson && videoSchemaJson !== '{}') {
+                    const videoSchemaTag = `<script type="application/ld+json" id="video-schema">${videoSchemaJson}</script>`;
+                    html = html.replace('</head>', `${videoSchemaTag}\n</head>`);
+                  }
+                  
+                  // Add video meta tags for social sharing and SEO
+                  if (product.video_url || product.preview_video_url) {
+                    const videoUrl = product.video_url || product.preview_video_url;
+                    const videoMetaTags = `
+    <meta property="og:type" content="video.other">
+    <meta property="og:video" content="${videoUrl}">
+    <meta property="og:video:url" content="${videoUrl}">
+    <meta property="og:video:secure_url" content="${videoUrl}">
+    <meta property="og:video:type" content="video/mp4">
+    <meta property="og:video:width" content="1280">
+    <meta property="og:video:height" content="720">
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:player" content="${videoUrl}">
+    <meta name="twitter:player:width" content="1280">
+    <meta name="twitter:player:height" content="720">`;
+                    html = html.replace('</head>', `${videoMetaTags}\n</head>`);
+                  }
                   
                   // LCP Optimization: Preload hero image for faster rendering
                   if (product.thumbnail_url) {

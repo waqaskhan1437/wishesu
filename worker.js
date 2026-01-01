@@ -458,16 +458,31 @@ function generateOfferObject(product, baseUrl) {
  */
 function generateProductSchema(product, baseUrl, reviews = []) {
   const sku = product.slug ? `WV-${product.id}-${product.slug.toUpperCase().replace(/-/g, '')}` : `WV-${product.id}`;
+  const productUrl = `${baseUrl}${canonicalProductPath(product)}`;
+
+  // Build images array
+  const images = [];
+  if (product.thumbnail_url) images.push(product.thumbnail_url);
+  if (product.gallery_images) {
+    try {
+      const gallery = typeof product.gallery_images === 'string' 
+        ? JSON.parse(product.gallery_images) 
+        : product.gallery_images;
+      if (Array.isArray(gallery)) {
+        images.push(...gallery.slice(0, 5));
+      }
+    } catch (e) {}
+  }
 
   const schema = {
     "@context": "https://schema.org/",
     "@type": "Product",
-    "@id": `${baseUrl}${canonicalProductPath(product)}`,
+    "@id": productUrl,
     "name": product.title,
     "description": product.seo_description || product.description || product.title,
     "sku": sku,
     "mpn": sku,
-    "image": product.thumbnail_url ? [product.thumbnail_url] : [],
+    "image": images.length > 0 ? images : [`${baseUrl}/favicon.ico`],
     "brand": {
       "@type": "Brand",
       "name": "WishVideo",
@@ -481,6 +496,49 @@ function generateProductSchema(product, baseUrl, reviews = []) {
     "category": "Digital Goods > Personalized Videos",
     "offers": generateOfferObject(product, baseUrl)
   };
+
+  // Add video if available - enables video rich results in Google
+  const videoUrl = product.video_url || product.preview_video_url || product.sample_video_url;
+  if (videoUrl) {
+    const uploadDate = product.created_at 
+      ? new Date(product.created_at).toISOString() 
+      : new Date().toISOString();
+    
+    schema.video = {
+      "@type": "VideoObject",
+      "name": `${product.title} - Personalized Video`,
+      "description": product.seo_description || product.description || `Watch ${product.title} personalized video greeting`,
+      "thumbnailUrl": product.thumbnail_url || `${baseUrl}/favicon.ico`,
+      "uploadDate": uploadDate,
+      "duration": product.video_duration || "PT1M",
+      "contentUrl": videoUrl,
+      "embedUrl": videoUrl,
+      "interactionStatistic": {
+        "@type": "InteractionCounter",
+        "interactionType": { "@type": "WatchAction" },
+        "userInteractionCount": parseInt(product.view_count) || 100
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "WishVideo",
+        "logo": {
+          "@type": "ImageObject",
+          "url": `${baseUrl}/favicon.ico`
+        }
+      },
+      "potentialAction": {
+        "@type": "WatchAction",
+        "target": productUrl
+      }
+    };
+    
+    // Also add subjectOf for additional video association
+    schema.subjectOf = {
+      "@type": "VideoObject",
+      "@id": `${productUrl}#video`,
+      ...schema.video
+    };
+  }
 
    // Add aggregateRating (always present, even with 0 reviews for better Rich Results)
    schema.aggregateRating = {
@@ -511,6 +569,50 @@ function generateProductSchema(product, baseUrl, reviews = []) {
     }));
   }
 
+  return JSON.stringify(schema);
+}
+
+/**
+ * Generate VideoObject schema for video rich results
+ */
+function generateVideoSchema(product, baseUrl) {
+  const videoUrl = product.video_url || product.preview_video_url || product.sample_video_url;
+  if (!videoUrl) return '{}';
+  
+  const uploadDate = product.created_at 
+    ? new Date(product.created_at).toISOString() 
+    : new Date().toISOString();
+  
+  const schema = {
+    "@context": "https://schema.org/",
+    "@type": "VideoObject",
+    "@id": `${baseUrl}${canonicalProductPath(product)}#video`,
+    "name": `${product.title} - Personalized Video`,
+    "description": product.seo_description || product.description || `Watch ${product.title} personalized video greeting`,
+    "thumbnailUrl": product.thumbnail_url || `${baseUrl}/favicon.ico`,
+    "uploadDate": uploadDate,
+    "duration": product.video_duration || "PT1M",
+    "contentUrl": videoUrl,
+    "embedUrl": videoUrl,
+    "interactionStatistic": {
+      "@type": "InteractionCounter",
+      "interactionType": { "@type": "WatchAction" },
+      "userInteractionCount": parseInt(product.view_count) || 100
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "WishVideo",
+      "logo": {
+        "@type": "ImageObject",
+        "url": `${baseUrl}/favicon.ico`
+      }
+    },
+    "potentialAction": {
+      "@type": "WatchAction",
+      "target": `${baseUrl}${canonicalProductPath(product)}`
+    }
+  };
+  
   return JSON.stringify(schema);
 }
 
@@ -3418,6 +3520,31 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
 
                   const schemaJson = generateProductSchema(product, baseUrl, reviews);
                   html = injectSchemaIntoHTML(html, 'product-schema', schemaJson);
+                  
+                  // Inject VideoObject schema for video rich results
+                  const videoSchemaJson = generateVideoSchema(product, baseUrl);
+                  if (videoSchemaJson && videoSchemaJson !== '{}') {
+                    const videoSchemaTag = `<script type="application/ld+json" id="video-schema">${videoSchemaJson}</script>`;
+                    html = html.replace('</head>', `${videoSchemaTag}\n</head>`);
+                  }
+                  
+                  // Add video meta tags for social sharing and SEO
+                  const videoUrl = product.video_url || product.preview_video_url;
+                  if (videoUrl) {
+                    const videoMetaTags = `
+    <meta property="og:type" content="video.other">
+    <meta property="og:video" content="${videoUrl}">
+    <meta property="og:video:url" content="${videoUrl}">
+    <meta property="og:video:secure_url" content="${videoUrl}">
+    <meta property="og:video:type" content="video/mp4">
+    <meta property="og:video:width" content="1280">
+    <meta property="og:video:height" content="720">
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:player" content="${videoUrl}">
+    <meta name="twitter:player:width" content="1280">
+    <meta name="twitter:player:height" content="720">`;
+                    html = html.replace('</head>', `${videoMetaTags}\n</head>`);
+                  }
                 }
               }
             }

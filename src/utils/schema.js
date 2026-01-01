@@ -84,6 +84,59 @@ export function generateOfferObject(product, baseUrl) {
 }
 
 /**
+ * Generate VideoObject schema for video content
+ * @param {Object} product - Product data
+ * @param {string} baseUrl - Site base URL
+ * @returns {Object|null} VideoObject schema or null if no video
+ */
+export function generateVideoObject(product, baseUrl) {
+  // Check for video URL in various fields
+  const videoUrl = product.video_url || product.preview_video_url || product.sample_video_url;
+  
+  if (!videoUrl) return null;
+  
+  // Get upload date - use product created_at or current date
+  const uploadDate = product.created_at 
+    ? new Date(product.created_at).toISOString() 
+    : new Date().toISOString();
+  
+  // Estimate duration - default 60 seconds for personalized videos
+  const duration = product.video_duration || "PT1M";
+  
+  const videoSchema = {
+    "@type": "VideoObject",
+    "name": `${product.title} - Personalized Video`,
+    "description": product.seo_description || product.description || `Watch ${product.title} personalized video greeting`,
+    "thumbnailUrl": product.thumbnail_url || `${baseUrl}/favicon.ico`,
+    "uploadDate": uploadDate,
+    "duration": duration,
+    "contentUrl": videoUrl,
+    "embedUrl": videoUrl,
+    "interactionStatistic": {
+      "@type": "InteractionCounter",
+      "interactionType": { "@type": "WatchAction" },
+      "userInteractionCount": parseInt(product.view_count) || 100
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "WishVideo",
+      "logo": {
+        "@type": "ImageObject",
+        "url": `${baseUrl}/favicon.ico`
+      }
+    }
+  };
+  
+  // Add potentialAction for video
+  videoSchema.potentialAction = {
+    "@type": "WatchAction",
+    "target": `${baseUrl}${canonicalProductPath(product)}`
+  };
+  
+  return videoSchema;
+}
+
+/**
  * Generate Product schema for individual product pages
  * @param {Object} product - Product data from database
  * @param {string} baseUrl - Site base URL
@@ -92,16 +145,31 @@ export function generateOfferObject(product, baseUrl) {
  */
 export function generateProductSchema(product, baseUrl, reviews = []) {
   const sku = product.slug ? `WV-${product.id}-${product.slug.toUpperCase().replace(/-/g, '')}` : `WV-${product.id}`;
+  const productUrl = `${baseUrl}${canonicalProductPath(product)}`;
+
+  // Build images array - include thumbnail and video thumbnail
+  const images = [];
+  if (product.thumbnail_url) images.push(product.thumbnail_url);
+  if (product.gallery_images) {
+    try {
+      const gallery = typeof product.gallery_images === 'string' 
+        ? JSON.parse(product.gallery_images) 
+        : product.gallery_images;
+      if (Array.isArray(gallery)) {
+        images.push(...gallery.slice(0, 5));
+      }
+    } catch (e) {}
+  }
 
   const schema = {
     "@context": "https://schema.org/",
     "@type": "Product",
-    "@id": `${baseUrl}${canonicalProductPath(product)}`,
+    "@id": productUrl,
     "name": product.title,
     "description": product.seo_description || product.description || product.title,
     "sku": sku,
     "mpn": sku,
-    "image": product.thumbnail_url ? [product.thumbnail_url] : [],
+    "image": images.length > 0 ? images : [`${baseUrl}/favicon.ico`],
     "brand": {
       "@type": "Brand",
       "name": "WishVideo",
@@ -115,6 +183,18 @@ export function generateProductSchema(product, baseUrl, reviews = []) {
     "category": "Digital Goods > Personalized Videos",
     "offers": generateOfferObject(product, baseUrl)
   };
+
+  // Add video if available - this enables video rich results
+  const videoObject = generateVideoObject(product, baseUrl);
+  if (videoObject) {
+    schema.video = videoObject;
+    // Also add subjectOf for additional video association
+    schema.subjectOf = {
+      "@type": "VideoObject",
+      "@id": `${productUrl}#video`,
+      ...videoObject
+    };
+  }
 
   // Add aggregateRating (always present, even with 0 reviews for better Rich Results)
   schema.aggregateRating = {
@@ -149,6 +229,28 @@ export function generateProductSchema(product, baseUrl, reviews = []) {
 }
 
 /**
+ * Generate standalone VideoObject schema for video-focused pages
+ * @param {Object} product - Product data
+ * @param {string} baseUrl - Site base URL
+ * @returns {string} JSON-LD VideoObject schema as string
+ */
+export function generateVideoSchema(product, baseUrl) {
+  const videoObject = generateVideoObject(product, baseUrl);
+  
+  if (!videoObject) {
+    return '{}';
+  }
+  
+  const schema = {
+    "@context": "https://schema.org/",
+    ...videoObject,
+    "@id": `${baseUrl}${canonicalProductPath(product)}#video`
+  };
+  
+  return JSON.stringify(schema);
+}
+
+/**
  * Generate ItemList schema for product collection pages
  * @param {Array} products - Array of product data
  * @param {string} baseUrl - Site base URL
@@ -173,6 +275,17 @@ export function generateCollectionSchema(products, baseUrl) {
         "offers": generateOfferObject(product, baseUrl)
       }
     };
+
+    // Add video thumbnail to images if video exists
+    const videoUrl = product.video_url || product.preview_video_url;
+    if (videoUrl && product.thumbnail_url) {
+      item.item.video = {
+        "@type": "VideoObject",
+        "name": product.title,
+        "thumbnailUrl": product.thumbnail_url,
+        "contentUrl": videoUrl
+      };
+    }
 
     // Add aggregateRating if product has reviews
     if (product.review_count > 0) {
