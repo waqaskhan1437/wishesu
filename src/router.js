@@ -11,6 +11,7 @@ import {
   getProducts, 
   getProductsList, 
   getProduct, 
+  getAdjacentProducts,
   saveProduct, 
   deleteProduct, 
   updateProductStatus, 
@@ -303,6 +304,11 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'GET' && path.startsWith('/api/product/')) {
+    // Check for adjacent products endpoint
+    if (path.match(/^\/api\/product\/(\d+)\/adjacent$/)) {
+      const id = path.split('/')[3];
+      return getAdjacentProducts(env, id);
+    }
     const id = path.split('/').pop();
     return getProduct(env, id);
   }

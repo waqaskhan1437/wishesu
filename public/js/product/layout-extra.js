@@ -50,6 +50,66 @@
     descRow.appendChild(descBox);
     wrapper.appendChild(descRow);
     
+    // Add product navigation (Next/Previous buttons)
+    const navSection = document.createElement('div');
+    navSection.id = 'product-navigation';
+    navSection.className = 'product-navigation-section';
+    navSection.innerHTML = `
+      <div style="display: flex; justify-content: center; align-items: center; padding: 30px 0; gap: 20px; flex-wrap: wrap;">
+        <div id="prev-product-btn" style="flex: 1; max-width: 300px; min-width: 200px;"></div>
+        <div id="next-product-btn" style="flex: 1; max-width: 300px; min-width: 200px;"></div>
+      </div>
+    `;
+    wrapper.appendChild(navSection);
+    
+    // Load adjacent products
+    if (product.id && typeof window.getAdjacentProducts === 'function') {
+      window.getAdjacentProducts(product.id).then(function(data) {
+        const prevContainer = document.getElementById('prev-product-btn');
+        const nextContainer = document.getElementById('next-product-btn');
+        
+        if (data.previous && prevContainer) {
+          prevContainer.innerHTML = `
+            <a href="${data.previous.url}" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border: 2px solid #e5e7eb; border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.05);" 
+               onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
+               onmouseleave="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)';">
+              <div style="width: 60px; height: 60px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: #f3f4f6;">
+                ${data.previous.thumbnail_url ? `<img src="${data.previous.thumbnail_url}" alt="" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">📦</div>'}
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px;">← Previous</div>
+                <div style="font-weight: 600; font-size: 14px; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${data.previous.title}</div>
+              </div>
+            </a>
+          `;
+        }
+        
+        if (data.next && nextContainer) {
+          nextContainer.innerHTML = `
+            <a href="${data.next.url}" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border: 2px solid #e5e7eb; border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-direction: row-reverse; text-align: right;" 
+               onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
+               onmouseleave="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)';">
+              <div style="width: 60px; height: 60px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: #f3f4f6;">
+                ${data.next.thumbnail_url ? `<img src="${data.next.thumbnail_url}" alt="" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">📦</div>'}
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px;">Next →</div>
+                <div style="font-weight: 600; font-size: 14px; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${data.next.title}</div>
+              </div>
+            </a>
+          `;
+        }
+        
+        // Hide section if no navigation available
+        if (!data.previous && !data.next) {
+          navSection.style.display = 'none';
+        }
+      }).catch(function(err) {
+        console.warn('Failed to load adjacent products:', err);
+        navSection.style.display = 'none';
+      });
+    }
+    
     // Load reviews - first try from existing product data, then fallback to widget
     setTimeout(() => {
       const container = document.getElementById('reviews-container');

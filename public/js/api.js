@@ -48,6 +48,16 @@ function getProduct(id) {
 }
 
 /**
+ * Get adjacent (next/previous) products for navigation.
+ * Returns an object with `previous` and `next` product info.
+ *
+ * @param {string|number} id Product ID
+ */
+function getAdjacentProducts(id) {
+  return apiFetch(`/api/product/${encodeURIComponent(id)}/adjacent`);
+}
+
+/**
  * Create a new order.  The body should include `email`, `amount`,
  * `productId` and optional `addons` array.  Returns order details.
  * This helper wraps the POST request to `/api/order/create`.
@@ -93,6 +103,7 @@ function getAllReviews() {
 // functions would be module‑scoped and unavailable to the page.
 window.getProducts = getProducts;
 window.getProduct = getProduct;
+window.getAdjacentProducts = getAdjacentProducts;
 window.createOrder = createOrder;
 window.saveArchiveLink = saveArchiveLink;
 

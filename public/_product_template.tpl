@@ -49,6 +49,9 @@
     #thumbnails-slider video{pointer-events:none}
     #thumbnails-slider video::-webkit-media-controls,#thumbnails-slider video::-webkit-media-controls-panel,#thumbnails-slider video::-webkit-media-controls-enclosure{display:none !important;opacity:0 !important;visibility:hidden !important}
     .site-footer{text-align:center;padding:2rem 0;color:var(--text-muted);border-top:1px solid var(--border);margin-top:3rem}
+    /* Product Navigation */
+    .product-navigation-section{margin-top:2rem;padding-top:2rem;border-top:1px solid #e5e7eb}
+    @media(max-width:600px){.product-navigation-section > div{flex-direction:column !important}.product-navigation-section > div > div{max-width:100% !important;width:100%}}
     /* Skeleton loading to prevent CLS */
     .skeleton-container{display:grid;grid-template-columns:55% 45%;gap:2.5rem;align-items:start}
     .skeleton-media{aspect-ratio:16/9;min-height:350px;background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
