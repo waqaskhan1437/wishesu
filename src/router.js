@@ -398,6 +398,66 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'GET' && path === '/api/settings/payment-methods') {
     return getPaymentMethodsStatus(env);
   }
+
+  // ----- UNIVERSAL CUSTOM CSS -----
+  if (method === 'GET' && path === '/api/settings/custom-css') {
+    try {
+      const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('custom_css').first();
+      if (row && row.value) {
+        const settings = JSON.parse(row.value);
+        return json({ success: true, settings });
+      }
+      return json({ success: true, settings: {} });
+    } catch (err) {
+      return json({ success: true, settings: {} });
+    }
+  }
+
+  if (method === 'POST' && path === '/api/settings/custom-css') {
+    try {
+      const body = await req.json();
+      const value = JSON.stringify(body);
+      await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('custom_css', value).run();
+      return json({ success: true });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
+  // Public endpoint to get CSS for frontend injection
+  if (method === 'GET' && path === '/api/public/custom-css') {
+    try {
+      const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('custom_css').first();
+      if (row && row.value) {
+        const settings = JSON.parse(row.value);
+        const section = url.searchParams.get('section') || 'all';
+        
+        let css = '';
+        if (section === 'all' || section === 'global') {
+          css += settings.global || '';
+        }
+        if (section === 'all' || section === 'product') {
+          css += '\n' + (settings.product || '');
+        }
+        if (section === 'all' || section === 'blog') {
+          css += '\n' + (settings.blog || '');
+        }
+        if (section === 'all' || section === 'forum') {
+          css += '\n' + (settings.forum || '');
+        }
+        
+        return new Response(css.trim(), {
+          headers: {
+            'Content-Type': 'text/css',
+            'Cache-Control': 'public, max-age=300'
+          }
+        });
+      }
+      return new Response('', { headers: { 'Content-Type': 'text/css' } });
+    } catch (err) {
+      return new Response('', { headers: { 'Content-Type': 'text/css' } });
+    }
+  }
   
   if (method === 'POST' && path === '/api/settings/payment-methods') {
     const body = await req.json();

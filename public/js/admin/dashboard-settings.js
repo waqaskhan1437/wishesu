@@ -274,14 +274,152 @@
         </label>
         <span id="full-import-status" style="margin-left: 10px; font-size: 0.85em; color: #6b7280;"></span>
       </div>
+    </div>
+    
+    <!-- Universal Custom CSS Section -->
+    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
+      <h3>🎨 Universal Custom CSS</h3>
+      <p style="color: #6b7280; margin-bottom: 20px;">Add custom CSS to style your Product, Blog, and Forum pages. Changes apply site-wide.</p>
+      
+      <!-- CSS Tabs -->
+      <div style="display: flex; gap: 5px; margin-bottom: 15px; border-bottom: 2px solid #e5e7eb;">
+        <button type="button" class="css-tab active" data-tab="global" style="padding: 10px 20px; border: none; background: transparent; cursor: pointer; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+          🌐 Global
+        </button>
+        <button type="button" class="css-tab" data-tab="product" style="padding: 10px 20px; border: none; background: transparent; cursor: pointer; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+          🛍️ Product
+        </button>
+        <button type="button" class="css-tab" data-tab="blog" style="padding: 10px 20px; border: none; background: transparent; cursor: pointer; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+          📝 Blog
+        </button>
+        <button type="button" class="css-tab" data-tab="forum" style="padding: 10px 20px; border: none; background: transparent; cursor: pointer; font-weight: 600; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -2px;">
+          💬 Forum
+        </button>
+      </div>
+      
+      <!-- CSS Editors -->
+      <div id="css-editor-global" class="css-editor-panel">
+        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Global CSS <span style="font-weight: normal; color: #6b7280;">(applies to all pages)</span></label>
+        <textarea id="css-global" rows="12" placeholder="/* Global CSS - applies everywhere */
+:root {
+  --primary-color: #4f46e5;
+  --text-color: #1f2937;
+}
+
+.site-header {
+  background: var(--primary-color);
+}" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: 'Fira Code', 'Monaco', monospace; font-size: 13px; line-height: 1.5; resize: vertical;"></textarea>
+      </div>
+      
+      <div id="css-editor-product" class="css-editor-panel" style="display: none;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Product Page CSS</label>
+        <div style="margin-bottom: 10px; padding: 10px; background: #f0fdf4; border-radius: 6px; font-size: 0.85em; color: #166534;">
+          <strong>Available selectors:</strong> .video-wrapper, .product-info, .price-display, .addon-item, .reviews-section, .product-description, .buy-button
+        </div>
+        <textarea id="css-product" rows="12" placeholder="/* Product page specific CSS */
+.video-wrapper {
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.price-display {
+  font-size: 2rem;
+  color: #16a34a;
+}
+
+.addon-item {
+  border: 2px solid #e5e7eb;
+  padding: 15px;
+}
+
+.reviews-section {
+  background: #fafafa;
+  padding: 20px;
+  border-radius: 12px;
+}" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: 'Fira Code', 'Monaco', monospace; font-size: 13px; line-height: 1.5; resize: vertical;"></textarea>
+      </div>
+      
+      <div id="css-editor-blog" class="css-editor-panel" style="display: none;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Blog Page CSS</label>
+        <div style="margin-bottom: 10px; padding: 10px; background: #eff6ff; border-radius: 6px; font-size: 0.85em; color: #1e40af;">
+          <strong>Available selectors:</strong> .blog-container, .blog-header, .blog-content, .blog-sidebar, .blog-card, .blog-comments, .comment-item
+        </div>
+        <textarea id="css-blog" rows="12" placeholder="/* Blog page specific CSS */
+.blog-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.blog-header h1 {
+  font-size: 2.5rem;
+  line-height: 1.3;
+}
+
+.blog-content {
+  font-size: 1.1rem;
+  line-height: 1.8;
+}
+
+.blog-card {
+  transition: transform 0.2s;
+}
+
+.blog-card:hover {
+  transform: translateY(-5px);
+}" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: 'Fira Code', 'Monaco', monospace; font-size: 13px; line-height: 1.5; resize: vertical;"></textarea>
+      </div>
+      
+      <div id="css-editor-forum" class="css-editor-panel" style="display: none;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Forum Page CSS</label>
+        <div style="margin-bottom: 10px; padding: 10px; background: #fef3c7; border-radius: 6px; font-size: 0.85em; color: #92400e;">
+          <strong>Available selectors:</strong> .forum-container, .question-card, .question-content, .reply-item, .forum-sidebar, .ask-form
+        </div>
+        <textarea id="css-forum" rows="12" placeholder="/* Forum page specific CSS */
+.forum-container {
+  background: #fafafa;
+  padding: 20px;
+}
+
+.question-card {
+  background: white;
+  border-left: 4px solid #4f46e5;
+  padding: 20px;
+  margin-bottom: 15px;
+}
+
+.reply-item {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 15px 0;
+}
+
+.ask-form textarea {
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+}" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-family: 'Fira Code', 'Monaco', monospace; font-size: 13px; line-height: 1.5; resize: vertical;"></textarea>
+      </div>
+      
+      <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <button class="btn btn-primary" id="save-custom-css-btn">💾 Save Custom CSS</button>
+        <button class="btn" id="preview-css-btn" style="background: #6b7280; color: white;">👁️ Preview</button>
+        <button class="btn" id="reset-css-btn" style="background: #ef4444; color: white;">🗑️ Reset All CSS</button>
+        <span id="custom-css-status" style="font-size: 0.9rem; color: #6b7280;"></span>
+      </div>
+      
+      <div style="margin-top: 15px; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+        <small style="color: #6b7280;">
+          <strong>💡 Tips:</strong> Use CSS variables in Global for consistent theming. Product/Blog/Forum CSS only loads on those specific pages for better performance.
+        </small>
+      </div>
     </div>`;
 
     loadWhopSettings();
     loadPayPalSettings();
     loadPaymentMethodsSettings();
+    loadCustomCssSettings();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
     document.getElementById('save-payment-methods-btn').addEventListener('click', savePaymentMethodsSettings);
+    setupCustomCssHandlers();
 
     const openSeoBtn = document.getElementById('open-seo-settings');
     if (openSeoBtn) {
@@ -895,6 +1033,214 @@
       }
       e.target.value = '';
     });
+  }
+
+  // Load Custom CSS Settings
+  async function loadCustomCssSettings() {
+    try {
+      const res = await fetch('/api/settings/custom-css');
+      const data = await res.json();
+      
+      if (data.success && data.settings) {
+        document.getElementById('css-global').value = data.settings.global || '';
+        document.getElementById('css-product').value = data.settings.product || '';
+        document.getElementById('css-blog').value = data.settings.blog || '';
+        document.getElementById('css-forum').value = data.settings.forum || '';
+      }
+    } catch (err) {
+      console.error('Failed to load custom CSS settings:', err);
+    }
+  }
+
+  // Setup Custom CSS Handlers
+  function setupCustomCssHandlers() {
+    // Tab switching
+    document.querySelectorAll('.css-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Remove active from all tabs
+        document.querySelectorAll('.css-tab').forEach(t => {
+          t.classList.remove('active');
+          t.style.color = '#6b7280';
+          t.style.borderBottomColor = 'transparent';
+        });
+        
+        // Hide all panels
+        document.querySelectorAll('.css-editor-panel').forEach(p => {
+          p.style.display = 'none';
+        });
+        
+        // Activate clicked tab
+        tab.classList.add('active');
+        tab.style.color = '#4f46e5';
+        tab.style.borderBottomColor = '#4f46e5';
+        
+        // Show corresponding panel
+        const tabName = tab.dataset.tab;
+        document.getElementById('css-editor-' + tabName).style.display = 'block';
+      });
+    });
+    
+    // Initialize first tab as active
+    const firstTab = document.querySelector('.css-tab');
+    if (firstTab) {
+      firstTab.style.color = '#4f46e5';
+      firstTab.style.borderBottomColor = '#4f46e5';
+    }
+    
+    // Save Custom CSS
+    document.getElementById('save-custom-css-btn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('custom-css-status');
+      statusEl.textContent = 'Saving...';
+      statusEl.style.color = '#6b7280';
+      
+      const cssData = {
+        global: document.getElementById('css-global').value,
+        product: document.getElementById('css-product').value,
+        blog: document.getElementById('css-blog').value,
+        forum: document.getElementById('css-forum').value
+      };
+      
+      try {
+        const res = await fetch('/api/settings/custom-css', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cssData)
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          statusEl.textContent = '✅ CSS saved successfully!';
+          statusEl.style.color = '#16a34a';
+          setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        } else {
+          statusEl.textContent = '❌ ' + (data.error || 'Save failed');
+          statusEl.style.color = '#dc2626';
+        }
+      } catch (err) {
+        statusEl.textContent = '❌ ' + err.message;
+        statusEl.style.color = '#dc2626';
+      }
+    });
+    
+    // Preview CSS
+    document.getElementById('preview-css-btn').addEventListener('click', () => {
+      const globalCss = document.getElementById('css-global').value;
+      const productCss = document.getElementById('css-product').value;
+      const blogCss = document.getElementById('css-blog').value;
+      const forumCss = document.getElementById('css-forum').value;
+      
+      const allCss = [globalCss, productCss, blogCss, forumCss].filter(c => c.trim()).join('\n\n');
+      
+      // Create preview window
+      const previewWindow = window.open('', 'CSS Preview', 'width=800,height=600');
+      previewWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>CSS Preview</title>
+          <style>
+            body { font-family: system-ui, sans-serif; padding: 20px; background: #f9fafb; }
+            pre { 
+              background: #1f2937; 
+              color: #f0f0f0; 
+              padding: 20px; 
+              border-radius: 8px; 
+              overflow-x: auto; 
+              font-size: 13px;
+              line-height: 1.5;
+            }
+            h2 { color: #374151; margin-top: 30px; }
+            .section { margin-bottom: 30px; }
+            .label { 
+              display: inline-block; 
+              padding: 4px 12px; 
+              border-radius: 4px; 
+              font-size: 12px; 
+              font-weight: 600; 
+              margin-bottom: 10px;
+            }
+            .global { background: #dbeafe; color: #1e40af; }
+            .product { background: #dcfce7; color: #166534; }
+            .blog { background: #e0e7ff; color: #3730a3; }
+            .forum { background: #fef3c7; color: #92400e; }
+          </style>
+        </head>
+        <body>
+          <h1>🎨 Custom CSS Preview</h1>
+          
+          ${globalCss ? `
+          <div class="section">
+            <span class="label global">🌐 Global CSS</span>
+            <pre>${escapeHtml(globalCss)}</pre>
+          </div>
+          ` : ''}
+          
+          ${productCss ? `
+          <div class="section">
+            <span class="label product">🛍️ Product CSS</span>
+            <pre>${escapeHtml(productCss)}</pre>
+          </div>
+          ` : ''}
+          
+          ${blogCss ? `
+          <div class="section">
+            <span class="label blog">📝 Blog CSS</span>
+            <pre>${escapeHtml(blogCss)}</pre>
+          </div>
+          ` : ''}
+          
+          ${forumCss ? `
+          <div class="section">
+            <span class="label forum">💬 Forum CSS</span>
+            <pre>${escapeHtml(forumCss)}</pre>
+          </div>
+          ` : ''}
+          
+          ${!allCss.trim() ? '<p style="color: #6b7280;">No custom CSS defined yet.</p>' : ''}
+        </body>
+        </html>
+      `);
+      previewWindow.document.close();
+    });
+    
+    // Reset CSS
+    document.getElementById('reset-css-btn').addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to reset all custom CSS? This cannot be undone.')) {
+        return;
+      }
+      
+      const statusEl = document.getElementById('custom-css-status');
+      
+      document.getElementById('css-global').value = '';
+      document.getElementById('css-product').value = '';
+      document.getElementById('css-blog').value = '';
+      document.getElementById('css-forum').value = '';
+      
+      try {
+        const res = await fetch('/api/settings/custom-css', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ global: '', product: '', blog: '', forum: '' })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          statusEl.textContent = '🗑️ CSS reset successfully!';
+          statusEl.style.color = '#6b7280';
+          setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        }
+      } catch (err) {
+        statusEl.textContent = '❌ ' + err.message;
+        statusEl.style.color = '#dc2626';
+      }
+    });
+  }
+  
+  // Helper to escape HTML
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   console.log('✅ Dashboard Settings loaded');
