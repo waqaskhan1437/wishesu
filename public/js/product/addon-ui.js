@@ -1,7 +1,16 @@
 /*
  * UI helpers for rendering product addon controls.
  * Updated: Forces file inputs to accept ONLY IMAGES.
+ * Updated: Added character limits with counters for all text fields.
  */
+
+// Character limits configuration
+const CHAR_LIMITS = {
+  text: 200,      // Short text fields (name, etc)
+  email: 100,     // Email field
+  textarea: 2000, // Long text areas (message, instructions)
+  option_text: 500 // Extra text fields for options
+};
 
 ;(function(){
   function renderAddonField(field) {
@@ -47,6 +56,25 @@
       }
       // Fallback to option label
       return opt.label || '';
+    };
+
+    // Helper to create character counter
+    const createCharCounter = (inputEl, maxLen) => {
+      const counter = document.createElement('div');
+      counter.style.cssText = 'text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px;';
+      counter.innerHTML = `<span class="char-count">0</span>/${maxLen}`;
+      
+      const updateCount = () => {
+        const len = inputEl.value.length;
+        const countSpan = counter.querySelector('.char-count');
+        countSpan.textContent = len;
+        countSpan.style.color = len > maxLen * 0.9 ? '#ef4444' : '#6b7280';
+      };
+      
+      inputEl.addEventListener('input', updateCount);
+      updateCount();
+      
+      return counter;
     };
 
     if (field.type === 'select') {
@@ -175,18 +203,28 @@
       if (field.placeholder) input.placeholder = field.placeholder;
       if (field.required) input.required = true;
 
-      // Add character limits
-      if (field.type === 'text' || field.type === 'email') {
-        input.maxLength = 1000; // Text fields max 1000 characters
+      // Determine max length based on field type
+      let maxLen = CHAR_LIMITS.text;
+      if (field.type === 'email') {
+        maxLen = CHAR_LIMITS.email;
+      } else if (isArea) {
+        maxLen = CHAR_LIMITS.textarea;
       }
-      if (isArea) {
-        input.maxLength = 3000; // Textareas max 3000 characters
-      }
+      
+      input.maxLength = maxLen;
 
       // Restrict standalone file inputs to images and 5MB size
       if (field.type === 'file') {
         input.accept = 'image/*';
         // File size validation will be done during upload
+      }
+
+      // Add character counter for text fields
+      if (field.type === 'text' || field.type === 'email' || isArea) {
+        container.appendChild(input);
+        container.appendChild(createCharCounter(input, maxLen));
+        if (field.type !== 'checkbox_group') container.appendChild(extras);
+        return container;
       }
     }
 
@@ -197,10 +235,17 @@
 
   function renderExtras(container, ds, idSuffix) {
     container.innerHTML = '';
+    
     const createField = (label, type, name) => {
       const d = document.createElement('div');
       d.style.marginTop = '0.5rem';
-      d.innerHTML = `<label for="${name}" style="font-size:0.9rem;display:block;margin-bottom:0.2rem">${label}</label>`;
+      
+      const maxLen = type === 'text' ? CHAR_LIMITS.option_text : CHAR_LIMITS.text;
+      const labelHtml = type === 'text' 
+        ? `<label for="${name}" style="font-size:0.9rem;display:block;margin-bottom:0.2rem">${label} <small style="color:#6b7280">(max ${maxLen})</small></label>`
+        : `<label for="${name}" style="font-size:0.9rem;display:block;margin-bottom:0.2rem">${label}</label>`;
+      
+      d.innerHTML = labelHtml;
       const i = document.createElement('input');
       i.type = type; i.name = i.id = name;
       
@@ -209,8 +254,30 @@
         i.accept = 'image/*';
       }
       
-      if (type === 'text') { i.className = 'form-input'; i.placeholder = 'Enter details...'; }
-      d.appendChild(i);
+      if (type === 'text') { 
+        i.className = 'form-input'; 
+        i.placeholder = 'Enter details...';
+        i.maxLength = maxLen;
+        
+        // Add character counter
+        const counter = document.createElement('div');
+        counter.style.cssText = 'text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px;';
+        counter.innerHTML = `<span class="char-count-${name}">0</span>/${maxLen}`;
+        
+        i.addEventListener('input', () => {
+          const countSpan = counter.querySelector(`.char-count-${name}`);
+          if (countSpan) {
+            countSpan.textContent = i.value.length;
+            countSpan.style.color = i.value.length > maxLen * 0.9 ? '#ef4444' : '#6b7280';
+          }
+        });
+        
+        d.appendChild(i);
+        d.appendChild(counter);
+      } else {
+        d.appendChild(i);
+      }
+      
       container.appendChild(d);
     };
 
@@ -230,4 +297,5 @@
 
   window.renderAddonField = renderAddonField;
   window.renderExtras = renderExtras;
+  window.ADDON_CHAR_LIMITS = CHAR_LIMITS;
 })();

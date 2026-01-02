@@ -9,6 +9,51 @@ import { getGoogleScriptUrl } from '../config/secrets.js';
 // Re-export from shared utility for backwards compatibility
 export { getLatestOrderForEmail } from '../utils/order-helpers.js';
 
+// Character limits for addon validation
+const ADDON_LIMITS = {
+  field: 100,      // Field name max length
+  value: 2000,     // Value max length
+  email: 100,      // Email max length
+  totalAddons: 50  // Max number of addons
+};
+
+/**
+ * Validate and sanitize addons array
+ */
+function validateAddons(addons) {
+  if (!Array.isArray(addons)) return [];
+  
+  // Limit number of addons
+  const limited = addons.slice(0, ADDON_LIMITS.totalAddons);
+  
+  return limited.map(addon => {
+    if (!addon || typeof addon !== 'object') return null;
+    
+    let field = String(addon.field || '').trim();
+    let value = String(addon.value || '').trim();
+    
+    // Truncate if too long
+    if (field.length > ADDON_LIMITS.field) {
+      field = field.substring(0, ADDON_LIMITS.field);
+    }
+    if (value.length > ADDON_LIMITS.value) {
+      value = value.substring(0, ADDON_LIMITS.value);
+    }
+    
+    return { field, value };
+  }).filter(Boolean);
+}
+
+/**
+ * Validate email
+ */
+function validateEmail(email) {
+  if (!email) return '';
+  const trimmed = String(email).trim().substring(0, ADDON_LIMITS.email);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(trimmed) ? trimmed : '';
+}
+
 /**
  * Get all orders (admin)
  */
@@ -37,12 +82,17 @@ export async function getOrders(env) {
 export async function createOrder(env, body) {
   if (!body.productId) return json({ error: 'productId required' }, 400);
   
+  // Validate and sanitize inputs
+  const email = validateEmail(body.email);
+  const addons = validateAddons(body.addons);
+  const amount = parseFloat(body.amount) || 0;
+  
   const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   const data = JSON.stringify({
-    email: body.email,
-    amount: body.amount,
+    email: email,
+    amount: amount,
     productId: body.productId,
-    addons: body.addons || []
+    addons: addons
   });
   
   await env.DB.prepare(
@@ -60,13 +110,27 @@ export async function createManualOrder(env, body) {
     return json({ error: 'productId and email required' }, 400);
   }
   
+  // Validate inputs
+  const email = validateEmail(body.email);
+  if (!email) {
+    return json({ error: 'Invalid email format' }, 400);
+  }
+  
   const orderId = 'MO' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 6).toUpperCase();
   
+  // Validate addons or notes
+  let addons = [];
+  if (body.addons) {
+    addons = validateAddons(body.addons);
+  } else if (body.notes) {
+    const notes = String(body.notes).trim().substring(0, ADDON_LIMITS.value);
+    addons = [{ field: 'Admin Notes', value: notes }];
+  }
+  
   const encryptedData = JSON.stringify({
-    email: body.email,
-    amount: body.amount || 0,
-    // Use body.addons if provided, otherwise fall back to notes
-    addons: body.addons || (body.notes ? [{ field: 'Admin Notes', value: body.notes }] : []),
+    email: email,
+    amount: parseFloat(body.amount) || 0,
+    addons: addons,
     manualOrder: true
   });
   
