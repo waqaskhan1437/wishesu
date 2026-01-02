@@ -6,16 +6,41 @@
  *   await submitReviewToAPI(orderData, { name, comment, rating, portfolioEnabled });
  */
 
+// Character limits
+const REVIEW_LIMITS = {
+  name: 50,
+  comment: 1000
+};
+
 async function submitReviewToAPI(orderData, reviewFormData) {
-  const { name, comment, rating, portfolioEnabled } = reviewFormData;
+  let { name, comment, rating, portfolioEnabled } = reviewFormData;
   
-  // Validate inputs
-  if (!name || !comment) {
-    throw new Error('Please fill all fields');
+  // Trim and validate inputs
+  name = String(name || '').trim();
+  comment = String(comment || '').trim();
+  
+  if (!name) {
+    throw new Error('Please enter your name');
+  }
+  
+  if (name.length > REVIEW_LIMITS.name) {
+    throw new Error(`Name must be ${REVIEW_LIMITS.name} characters or less`);
+  }
+  
+  if (!comment) {
+    throw new Error('Please enter a comment');
+  }
+  
+  if (comment.length < 5) {
+    throw new Error('Comment must be at least 5 characters');
+  }
+  
+  if (comment.length > REVIEW_LIMITS.comment) {
+    throw new Error(`Comment must be ${REVIEW_LIMITS.comment} characters or less`);
   }
   
   if (!rating || rating < 1 || rating > 5) {
-    throw new Error('Please select a rating');
+    throw new Error('Please select a rating (1-5)');
   }
   
   // Prepare review data with all required fields

@@ -4,33 +4,48 @@
 
 import { json } from '../utils/response.js';
 
+// Cache for schema validation - avoids repeated checks per request
+let forumSchemaValidated = false;
+
 /**
  * Ensure forum tables exist with proper schema
+ * Uses caching to avoid repeated checks on every request
  */
 async function ensureForumTables(env) {
+  // Skip if already validated in this worker instance
+  if (forumSchemaValidated) return;
+  
   try {
-    // Check if forum_replies has question_id column
-    let needsRecreate = false;
+    // Quick check - if both columns exist, we're good
+    let repliesOk = false;
+    let questionsOk = false;
+    
     try {
       await env.DB.prepare(`SELECT question_id FROM forum_replies LIMIT 1`).first();
-    } catch (e) {
-      // Column doesn't exist, need to recreate table
-      needsRecreate = true;
+      repliesOk = true;
+    } catch (e) { /* needs fix */ }
+    
+    try {
+      await env.DB.prepare(`SELECT email FROM forum_questions LIMIT 1`).first();
+      questionsOk = true;
+    } catch (e) { /* needs fix */ }
+    
+    // If both tables are OK, cache and return
+    if (repliesOk && questionsOk) {
+      forumSchemaValidated = true;
+      return;
     }
 
-    if (needsRecreate) {
-      // Backup existing replies data if any
+    // Only recreate if needed (rare - only on first deploy or schema change)
+    if (!repliesOk) {
+      // Backup and recreate forum_replies
       let existingReplies = [];
       try {
         const result = await env.DB.prepare(`SELECT * FROM forum_replies`).all();
         existingReplies = result.results || [];
       } catch (e) { /* table might not exist */ }
 
-      // Drop and recreate forum_replies with proper schema
-      try {
-        await env.DB.prepare(`DROP TABLE IF EXISTS forum_replies`).run();
-      } catch (e) { /* ignore */ }
-
+      await env.DB.prepare(`DROP TABLE IF EXISTS forum_replies`).run();
       await env.DB.prepare(`
         CREATE TABLE forum_replies (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,46 +58,28 @@ async function ensureForumTables(env) {
         )
       `).run();
 
-      // Restore data if any (with default question_id = 0)
-      for (const r of existingReplies) {
-        try {
-          await env.DB.prepare(`
-            INSERT INTO forum_replies (id, question_id, name, email, content, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `).bind(
-            r.id || null,
-            r.question_id || 0,
-            r.name || '',
-            r.email || '',
-            r.content || '',
-            r.status || 'pending',
-            r.created_at || Date.now()
-          ).run();
-        } catch (e) { /* skip failed rows */ }
+      // Batch insert for better performance
+      if (existingReplies.length > 0) {
+        const batch = existingReplies.map(r => 
+          env.DB.prepare(`INSERT INTO forum_replies (id, question_id, name, email, content, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+            .bind(r.id || null, r.question_id || 0, r.name || '', r.email || '', r.content || '', r.status || 'pending', r.created_at || Date.now())
+        );
+        // Execute in parallel batches of 10
+        for (let i = 0; i < batch.length; i += 10) {
+          await Promise.all(batch.slice(i, i + 10).map(stmt => stmt.run().catch(() => {})));
+        }
       }
     }
 
-    // Check if forum_questions has email column
-    let needsQRecreate = false;
-    try {
-      await env.DB.prepare(`SELECT email FROM forum_questions LIMIT 1`).first();
-    } catch (e) {
-      needsQRecreate = true;
-    }
-
-    if (needsQRecreate) {
-      // Backup existing questions
+    if (!questionsOk) {
+      // Backup and recreate forum_questions
       let existingQuestions = [];
       try {
         const result = await env.DB.prepare(`SELECT * FROM forum_questions`).all();
         existingQuestions = result.results || [];
       } catch (e) { /* table might not exist */ }
 
-      // Drop and recreate
-      try {
-        await env.DB.prepare(`DROP TABLE IF EXISTS forum_questions`).run();
-      } catch (e) { /* ignore */ }
-
+      await env.DB.prepare(`DROP TABLE IF EXISTS forum_questions`).run();
       await env.DB.prepare(`
         CREATE TABLE forum_questions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,56 +95,21 @@ async function ensureForumTables(env) {
         )
       `).run();
 
-      // Restore data
-      for (const q of existingQuestions) {
-        try {
-          await env.DB.prepare(`
-            INSERT INTO forum_questions (id, title, slug, content, name, email, status, reply_count, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(
-            q.id || null,
-            q.title || '',
-            q.slug || '',
-            q.content || '',
-            q.name || '',
-            q.email || '',
-            q.status || 'pending',
-            q.reply_count || 0,
-            q.created_at || Date.now(),
-            q.updated_at || Date.now()
-          ).run();
-        } catch (e) { /* skip failed rows */ }
+      // Batch insert for better performance
+      if (existingQuestions.length > 0) {
+        const batch = existingQuestions.map(q =>
+          env.DB.prepare(`INSERT INTO forum_questions (id, title, slug, content, name, email, status, reply_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+            .bind(q.id || null, q.title || '', q.slug || '', q.content || '', q.name || '', q.email || '', q.status || 'pending', q.reply_count || 0, q.created_at || Date.now(), q.updated_at || Date.now())
+        );
+        for (let i = 0; i < batch.length; i += 10) {
+          await Promise.all(batch.slice(i, i + 10).map(stmt => stmt.run().catch(() => {})));
+        }
       }
     }
 
-    // If tables don't exist at all, create them
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS forum_questions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL DEFAULT '',
-        slug TEXT,
-        content TEXT NOT NULL DEFAULT '',
-        name TEXT NOT NULL DEFAULT '',
-        email TEXT DEFAULT '',
-        status TEXT DEFAULT 'pending',
-        reply_count INTEGER DEFAULT 0,
-        created_at INTEGER,
-        updated_at INTEGER
-      )
-    `).run();
+    // Mark as validated
+    forumSchemaValidated = true;
     
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS forum_replies (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        question_id INTEGER NOT NULL DEFAULT 0,
-        name TEXT NOT NULL DEFAULT '',
-        email TEXT DEFAULT '',
-        content TEXT NOT NULL DEFAULT '',
-        status TEXT DEFAULT 'pending',
-        created_at INTEGER
-      )
-    `).run();
-
   } catch (e) {
     console.error('Forum table creation error:', e);
   }

@@ -1,9 +1,18 @@
 /**
  * Reviews controller - Review management
+ * OPTIMIZED: Added validation limits and caching hints
  */
 
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
+
+// Review limits
+const REVIEW_LIMITS = {
+  author_name: 50,
+  comment: 1000,
+  rating_min: 1,
+  rating_max: 5
+};
 
 /**
  * Get reviews with filters
@@ -89,13 +98,28 @@ export async function getProductReviews(env, productId) {
 export async function addReview(env, body) {
   if (!body.productId || !body.rating) return json({ error: 'productId and rating required' }, 400);
   
+  // Validate and sanitize inputs with defined limits
+  const authorName = String(body.author || 'Customer').trim().substring(0, REVIEW_LIMITS.author_name);
+  const comment = String(body.comment || '').trim().substring(0, REVIEW_LIMITS.comment);
+  const rating = Math.min(REVIEW_LIMITS.rating_max, Math.max(REVIEW_LIMITS.rating_min, parseInt(body.rating) || 5));
+  
+  // Validate author name
+  if (authorName.length < 1) {
+    return json({ error: 'Name is required' }, 400);
+  }
+  
+  // Validate comment length
+  if (comment.length > 0 && comment.length < 3) {
+    return json({ error: 'Comment must be at least 3 characters' }, 400);
+  }
+  
   await env.DB.prepare(
     'INSERT INTO reviews (product_id, author_name, rating, comment, status, order_id, show_on_product) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     Number(body.productId), 
-    body.author || 'Customer', 
-    Number(body.rating), 
-    body.comment || '', 
+    authorName, 
+    rating, 
+    comment, 
     'approved', 
     body.orderId || null, 
     body.showOnProduct !== undefined ? (body.showOnProduct ? 1 : 0) : 1
@@ -109,26 +133,34 @@ export async function addReview(env, body) {
  */
 export async function updateReview(env, body) {
   const id = Number(body.id);
+  if (!id) return json({ error: 'Review ID required' }, 400);
   
-  // Build dynamic update query
+  // Build dynamic update query with validation
   const updates = [];
   const values = [];
   
   if (body.status !== undefined) {
+    const status = String(body.status).trim();
+    if (!['approved', 'pending', 'rejected'].includes(status)) {
+      return json({ error: 'Invalid status' }, 400);
+    }
     updates.push('status = ?');
-    values.push(body.status);
+    values.push(status);
   }
   if (body.author_name !== undefined) {
+    const name = String(body.author_name).trim().substring(0, REVIEW_LIMITS.author_name);
     updates.push('author_name = ?');
-    values.push(body.author_name);
+    values.push(name);
   }
   if (body.rating !== undefined) {
+    const rating = Math.min(REVIEW_LIMITS.rating_max, Math.max(REVIEW_LIMITS.rating_min, parseInt(body.rating) || 5));
     updates.push('rating = ?');
-    values.push(Number(body.rating));
+    values.push(rating);
   }
   if (body.comment !== undefined) {
+    const comment = String(body.comment).trim().substring(0, REVIEW_LIMITS.comment);
     updates.push('comment = ?');
-    values.push(body.comment);
+    values.push(comment);
   }
   if (body.show_on_product !== undefined) {
     updates.push('show_on_product = ?');

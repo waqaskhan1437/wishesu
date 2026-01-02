@@ -1537,24 +1537,16 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
         // ----- PRODUCTS -----
         if (method === 'GET' && path === '/api/products') {
           const r = await env.DB.prepare(
-            'SELECT id, title, slug, normal_price, sale_price, thumbnail_url, normal_delivery_text FROM products WHERE status = ? ORDER BY sort_order ASC, id DESC'
-          ).bind('active').all();
+            'SELECT p.id, p.title, p.slug, p.normal_price, p.sale_price, p.thumbnail_url, p.normal_delivery_text, COUNT(r.id) as review_count, AVG(r.rating) as rating_average FROM products p LEFT JOIN reviews r ON p.id = r.product_id AND r.status = ? WHERE p.status = ? GROUP BY p.id ORDER BY p.sort_order ASC, p.id DESC'
+          ).bind('approved', 'active').all();
           
-          // Fetch review statistics for each product
-          const products = r.results || [];
-          const productsWithReviews = await Promise.all(products.map(async (product) => {
-            const stats = await env.DB.prepare(
-              'SELECT COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id = ? AND status = ?'
-            ).bind(product.id, 'approved').first();
-            
-            return {
-              ...product,
-              review_count: stats?.cnt || 0,
-              rating_average: stats?.avg ? Math.round(stats.avg * 10) / 10 : 0
-            };
+          const products = (r.results || []).map(p => ({
+            ...p,
+            review_count: p.review_count || 0,
+            rating_average: p.rating_average ? Math.round(p.rating_average * 10) / 10 : 0
           }));
           
-          return json({ products: productsWithReviews });
+          return json({ products });
         }
 
         // ----- WHOP CHECKOUT -----
@@ -3638,37 +3630,49 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
         LIMIT 50
       `).all();
       
+      const checkouts = expiredCheckouts.results || [];
+      if (checkouts.length === 0) {
+        console.log('✅ No expired checkouts to clean');
+        return;
+      }
+      
       let deleted = 0;
       let failed = 0;
       
-      for (const checkout of (expiredCheckouts.results || [])) {
-        try {
-          // Delete from Whop
-          const deleteResponse = await fetch(`https://api.whop.com/api/v2/checkout_sessions/${checkout.checkout_id}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${env.WHOP_API_KEY}`
-            }
-          });
-          
-          if (deleteResponse.ok || deleteResponse.status === 404) {
-            // Mark as expired in database
-            await env.DB.prepare(`
-              UPDATE checkout_sessions 
-              SET status = 'expired', completed_at = datetime('now')
-              WHERE checkout_id = ?
-            `).bind(checkout.checkout_id).run();
+      // Process in parallel batches of 5 for better CPU efficiency
+      const batchSize = 5;
+      for (let i = 0; i < checkouts.length; i += batchSize) {
+        const batch = checkouts.slice(i, i + batchSize);
+        
+        const results = await Promise.allSettled(batch.map(async (checkout) => {
+          try {
+            // Delete from Whop
+            const deleteResponse = await fetch(`https://api.whop.com/api/v2/checkout_sessions/${checkout.checkout_id}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
+            });
             
-            deleted++;
-            console.log('🗑️ Expired checkout deleted:', checkout.checkout_id);
-          } else {
-            failed++;
-            console.error('Failed to delete checkout:', checkout.checkout_id, deleteResponse.status);
+            if (deleteResponse.ok || deleteResponse.status === 404) {
+              // Mark as expired in database
+              await env.DB.prepare(`
+                UPDATE checkout_sessions 
+                SET status = 'expired', completed_at = datetime('now')
+                WHERE checkout_id = ?
+              `).bind(checkout.checkout_id).run();
+              
+              return { success: true, id: checkout.checkout_id };
+            }
+            return { success: false, id: checkout.checkout_id };
+          } catch (e) {
+            console.error('Error deleting checkout:', checkout.checkout_id, e.message);
+            return { success: false, id: checkout.checkout_id };
           }
-        } catch (e) {
-          failed++;
-          console.error('Error deleting checkout:', checkout.checkout_id, e.message);
-        }
+        }));
+        
+        results.forEach(r => {
+          if (r.status === 'fulfilled' && r.value?.success) deleted++;
+          else failed++;
+        });
       }
       
       console.log(`✅ Cleanup complete: ${deleted} deleted, ${failed} failed`);

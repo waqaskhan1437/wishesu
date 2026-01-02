@@ -224,6 +224,7 @@ async function runPagesMigration(env) {
 /**
  * Run migrations asynchronously (non-blocking)
  * These are legacy column additions for older databases
+ * Optimized: Uses Promise.allSettled for parallel execution
  */
 async function runMigrations(env) {
   const migrations = [
@@ -239,13 +240,12 @@ async function runMigrations(env) {
     { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' }
   ];
 
-  for (const m of migrations) {
-    try {
-      await env.DB.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`).run();
-    } catch (e) {
-      // Column already exists - this is expected
-    }
-  }
+  // Run all migrations in parallel - most will fail silently (column exists)
+  await Promise.allSettled(
+    migrations.map(m => 
+      env.DB.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`).run().catch(() => {})
+    )
+  );
 }
 
 /**

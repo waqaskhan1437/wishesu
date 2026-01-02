@@ -285,8 +285,12 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   // ----- PRODUCTS -----
+  // Public products listing - cache for 60s at CDN, 30s at browser
   if (method === 'GET' && path === '/api/products') {
-    return getProducts(env);
+    const response = await getProducts(env);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Cache-Control', 'public, max-age=30, s-maxage=60');
+    return new Response(response.body, { status: response.status, headers: newHeaders });
   }
 
   if (method === 'GET' && path === '/api/products/list') {
@@ -304,13 +308,20 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'GET' && path.startsWith('/api/product/')) {
-    // Check for adjacent products endpoint
+    // Check for adjacent products endpoint - cache for 60s
     if (path.match(/^\/api\/product\/(\d+)\/adjacent$/)) {
       const id = path.split('/')[3];
-      return getAdjacentProducts(env, id);
+      const response = await getAdjacentProducts(env, id);
+      const newHeaders = new Headers(response.headers);
+      newHeaders.set('Cache-Control', 'public, max-age=30, s-maxage=60');
+      return new Response(response.body, { status: response.status, headers: newHeaders });
     }
+    // Single product - cache for 30s
     const id = path.split('/').pop();
-    return getProduct(env, id);
+    const response = await getProduct(env, id);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Cache-Control', 'public, max-age=15, s-maxage=30');
+    return new Response(response.body, { status: response.status, headers: newHeaders });
   }
 
   if (method === 'POST' && path === '/api/product/save') {
@@ -609,8 +620,12 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   // ----- REVIEWS -----
+  // Public reviews - cache for 60s
   if (method === 'GET' && path === '/api/reviews') {
-    return getReviews(env, url);
+    const response = await getReviews(env, url);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Cache-Control', 'public, max-age=30, s-maxage=60');
+    return new Response(response.body, { status: response.status, headers: newHeaders });
   }
 
   if (method === 'POST' && path === '/api/reviews/add') {
@@ -618,9 +633,13 @@ export async function routeApiRequest(req, env, url, path, method) {
     return addReview(env, body);
   }
 
+  // Product reviews - cache for 60s
   if (method === 'GET' && path.startsWith('/api/reviews/')) {
     const productId = path.split('/').pop();
-    return getProductReviews(env, productId);
+    const response = await getProductReviews(env, productId);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Cache-Control', 'public, max-age=30, s-maxage=60');
+    return new Response(response.body, { status: response.status, headers: newHeaders });
   }
 
   if (method === 'POST' && path === '/api/reviews/update') {
@@ -810,12 +829,10 @@ export async function routeApiRequest(req, env, url, path, method) {
   // ----- ADMIN USERS -----
   if (method === 'GET' && path === '/api/admin/users') {
     try {
-      // Get all unique emails from orders, blog_comments, and forum
-      
-      // Get emails from blog_comments with counts
-      let commentUsers = { results: [] };
-      try {
-        commentUsers = await env.DB.prepare(`
+      // Run all queries in parallel for better performance
+      const [commentUsers, forumQUsers, forumRUsers, orders] = await Promise.all([
+        // Get emails from blog_comments with counts
+        env.DB.prepare(`
           SELECT 
             LOWER(email) as email,
             MAX(name) as name,
@@ -823,13 +840,10 @@ export async function routeApiRequest(req, env, url, path, method) {
             MAX(created_at) as last_activity
           FROM blog_comments
           GROUP BY LOWER(email)
-        `).all();
-      } catch (e) { console.log('blog_comments query error:', e.message); }
-      
-      // Get emails from forum_questions
-      let forumQUsers = { results: [] };
-      try {
-        forumQUsers = await env.DB.prepare(`
+        `).all().catch(() => ({ results: [] })),
+        
+        // Get emails from forum_questions
+        env.DB.prepare(`
           SELECT 
             LOWER(email) as email,
             MAX(name) as name,
@@ -838,13 +852,10 @@ export async function routeApiRequest(req, env, url, path, method) {
           FROM forum_questions
           WHERE email IS NOT NULL AND email != ''
           GROUP BY LOWER(email)
-        `).all();
-      } catch (e) { console.log('forum_questions query error:', e.message); }
-      
-      // Get emails from forum_replies
-      let forumRUsers = { results: [] };
-      try {
-        forumRUsers = await env.DB.prepare(`
+        `).all().catch(() => ({ results: [] })),
+        
+        // Get emails from forum_replies
+        env.DB.prepare(`
           SELECT 
             LOWER(email) as email,
             MAX(name) as name,
@@ -853,13 +864,13 @@ export async function routeApiRequest(req, env, url, path, method) {
           FROM forum_replies
           WHERE email IS NOT NULL AND email != ''
           GROUP BY LOWER(email)
-        `).all();
-      } catch (e) { console.log('forum_replies query error:', e.message); }
-      
-      // Get orders for email extraction
-      const orders = await env.DB.prepare(`
-        SELECT id, order_id, archive_data, created_at FROM orders
-      `).all();
+        `).all().catch(() => ({ results: [] })),
+        
+        // Get orders for email extraction
+        env.DB.prepare(`
+          SELECT id, order_id, encrypted_data, created_at FROM orders
+        `).all().catch(() => ({ results: [] }))
+      ]);
       
       // Build user map
       const userMap = new Map();
@@ -1236,12 +1247,15 @@ export async function routeApiRequest(req, env, url, path, method) {
   // ----- ADMIN EXPORT/IMPORT ENDPOINTS -----
   if (method === 'GET' && path === '/api/admin/export/full') {
     try {
-      const products = await env.DB.prepare('SELECT * FROM products').all();
-      const pages = await env.DB.prepare('SELECT * FROM pages').all();
-      const reviews = await env.DB.prepare('SELECT * FROM reviews').all();
-      const orders = await env.DB.prepare('SELECT * FROM orders').all();
-      const settings = await env.DB.prepare('SELECT * FROM settings').all();
-      const blogs = await env.DB.prepare('SELECT * FROM blogs').all();
+      // Run all queries in parallel
+      const [products, pages, reviews, orders, settings, blogs] = await Promise.all([
+        env.DB.prepare('SELECT * FROM products').all(),
+        env.DB.prepare('SELECT * FROM pages').all(),
+        env.DB.prepare('SELECT * FROM reviews').all(),
+        env.DB.prepare('SELECT * FROM orders').all(),
+        env.DB.prepare('SELECT * FROM settings').all(),
+        env.DB.prepare('SELECT * FROM blogs').all()
+      ]);
       return json({
         success: true,
         data: {
@@ -1426,10 +1440,12 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'GET' && path === '/api/admin/export-data') {
     try {
-      // Export all data for Google Sheets integration
-      const products = await env.DB.prepare('SELECT * FROM products').all();
-      const orders = await env.DB.prepare('SELECT * FROM orders').all();
-      const reviews = await env.DB.prepare('SELECT * FROM reviews').all();
+      // Export all data for Google Sheets integration - run in parallel
+      const [products, orders, reviews] = await Promise.all([
+        env.DB.prepare('SELECT * FROM products').all(),
+        env.DB.prepare('SELECT * FROM orders').all(),
+        env.DB.prepare('SELECT * FROM reviews').all()
+      ]);
       return json({
         success: true,
         data: {
