@@ -166,27 +166,27 @@
     getDeliveryText: function(instantDelivery, deliveryDays) {
       // If instant delivery is ON, show 60 minutes
       if (instantDelivery == 1 || instantDelivery === true) {
-        return '⚡ Instant Delivery in 60 Minutes';
+        return 'Instant Delivery in 60 Minutes';
       }
 
       // Otherwise use days
       const days = parseInt(deliveryDays) || 1;
       
       if (days === 1) {
-        return '🚀 24 Hours Express Delivery';
+        return '24 Hour Express Delivery';
       } else if (days === 2) {
-        return '📦 2 Days Delivery';
+        return '2 Days Delivery';
       } else if (days === 3) {
-        return '📦 3 Days Delivery';
+        return '3 Days Delivery';
       } else {
-        return `📦 ${days} Days Delivery`;
+        return `${days} Days Delivery`;
       }
     },
 
     // Get delivery icon
     getDeliveryIcon: function(instantDelivery) {
       if (instantDelivery == 1 || instantDelivery === true) return '⚡';
-      return '📦';
+      return '🚀';
     },
 
     // Render rating stars

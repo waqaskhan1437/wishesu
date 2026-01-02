@@ -211,6 +211,15 @@ main {
 .btn-buy { display: block; width: 100%; background: var(--primary); color: #fff; font-size: 1.1rem; font-weight: 700; padding: 1rem; border: none; border-radius: var(--radius-sm); cursor: pointer; transition: background 0.2s; margin-top: 1.5rem; text-align: center; }
 .btn-buy:hover { background: var(--primary-hover); transform: translateY(-1px); }
 
+/* Book Now Button - Collapsible Form Trigger */
+.btn-book-now { display: block; width: 100%; font-size: 1.2rem; font-weight: 700; padding: 1rem 1.5rem; border: none; border-radius: var(--radius); cursor: pointer; transition: all 0.3s ease; text-align: center; }
+.btn-book-now:hover { transform: translateY(-2px); filter: brightness(1.1); }
+.btn-book-now:active { transform: translateY(0); }
+
+/* Addons Container Animation */
+#addons-container { transition: max-height 0.5s ease-out, opacity 0.3s ease; }
+#addons-container.expanded { max-height: 2000px !important; opacity: 1 !important; }
+
 /* Description */
 .product-desc { background: #fff; padding: 2rem; border-radius: var(--radius); border: 1px solid var(--border); }
 .product-desc h2, .product-desc h3 { margin-top: 0; font-size: 1.25rem; margin-bottom: 1rem; }

@@ -493,10 +493,48 @@
     note.innerHTML = '<span>📩</span> <span><strong>Digital Delivery:</strong> Receive via WhatsApp/Email.</span>';
     panel.appendChild(note);
     
-    // Addons Form
+    // Book Now Button - reveals addons form
+    const bookNowBtn = document.createElement('button');
+    bookNowBtn.id = 'book-now-trigger';
+    bookNowBtn.className = 'btn-book-now';
+    bookNowBtn.innerHTML = '🎬 Book Now - $' + window.basePrice.toLocaleString();
+    bookNowBtn.style.cssText = `
+      width: 100%;
+      padding: 16px 24px;
+      margin-top: 1.5rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    `;
+    panel.appendChild(bookNowBtn);
+    
+    // Collapsible Addons Container
+    const addonsContainer = document.createElement('div');
+    addonsContainer.id = 'addons-container';
+    addonsContainer.style.cssText = `
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.5s ease-out, opacity 0.3s ease;
+      opacity: 0;
+    `;
+    
+    // Addons Form inside container
     const addonsForm = document.createElement('form');
     addonsForm.id = 'addons-form';
-    addonsForm.style.marginTop = '1.5rem';
+    addonsForm.style.cssText = 'padding-top: 1.5rem; border-top: 1px solid #e5e7eb; margin-top: 1.5rem;';
+    
+    // Add form header
+    const formHeader = document.createElement('div');
+    formHeader.style.cssText = 'margin-bottom: 1rem;';
+    formHeader.innerHTML = '<h3 style="margin:0; font-size:1.1rem; color:#374151;">📝 Customize Your Order</h3>';
+    addonsForm.appendChild(formHeader);
+    
     if (addonGroups && addonGroups.length > 0) {
       addonGroups.forEach(group => {
         if (group.type === 'heading') {
@@ -510,8 +548,9 @@
         }
       });
     }
-    panel.appendChild(addonsForm);
+    addonsContainer.appendChild(addonsForm);
     
+    // Sticky Footer with Checkout button (inside container)
     const stickyFooter = document.createElement('div');
     stickyFooter.style.marginTop = '2rem';
     stickyFooter.style.paddingTop = '1rem';
@@ -555,14 +594,52 @@
       const checkoutBtn = document.createElement('button');
       checkoutBtn.id = 'checkout-btn';
       checkoutBtn.className = 'btn-buy';
-      checkoutBtn.textContent = 'Checkout - $' + window.currentTotal.toLocaleString();
+      checkoutBtn.textContent = '✅ Proceed to Checkout - $' + window.currentTotal.toLocaleString();
       checkoutBtn.addEventListener('click', function(e) {
         e.preventDefault();
         if (typeof handleCheckout === 'function') handleCheckout();
       });
       stickyFooter.appendChild(checkoutBtn);
     }
-    panel.appendChild(stickyFooter);
+    
+    addonsContainer.appendChild(stickyFooter);
+    panel.appendChild(addonsContainer);
+    
+    // Book Now click handler - expand addons form
+    let isExpanded = false;
+    bookNowBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (!isExpanded) {
+        // Expand
+        addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 500 + 'px';
+        addonsContainer.style.opacity = '1';
+        bookNowBtn.innerHTML = '📝 Customize Your Order';
+        bookNowBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+        bookNowBtn.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.4)';
+        isExpanded = true;
+        
+        // Scroll to form smoothly
+        setTimeout(() => {
+          addonsForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      } else {
+        // Collapse
+        addonsContainer.style.maxHeight = '0';
+        addonsContainer.style.opacity = '0';
+        bookNowBtn.innerHTML = '🎬 Book Now - $' + window.basePrice.toLocaleString();
+        bookNowBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        bookNowBtn.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+        isExpanded = false;
+      }
+    });
+    
+    // Update checkout button when price changes
+    window.updateCheckoutPrice = function(newTotal) {
+      const checkoutBtn = document.getElementById('checkout-btn');
+      if (checkoutBtn && !useMinimal) {
+        checkoutBtn.textContent = '✅ Proceed to Checkout - $' + newTotal.toLocaleString();
+      }
+    };
     
     rightCol.appendChild(panel);
     mainRow.appendChild(rightCol);

@@ -57,7 +57,11 @@
     });
     window.currentTotal = window.basePrice + addonTotal;
     const btn = document.getElementById('checkout-btn');
-    if (btn) btn.textContent = 'Checkout - $' + window.currentTotal.toLocaleString();
+    if (btn) btn.textContent = '✅ Proceed to Checkout - $' + window.currentTotal.toLocaleString();
+    // Also update via global function if available
+    if (typeof window.updateCheckoutPrice === 'function') {
+      window.updateCheckoutPrice(window.currentTotal);
+    }
   }
 
   async function handleCheckout() {
