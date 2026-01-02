@@ -335,9 +335,34 @@ export async function submitQuestion(env, body) {
       return json({ error: 'All fields are required' }, 400);
     }
 
+    // Character limits validation
+    const trimmedName = String(name).trim();
+    const trimmedEmail = String(email).trim().toLowerCase();
+    const trimmedTitle = String(title).trim();
+    const trimmedContent = String(content).trim();
+
+    if (trimmedName.length > 50) {
+      return json({ error: 'Name must be 50 characters or less' }, 400);
+    }
+    if (trimmedEmail.length > 100) {
+      return json({ error: 'Email must be 100 characters or less' }, 400);
+    }
+    if (trimmedTitle.length > 200) {
+      return json({ error: 'Question title must be 200 characters or less' }, 400);
+    }
+    if (trimmedContent.length > 2000) {
+      return json({ error: 'Question content must be 2000 characters or less' }, 400);
+    }
+    if (trimmedTitle.length < 5) {
+      return json({ error: 'Question title must be at least 5 characters' }, 400);
+    }
+    if (trimmedContent.length < 10) {
+      return json({ error: 'Question content must be at least 10 characters' }, 400);
+    }
+
     // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(trimmedEmail)) {
       return json({ error: 'Invalid email format' }, 400);
     }
 
@@ -347,13 +372,13 @@ export async function submitQuestion(env, body) {
     try {
       pendingQ = await env.DB.prepare(`
         SELECT id FROM forum_questions WHERE email = ? AND status = 'pending' LIMIT 1
-      `).bind(email.toLowerCase()).first();
+      `).bind(trimmedEmail).first();
     } catch (e) { /* email column might not exist */ }
 
     try {
       pendingR = await env.DB.prepare(`
         SELECT id FROM forum_replies WHERE email = ? AND status = 'pending' LIMIT 1
-      `).bind(email.toLowerCase()).first();
+      `).bind(trimmedEmail).first();
     } catch (e) { /* email column might not exist */ }
 
     if (pendingQ || pendingR) {
@@ -364,7 +389,7 @@ export async function submitQuestion(env, body) {
     }
 
     // Generate slug
-    const slug = title.toLowerCase()
+    const slug = trimmedTitle.toLowerCase()
       .replace(/['"`]/g, '')
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
@@ -375,7 +400,7 @@ export async function submitQuestion(env, body) {
     await env.DB.prepare(`
       INSERT INTO forum_questions (title, slug, content, name, email, status, reply_count, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
-    `).bind(title.trim(), slug, content.trim(), name.trim(), email.toLowerCase().trim(), now, now).run();
+    `).bind(trimmedTitle, slug, trimmedContent, trimmedName, trimmedEmail, now, now).run();
 
     return json({
       success: true,
@@ -400,9 +425,27 @@ export async function submitReply(env, body) {
       return json({ error: 'All fields are required' }, 400);
     }
 
+    // Character limits validation
+    const trimmedName = String(name).trim();
+    const trimmedEmail = String(email).trim().toLowerCase();
+    const trimmedContent = String(content).trim();
+
+    if (trimmedName.length > 50) {
+      return json({ error: 'Name must be 50 characters or less' }, 400);
+    }
+    if (trimmedEmail.length > 100) {
+      return json({ error: 'Email must be 100 characters or less' }, 400);
+    }
+    if (trimmedContent.length > 2000) {
+      return json({ error: 'Reply must be 2000 characters or less' }, 400);
+    }
+    if (trimmedContent.length < 5) {
+      return json({ error: 'Reply must be at least 5 characters' }, 400);
+    }
+
     // Validate email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(trimmedEmail)) {
       return json({ error: 'Invalid email format' }, 400);
     }
 
@@ -421,13 +464,13 @@ export async function submitReply(env, body) {
     try {
       pendingQ = await env.DB.prepare(`
         SELECT id FROM forum_questions WHERE email = ? AND status = 'pending' LIMIT 1
-      `).bind(email.toLowerCase()).first();
+      `).bind(trimmedEmail).first();
     } catch (e) { /* email column might not exist */ }
 
     try {
       pendingR = await env.DB.prepare(`
         SELECT id FROM forum_replies WHERE email = ? AND status = 'pending' LIMIT 1
-      `).bind(email.toLowerCase()).first();
+      `).bind(trimmedEmail).first();
     } catch (e) { /* email column might not exist */ }
 
     if (pendingQ || pendingR) {
@@ -442,7 +485,7 @@ export async function submitReply(env, body) {
     await env.DB.prepare(`
       INSERT INTO forum_replies (question_id, name, email, content, status, created_at)
       VALUES (?, ?, ?, ?, 'pending', ?)
-    `).bind(question_id, name.trim(), email.toLowerCase().trim(), content.trim(), now).run();
+    `).bind(question_id, trimmedName, trimmedEmail, trimmedContent, now).run();
 
     return json({
       success: true,

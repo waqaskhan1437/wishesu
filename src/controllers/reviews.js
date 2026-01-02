@@ -140,7 +140,7 @@ export async function updateReview(env, body) {
   }
   
   values.push(id);
-  await env.DB.prepare(`UPDATE reviews SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).bind(...values).run();
+  await env.DB.prepare(`UPDATE reviews SET ${updates.join(', ')} WHERE id = ?`).bind(...values).run();
   return json({ success: true });
 }
 

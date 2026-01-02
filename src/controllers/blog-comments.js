@@ -54,9 +54,27 @@ export async function addBlogComment(env, body) {
       return json({ error: 'All fields are required' }, 400);
     }
 
+    // Character limits validation
+    const trimmedName = String(name).trim();
+    const trimmedEmail = String(email).trim().toLowerCase();
+    const trimmedComment = String(comment).trim();
+
+    if (trimmedName.length > 50) {
+      return json({ error: 'Name must be 50 characters or less' }, 400);
+    }
+    if (trimmedEmail.length > 100) {
+      return json({ error: 'Email must be 100 characters or less' }, 400);
+    }
+    if (trimmedComment.length > 2000) {
+      return json({ error: 'Comment must be 2000 characters or less' }, 400);
+    }
+    if (trimmedComment.length < 3) {
+      return json({ error: 'Comment must be at least 3 characters' }, 400);
+    }
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(trimmedEmail)) {
       return json({ error: 'Invalid email format' }, 400);
     }
 
@@ -65,7 +83,7 @@ export async function addBlogComment(env, body) {
       SELECT id FROM blog_comments 
       WHERE blog_id = ? AND email = ? AND status = 'pending'
       LIMIT 1
-    `).bind(blog_id, email).first();
+    `).bind(blog_id, trimmedEmail).first();
 
     if (pending) {
       return json({ 
@@ -88,7 +106,7 @@ export async function addBlogComment(env, body) {
     await env.DB.prepare(`
       INSERT INTO blog_comments (blog_id, name, email, comment, status, created_at)
       VALUES (?, ?, ?, ?, 'pending', ?)
-    `).bind(blog_id, name.trim(), email.trim().toLowerCase(), comment.trim(), now).run();
+    `).bind(blog_id, trimmedName, trimmedEmail, trimmedComment, now).run();
 
     return json({ 
       success: true, 

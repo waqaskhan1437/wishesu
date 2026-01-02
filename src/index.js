@@ -480,17 +480,18 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
               <input type="hidden" id="blog-id" value="${blog.id}">
               <div class="form-row">
                 <div class="form-group">
-                  <label for="comment-name">Name *</label>
-                  <input type="text" id="comment-name" placeholder="Your name" required>
+                  <label for="comment-name">Name * <small style="color:#6b7280;font-weight:normal">(max 50)</small></label>
+                  <input type="text" id="comment-name" placeholder="Your name" required maxlength="50">
                 </div>
                 <div class="form-group">
-                  <label for="comment-email">Email *</label>
-                  <input type="email" id="comment-email" placeholder="your@email.com" required>
+                  <label for="comment-email">Email * <small style="color:#6b7280;font-weight:normal">(max 100)</small></label>
+                  <input type="email" id="comment-email" placeholder="your@email.com" required maxlength="100">
                 </div>
               </div>
               <div class="form-group full">
-                <label for="comment-text">Comment *</label>
-                <textarea id="comment-text" placeholder="Write your comment here..." required></textarea>
+                <label for="comment-text">Comment * <small style="color:#6b7280;font-weight:normal">(3-2000 chars)</small></label>
+                <textarea id="comment-text" placeholder="Write your comment here..." required minlength="3" maxlength="2000"></textarea>
+                <div style="text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px"><span id="comment-count">0</span>/2000</div>
               </div>
               <button type="submit" class="submit-btn" id="submit-btn">Submit Comment</button>
             </form>
@@ -509,6 +510,11 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
     const pendingNotice = document.getElementById('pending-notice');
     const submitBtn = document.getElementById('submit-btn');
     const emailInput = document.getElementById('comment-email');
+    
+    // Character counter for comment
+    document.getElementById('comment-text').addEventListener('input', function() {
+      document.getElementById('comment-count').textContent = this.value.length;
+    });
     
     // Check for pending comment when email is entered
     let checkTimeout;
