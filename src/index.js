@@ -1421,27 +1421,30 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             `).bind(slug).first();
             
             if (blog) {
-              // Get previous 2 blog posts (before current one)
-              const prevResult = await env.DB.prepare(`
-                SELECT id, title, slug, description, thumbnail_url, created_at
-                FROM blogs 
-                WHERE status = 'published' AND id < ?
-                ORDER BY id DESC
-                LIMIT 2
-              `).bind(blog.id).all();
-              
-              // Get approved comments
-              const commentsResult = await env.DB.prepare(`
-                SELECT id, name, comment, created_at
-                FROM blog_comments 
-                WHERE blog_id = ? AND status = 'approved'
-                ORDER BY created_at DESC
-              `).bind(blog.id).all();
+              // Run all queries in parallel for better CPU efficiency
+              const [prevResult, commentsResult, seo] = await Promise.all([
+                // Get previous 2 blog posts (before current one)
+                env.DB.prepare(`
+                  SELECT id, title, slug, description, thumbnail_url, created_at
+                  FROM blogs 
+                  WHERE status = 'published' AND id < ?
+                  ORDER BY id DESC
+                  LIMIT 2
+                `).bind(blog.id).all(),
+                // Get approved comments
+                env.DB.prepare(`
+                  SELECT id, name, comment, created_at
+                  FROM blog_comments 
+                  WHERE blog_id = ? AND status = 'approved'
+                  ORDER BY created_at DESC
+                `).bind(blog.id).all(),
+                // Get SEO settings
+                getSeoForRequest(env, req, { path })
+              ]);
               
               const previousBlogs = prevResult.results || [];
               const comments = commentsResult.results || [];
               const htmlRaw = generateBlogPostHTML(blog, previousBlogs, comments);
-              const seo = await getSeoForRequest(env, req, { path });
               const html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
               
               return new Response(html, {
@@ -1470,31 +1473,34 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             `).bind(slug).first();
             
             if (question) {
-              // Get approved replies
-              const repliesResult = await env.DB.prepare(`
-                SELECT id, name, content, created_at
-                FROM forum_replies 
-                WHERE question_id = ? AND status = 'approved'
-                ORDER BY created_at ASC
-              `).bind(question.id).all();
-              
-              // Get sidebar content - products and blogs based on question id for internal linking
-              // Older questions show older products/blogs
-              const productsResult = await env.DB.prepare(`
-                SELECT id, title, slug, thumbnail_url, sale_price, normal_price
-                FROM products 
-                WHERE status = 'active'
-                ORDER BY id DESC
-                LIMIT 2 OFFSET ?
-              `).bind(Math.max(0, question.id - 1)).all();
-              
-              const blogsResult = await env.DB.prepare(`
-                SELECT id, title, slug, thumbnail_url, description
-                FROM blogs 
-                WHERE status = 'published'
-                ORDER BY id DESC
-                LIMIT 2 OFFSET ?
-              `).bind(Math.max(0, question.id - 1)).all();
+              // Run all queries in parallel for better CPU efficiency
+              const [repliesResult, productsResult, blogsResult, seo] = await Promise.all([
+                // Get approved replies
+                env.DB.prepare(`
+                  SELECT id, name, content, created_at
+                  FROM forum_replies 
+                  WHERE question_id = ? AND status = 'approved'
+                  ORDER BY created_at ASC
+                `).bind(question.id).all(),
+                // Get sidebar products
+                env.DB.prepare(`
+                  SELECT id, title, slug, thumbnail_url, sale_price, normal_price
+                  FROM products 
+                  WHERE status = 'active'
+                  ORDER BY id DESC
+                  LIMIT 2 OFFSET ?
+                `).bind(Math.max(0, question.id - 1)).all(),
+                // Get sidebar blogs
+                env.DB.prepare(`
+                  SELECT id, title, slug, thumbnail_url, description
+                  FROM blogs 
+                  WHERE status = 'published'
+                  ORDER BY id DESC
+                  LIMIT 2 OFFSET ?
+                `).bind(Math.max(0, question.id - 1)).all(),
+                // Get SEO settings
+                getSeoForRequest(env, req, { path })
+              ]);
               
               const replies = repliesResult.results || [];
               const sidebar = {
@@ -1503,7 +1509,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               };
               
               const htmlRaw = generateForumQuestionHTML(question, replies, sidebar);
-              const seo = await getSeoForRequest(env, req, { path });
               const html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
               
               return new Response(html, {

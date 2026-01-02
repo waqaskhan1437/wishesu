@@ -986,44 +986,38 @@ export async function routeApiRequest(req, env, url, path, method) {
         return json({ error: 'Email required' }, 400);
       }
       
-      // Get blog comments
-      let comments = { results: [] };
-      try {
-        comments = await env.DB.prepare(`
+      // Run all queries in parallel for better CPU efficiency
+      const [comments, forumQuestions, forumReplies, allOrders] = await Promise.all([
+        // Get blog comments
+        env.DB.prepare(`
           SELECT c.*, b.title as blog_title, b.slug as blog_slug
           FROM blog_comments c
           LEFT JOIN blogs b ON c.blog_id = b.id
           WHERE LOWER(c.email) = ?
           ORDER BY c.created_at DESC
-        `).bind(email).all();
-      } catch (e) { console.log('comments query error:', e.message); }
-      
-      // Get forum questions
-      let forumQuestions = { results: [] };
-      try {
-        forumQuestions = await env.DB.prepare(`
+        `).bind(email).all().catch(() => ({ results: [] })),
+        
+        // Get forum questions
+        env.DB.prepare(`
           SELECT * FROM forum_questions
           WHERE LOWER(email) = ?
           ORDER BY created_at DESC
-        `).bind(email).all();
-      } catch (e) { console.log('forumQuestions query error:', e.message); }
-      
-      // Get forum replies
-      let forumReplies = { results: [] };
-      try {
-        forumReplies = await env.DB.prepare(`
+        `).bind(email).all().catch(() => ({ results: [] })),
+        
+        // Get forum replies
+        env.DB.prepare(`
           SELECT r.*, q.title as question_title, q.slug as question_slug
           FROM forum_replies r
           LEFT JOIN forum_questions q ON r.question_id = q.id
           WHERE LOWER(r.email) = ?
           ORDER BY r.created_at DESC
-        `).bind(email).all();
-      } catch (e) { console.log('forumReplies query error:', e.message); }
-      
-      // Get orders
-      const allOrders = await env.DB.prepare(`
-        SELECT * FROM orders ORDER BY created_at DESC
-      `).all();
+        `).bind(email).all().catch(() => ({ results: [] })),
+        
+        // Get orders
+        env.DB.prepare(`
+          SELECT * FROM orders ORDER BY created_at DESC
+        `).all().catch(() => ({ results: [] }))
+      ]);
       
       // Filter orders by email
       const userOrders = [];
@@ -1147,11 +1141,13 @@ export async function routeApiRequest(req, env, url, path, method) {
         )
       `).run();
 
-      // Restore data
+      // Batch restore replies in parallel batches of 10
       let restoredReplies = 0;
-      for (const r of existingReplies) {
-        try {
-          await env.DB.prepare(`
+      const batchSize = 10;
+      for (let i = 0; i < existingReplies.length; i += batchSize) {
+        const batch = existingReplies.slice(i, i + batchSize);
+        const results = await Promise.allSettled(batch.map(r =>
+          env.DB.prepare(`
             INSERT INTO forum_replies (question_id, name, email, content, status, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
           `).bind(
@@ -1161,9 +1157,9 @@ export async function routeApiRequest(req, env, url, path, method) {
             r.content || '',
             r.status || 'pending',
             r.created_at || Date.now()
-          ).run();
-          restoredReplies++;
-        } catch (e) { /* skip */ }
+          ).run()
+        ));
+        restoredReplies += results.filter(r => r.status === 'fulfilled').length;
       }
 
       // Force recreate forum_questions table
@@ -1189,11 +1185,12 @@ export async function routeApiRequest(req, env, url, path, method) {
         )
       `).run();
 
-      // Restore data
+      // Batch restore questions in parallel batches of 10
       let restoredQuestions = 0;
-      for (const q of existingQuestions) {
-        try {
-          await env.DB.prepare(`
+      for (let i = 0; i < existingQuestions.length; i += batchSize) {
+        const batch = existingQuestions.slice(i, i + batchSize);
+        const results = await Promise.allSettled(batch.map(q =>
+          env.DB.prepare(`
             INSERT INTO forum_questions (title, slug, content, name, email, status, reply_count, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(
@@ -1206,9 +1203,9 @@ export async function routeApiRequest(req, env, url, path, method) {
             q.reply_count || 0,
             q.created_at || Date.now(),
             q.updated_at || Date.now()
-          ).run();
-          restoredQuestions++;
-        } catch (e) { /* skip */ }
+          ).run()
+        ));
+        restoredQuestions += results.filter(r => r.status === 'fulfilled').length;
       }
 
       return json({

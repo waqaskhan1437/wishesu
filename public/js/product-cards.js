@@ -90,6 +90,8 @@
         normal_price,
         sale_price,
         normal_delivery_text,
+        instant_delivery,
+        delivery_time_days,
         average_rating,
         review_count
       } = product;
@@ -103,9 +105,9 @@
       const hasDiscount = salePrice < originalPrice;
       const discount = hasDiscount ? Math.round((1 - salePrice / originalPrice) * 100) : 0;
 
-      // Delivery text
-      const deliveryText = this.getDeliveryText(normal_delivery_text);
-      const deliveryIcon = this.getDeliveryIcon(normal_delivery_text);
+      // Delivery text - pass instant_delivery flag and days
+      const deliveryText = this.getDeliveryText(instant_delivery, delivery_time_days || normal_delivery_text);
+      const deliveryIcon = this.getDeliveryIcon(instant_delivery);
 
       // Rating stars
       const rating = parseFloat(average_rating || 5);
@@ -160,31 +162,30 @@
       `;
     },
 
-    // Get delivery text based on time
-    getDeliveryText: function(deliveryText) {
-      if (!deliveryText) return 'Instant Delivery in 60 Minutes';
+    // Get delivery text based on instant flag and days
+    getDeliveryText: function(instantDelivery, deliveryDays) {
+      // If instant delivery is ON, show 60 minutes
+      if (instantDelivery == 1 || instantDelivery === true) {
+        return '⚡ Instant Delivery in 60 Minutes';
+      }
 
-      const text = deliveryText.toLowerCase();
-      const minutes = parseInt(text.match(/\d+/)?.[0] || 60);
-
-      if (text.includes('instant') || minutes <= 60) {
-        return `⚡ Instant Delivery in ${minutes} Minutes`;
-      } else if (text.includes('24 hours') || text.includes('1 day')) {
+      // Otherwise use days
+      const days = parseInt(deliveryDays) || 1;
+      
+      if (days === 1) {
         return '🚀 24 Hours Express Delivery';
-      } else if (text.includes('2 days')) {
+      } else if (days === 2) {
         return '📦 2 Days Delivery';
-      } else if (text.includes('3 days')) {
+      } else if (days === 3) {
         return '📦 3 Days Delivery';
       } else {
-        return deliveryText;
+        return `📦 ${days} Days Delivery`;
       }
     },
 
     // Get delivery icon
-    getDeliveryIcon: function(deliveryText) {
-      const text = (deliveryText || '').toLowerCase();
-      if (text.includes('instant') || text.includes('60')) return '⚡';
-      if (text.includes('24') || text.includes('1 day')) return '🚀';
+    getDeliveryIcon: function(instantDelivery) {
+      if (instantDelivery == 1 || instantDelivery === true) return '⚡';
       return '📦';
     },
 
