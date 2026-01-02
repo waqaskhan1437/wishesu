@@ -103,20 +103,67 @@
 
     const originalText = btn.textContent;
     
-    // Show loading spinner
+    // Also get Apple Pay button if exists
+    const applePayBtn = document.getElementById('apple-pay-btn');
+    const applePayOriginal = applePayBtn ? applePayBtn.innerHTML : '';
+    
+    // Show loading spinner on both buttons
     btn.disabled = true;
+    btn.style.opacity = '0.8';
+    btn.style.cursor = 'not-allowed';
     btn.innerHTML = `
-      <span style="display: inline-flex; align-items: center; gap: 8px;">
-        <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite;"></span>
-        Opening checkout...
+      <span style="display: inline-flex; align-items: center; justify-content: center; gap: 10px;">
+        <span class="checkout-spinner"></span>
+        Processing...
       </span>
     `;
+    
+    // Also disable Apple Pay button if exists
+    if (applePayBtn) {
+      applePayBtn.disabled = true;
+      applePayBtn.style.opacity = '0.6';
+      applePayBtn.style.cursor = 'not-allowed';
+    }
+    
+    // Add spinner CSS if not exists
+    if (!document.getElementById('checkout-spinner-css')) {
+      const style = document.createElement('style');
+      style.id = 'checkout-spinner-css';
+      style.textContent = `
+        .checkout-spinner {
+          display: inline-block;
+          width: 18px;
+          height: 18px;
+          border: 3px solid rgba(255,255,255,0.3);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: checkoutSpin 0.8s linear infinite;
+        }
+        @keyframes checkoutSpin {
+          to { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Helper to restore buttons
+    const restoreButtons = () => {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+      btn.textContent = originalText;
+      if (applePayBtn) {
+        applePayBtn.disabled = false;
+        applePayBtn.style.opacity = '1';
+        applePayBtn.style.cursor = 'pointer';
+        applePayBtn.innerHTML = applePayOriginal;
+      }
+    };
     
     // 1. Check if files are still uploading
     if (window.isUploadInProgress && window.isUploadInProgress()) {
       alert('Please wait for file uploads to complete.');
-      btn.disabled = false;
-      btn.textContent = originalText;
+      restoreButtons();
       return;
     }
 
@@ -214,9 +261,9 @@
 
     // 5. Open Payment Selector Modal
     btn.innerHTML = `
-      <span style="display: inline-flex; align-items: center; gap: 8px;">
-        <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite;"></span>
-        Loading payment options...
+      <span style="display: inline-flex; align-items: center; justify-content: center; gap: 10px;">
+        <span class="checkout-spinner"></span>
+        Loading payment...
       </span>
     `;
     
@@ -243,9 +290,8 @@
     localStorage.setItem('pendingOrderData', JSON.stringify(orderData));
     console.log('🔵 Stored order data in localStorage:', orderData);
 
-    // Reset button before opening modal
-    btn.disabled = false;
-    btn.textContent = originalText;
+    // Reset buttons before opening modal
+    restoreButtons();
 
     // Check if PaymentSelector is available
     if (typeof window.PaymentSelector !== 'undefined') {
@@ -260,16 +306,17 @@
     } else {
       // Fallback to direct Whop checkout
       console.log('🔵 PaymentSelector not loaded, using direct Whop checkout...');
-      await processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes);
+      await processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes, restoreButtons);
     }
   }
 
   // Direct Whop checkout (fallback)
-  async function processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes) {
+  async function processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes, restoreButtons) {
     btn.disabled = true;
+    btn.style.opacity = '0.8';
     btn.innerHTML = `
-      <span style="display: inline-flex; align-items: center; gap: 8px;">
-        <span style="display: inline-block; width: 16px; height: 16px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite;"></span>
+      <span style="display: inline-flex; align-items: center; justify-content: center; gap: 10px;">
+        <span class="checkout-spinner"></span>
         Processing...
       </span>
     `;
@@ -295,8 +342,13 @@
         throw new Error(data.error || 'Failed to create checkout');
       }
 
-      btn.disabled = false;
-      btn.textContent = originalText;
+      // Restore buttons
+      if (restoreButtons) restoreButtons();
+      else {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.textContent = originalText;
+      }
 
       if (typeof window.whopCheckout === 'function' && data.checkout_url) {
         window.whopCheckout({
@@ -316,8 +368,13 @@
     } catch (err) {
       console.error('Checkout error:', err);
       alert('Checkout Error: ' + err.message);
-      btn.disabled = false;
-      btn.textContent = originalText;
+      // Restore buttons on error
+      if (restoreButtons) restoreButtons();
+      else {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.textContent = originalText;
+      }
     }
   }
 
