@@ -363,11 +363,11 @@
           <div class="comp-card-header">
             <div class="comp-card-title">${h.name || 'Untitled Header'} ${h.id === componentsData.defaultHeaderId ? '<span class="default-badge">DEFAULT</span>' : ''}</div>
             <div class="comp-card-actions">
-              <button onclick="AdminDashboard.editHeader(${i})">Edit</button>
-              <button onclick="AdminDashboard.previewComp('header',${i})">Preview</button>
-              <button onclick="AdminDashboard.copyCode('header',${i})">Copy</button>
-              ${h.id !== componentsData.defaultHeaderId ? `<button class="primary" onclick="AdminDashboard.setDefault('header',${i})">Set Default</button>` : ''}
-              <button class="danger" onclick="AdminDashboard.deleteComp('header',${i})">Delete</button>
+              <button onclick="AD.editHeader(${i})">Edit</button>
+              <button onclick="AD.previewComp('header',${i})">Preview</button>
+              <button onclick="AD.copyCode('header',${i})">Copy</button>
+              ${h.id !== componentsData.defaultHeaderId ? `<button class="primary" onclick="AD.setDefault('header',${i})">Set Default</button>` : ''}
+              <button class="danger" onclick="AD.deleteComp('header',${i})">Delete</button>
             </div>
           </div>
           <div class="comp-card-preview">${h.code || ''}</div>
@@ -389,11 +389,11 @@
           <div class="comp-card-header">
             <div class="comp-card-title">${f.name || 'Untitled Footer'} ${f.id === componentsData.defaultFooterId ? '<span class="default-badge">DEFAULT</span>' : ''}</div>
             <div class="comp-card-actions">
-              <button onclick="AdminDashboard.editFooter(${i})">Edit</button>
-              <button onclick="AdminDashboard.previewComp('footer',${i})">Preview</button>
-              <button onclick="AdminDashboard.copyCode('footer',${i})">Copy</button>
-              ${f.id !== componentsData.defaultFooterId ? `<button class="primary" onclick="AdminDashboard.setDefault('footer',${i})">Set Default</button>` : ''}
-              <button class="danger" onclick="AdminDashboard.deleteComp('footer',${i})">Delete</button>
+              <button onclick="AD.editFooter(${i})">Edit</button>
+              <button onclick="AD.previewComp('footer',${i})">Preview</button>
+              <button onclick="AD.copyCode('footer',${i})">Copy</button>
+              ${f.id !== componentsData.defaultFooterId ? `<button class="primary" onclick="AD.setDefault('footer',${i})">Set Default</button>` : ''}
+              <button class="danger" onclick="AD.deleteComp('footer',${i})">Delete</button>
             </div>
           </div>
           <div class="comp-card-preview">${f.code || ''}</div>
@@ -455,16 +455,6 @@
       `;
       document.body.appendChild(modal);
 
-      // Auto-check default for first item
-      try {
-        const chk = modal.querySelector('#set-default');
-        if (chk && !isEdit) {
-          if (type === 'header' && !componentsData.defaultHeaderId) chk.checked = true;
-          if (type === 'footer' && !componentsData.defaultFooterId) chk.checked = true;
-        }
-      } catch(e) {}
-
-
       // Templates
       modal.querySelectorAll('.template-card').forEach(card => {
         card.addEventListener('click', () => {
@@ -507,12 +497,12 @@
           if (!componentsData.headers) componentsData.headers = [];
           if (isEdit && index !== null) componentsData.headers[index] = newItem;
           else componentsData.headers.push(newItem);
-          if (setDef || !componentsData.defaultHeaderId) componentsData.defaultHeaderId = id;
+          if (setDef) componentsData.defaultHeaderId = id;
         } else {
           if (!componentsData.footers) componentsData.footers = [];
           if (isEdit && index !== null) componentsData.footers[index] = newItem;
           else componentsData.footers.push(newItem);
-          if (setDef || !componentsData.defaultFooterId) componentsData.defaultFooterId = id;
+          if (setDef) componentsData.defaultFooterId = id;
         }
         saveComponentsData(componentsData);
         modal.remove();
@@ -578,10 +568,10 @@
             <div class="comp-card-header">
               <div class="comp-card-title">${item.name || `Product List #${i+1}`}</div>
               <div class="comp-card-actions">
-                <button onclick="AdminDashboard.editPL(${i})">Edit</button>
-                <button onclick="AdminDashboard.previewPL(${i})">Preview</button>
-                <button onclick="AdminDashboard.copyPL(${i})">Copy Embed</button>
-                <button class="danger" onclick="AdminDashboard.deletePL(${i})">Delete</button>
+                <button onclick="AD.editPL(${i})">Edit</button>
+                <button onclick="AD.previewPL(${i})">Preview</button>
+                <button onclick="AD.copyPL(${i})">Copy Embed</button>
+                <button class="danger" onclick="AD.deletePL(${i})">Delete</button>
               </div>
             </div>
             <div class="comp-card-meta">
@@ -607,10 +597,10 @@
           <div class="comp-card-header">
             <div class="comp-card-title">${item.name || `Review List #${i+1}`}</div>
             <div class="comp-card-actions">
-              <button onclick="AdminDashboard.editRL(${i})">Edit</button>
-              <button onclick="AdminDashboard.previewRL(${i})">Preview</button>
-              <button onclick="AdminDashboard.copyRL(${i})">Copy Embed</button>
-              <button class="danger" onclick="AdminDashboard.deleteRL(${i})">Delete</button>
+              <button onclick="AD.editRL(${i})">Edit</button>
+              <button onclick="AD.previewRL(${i})">Preview</button>
+              <button onclick="AD.copyRL(${i})">Copy Embed</button>
+              <button class="danger" onclick="AD.deleteRL(${i})">Delete</button>
             </div>
           </div>
           <div class="comp-card-meta">
@@ -688,16 +678,6 @@
         </div>
       `;
       document.body.appendChild(modal);
-
-      // Auto-check default for first item
-      try {
-        const chk = modal.querySelector('#set-default');
-        if (chk && !isEdit) {
-          if (type === 'header' && !componentsData.defaultHeaderId) chk.checked = true;
-          if (type === 'footer' && !componentsData.defaultFooterId) chk.checked = true;
-        }
-      } catch(e) {}
-
       modal.querySelector('#save-pl').addEventListener('click', () => {
         const ids = [...modal.querySelectorAll('input[name="pl-prods"]:checked')].map(c => c.value);
         const newItem = {
@@ -788,16 +768,6 @@
         </div>
       `;
       document.body.appendChild(modal);
-
-      // Auto-check default for first item
-      try {
-        const chk = modal.querySelector('#set-default');
-        if (chk && !isEdit) {
-          if (type === 'header' && !componentsData.defaultHeaderId) chk.checked = true;
-          if (type === 'footer' && !componentsData.defaultFooterId) chk.checked = true;
-        }
-      } catch(e) {}
-
       modal.querySelector('#save-rl').addEventListener('click', () => {
         const pid = modal.querySelector('#rl-prod').value;
         const newItem = {
