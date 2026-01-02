@@ -2062,7 +2062,7 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
           try {
             // Get expired checkouts from database
             const expiredCheckouts = await env.DB.prepare(`
-              SELECT checkout_id, product_id, expires_at
+              SELECT checkout_id, plan_id, product_id, expires_at
               FROM checkout_sessions
               WHERE status = 'pending' 
               AND datetime(expires_at) < datetime('now')
@@ -2070,47 +2070,54 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
               LIMIT 50
             `).all();
             
+            const checkouts = expiredCheckouts.results || [];
+            if (checkouts.length === 0) {
+              return json({ success: true, deleted: 0, failed: 0, message: 'No expired checkouts' });
+            }
+            
             let deleted = 0;
             let failed = 0;
             
-            for (const checkout of (expiredCheckouts.results || [])) {
-              try {
-                // Delete the checkout session from Whop (ignore if already gone)
-                const deleteSessionResp = await fetch(`https://api.whop.com/api/v2/checkout_sessions/${checkout.checkout_id}`, {
-                  method: 'DELETE',
-                  headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
-                });
-                // Attempt to delete the associated plan if one exists
-                let planDeleted = false;
+            // Process in parallel batches of 5 for better CPU efficiency
+            const batchSize = 5;
+            for (let i = 0; i < checkouts.length; i += batchSize) {
+              const batch = checkouts.slice(i, i + batchSize);
+              
+              const results = await Promise.allSettled(batch.map(async (checkout) => {
                 try {
-                  const row = await env.DB.prepare('SELECT plan_id FROM checkout_sessions WHERE checkout_id = ?').bind(checkout.checkout_id).first();
-                  const planId = row && row.plan_id;
-                  if (planId) {
-                    const delPlanResp = await fetch(`https://api.whop.com/api/v2/plans/${planId}`, {
+                  // Delete the checkout session from Whop (ignore if already gone)
+                  const deleteSessionResp = await fetch(`https://api.whop.com/api/v2/checkout_sessions/${checkout.checkout_id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
+                  });
+                  
+                  // Attempt to delete the associated plan if one exists
+                  if (checkout.plan_id) {
+                    await fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
                       method: 'DELETE',
                       headers: { 'Authorization': `Bearer ${env.WHOP_API_KEY}` }
-                    });
-                    planDeleted = delPlanResp.ok || delPlanResp.status === 404;
+                    }).catch(() => {});
                   }
-                } catch (pe) {
-                  console.error('Plan deletion error:', pe);
+                  
+                  if (deleteSessionResp.ok || deleteSessionResp.status === 404) {
+                    // Mark as expired in database
+                    await env.DB.prepare(`
+                      UPDATE checkout_sessions 
+                      SET status = 'expired', completed_at = datetime('now')
+                      WHERE checkout_id = ?
+                    `).bind(checkout.checkout_id).run();
+                    return { success: true };
+                  }
+                  return { success: false };
+                } catch (e) {
+                  return { success: false };
                 }
-                if (deleteSessionResp.ok || deleteSessionResp.status === 404) {
-                  // Mark as expired in database regardless of plan deletion outcome
-                  await env.DB.prepare(`
-                    UPDATE checkout_sessions 
-                    SET status = 'expired', completed_at = datetime('now')
-                    WHERE checkout_id = ?
-                  `).bind(checkout.checkout_id).run();
-                  deleted++;
-                  console.log('🗑️ Expired checkout deleted:', checkout.checkout_id, planDeleted ? 'and plan cleaned up' : '');
-                } else {
-                  failed++;
-                }
-              } catch (e) {
-                failed++;
-                console.error('Failed to delete checkout:', checkout.checkout_id, e);
-              }
+              }));
+              
+              results.forEach(r => {
+                if (r.status === 'fulfilled' && r.value?.success) deleted++;
+                else failed++;
+              });
             }
             
             return json({

@@ -45,14 +45,17 @@ export async function startChat(env, body) {
     ).bind(email, canonicalId).all();
 
     const otherIds = (others?.results || []).map(r => String(r.id));
-    for (const sid of otherIds) {
-      await env.DB.prepare(
-        `UPDATE chat_messages SET session_id = ? WHERE session_id = ?`
-      ).bind(canonicalId, sid).run();
-
-      await env.DB.prepare(
-        `DELETE FROM chat_sessions WHERE id = ?`
-      ).bind(sid).run();
+    
+    // Batch migrate sessions - process in parallel
+    if (otherIds.length > 0) {
+      await Promise.all(otherIds.map(async (sid) => {
+        await env.DB.prepare(
+          `UPDATE chat_messages SET session_id = ? WHERE session_id = ?`
+        ).bind(canonicalId, sid).run();
+        await env.DB.prepare(
+          `DELETE FROM chat_sessions WHERE id = ?`
+        ).bind(sid).run();
+      }));
     }
 
     return json({ sessionId: canonicalId, reused: true });

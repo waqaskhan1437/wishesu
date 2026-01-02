@@ -162,8 +162,8 @@
         <h3>⭐ Leave a Review</h3>
         <form id="review-form">
           <div class="form-group">
-            <label>Your Name:</label>
-            <input type="text" id="reviewer-name" required>
+            <label>Your Name: <small style="color:#6b7280;font-weight:normal">(max 50)</small></label>
+            <input type="text" id="reviewer-name" required maxlength="50">
           </div>
           <div class="form-group">
             <label>Rating:</label>
@@ -176,8 +176,9 @@
             </div>
           </div>
           <div class="form-group">
-            <label>Your Comment:</label>
-            <textarea id="review-comment" required></textarea>
+            <label>Your Comment: <small style="color:#6b7280;font-weight:normal">(max 1000)</small></label>
+            <textarea id="review-comment" required maxlength="1000" minlength="5"></textarea>
+            <div style="text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px"><span id="comment-count">0</span>/1000</div>
           </div>
           <div style="margin: 15px 0;">
             <label><input type="checkbox" id="portfolio-checkbox" checked> Show in portfolio</label>

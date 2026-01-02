@@ -12,6 +12,16 @@
     return;
   }
 
+  // Character counter for review comment
+  const commentEl = document.getElementById('review-comment');
+  const countEl = document.getElementById('comment-count');
+  if (commentEl && countEl) {
+    commentEl.addEventListener('input', function() {
+      countEl.textContent = this.value.length;
+      countEl.style.color = this.value.length > 900 ? '#ef4444' : '#6b7280';
+    });
+  }
+
   // Setup view
   if (isAdmin) {
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');

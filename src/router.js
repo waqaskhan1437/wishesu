@@ -1057,30 +1057,42 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   // ----- FORUM -----
-  // Public: Get published questions
+  // Public: Get published questions - cache for 60s
   if (method === 'GET' && path === '/api/forum/questions') {
-    return getPublishedQuestions(env, url);
+    const response = await getPublishedQuestions(env, url);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Cache-Control', 'public, max-age=30, s-maxage=60');
+    return new Response(response.body, { status: response.status, headers: newHeaders });
   }
 
-  // Public: Get single question with replies
+  // Public: Get single question with replies - cache for 30s
   if (method === 'GET' && path.startsWith('/api/forum/question/')) {
     const slug = path.split('/').pop();
-    return getQuestion(env, slug);
+    const response = await getQuestion(env, slug);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Cache-Control', 'public, max-age=15, s-maxage=30');
+    return new Response(response.body, { status: response.status, headers: newHeaders });
   }
 
-  // Public: Get replies for a question by ID
+  // Public: Get replies for a question by ID - cache for 30s
   if (method === 'GET' && path === '/api/forum/question-replies') {
     const questionId = parseInt(url.searchParams.get('question_id') || '0');
-    return getQuestionReplies(env, questionId);
+    const response = await getQuestionReplies(env, questionId);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Cache-Control', 'public, max-age=15, s-maxage=30');
+    return new Response(response.body, { status: response.status, headers: newHeaders });
   }
 
-  // Public: Get question by ID
+  // Public: Get question by ID - cache for 30s
   if (method === 'GET' && path === '/api/forum/question-by-id') {
     const id = url.searchParams.get('id');
-    return getQuestionById(env, id);
+    const response = await getQuestionById(env, id);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Cache-Control', 'public, max-age=15, s-maxage=30');
+    return new Response(response.body, { status: response.status, headers: newHeaders });
   }
 
-  // Public: Check pending for user
+  // Public: Check pending for user (no cache - user specific)
   if (method === 'POST' && path === '/api/forum/check-pending') {
     const body = await req.json().catch(() => ({}));
     return checkPendingForum(env, (body.email || '').toLowerCase());
@@ -1098,10 +1110,13 @@ export async function routeApiRequest(req, env, url, path, method) {
     return submitReply(env, body);
   }
 
-  // Public: Get sidebar content
+  // Public: Get sidebar content - cache for 5 minutes
   if (method === 'GET' && path === '/api/forum/sidebar') {
     const questionId = parseInt(url.searchParams.get('question_id') || '1');
-    return getForumSidebar(env, questionId);
+    const response = await getForumSidebar(env, questionId);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('Cache-Control', 'public, max-age=60, s-maxage=300');
+    return new Response(response.body, { status: response.status, headers: newHeaders });
   }
 
   // Admin: Get all questions
@@ -1307,21 +1322,30 @@ export async function routeApiRequest(req, env, url, path, method) {
       if (!Array.isArray(blogs)) {
         return json({ error: 'Invalid data format' }, 400);
       }
-      let imported = 0;
+      
       const now = Date.now();
-      for (const b of blogs) {
-        if (!b.title) continue;
-        await env.DB.prepare(`
-          INSERT OR REPLACE INTO blogs (id, title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          b.id || null, b.title, b.slug || '', b.description || '', b.content || '',
-          b.thumbnail_url || '', b.custom_css || '', b.custom_js || '',
-          b.seo_title || '', b.seo_description || '', b.seo_keywords || '',
-          b.status || 'draft', b.created_at || now, b.updated_at || now
-        ).run();
-        imported++;
+      const validBlogs = blogs.filter(b => b.title);
+      
+      // Process in batches of 10 for better performance
+      const batchSize = 10;
+      let imported = 0;
+      
+      for (let i = 0; i < validBlogs.length; i += batchSize) {
+        const batch = validBlogs.slice(i, i + batchSize);
+        await Promise.all(batch.map(b =>
+          env.DB.prepare(`
+            INSERT OR REPLACE INTO blogs (id, title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            b.id || null, b.title, b.slug || '', b.description || '', b.content || '',
+            b.thumbnail_url || '', b.custom_css || '', b.custom_js || '',
+            b.seo_title || '', b.seo_description || '', b.seo_keywords || '',
+            b.status || 'draft', b.created_at || now, b.updated_at || now
+          ).run().catch(() => null)
+        ));
+        imported += batch.length;
       }
+      
       return json({ success: true, imported });
     } catch (err) {
       return json({ error: err.message }, 500);
@@ -1335,23 +1359,31 @@ export async function routeApiRequest(req, env, url, path, method) {
       if (!Array.isArray(products)) {
         return json({ error: 'Invalid data format' }, 400);
       }
+      
+      const validProducts = products.filter(p => p.title);
+      
+      // Process in batches of 10 for better performance
+      const batchSize = 10;
       let imported = 0;
-      for (const p of products) {
-        if (!p.title) continue;
-        // Handle both addons_json and addons field names for compatibility
-        const addonsData = p.addons_json || p.addons || '[]';
-        await env.DB.prepare(`
-          INSERT OR REPLACE INTO products (id, title, slug, description, normal_price, sale_price, thumbnail_url, video_url, gallery_images, addons_json, status, sort_order, whop_plan, whop_price_map, whop_product_id, normal_delivery_text, instant_delivery, seo_title, seo_description, seo_keywords, seo_canonical)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          p.id || null, p.title, p.slug || '', p.description || '', p.normal_price || 0, p.sale_price || null,
-          p.thumbnail_url || '', p.video_url || '', p.gallery_images || '[]', addonsData,
-          p.status || 'active', p.sort_order || 0, p.whop_plan || '', p.whop_price_map || '', p.whop_product_id || '',
-          p.normal_delivery_text || '', p.instant_delivery || 0,
-          p.seo_title || '', p.seo_description || '', p.seo_keywords || '', p.seo_canonical || ''
-        ).run();
-        imported++;
+      
+      for (let i = 0; i < validProducts.length; i += batchSize) {
+        const batch = validProducts.slice(i, i + batchSize);
+        await Promise.all(batch.map(p => {
+          const addonsData = p.addons_json || p.addons || '[]';
+          return env.DB.prepare(`
+            INSERT OR REPLACE INTO products (id, title, slug, description, normal_price, sale_price, thumbnail_url, video_url, gallery_images, addons_json, status, sort_order, whop_plan, whop_price_map, whop_product_id, normal_delivery_text, instant_delivery, seo_title, seo_description, seo_keywords, seo_canonical)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            p.id || null, p.title, p.slug || '', p.description || '', p.normal_price || 0, p.sale_price || null,
+            p.thumbnail_url || '', p.video_url || '', p.gallery_images || '[]', addonsData,
+            p.status || 'active', p.sort_order || 0, p.whop_plan || '', p.whop_price_map || '', p.whop_product_id || '',
+            p.normal_delivery_text || '', p.instant_delivery || 0,
+            p.seo_title || '', p.seo_description || '', p.seo_keywords || '', p.seo_canonical || ''
+          ).run().catch(() => null);
+        }));
+        imported += batch.length;
       }
+      
       return json({ success: true, imported });
     } catch (err) {
       return json({ error: err.message }, 500);
@@ -1365,17 +1397,26 @@ export async function routeApiRequest(req, env, url, path, method) {
       if (!Array.isArray(pages)) {
         return json({ error: 'Invalid data format' }, 400);
       }
+      
+      const validPages = pages.filter(p => p.slug || p.name);
+      
+      // Process in batches of 10 for better performance
+      const batchSize = 10;
       let imported = 0;
-      for (const p of pages) {
-        if (!p.slug && !p.name) continue;
-        await env.DB.prepare(`
-          INSERT OR REPLACE INTO pages (id, name, slug, content, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(
-          p.id || null, p.name || p.slug, p.slug || p.name, p.content || '', p.status || 'active', p.created_at || Date.now()
-        ).run();
-        imported++;
+      
+      for (let i = 0; i < validPages.length; i += batchSize) {
+        const batch = validPages.slice(i, i + batchSize);
+        await Promise.all(batch.map(p =>
+          env.DB.prepare(`
+            INSERT OR REPLACE INTO pages (id, name, slug, content, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(
+            p.id || null, p.name || p.slug, p.slug || p.name, p.content || '', p.status || 'active', p.created_at || Date.now()
+          ).run().catch(() => null)
+        ));
+        imported += batch.length;
       }
+      
       return json({ success: true, imported });
     } catch (err) {
       return json({ error: err.message }, 500);
