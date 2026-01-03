@@ -211,6 +211,15 @@
         <small style="color: #92400e;"><strong>Note:</strong> Clearing temp files removes uploaded files that haven't been attached to orders. Clearing pending checkouts removes incomplete checkout sessions.</small>
       </div>
     </div>
+
+    <!-- Automation & Alerts Section -->
+    <div style="background: linear-gradient(135deg, #f97316 0%, #ef4444 100%); padding: 30px; border-radius: 12px; color: white; margin-top: 20px;">
+      <h3 style="margin: 0 0 10px 0; color: white;">🤖 Automation & Alerts</h3>
+      <p style="color: rgba(255,255,255,0.85); margin-bottom: 20px;">Configure automatic notifications for admin and customers.</p>
+      <button class="btn" id="open-automation-settings" style="background: white; color: #f97316; font-weight: 600; padding: 12px 24px;">
+        ⚙️ Open Automation Settings
+      </button>
+    </div>
     
     <!-- Export/Import Section -->
     <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
@@ -546,6 +555,7 @@
     setupPayPalHandlers();
     setupMaintenanceHandlers();
     setupWhopTestHandlers();
+    setupAutomationHandlers();
   };
 
   // Load payment methods enabled status
@@ -1734,6 +1744,554 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         alert('❌ Failed to save: ' + (result.error || 'Unknown error'));
       }
+    });
+  }
+
+  // ==================== AUTOMATION SETTINGS ====================
+  
+  function setupAutomationHandlers() {
+    const openBtn = document.getElementById('open-automation-settings');
+    if (openBtn) {
+      openBtn.addEventListener('click', () => openAutomationModal());
+    }
+  }
+  
+  async function openAutomationModal() {
+    // Load current settings
+    let settings = {};
+    try {
+      const res = await fetch('/api/admin/automation/settings');
+      const data = await res.json();
+      settings = data.settings || {};
+    } catch (e) {
+      console.error('Failed to load automation settings:', e);
+    }
+    
+    // Create modal
+    const modal = document.createElement('div');
+    modal.id = 'automation-modal';
+    modal.innerHTML = `
+      <style>
+        #automation-modal {
+          position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+          background: rgba(0,0,0,0.7); z-index: 99999;
+          display: flex; align-items: center; justify-content: center;
+          animation: fadeIn 0.2s;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .auto-modal-content {
+          background: white; border-radius: 16px; width: 95%; max-width: 900px;
+          max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+        }
+        .auto-modal-header {
+          background: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+          padding: 25px 30px; border-radius: 16px 16px 0 0; color: white;
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .auto-modal-header h2 { margin: 0; font-size: 1.5em; }
+        .auto-modal-close {
+          background: rgba(255,255,255,0.2); border: none; color: white;
+          width: 40px; height: 40px; border-radius: 50%; font-size: 24px;
+          cursor: pointer; transition: all 0.2s;
+        }
+        .auto-modal-close:hover { background: rgba(255,255,255,0.3); transform: scale(1.1); }
+        .auto-modal-body { padding: 30px; }
+        .auto-section {
+          background: #f9fafb; border-radius: 12px; padding: 20px;
+          margin-bottom: 20px; border: 1px solid #e5e7eb;
+        }
+        .auto-section h3 {
+          margin: 0 0 15px 0; color: #374151; font-size: 1.1em;
+          display: flex; align-items: center; gap: 8px;
+        }
+        .auto-toggle {
+          display: flex; align-items: center; gap: 10px; margin: 10px 0;
+          padding: 12px 15px; background: white; border-radius: 8px;
+          border: 1px solid #e5e7eb; cursor: pointer; transition: all 0.2s;
+        }
+        .auto-toggle:hover { border-color: #f97316; }
+        .auto-toggle input { width: 18px; height: 18px; cursor: pointer; accent-color: #f97316; }
+        .auto-toggle label { cursor: pointer; flex: 1; }
+        .auto-toggle .desc { font-size: 0.85em; color: #6b7280; margin-top: 3px; }
+        .auto-input {
+          margin: 15px 0; padding: 15px; background: white;
+          border-radius: 8px; border: 1px solid #e5e7eb;
+        }
+        .auto-input label { display: block; font-weight: 600; margin-bottom: 8px; color: #374151; }
+        .auto-input input, .auto-input select {
+          width: 100%; padding: 10px 12px; border: 1px solid #d1d5db;
+          border-radius: 6px; font-size: 14px;
+        }
+        .auto-input small { color: #6b7280; font-size: 0.85em; margin-top: 5px; display: block; }
+        .auto-actions {
+          display: flex; gap: 10px; margin-top: 25px; padding-top: 20px;
+          border-top: 1px solid #e5e7eb; justify-content: space-between; flex-wrap: wrap;
+        }
+        .auto-btn {
+          padding: 12px 24px; border: none; border-radius: 8px;
+          font-weight: 600; cursor: pointer; transition: all 0.2s;
+        }
+        .auto-btn-primary { background: linear-gradient(135deg, #f97316 0%, #ef4444 100%); color: white; }
+        .auto-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(249,115,22,0.4); }
+        .auto-btn-test { background: #3b82f6; color: white; }
+        .auto-btn-test:hover { background: #2563eb; }
+        .auto-btn-logs { background: #8b5cf6; color: white; }
+        .auto-btn-logs:hover { background: #7c3aed; }
+        .auto-tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; }
+        .auto-tab {
+          padding: 12px 20px; cursor: pointer; border: none; background: none;
+          color: #6b7280; font-weight: 500; border-bottom: 2px solid transparent;
+          margin-bottom: -2px; transition: all 0.2s;
+        }
+        .auto-tab:hover { color: #f97316; }
+        .auto-tab.active { color: #f97316; border-bottom-color: #f97316; }
+        .auto-tab-content { display: none; }
+        .auto-tab-content.active { display: block; }
+      </style>
+      
+      <div class="auto-modal-content">
+        <div class="auto-modal-header">
+          <h2>🤖 Automation & Alerts</h2>
+          <button class="auto-modal-close" onclick="document.getElementById('automation-modal').remove()">&times;</button>
+        </div>
+        <div class="auto-modal-body">
+          <!-- Tabs -->
+          <div class="auto-tabs">
+            <button class="auto-tab active" data-tab="admin">👨‍💼 Admin Alerts</button>
+            <button class="auto-tab" data-tab="customer">👤 Customer Alerts</button>
+            <button class="auto-tab" data-tab="webhook">🔗 Webhook Settings</button>
+            <button class="auto-tab" data-tab="email">📧 Email Service</button>
+            <button class="auto-tab" data-tab="logs">📋 Logs</button>
+          </div>
+          
+          <!-- Admin Alerts Tab -->
+          <div class="auto-tab-content active" id="tab-admin">
+            <div class="auto-section">
+              <h3>🔔 Admin Notifications</h3>
+              <p style="color: #6b7280; margin-bottom: 15px;">Get instant alerts when important events happen on your site.</p>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-enabled" ${settings.automation_enabled === 'true' ? 'checked' : ''}>
+                <label for="auto-enabled">
+                  <strong>Enable Automation</strong>
+                  <div class="desc">Master switch for all automation features</div>
+                </label>
+              </div>
+              
+              <div class="auto-input">
+                <label>📧 Admin Email</label>
+                <input type="email" id="auto-admin-email" value="${settings.admin_email || ''}" placeholder="admin@yourdomain.com">
+                <small>Receive email alerts at this address</small>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-new-order" ${settings.admin_alert_new_order === 'true' ? 'checked' : ''}>
+                <label for="auto-new-order">
+                  <strong>💰 New Order</strong>
+                  <div class="desc">Alert when a new order is placed</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-new-tip" ${settings.admin_alert_new_tip === 'true' ? 'checked' : ''}>
+                <label for="auto-new-tip">
+                  <strong>💝 New Tip</strong>
+                  <div class="desc">Alert when customer sends a tip</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-new-review" ${settings.admin_alert_new_review === 'true' ? 'checked' : ''}>
+                <label for="auto-new-review">
+                  <strong>⭐ New Review</strong>
+                  <div class="desc">Alert when customer submits a review</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-blog-comment" ${settings.admin_alert_blog_comment === 'true' ? 'checked' : ''}>
+                <label for="auto-blog-comment">
+                  <strong>📝 New Blog Comment</strong>
+                  <div class="desc">Alert when someone comments on a blog post</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-forum-question" ${settings.admin_alert_forum_question === 'true' ? 'checked' : ''}>
+                <label for="auto-forum-question">
+                  <strong>❓ New Forum Question</strong>
+                  <div class="desc">Alert when someone asks a new question</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-forum-reply" ${settings.admin_alert_forum_reply === 'true' ? 'checked' : ''}>
+                <label for="auto-forum-reply">
+                  <strong>💬 New Forum Reply</strong>
+                  <div class="desc">Alert when someone replies to a question</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-chat-message" ${settings.admin_alert_chat_message === 'true' ? 'checked' : ''}>
+                <label for="auto-chat-message">
+                  <strong>💬 New Support Message</strong>
+                  <div class="desc">Alert when customer sends a chat message</div>
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Customer Alerts Tab -->
+          <div class="auto-tab-content" id="tab-customer">
+            <div class="auto-section">
+              <h3>👤 Customer Email Notifications</h3>
+              <p style="color: #6b7280; margin-bottom: 15px;">Keep customers informed about their orders and activity.</p>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-cust-enabled" ${settings.customer_email_enabled === 'true' ? 'checked' : ''}>
+                <label for="auto-cust-enabled">
+                  <strong>Enable Customer Emails</strong>
+                  <div class="desc">Master switch for customer notifications</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-cust-order-confirmed" ${settings.customer_email_order_confirmed === 'true' ? 'checked' : ''}>
+                <label for="auto-cust-order-confirmed">
+                  <strong>🎉 Order Confirmation</strong>
+                  <div class="desc">Email customer when order is placed</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-cust-order-delivered" ${settings.customer_email_order_delivered === 'true' ? 'checked' : ''}>
+                <label for="auto-cust-order-delivered">
+                  <strong>🎬 Video Delivered</strong>
+                  <div class="desc">Email customer when video is ready</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-cust-chat-reply" ${settings.customer_email_chat_reply === 'true' ? 'checked' : ''}>
+                <label for="auto-cust-chat-reply">
+                  <strong>💬 Support Reply</strong>
+                  <div class="desc">Email customer when admin replies to chat</div>
+                </label>
+              </div>
+              
+              <div class="auto-toggle">
+                <input type="checkbox" id="auto-cust-forum-reply" ${settings.customer_email_forum_reply === 'true' ? 'checked' : ''}>
+                <label for="auto-cust-forum-reply">
+                  <strong>🗣️ Forum Reply</strong>
+                  <div class="desc">Email when someone replies to customer's question</div>
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Webhook Settings Tab -->
+          <div class="auto-tab-content" id="tab-webhook">
+            <div class="auto-section">
+              <h3>🔗 Webhook Integration</h3>
+              <p style="color: #6b7280; margin-bottom: 15px;">Send admin alerts to Slack, Discord, or custom webhook.</p>
+              
+              <div class="auto-input">
+                <label>Webhook Type</label>
+                <select id="auto-webhook-type">
+                  <option value="" ${!settings.admin_webhook_type ? 'selected' : ''}>Select type...</option>
+                  <option value="slack" ${settings.admin_webhook_type === 'slack' ? 'selected' : ''}>Slack</option>
+                  <option value="discord" ${settings.admin_webhook_type === 'discord' ? 'selected' : ''}>Discord</option>
+                  <option value="custom" ${settings.admin_webhook_type === 'custom' ? 'selected' : ''}>Custom Webhook</option>
+                </select>
+              </div>
+              
+              <div class="auto-input" id="slack-url-section" style="display: ${settings.admin_webhook_type === 'slack' ? 'block' : 'none'}">
+                <label>🔷 Slack Webhook URL</label>
+                <input type="text" id="auto-slack-url" value="${settings.slack_webhook_url || ''}" placeholder="https://hooks.slack.com/services/...">
+                <small>Create incoming webhook in Slack App settings</small>
+              </div>
+              
+              <div class="auto-input" id="discord-url-section" style="display: ${settings.admin_webhook_type === 'discord' ? 'block' : 'none'}">
+                <label>🟣 Discord Webhook URL</label>
+                <input type="text" id="auto-discord-url" value="${settings.discord_webhook_url || ''}" placeholder="https://discord.com/api/webhooks/...">
+                <small>Server Settings → Integrations → Webhooks</small>
+              </div>
+              
+              <div id="custom-webhook-section" style="display: ${settings.admin_webhook_type === 'custom' ? 'block' : 'none'}">
+                <div class="auto-input">
+                  <label>🌐 Custom Webhook URL</label>
+                  <input type="text" id="auto-custom-url" value="${settings.custom_webhook_url || ''}" placeholder="https://your-server.com/webhook">
+                  <small>Your custom endpoint to receive POST requests</small>
+                </div>
+                <div class="auto-input">
+                  <label>🔐 Webhook Secret (Optional)</label>
+                  <input type="text" id="auto-custom-secret" value="${settings.custom_webhook_secret || ''}" placeholder="your-secret-key">
+                  <small>Added to payload for verification</small>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Email Service Tab -->
+          <div class="auto-tab-content" id="tab-email">
+            <div class="auto-section">
+              <h3>📧 Email Service Configuration</h3>
+              <p style="color: #6b7280; margin-bottom: 15px;">Configure email service for sending notifications.</p>
+              
+              <div class="auto-input">
+                <label>Email Service Provider</label>
+                <select id="auto-email-service">
+                  <option value="" ${!settings.email_service ? 'selected' : ''}>Select provider...</option>
+                  <option value="resend" ${settings.email_service === 'resend' ? 'selected' : ''}>Resend (Recommended)</option>
+                  <option value="sendgrid" ${settings.email_service === 'sendgrid' ? 'selected' : ''}>SendGrid</option>
+                  <option value="mailgun" ${settings.email_service === 'mailgun' ? 'selected' : ''}>Mailgun</option>
+                  <option value="postmark" ${settings.email_service === 'postmark' ? 'selected' : ''}>Postmark</option>
+                </select>
+              </div>
+              
+              <div class="auto-input">
+                <label>API Key</label>
+                <input type="password" id="auto-email-api-key" value="${settings.email_api_key || ''}" placeholder="Enter API key">
+                <small>Your email service API key (leave empty to keep existing)</small>
+              </div>
+              
+              <div class="auto-input">
+                <label>From Name</label>
+                <input type="text" id="auto-email-from-name" value="${settings.email_from_name || 'WishesU'}" placeholder="WishesU">
+                <small>Sender name shown in emails</small>
+              </div>
+              
+              <div class="auto-input">
+                <label>From Email Address</label>
+                <input type="email" id="auto-email-from-address" value="${settings.email_from_address || ''}" placeholder="noreply@yourdomain.com">
+                <small>Must be verified with your email provider</small>
+              </div>
+              
+              <div style="margin-top: 15px; padding: 15px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                <p style="margin: 0; font-size: 0.9em; color: #1e40af;">
+                  <strong>💡 Setup Guide:</strong><br>
+                  1. Sign up for an email service (Resend is free for 3000 emails/month)<br>
+                  2. Add your domain and verify it<br>
+                  3. Generate an API key<br>
+                  4. Enter the details above
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Logs Tab -->
+          <div class="auto-tab-content" id="tab-logs">
+            <div class="auto-section">
+              <h3>📋 Automation Logs</h3>
+              <p style="color: #6b7280; margin-bottom: 15px;">View recent automation activity.</p>
+              <div id="auto-logs-container" style="max-height: 400px; overflow-y: auto;">
+                <p style="color: #6b7280; text-align: center; padding: 20px;">Click "Load Logs" to view recent activity</p>
+              </div>
+              <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button class="auto-btn auto-btn-logs" id="load-logs-btn">📋 Load Logs</button>
+                <button class="auto-btn" style="background: #dc2626; color: white;" id="clear-logs-btn">🗑️ Clear Logs</button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Actions -->
+          <div class="auto-actions">
+            <div style="display: flex; gap: 10px;">
+              <button class="auto-btn auto-btn-test" id="test-webhook-btn">🧪 Test Webhook</button>
+              <button class="auto-btn auto-btn-test" id="test-email-btn">📧 Test Email</button>
+            </div>
+            <button class="auto-btn auto-btn-primary" id="save-automation-btn">💾 Save Settings</button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Tab switching
+    modal.querySelectorAll('.auto-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        modal.querySelectorAll('.auto-tab').forEach(t => t.classList.remove('active'));
+        modal.querySelectorAll('.auto-tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        modal.querySelector('#tab-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+    
+    // Webhook type change
+    const webhookTypeSelect = modal.querySelector('#auto-webhook-type');
+    webhookTypeSelect.addEventListener('change', () => {
+      const type = webhookTypeSelect.value;
+      modal.querySelector('#slack-url-section').style.display = type === 'slack' ? 'block' : 'none';
+      modal.querySelector('#discord-url-section').style.display = type === 'discord' ? 'block' : 'none';
+      modal.querySelector('#custom-webhook-section').style.display = type === 'custom' ? 'block' : 'none';
+    });
+    
+    // Save settings
+    modal.querySelector('#save-automation-btn').addEventListener('click', async () => {
+      const btn = modal.querySelector('#save-automation-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Saving...';
+      
+      const payload = {
+        automation_enabled: modal.querySelector('#auto-enabled').checked ? 'true' : 'false',
+        admin_email: modal.querySelector('#auto-admin-email').value.trim(),
+        admin_webhook_type: modal.querySelector('#auto-webhook-type').value,
+        admin_alert_new_order: modal.querySelector('#auto-new-order').checked ? 'true' : 'false',
+        admin_alert_new_tip: modal.querySelector('#auto-new-tip').checked ? 'true' : 'false',
+        admin_alert_new_review: modal.querySelector('#auto-new-review').checked ? 'true' : 'false',
+        admin_alert_blog_comment: modal.querySelector('#auto-blog-comment').checked ? 'true' : 'false',
+        admin_alert_forum_question: modal.querySelector('#auto-forum-question').checked ? 'true' : 'false',
+        admin_alert_forum_reply: modal.querySelector('#auto-forum-reply').checked ? 'true' : 'false',
+        admin_alert_chat_message: modal.querySelector('#auto-chat-message').checked ? 'true' : 'false',
+        customer_email_enabled: modal.querySelector('#auto-cust-enabled').checked ? 'true' : 'false',
+        customer_email_order_confirmed: modal.querySelector('#auto-cust-order-confirmed').checked ? 'true' : 'false',
+        customer_email_order_delivered: modal.querySelector('#auto-cust-order-delivered').checked ? 'true' : 'false',
+        customer_email_chat_reply: modal.querySelector('#auto-cust-chat-reply').checked ? 'true' : 'false',
+        customer_email_forum_reply: modal.querySelector('#auto-cust-forum-reply').checked ? 'true' : 'false',
+        slack_webhook_url: modal.querySelector('#auto-slack-url').value.trim(),
+        discord_webhook_url: modal.querySelector('#auto-discord-url').value.trim(),
+        custom_webhook_url: modal.querySelector('#auto-custom-url').value.trim(),
+        custom_webhook_secret: modal.querySelector('#auto-custom-secret').value.trim(),
+        email_service: modal.querySelector('#auto-email-service').value,
+        email_from_name: modal.querySelector('#auto-email-from-name').value.trim(),
+        email_from_address: modal.querySelector('#auto-email-from-address').value.trim()
+      };
+      
+      // Only include API key if changed
+      const apiKey = modal.querySelector('#auto-email-api-key').value.trim();
+      if (apiKey) {
+        payload.email_api_key = apiKey;
+      }
+      
+      try {
+        const res = await fetch('/api/admin/automation/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          alert('✅ Automation settings saved!');
+        } else {
+          alert('❌ Failed to save: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('❌ Error: ' + e.message);
+      }
+      
+      btn.disabled = false;
+      btn.textContent = '💾 Save Settings';
+    });
+    
+    // Test webhook
+    modal.querySelector('#test-webhook-btn').addEventListener('click', async () => {
+      const btn = modal.querySelector('#test-webhook-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Testing...';
+      
+      try {
+        const res = await fetch('/api/admin/automation/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'webhook' })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          alert('✅ Webhook test sent successfully!');
+        } else {
+          alert('❌ Webhook test failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('❌ Error: ' + e.message);
+      }
+      
+      btn.disabled = false;
+      btn.textContent = '🧪 Test Webhook';
+    });
+    
+    // Test email
+    modal.querySelector('#test-email-btn').addEventListener('click', async () => {
+      const btn = modal.querySelector('#test-email-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Testing...';
+      
+      try {
+        const res = await fetch('/api/admin/automation/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'email' })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          alert('✅ Test email sent successfully!');
+        } else {
+          alert('❌ Email test failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('❌ Error: ' + e.message);
+      }
+      
+      btn.disabled = false;
+      btn.textContent = '📧 Test Email';
+    });
+    
+    // Load logs
+    modal.querySelector('#load-logs-btn').addEventListener('click', async () => {
+      const container = modal.querySelector('#auto-logs-container');
+      container.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">⏳ Loading...</p>';
+      
+      try {
+        const res = await fetch('/api/admin/automation/logs?limit=50');
+        const data = await res.json();
+        
+        if (data.logs && data.logs.length > 0) {
+          container.innerHTML = data.logs.map(log => `
+            <div style="padding: 12px; margin-bottom: 8px; background: white; border-radius: 8px; border: 1px solid #e5e7eb;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="font-weight: 600; color: ${log.status === 'sent' ? '#16a34a' : log.status === 'error' ? '#dc2626' : '#6b7280'};">
+                  ${log.status === 'sent' ? '✅' : log.status === 'error' ? '❌' : '⏳'} ${log.type}
+                </span>
+                <span style="font-size: 0.8em; color: #9ca3af;">${new Date(log.created_at).toLocaleString()}</span>
+              </div>
+              <div style="font-size: 0.9em; color: #4b5563;">${log.subject || log.recipient || ''}</div>
+              ${log.response ? `<div style="font-size: 0.8em; color: #9ca3af; margin-top: 5px;">Response: ${log.response.substring(0, 100)}</div>` : ''}
+            </div>
+          `).join('');
+        } else {
+          container.innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">No logs found</p>';
+        }
+      } catch (e) {
+        container.innerHTML = '<p style="color: #dc2626; text-align: center; padding: 20px;">❌ Failed to load logs</p>';
+      }
+    });
+    
+    // Clear logs
+    modal.querySelector('#clear-logs-btn').addEventListener('click', async () => {
+      if (!confirm('Are you sure you want to clear all automation logs?')) return;
+      
+      try {
+        const res = await fetch('/api/admin/automation/logs', { method: 'DELETE' });
+        const data = await res.json();
+        
+        if (data.success) {
+          modal.querySelector('#auto-logs-container').innerHTML = '<p style="color: #6b7280; text-align: center; padding: 20px;">Logs cleared</p>';
+          alert('✅ Logs cleared!');
+        } else {
+          alert('❌ Failed to clear logs');
+        }
+      } catch (e) {
+        alert('❌ Error: ' + e.message);
+      }
+    });
+    
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
     });
   }
 

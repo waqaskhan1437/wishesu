@@ -5,6 +5,7 @@
 
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
+import { notifyNewReview } from './automation.js';
 
 // Review limits
 const REVIEW_LIMITS = {
@@ -124,6 +125,16 @@ export async function addReview(env, body) {
     body.orderId || null, 
     body.showOnProduct !== undefined ? (body.showOnProduct ? 1 : 0) : 1
   ).run();
+  
+  // Get product title for notification
+  let productTitle = '';
+  try {
+    const product = await env.DB.prepare('SELECT title FROM products WHERE id = ?').bind(Number(body.productId)).first();
+    productTitle = product?.title || '';
+  } catch (e) {}
+  
+  // Notify admin about new review (async)
+  notifyNewReview(env, { productTitle, rating, authorName, comment }).catch(() => {});
   
   return json({ success: true });
 }

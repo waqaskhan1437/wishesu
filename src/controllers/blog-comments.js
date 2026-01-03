@@ -4,6 +4,7 @@
  */
 
 import { json } from '../utils/response.js';
+import { notifyNewBlogComment } from './automation.js';
 
 /**
  * Get approved comments for a blog post (public)
@@ -107,6 +108,21 @@ export async function addBlogComment(env, body) {
       INSERT INTO blog_comments (blog_id, name, email, comment, status, created_at)
       VALUES (?, ?, ?, ?, 'pending', ?)
     `).bind(blog_id, trimmedName, trimmedEmail, trimmedComment, now).run();
+
+    // Get blog title for notification
+    let blogTitle = '';
+    try {
+      const blogInfo = await env.DB.prepare('SELECT title FROM blogs WHERE id = ?').bind(blog_id).first();
+      blogTitle = blogInfo?.title || '';
+    } catch (e) {}
+    
+    // Notify admin about new comment (async)
+    notifyNewBlogComment(env, { 
+      blogTitle, 
+      name: trimmedName, 
+      email: trimmedEmail, 
+      comment: trimmedComment 
+    }).catch(() => {});
 
     return json({ 
       success: true, 

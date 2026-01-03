@@ -166,6 +166,15 @@ import {
   adminPatchProductRule
 } from './controllers/seo.js';
 
+// Automation
+import {
+  getAutomationSettings,
+  saveAutomationSettings,
+  getAutomationLogs,
+  clearAutomationLogs,
+  testAutomation
+} from './controllers/automation.js';
+
 /**
  * Route API requests to appropriate handlers
  * @param {Request} req - Request object
@@ -277,6 +286,30 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'POST' && path === '/api/admin/seo/products') {
     return adminPatchProductRule(env, req);
+  }
+
+  // ----- AUTOMATION -----
+  if (method === 'GET' && path === '/api/admin/automation/settings') {
+    return getAutomationSettings(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/automation/settings') {
+    const body = await req.json().catch(() => ({}));
+    return saveAutomationSettings(env, body);
+  }
+
+  if (method === 'GET' && path === '/api/admin/automation/logs') {
+    const limit = parseInt(url.searchParams.get('limit')) || 50;
+    return getAutomationLogs(env, limit);
+  }
+
+  if (method === 'DELETE' && path === '/api/admin/automation/logs') {
+    return clearAutomationLogs(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/automation/test') {
+    const body = await req.json().catch(() => ({}));
+    return testAutomation(env, body.type);
   }
 
   // ----- CACHE PURGE -----

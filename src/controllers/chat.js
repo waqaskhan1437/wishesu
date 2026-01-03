@@ -6,6 +6,7 @@ import { json } from '../utils/response.js';
 import { escapeHtml, normalizeQuickAction } from '../utils/formatting.js';
 import { enforceUserRateLimit } from '../utils/validation.js';
 import { getLatestOrderForEmail } from '../utils/order-helpers.js';
+import { notifyNewChatMessage, notifyCustomerChatReply } from './automation.js';
 
 /**
  * Start a new chat session or reuse existing one
@@ -156,6 +157,32 @@ export async function sendMessage(env, body, reqUrl) {
     ).bind(safeContent, sessionId).run();
   } catch (e) {
     console.error('Failed to update chat_sessions last-message fields:', e);
+  }
+
+  // Get session info for notifications
+  let sessionName = '', sessionEmail = '';
+  try {
+    const sess2 = await env.DB.prepare('SELECT name, email FROM chat_sessions WHERE id = ?').bind(sessionId).first();
+    sessionName = sess2?.name || '';
+    sessionEmail = sess2?.email || '';
+  } catch (e) {}
+
+  // Notify admin about customer message (async)
+  if (role === 'user') {
+    notifyNewChatMessage(env, { 
+      name: sessionName, 
+      email: sessionEmail, 
+      content: trimmed 
+    }).catch(() => {});
+  }
+  
+  // Notify customer about admin reply (async)
+  if (role === 'admin' && sessionEmail) {
+    notifyCustomerChatReply(env, { 
+      name: sessionName, 
+      email: sessionEmail, 
+      replyContent: trimmed 
+    }).catch(() => {});
   }
 
   // Trigger email alert webhook on first customer message (NON-BLOCKING)

@@ -3,6 +3,11 @@
  */
 
 import { json } from '../utils/response.js';
+import { 
+  notifyNewForumQuestion, 
+  notifyNewForumReply,
+  notifyCustomerForumReply
+} from './automation.js';
 
 // Cache for schema validation - avoids repeated checks per request
 let forumSchemaValidated = false;
@@ -364,6 +369,14 @@ export async function submitQuestion(env, body) {
       VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
     `).bind(trimmedTitle, slug, trimmedContent, trimmedName, trimmedEmail, now, now).run();
 
+    // Notify admin about new question (async)
+    notifyNewForumQuestion(env, { 
+      title: trimmedTitle, 
+      name: trimmedName, 
+      email: trimmedEmail, 
+      content: trimmedContent 
+    }).catch(() => {});
+
     return json({
       success: true,
       message: 'Question submitted! It will appear after admin approval.'
@@ -448,6 +461,36 @@ export async function submitReply(env, body) {
       INSERT INTO forum_replies (question_id, name, email, content, status, created_at)
       VALUES (?, ?, ?, ?, 'pending', ?)
     `).bind(question_id, trimmedName, trimmedEmail, trimmedContent, now).run();
+
+    // Get question details for notification
+    let questionTitle = '', questionAuthorName = '', questionAuthorEmail = '', questionSlug = '';
+    try {
+      const q = await env.DB.prepare('SELECT title, name, email, slug FROM forum_questions WHERE id = ?').bind(question_id).first();
+      questionTitle = q?.title || '';
+      questionAuthorName = q?.name || '';
+      questionAuthorEmail = q?.email || '';
+      questionSlug = q?.slug || '';
+    } catch (e) {}
+    
+    // Notify admin about new reply (async)
+    notifyNewForumReply(env, { 
+      questionTitle, 
+      name: trimmedName, 
+      email: trimmedEmail, 
+      content: trimmedContent 
+    }).catch(() => {});
+    
+    // Notify question author about reply (async)
+    if (questionAuthorEmail && questionAuthorEmail !== trimmedEmail) {
+      notifyCustomerForumReply(env, {
+        questionTitle,
+        questionSlug,
+        questionAuthorName,
+        questionAuthorEmail,
+        replyAuthorName: trimmedName,
+        replyContent: trimmedContent
+      }).catch(() => {});
+    }
 
     return json({
       success: true,

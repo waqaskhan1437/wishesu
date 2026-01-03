@@ -5,6 +5,12 @@
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
 import { getGoogleScriptUrl } from '../config/secrets.js';
+import { 
+  notifyNewOrder, 
+  notifyNewTip, 
+  notifyCustomerOrderConfirmed,
+  notifyCustomerOrderDelivered 
+} from './automation.js';
 
 // Re-export from shared utility for backwards compatibility
 export { getLatestOrderForEmail } from '../utils/order-helpers.js';
@@ -98,6 +104,20 @@ export async function createOrder(env, body) {
   await env.DB.prepare(
     'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
   ).bind(orderId, Number(body.productId), data, 'PAID', Number(body.deliveryTime) || 60).run();
+  
+  // Get product title for notification
+  let productTitle = '';
+  try {
+    const product = await env.DB.prepare('SELECT title FROM products WHERE id = ?').bind(Number(body.productId)).first();
+    productTitle = product?.title || '';
+  } catch (e) {}
+  
+  // Send notifications (async, don't wait)
+  const deliveryMinutes = Number(body.deliveryTime) || 60;
+  const deliveryTime = deliveryMinutes < 1440 ? `${Math.round(deliveryMinutes / 60)} hour(s)` : `${Math.round(deliveryMinutes / 1440)} day(s)`;
+  
+  notifyNewOrder(env, { orderId, email, amount, productTitle }).catch(() => {});
+  notifyCustomerOrderConfirmed(env, { orderId, email, amount, productTitle, deliveryTime }).catch(() => {});
   
   return json({ success: true, orderId });
 }
@@ -265,18 +285,26 @@ export async function deliverOrder(env, body) {
     'UPDATE orders SET delivered_video_url=?, delivered_thumbnail_url=?, status=?, delivered_at=CURRENT_TIMESTAMP, delivered_video_metadata=? WHERE order_id=?'
   ).bind(body.videoUrl, body.thumbnailUrl || null, 'delivered', deliveredVideoMetadata, body.orderId).run();
   
-  // Trigger email webhook if configured
+  // Get customer email for notification
+  let customerEmail = '';
+  try {
+    if (orderResult?.encrypted_data) {
+      const decrypted = JSON.parse(orderResult.encrypted_data);
+      customerEmail = decrypted.email || '';
+    }
+  } catch (e) {}
+  
+  // Send customer delivery notification (async)
+  notifyCustomerOrderDelivered(env, {
+    orderId: body.orderId,
+    email: customerEmail,
+    productTitle: orderResult?.product_title || 'Your Order'
+  }).catch(() => {});
+  
+  // Trigger email webhook if configured (legacy support)
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
     if (googleScriptUrl && orderResult) {
-      let customerEmail = '';
-      try {
-        const decrypted = JSON.parse(orderResult.encrypted_data);
-        customerEmail = decrypted.email || '';
-      } catch (e) {
-        console.warn('Could not decrypt order data for email');
-      }
-      
       await fetch(googleScriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -377,6 +405,19 @@ export async function markTipPaid(env, body) {
   await env.DB.prepare(
     'UPDATE orders SET tip_paid = 1, tip_amount = ? WHERE order_id = ?'
   ).bind(Number(amount) || 0, orderId).run();
+  
+  // Get customer email for notification
+  let email = '';
+  try {
+    const order = await env.DB.prepare('SELECT encrypted_data FROM orders WHERE order_id = ?').bind(orderId).first();
+    if (order?.encrypted_data) {
+      const data = JSON.parse(order.encrypted_data);
+      email = data.email || '';
+    }
+  } catch (e) {}
+  
+  // Notify admin about tip (async)
+  notifyNewTip(env, { orderId, amount: Number(amount) || 0, email }).catch(() => {});
   
   return json({ success: true });
 }
