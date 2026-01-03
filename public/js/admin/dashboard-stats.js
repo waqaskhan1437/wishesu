@@ -3,31 +3,7 @@
  */
 
 (function(AD) {
-  AD.loadDashboard = 
-// Stats cache
-let statsCache = null;
-let statsCacheTime = 0;
-const STATS_CACHE_TTL = 60000; // 1 minute
-
-async function loadStats(forceRefresh = false) {
-  const now = Date.now();
-  if (!forceRefresh && statsCache && (now - statsCacheTime) < STATS_CACHE_TTL) {
-    return statsCache;
-  }
-  
-  try {
-    const res = await fetch('/api/admin/stats');
-    const data = await res.json();
-    statsCache = data;
-    statsCacheTime = now;
-    return statsCache;
-  } catch (e) {
-    console.error('Load stats error:', e);
-    return statsCache || {};
-  }
-}
-
-async function(panel) {
+  AD.loadDashboard = async function(panel) {
     panel.innerHTML = `
       <div class="stats-grid">
         <div class="stat-card">
