@@ -1,8 +1,7 @@
-
-// Secrets cache to avoid repeated DB queries
-let secretsCache = null;
-let secretsCacheTime = 0;
-const SECRETS_CACHE_TTL = 300000; // 5 minutes
+// Cache for Whop config to reduce DB queries
+let whopConfigCache = null;
+let whopConfigCacheTime = 0;
+const CACHE_TTL = 300000; // 5 minutes
 
 /**
  * Helper functions for fetching API keys and secrets from DB/environment
