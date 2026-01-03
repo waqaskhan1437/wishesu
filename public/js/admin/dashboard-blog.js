@@ -3,7 +3,31 @@
  */
 
 (function(AD) {
-  AD.loadBlog = async function(panel) {
+  AD.loadBlog = 
+// Blog data cache
+let blogsCache = null;
+let blogsCacheTime = 0;
+const CACHE_TTL = 60000; // 1 minute
+
+async function loadBlogs(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && blogsCache && (now - blogsCacheTime) < CACHE_TTL) {
+    return blogsCache;
+  }
+  
+  try {
+    const blogs = await loadBlogs(); const res = { json: async () => ({ blogs }) };
+    const data = await res.json();
+    blogsCache = data.blogs || [];
+    blogsCacheTime = now;
+    return blogsCache;
+  } catch (e) {
+    console.error('Load blogs error:', e);
+    return blogsCache || [];
+  }
+}
+
+async function(panel) {
     panel.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <button class="btn btn-primary" onclick="window.location.href='/admin/blog-form.html'">+ Add Blog Post</button>

@@ -580,29 +580,11 @@ export async function testNotification(env, body) {
 }
 
 
-// =============================================
-// BACKWARDS-COMPATIBILITY ALIASES (v1 names)
-// =============================================
-
-export async function notifyNewBlogComment(env, data) {
-  return notifyBlogComment(env, data);
-}
-
-export async function notifyNewChatMessage(env, data) {
-  return notifyChatMessage(env, data);
-}
-
-export async function notifyNewForumQuestion(env, data) {
-  return notifyForumQuestion(env, data);
-}
-
-export async function notifyNewForumReply(env, data) {
-  return notifyForumReply(env, data);
-}
-
-export async function notifyCustomerOrderDelivered(env, data) {
-  return notifyOrderDelivered(env, data);
-}
-
+// Export aliases for backward compatibility with import statements
+export { notifyBlogComment as notifyNewBlogComment };
+export { notifyChatMessage as notifyNewChatMessage };
+export { notifyForumQuestion as notifyNewForumQuestion };
+export { notifyForumReply as notifyNewForumReply };
+export { notifyOrderDelivered as notifyCustomerOrderDelivered };
 
 export { NOTIFICATION_TYPES };

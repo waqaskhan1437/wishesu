@@ -11,6 +11,33 @@ import { notifyNewChatMessage, notifyCustomerChatReply } from './automation.js';
 /**
  * Start a new chat session or reuse existing one
  */
+
+// Session cache to reduce DB queries
+const sessionCache = new Map();
+const SESSION_CACHE_TTL = 300000; // 5 minutes
+
+function getCachedSession(sessionId) {
+  const cached = sessionCache.get(sessionId);
+  if (cached && (Date.now() - cached.timestamp) < SESSION_CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedSession(sessionId, data) {
+  sessionCache.set(sessionId, {
+    data: data,
+    timestamp: Date.now()
+  });
+  
+  // Cleanup old cache entries
+  if (sessionCache.size > 1000) {
+    const oldestKey = sessionCache.keys().next().value;
+    sessionCache.delete(oldestKey);
+  }
+}
+
+
 export async function startChat(env, body) {
   const nameIn = String(body.name || '').trim();
   const emailIn = String(body.email || '').trim();

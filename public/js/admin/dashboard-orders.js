@@ -3,7 +3,31 @@
  */
 
 (function(AD) {
-  AD.loadOrders = async function(panel) {
+  AD.loadOrders = 
+// Orders cache
+let ordersCache = null;
+let ordersCacheTime = 0;
+const ORDERS_CACHE_TTL = 30000; // 30 seconds
+
+async function loadOrders(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && ordersCache && (now - ordersCacheTime) < ORDERS_CACHE_TTL) {
+    return ordersCache;
+  }
+  
+  try {
+    const res = await fetch('/api/orders');
+    const data = await res.json();
+    ordersCache = data.orders || [];
+    ordersCacheTime = now;
+    return ordersCache;
+  } catch (e) {
+    console.error('Load orders error:', e);
+    return ordersCache || [];
+  }
+}
+
+async function(panel) {
     AD._ordersPanel = panel;
     panel.innerHTML = `
       <!-- Create Order Modal -->
