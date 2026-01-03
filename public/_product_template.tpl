@@ -82,18 +82,7 @@
   <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
 </head>
 <body>
-
-  <header class="site-header">
-    <div class="header-inner">
-      <div class="logo">WISHVIDEO</div>
-      <nav class="site-nav">
-        <a href="/">Home</a>
-        <a href="/all-products">All Products</a>
-        <a href="/about">About Us</a>
-        <a href="/contact">Contact</a>
-      </nav>
-    </div>
-  </header>
+  <script src="/js/global-components.js"></script>
 
   <main>
     <div class="breadcrumb">
@@ -123,10 +112,6 @@
       </div>
     </div>
   </main>
-
-  <footer class="site-footer">
-    <p>&copy; 2025 WishVideo. All rights reserved.</p>
-  </footer>
 
   <!-- Load Plyr.js only when needed (lazy-loaded on video click) -->
   <script>
