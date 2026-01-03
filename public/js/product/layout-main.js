@@ -610,20 +610,36 @@
     bookNowBtn.addEventListener('click', function(e) {
       e.preventDefault();
       if (!isExpanded) {
-        // Expand
-        addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 500 + 'px';
+        // Expand - first set expanding class for animation
+        addonsContainer.classList.add('expanding');
+        addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 1000 + 'px';
         addonsContainer.style.opacity = '1';
+        addonsContainer.style.overflow = 'hidden';
         bookNowBtn.innerHTML = '📝 Customize Your Order';
         bookNowBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
         bookNowBtn.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.4)';
         isExpanded = true;
+        
+        // After animation completes, remove height constraint so content can grow freely
+        setTimeout(() => {
+          addonsContainer.classList.remove('expanding');
+          addonsContainer.classList.add('expanded');
+          addonsContainer.style.maxHeight = 'none';
+          addonsContainer.style.overflow = 'visible';
+        }, 550);
         
         // Scroll to form smoothly
         setTimeout(() => {
           addonsForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
       } else {
-        // Collapse
+        // Collapse - first restore height constraint for animation
+        addonsContainer.classList.remove('expanded');
+        addonsContainer.style.overflow = 'hidden';
+        addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 'px';
+        
+        // Trigger reflow then collapse
+        addonsContainer.offsetHeight;
         addonsContainer.style.maxHeight = '0';
         addonsContainer.style.opacity = '0';
         bookNowBtn.innerHTML = '🎬 Book Now - $' + window.basePrice.toLocaleString();

@@ -70,6 +70,7 @@ window.updateDeliveryPreview = updateDeliveryPreview;
       const { product } = response;
       if (product) {
         console.log('🔵 Product loaded:', product.title);
+        console.log('🔵 instant_delivery from DB:', product.instant_delivery);
         fillBaseFields(form, product);
         if (typeof populateSeoForm === 'function') populateSeoForm(form, product);
 
@@ -88,8 +89,8 @@ window.updateDeliveryPreview = updateDeliveryPreview;
     }
 
     if (typeof initAddonsBuilder === 'function') initAddonsBuilder(form);
-    // Wait a tick for builder to fully initialize before syncing
-    setTimeout(() => initDeliveryTimeAddonSync(form, { applyInitial: true }), 10);
+    // For existing products, DON'T apply initial sync - database value takes precedence
+    setTimeout(() => initDeliveryTimeAddonSync(form, { applyInitial: false }), 10);
 
     // Add a Delete button in edit mode
     addDeleteProductButton(form, productId);
@@ -99,7 +100,7 @@ window.updateDeliveryPreview = updateDeliveryPreview;
     } else {
     if (typeof initAddonsBuilder === 'function') initAddonsBuilder(form);
     fillDemoProduct(form);
-    // Wait a tick for builder to fully initialize before syncing
+    // For NEW products, apply initial sync from addons
     setTimeout(() => initDeliveryTimeAddonSync(form, { applyInitial: true }), 10);
     
     // Initialize delivery preview
@@ -416,7 +417,10 @@ function fillBaseFields(form, product){
   form.description.value = product.description || '';
   form.normal_price.value = product.normal_price || '';
   form.sale_price.value = product.sale_price || '';
-  form.instant_delivery.checked = !!product.instant_delivery;
+  // Handle instant_delivery - convert to proper boolean (handles string "0" edge case)
+  const instantVal = product.instant_delivery;
+  form.instant_delivery.checked = (instantVal === 1 || instantVal === '1' || instantVal === true);
+  console.log('🔵 Setting instant_delivery checkbox:', form.instant_delivery.checked, '(raw value:', instantVal, ')');
   if (form.delivery_time_days) {
     form.delivery_time_days.value = product.delivery_time_days || 1;
   }

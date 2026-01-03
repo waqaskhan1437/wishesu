@@ -218,7 +218,8 @@ main {
 
 /* Addons Container Animation */
 #addons-container { transition: max-height 0.5s ease-out, opacity 0.3s ease; }
-#addons-container.expanded { max-height: 2000px !important; opacity: 1 !important; }
+#addons-container.expanded { max-height: none !important; overflow: visible !important; opacity: 1 !important; }
+#addons-container.expanding { max-height: 5000px !important; opacity: 1 !important; }
 
 /* Description */
 .product-desc { background: #fff; padding: 2rem; border-radius: var(--radius); border: 1px solid var(--border); }
