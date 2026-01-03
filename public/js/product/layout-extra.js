@@ -386,6 +386,20 @@
           // Take only last 20 for slider
           const sliderReviews = reviewsWithVideo.slice(-20);
           
+          // Intersection Observer for lazy loading video metadata
+          const videoObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+              if (entry.isIntersecting) {
+                const video = entry.target;
+                if (video.dataset.src && !video.src) {
+                  video.src = video.dataset.src;
+                  video.preload = 'metadata';
+                }
+                videoObserver.unobserve(video);
+              }
+            });
+          }, { rootMargin: '100px' });
+          
           sliderReviews.forEach(review => {
             const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
 
@@ -393,20 +407,20 @@
               const galleryThumb = document.createElement('div');
               galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: border-color 0.15s ease, transform 0.15s ease; background:#1a1a2e; contain: layout style;';
 
-              // PERFORMANCE FIX: Use image thumbnail instead of video element with preload
-              // This prevents loading video metadata for ALL thumbnails (major CPU/network saver)
-              const posterUrl = review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url;
-              if (posterUrl) {
-                const thumbImg = document.createElement('img');
-                thumbImg.src = posterUrl;
-                thumbImg.alt = 'Review video';
-                thumbImg.loading = 'lazy';
-                thumbImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover; pointer-events: none;';
-                galleryThumb.appendChild(thumbImg);
-              } else {
-                // Fallback: Show gradient placeholder instead of loading video
-                galleryThumb.style.background = 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)';
-              }
+              // Use video element with lazy loading for authentic video thumbnail
+              const videoThumb = document.createElement('video');
+              videoThumb.dataset.src = portfolioVideoUrl; // Store URL, load on intersection
+              videoThumb.preload = 'none'; // Don't load until visible
+              videoThumb.muted = true;
+              videoThumb.playsInline = true;
+              videoThumb.setAttribute('playsinline', '');
+              videoThumb.setAttribute('webkit-playsinline', '');
+              videoThumb.controls = false;
+              videoThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover; pointer-events: none; background: #1a1a2e;';
+              galleryThumb.appendChild(videoThumb);
+              
+              // Observe for lazy loading
+              videoObserver.observe(videoThumb);
 
               // Add review badge to gallery thumbnail
               const badge = document.createElement('div');
@@ -432,11 +446,10 @@
                 showHighlight(review);
                 scrollToPlayer();
 	              // Always use the unified setPlayerSource function
-	              // Fallback to product thumbnail if review poster is missing to avoid black screen.
 	              setPlayerSource(portfolioVideoUrl, review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url);
               };
 
-              // Hover effect - use CSS class instead of inline styles for better performance
+              // Hover effect
               galleryThumb.onmouseenter = () => {
                 galleryThumb.style.transform = 'scale(1.05)';
               };
