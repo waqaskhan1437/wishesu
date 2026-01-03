@@ -579,4 +579,30 @@ export async function testNotification(env, body) {
   return json(result);
 }
 
+
+// =============================================
+// BACKWARDS-COMPATIBILITY ALIASES (v1 names)
+// =============================================
+
+export async function notifyNewBlogComment(env, data) {
+  return notifyBlogComment(env, data);
+}
+
+export async function notifyNewChatMessage(env, data) {
+  return notifyChatMessage(env, data);
+}
+
+export async function notifyNewForumQuestion(env, data) {
+  return notifyForumQuestion(env, data);
+}
+
+export async function notifyNewForumReply(env, data) {
+  return notifyForumReply(env, data);
+}
+
+export async function notifyCustomerOrderDelivered(env, data) {
+  return notifyOrderDelivered(env, data);
+}
+
+
 export { NOTIFICATION_TYPES };
