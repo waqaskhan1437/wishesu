@@ -116,8 +116,36 @@ export async function createOrder(env, body) {
   const deliveryMinutes = Number(body.deliveryTime) || 60;
   const deliveryTime = deliveryMinutes < 1440 ? `${Math.round(deliveryMinutes / 60)} hour(s)` : `${Math.round(deliveryMinutes / 1440)} day(s)`;
   
+  // Send notifications via Advanced Automation
   notifyNewOrder(env, { orderId, email, amount, productTitle }).catch(() => {});
   notifyCustomerOrderConfirmed(env, { orderId, email, amount, productTitle, deliveryTime }).catch(() => {});
+  
+  // FIXED: Send Google Script webhook for new order (for email notifications)
+  try {
+    const googleScriptUrl = await getGoogleScriptUrl(env);
+    if (googleScriptUrl) {
+      await fetch(googleScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'order.created',
+          order: {
+            order_id: orderId,
+            product_id: body.productId,
+            product_title: productTitle,
+            email: email,
+            amount: amount,
+            delivery_time_minutes: Number(body.deliveryTime) || 60,
+            delivery_time_text: deliveryTime,
+            status: 'paid',
+            created_at: Date.now()
+          }
+        })
+      }).catch(err => console.error('Failed to send new order webhook:', err));
+    }
+  } catch (err) {
+    console.error('Error triggering new order webhook:', err);
+  }
   
   return json({ success: true, orderId });
 }

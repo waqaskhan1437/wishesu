@@ -2363,7 +2363,39 @@ if (path === '/api/admin/chats/sessions' && method === 'GET') {
             'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
           ).bind(orderId, Number(body.productId), data, 'PAID', Number(body.deliveryTime) || 60).run();
           
-          return json({ success: true, orderId });
+
+          // FIXED: Send Google Script webhook for new order
+          try {
+            const googleScriptUrl = await getGoogleScriptUrl(env);
+            if (googleScriptUrl) {
+              const productTitle = ''; // Get from DB if needed
+              const deliveryMinutes = Number(body.deliveryTime) || 60;
+              const deliveryTime = deliveryMinutes < 1440 ? `${Math.round(deliveryMinutes / 60)} hour(s)` : `${Math.round(deliveryMinutes / 1440)} day(s)`;
+              
+              await fetch(googleScriptUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  event: 'order.created',
+                  order: {
+                    order_id: orderId,
+                    product_id: body.productId,
+                    product_title: productTitle,
+                    email: body.email,
+                    amount: body.amount,
+                    delivery_time_minutes: deliveryMinutes,
+                    delivery_time_text: deliveryTime,
+                    status: 'paid',
+                    created_at: Date.now()
+                  }
+                })
+              }).catch(err => console.error('Failed to send new order webhook:', err));
+            }
+          } catch (err) {
+            console.error('Error triggering new order webhook:', err);
+          }
+          
+                    return json({ success: true, orderId });
         }
 
         if (method === 'GET' && path.startsWith('/api/order/buyer/')) {
