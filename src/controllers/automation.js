@@ -1,131 +1,168 @@
 /**
- * Automation Controller
- * Handles all automated notifications, webhooks, and alerts
- * - Admin alerts (tips, reviews, comments, forum activity)
- * - Customer alerts (chat replies, forum replies, order updates)
- * - Webhook integrations (Slack, Discord, custom webhooks)
- * - Email notifications via external services
+ * Advanced Automation Controller v2.0
+ * - Multiple webhook endpoints with routing
+ * - Multiple email services with routing
+ * - Notification type specific routing
+ * - Low CPU, high performance with caching
  */
 
 import { json } from '../utils/response.js';
 
 // Notification types
 const NOTIFICATION_TYPES = {
-  // Admin alerts
   NEW_ORDER: 'new_order',
   NEW_TIP: 'new_tip',
   NEW_REVIEW: 'new_review',
-  NEW_BLOG_COMMENT: 'new_blog_comment',
-  NEW_FORUM_QUESTION: 'new_forum_question',
-  NEW_FORUM_REPLY: 'new_forum_reply',
-  NEW_CHAT_MESSAGE: 'new_chat_message',
+  BLOG_COMMENT: 'blog_comment',
+  FORUM_QUESTION: 'forum_question',
+  FORUM_REPLY: 'forum_reply',
+  CHAT_MESSAGE: 'chat_message',
   ORDER_DELIVERED: 'order_delivered',
-  
-  // Customer alerts
   CUSTOMER_ORDER_CONFIRMED: 'customer_order_confirmed',
   CUSTOMER_ORDER_DELIVERED: 'customer_order_delivered',
   CUSTOMER_CHAT_REPLY: 'customer_chat_reply',
-  CUSTOMER_FORUM_REPLY: 'customer_forum_reply',
-  CUSTOMER_REVIEW_APPROVED: 'customer_review_approved'
+  CUSTOMER_FORUM_REPLY: 'customer_forum_reply'
 };
 
+// In-memory config cache
+let configCache = null;
+let configCacheTime = 0;
+const CACHE_TTL = 60000;
+
 /**
- * Get automation settings
+ * Get automation config with caching
+ */
+async function getConfig(env, forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && configCache && (now - configCacheTime) < CACHE_TTL) {
+    return configCache;
+  }
+  
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('automation_config_v2').first();
+    if (row?.value) {
+      configCache = JSON.parse(row.value);
+    } else {
+      configCache = getDefaultConfig();
+    }
+    configCacheTime = now;
+    return configCache;
+  } catch (e) {
+    console.error('Failed to load automation config:', e);
+    return getDefaultConfig();
+  }
+}
+
+function getDefaultConfig() {
+  return {
+    enabled: false,
+    adminEmail: '',
+    webhooks: [],
+    emailServices: [],
+    routing: {
+      new_order: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
+      new_tip: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
+      new_review: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
+      blog_comment: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
+      forum_question: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
+      forum_reply: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
+      chat_message: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
+      customer_order_confirmed: { webhooks: [], emailService: null, adminEmail: false, enabled: true },
+      customer_order_delivered: { webhooks: [], emailService: null, adminEmail: false, enabled: true },
+      customer_chat_reply: { webhooks: [], emailService: null, adminEmail: false, enabled: true },
+      customer_forum_reply: { webhooks: [], emailService: null, adminEmail: false, enabled: true }
+    }
+  };
+}
+
+/**
+ * Save automation config
+ */
+async function saveConfig(env, config) {
+  try {
+    await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .bind('automation_config_v2', JSON.stringify(config))
+      .run();
+    configCache = config;
+    configCacheTime = Date.now();
+    return true;
+  } catch (e) {
+    console.error('Failed to save automation config:', e);
+    return false;
+  }
+}
+
+/**
+ * API: Get automation config
  */
 export async function getAutomationSettings(env) {
   try {
-    const settings = {};
-    const keys = [
-      'automation_enabled',
-      'admin_email',
-      'admin_webhook_url',
-      'admin_webhook_type',
-      'admin_alert_new_order',
-      'admin_alert_new_tip',
-      'admin_alert_new_review',
-      'admin_alert_blog_comment',
-      'admin_alert_forum_question',
-      'admin_alert_forum_reply',
-      'admin_alert_chat_message',
-      'customer_email_enabled',
-      'customer_email_order_confirmed',
-      'customer_email_order_delivered',
-      'customer_email_chat_reply',
-      'customer_email_forum_reply',
-      'email_service',
-      'email_api_key',
-      'email_from_name',
-      'email_from_address',
-      'custom_email_api_url',
-      'custom_email_api_method',
-      'custom_email_api_headers',
-      'custom_email_api_body',
-      'slack_webhook_url',
-      'discord_webhook_url',
-      'custom_webhook_url',
-      'custom_webhook_secret'
-    ];
+    const config = await getConfig(env, true);
+    const safeConfig = JSON.parse(JSON.stringify(config));
     
-    for (const key of keys) {
-      const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first();
-      settings[key] = row?.value || '';
-    }
+    // Mask sensitive data
+    safeConfig.emailServices = (safeConfig.emailServices || []).map(s => ({
+      ...s,
+      apiKey: s.apiKey ? '••••' + s.apiKey.slice(-4) : ''
+    }));
+    safeConfig.webhooks = (safeConfig.webhooks || []).map(w => ({
+      ...w,
+      secret: w.secret ? '••••••••' : ''
+    }));
     
-    return json({ success: true, settings });
+    return json({ success: true, config: safeConfig });
   } catch (e) {
-    console.error('Get automation settings error:', e);
     return json({ error: e.message }, 500);
   }
 }
 
 /**
- * Save automation settings
+ * API: Save automation config
  */
 export async function saveAutomationSettings(env, body) {
   try {
-    const allowedKeys = [
-      'automation_enabled',
-      'admin_email',
-      'admin_webhook_url',
-      'admin_webhook_type',
-      'admin_alert_new_order',
-      'admin_alert_new_tip',
-      'admin_alert_new_review',
-      'admin_alert_blog_comment',
-      'admin_alert_forum_question',
-      'admin_alert_forum_reply',
-      'admin_alert_chat_message',
-      'customer_email_enabled',
-      'customer_email_order_confirmed',
-      'customer_email_order_delivered',
-      'customer_email_chat_reply',
-      'customer_email_forum_reply',
-      'email_service',
-      'email_api_key',
-      'email_from_name',
-      'email_from_address',
-      'custom_email_api_url',
-      'custom_email_api_method',
-      'custom_email_api_headers',
-      'custom_email_api_body',
-      'slack_webhook_url',
-      'discord_webhook_url',
-      'custom_webhook_url',
-      'custom_webhook_secret'
-    ];
+    const currentConfig = await getConfig(env, true);
+    const newConfig = body.config || body;
     
-    for (const key of allowedKeys) {
-      if (body[key] !== undefined) {
-        await env.DB.prepare(
-          'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
-        ).bind(key, String(body[key])).run();
-      }
+    // Preserve masked API keys
+    if (newConfig.emailServices) {
+      newConfig.emailServices = newConfig.emailServices.map(s => {
+        if (s.apiKey?.startsWith('••••')) {
+          const existing = currentConfig.emailServices?.find(e => e.id === s.id);
+          s.apiKey = existing?.apiKey || '';
+        }
+        return s;
+      });
     }
     
-    return json({ success: true, message: 'Automation settings saved' });
+    if (newConfig.webhooks) {
+      newConfig.webhooks = newConfig.webhooks.map(w => {
+        if (w.secret === '••••••••') {
+          const existing = currentConfig.webhooks?.find(e => e.id === w.id);
+          w.secret = existing?.secret || '';
+        }
+        return w;
+      });
+    }
+    
+    const success = await saveConfig(env, newConfig);
+    return json({ success });
   } catch (e) {
-    console.error('Save automation settings error:', e);
     return json({ error: e.message }, 500);
+  }
+}
+
+/**
+ * Log automation event
+ */
+async function logAutomation(env, type, target, title, message, status, response = '') {
+  try {
+    await env.DB.prepare(`
+      INSERT INTO automation_logs (type, target, title, message, status, response, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `).bind(type, target || '', title || '', message || '', status, (response || '').substring(0, 500)).run();
+  } catch (e) {
+    console.error('Log error:', e);
   }
 }
 
@@ -134,744 +171,10 @@ export async function saveAutomationSettings(env, body) {
  */
 export async function getAutomationLogs(env, limit = 50) {
   try {
-    // Create logs table if not exists
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS automation_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        type TEXT NOT NULL,
-        recipient TEXT,
-        subject TEXT,
-        message TEXT,
-        status TEXT DEFAULT 'pending',
-        response TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
-    
-    const result = await env.DB.prepare(`
-      SELECT * FROM automation_logs 
-      ORDER BY created_at DESC 
-      LIMIT ?
-    `).bind(limit).all();
-    
-    return json({ success: true, logs: result.results || [] });
+    const r = await env.DB.prepare('SELECT * FROM automation_logs ORDER BY created_at DESC LIMIT ?').bind(limit).all();
+    return json({ success: true, logs: r.results || [] });
   } catch (e) {
-    console.error('Get automation logs error:', e);
     return json({ error: e.message }, 500);
-  }
-}
-
-/**
- * Log automation event
- */
-async function logAutomation(env, type, recipient, subject, message, status, response) {
-  try {
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS automation_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        type TEXT NOT NULL,
-        recipient TEXT,
-        subject TEXT,
-        message TEXT,
-        status TEXT DEFAULT 'pending',
-        response TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
-    
-    await env.DB.prepare(`
-      INSERT INTO automation_logs (type, recipient, subject, message, status, response)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(type, recipient || '', subject || '', message || '', status, response || '').run();
-  } catch (e) {
-    console.error('Log automation error:', e);
-  }
-}
-
-/**
- * Get setting value
- */
-async function getSetting(env, key) {
-  try {
-    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first();
-    return row?.value || '';
-  } catch (e) {
-    return '';
-  }
-}
-
-/**
- * Check if automation is enabled for a specific type
- */
-async function isEnabled(env, settingKey) {
-  const enabled = await getSetting(env, 'automation_enabled');
-  if (enabled !== 'true' && enabled !== '1') return false;
-  
-  const specific = await getSetting(env, settingKey);
-  return specific === 'true' || specific === '1';
-}
-
-/**
- * Send webhook notification (Slack, Discord, or Custom)
- */
-async function sendWebhook(env, type, data) {
-  try {
-    const webhookType = await getSetting(env, 'admin_webhook_type');
-    let webhookUrl = '';
-    
-    switch (webhookType) {
-      case 'slack':
-        webhookUrl = await getSetting(env, 'slack_webhook_url');
-        break;
-      case 'discord':
-        webhookUrl = await getSetting(env, 'discord_webhook_url');
-        break;
-      case 'custom':
-        webhookUrl = await getSetting(env, 'custom_webhook_url');
-        break;
-      default:
-        webhookUrl = await getSetting(env, 'admin_webhook_url');
-    }
-    
-    if (!webhookUrl) return { success: false, error: 'No webhook URL configured' };
-    
-    let payload;
-    const timestamp = new Date().toISOString();
-    
-    // Format based on webhook type
-    if (webhookType === 'slack') {
-      payload = {
-        text: data.title,
-        blocks: [
-          {
-            type: 'header',
-            text: { type: 'plain_text', text: data.title, emoji: true }
-          },
-          {
-            type: 'section',
-            text: { type: 'mrkdwn', text: data.message }
-          },
-          {
-            type: 'context',
-            elements: [
-              { type: 'mrkdwn', text: `Type: *${type}* | ${timestamp}` }
-            ]
-          }
-        ]
-      };
-      if (data.link) {
-        payload.blocks.push({
-          type: 'actions',
-          elements: [{
-            type: 'button',
-            text: { type: 'plain_text', text: 'View Details' },
-            url: data.link
-          }]
-        });
-      }
-    } else if (webhookType === 'discord') {
-      payload = {
-        embeds: [{
-          title: data.title,
-          description: data.message,
-          color: data.color || 5814783, // Purple default
-          timestamp: timestamp,
-          footer: { text: `Type: ${type}` },
-          url: data.link || undefined
-        }]
-      };
-    } else {
-      // Custom webhook - send raw data
-      payload = {
-        type: type,
-        title: data.title,
-        message: data.message,
-        link: data.link,
-        data: data.extra || {},
-        timestamp: timestamp
-      };
-      
-      // Add secret if configured
-      const secret = await getSetting(env, 'custom_webhook_secret');
-      if (secret) {
-        payload.secret = secret;
-      }
-    }
-    
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    
-    const responseText = await response.text();
-    await logAutomation(env, `webhook_${type}`, webhookUrl, data.title, data.message, 
-      response.ok ? 'sent' : 'failed', responseText);
-    
-    return { success: response.ok, status: response.status, response: responseText };
-  } catch (e) {
-    console.error('Webhook error:', e);
-    await logAutomation(env, `webhook_${type}`, '', data.title, data.message, 'error', e.message);
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * Send email notification
- */
-async function sendEmail(env, to, subject, htmlBody, textBody) {
-  try {
-    const service = await getSetting(env, 'email_service');
-    const apiKey = await getSetting(env, 'email_api_key');
-    const fromName = await getSetting(env, 'email_from_name') || 'WishesU';
-    const fromEmail = await getSetting(env, 'email_from_address');
-    
-    if (!service || !apiKey || !fromEmail) {
-      return { success: false, error: 'Email service not configured' };
-    }
-    
-    let response;
-    
-    switch (service) {
-      case 'resend':
-        response = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: `${fromName} <${fromEmail}>`,
-            to: [to],
-            subject: subject,
-            html: htmlBody,
-            text: textBody
-          })
-        });
-        break;
-        
-      case 'sendgrid':
-        response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            personalizations: [{ to: [{ email: to }] }],
-            from: { email: fromEmail, name: fromName },
-            subject: subject,
-            content: [
-              { type: 'text/plain', value: textBody },
-              { type: 'text/html', value: htmlBody }
-            ]
-          })
-        });
-        break;
-        
-      case 'mailgun':
-        const domain = fromEmail.split('@')[1];
-        const formData = new FormData();
-        formData.append('from', `${fromName} <${fromEmail}>`);
-        formData.append('to', to);
-        formData.append('subject', subject);
-        formData.append('html', htmlBody);
-        formData.append('text', textBody);
-        
-        response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${btoa(`api:${apiKey}`)}`
-          },
-          body: formData
-        });
-        break;
-        
-      case 'postmark':
-        response = await fetch('https://api.postmarkapp.com/email', {
-          method: 'POST',
-          headers: {
-            'X-Postmark-Server-Token': apiKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            From: `${fromName} <${fromEmail}>`,
-            To: to,
-            Subject: subject,
-            HtmlBody: htmlBody,
-            TextBody: textBody
-          })
-        });
-        break;
-      
-      case 'custom':
-        // Custom API - allows any email service
-        const customUrl = await getSetting(env, 'custom_email_api_url');
-        const customMethod = await getSetting(env, 'custom_email_api_method') || 'POST';
-        const customHeadersStr = await getSetting(env, 'custom_email_api_headers') || '{}';
-        const customBodyTemplate = await getSetting(env, 'custom_email_api_body') || '';
-        
-        if (!customUrl) {
-          return { success: false, error: 'Custom API URL not configured' };
-        }
-        
-        // Parse headers JSON
-        let customHeaders = {};
-        try {
-          customHeaders = JSON.parse(customHeadersStr);
-        } catch (e) {
-          console.warn('Failed to parse custom headers:', e);
-        }
-        
-        // Add content-type if not specified
-        if (!customHeaders['Content-Type'] && !customHeaders['content-type']) {
-          customHeaders['Content-Type'] = 'application/json';
-        }
-        
-        // Replace placeholders in body template
-        // Available: {{to}}, {{subject}}, {{html}}, {{text}}, {{from_name}}, {{from_email}}, {{api_key}}
-        let customBody = customBodyTemplate
-          .replace(/\{\{to\}\}/g, to)
-          .replace(/\{\{subject\}\}/g, subject)
-          .replace(/\{\{html\}\}/g, JSON.stringify(htmlBody).slice(1, -1)) // Escape for JSON
-          .replace(/\{\{text\}\}/g, JSON.stringify(textBody).slice(1, -1))
-          .replace(/\{\{from_name\}\}/g, fromName)
-          .replace(/\{\{from_email\}\}/g, fromEmail)
-          .replace(/\{\{api_key\}\}/g, apiKey);
-        
-        // Replace placeholders in headers too
-        const processedHeaders = {};
-        for (const [key, value] of Object.entries(customHeaders)) {
-          processedHeaders[key] = String(value)
-            .replace(/\{\{api_key\}\}/g, apiKey)
-            .replace(/\{\{from_email\}\}/g, fromEmail);
-        }
-        
-        response = await fetch(customUrl, {
-          method: customMethod,
-          headers: processedHeaders,
-          body: customBody
-        });
-        break;
-        
-      default:
-        return { success: false, error: `Unknown email service: ${service}` };
-    }
-    
-    const responseText = await response.text();
-    await logAutomation(env, 'email', to, subject, textBody.substring(0, 200), 
-      response.ok ? 'sent' : 'failed', responseText);
-    
-    return { success: response.ok, status: response.status };
-  } catch (e) {
-    console.error('Email error:', e);
-    await logAutomation(env, 'email', to, subject, '', 'error', e.message);
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * Generate email HTML template
- */
-function generateEmailHTML(title, message, buttonText, buttonUrl, footerText) {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f4f5;">
-  <div style="max-width:600px;margin:0 auto;padding:20px;">
-    <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:30px;border-radius:12px 12px 0 0;text-align:center;">
-      <h1 style="color:white;margin:0;font-size:24px;">🎬 WishesU</h1>
-    </div>
-    <div style="background:white;padding:30px;border-radius:0 0 12px 12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);">
-      <h2 style="color:#1f2937;margin:0 0 15px 0;">${title}</h2>
-      <p style="color:#4b5563;line-height:1.6;margin:0 0 20px 0;">${message}</p>
-      ${buttonUrl ? `
-      <div style="text-align:center;margin:25px 0;">
-        <a href="${buttonUrl}" style="display:inline-block;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:600;">
-          ${buttonText || 'View Details'}
-        </a>
-      </div>
-      ` : ''}
-      <hr style="border:none;border-top:1px solid #e5e7eb;margin:25px 0;">
-      <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0;">
-        ${footerText || 'This is an automated notification from WishesU.'}
-      </p>
-    </div>
-  </div>
-</body>
-</html>`;
-}
-
-// ==================== ADMIN NOTIFICATIONS ====================
-
-/**
- * Notify admin of new order
- */
-export async function notifyNewOrder(env, orderData) {
-  if (!await isEnabled(env, 'admin_alert_new_order')) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '💰 New Order Received!';
-  const message = `
-**Order ID:** ${orderData.orderId}
-**Product:** ${orderData.productTitle || 'N/A'}
-**Amount:** $${orderData.amount || 0}
-**Email:** ${orderData.email || 'N/A'}
-  `.trim();
-  
-  // Send webhook
-  await sendWebhook(env, NOTIFICATION_TYPES.NEW_ORDER, {
-    title,
-    message,
-    link: `${baseUrl}/admin/dashboard.html#orders`,
-    color: 3066993, // Green
-    extra: orderData
-  });
-  
-  // Send email to admin
-  const adminEmail = await getSetting(env, 'admin_email');
-  if (adminEmail) {
-    await sendEmail(env, adminEmail, title,
-      generateEmailHTML(title, message.replace(/\n/g, '<br>').replace(/\*\*/g, ''), 'View Order', `${baseUrl}/admin/dashboard.html#orders`),
-      message.replace(/\*\*/g, '')
-    );
-  }
-}
-
-/**
- * Notify admin of new tip
- */
-export async function notifyNewTip(env, tipData) {
-  if (!await isEnabled(env, 'admin_alert_new_tip')) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '💝 New Tip Received!';
-  const message = `
-**Order ID:** ${tipData.orderId}
-**Tip Amount:** $${tipData.amount || 0}
-**From:** ${tipData.email || 'Anonymous'}
-  `.trim();
-  
-  await sendWebhook(env, NOTIFICATION_TYPES.NEW_TIP, {
-    title,
-    message,
-    link: `${baseUrl}/admin/dashboard.html#orders`,
-    color: 15844367, // Gold
-    extra: tipData
-  });
-  
-  const adminEmail = await getSetting(env, 'admin_email');
-  if (adminEmail) {
-    await sendEmail(env, adminEmail, title,
-      generateEmailHTML(title, message.replace(/\n/g, '<br>').replace(/\*\*/g, ''), 'View Order', `${baseUrl}/admin/dashboard.html#orders`),
-      message.replace(/\*\*/g, '')
-    );
-  }
-}
-
-/**
- * Notify admin of new review
- */
-export async function notifyNewReview(env, reviewData) {
-  if (!await isEnabled(env, 'admin_alert_new_review')) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '⭐ New Product Review!';
-  const stars = '⭐'.repeat(reviewData.rating || 5);
-  const message = `
-**Product:** ${reviewData.productTitle || 'N/A'}
-**Rating:** ${stars} (${reviewData.rating}/5)
-**Author:** ${reviewData.authorName || 'Anonymous'}
-**Comment:** ${(reviewData.comment || '').substring(0, 200)}
-  `.trim();
-  
-  await sendWebhook(env, NOTIFICATION_TYPES.NEW_REVIEW, {
-    title,
-    message,
-    link: `${baseUrl}/admin/dashboard.html#reviews`,
-    color: 16776960, // Yellow
-    extra: reviewData
-  });
-  
-  const adminEmail = await getSetting(env, 'admin_email');
-  if (adminEmail) {
-    await sendEmail(env, adminEmail, title,
-      generateEmailHTML(title, message.replace(/\n/g, '<br>').replace(/\*\*/g, ''), 'Review & Approve', `${baseUrl}/admin/dashboard.html#reviews`),
-      message.replace(/\*\*/g, '')
-    );
-  }
-}
-
-/**
- * Notify admin of new blog comment
- */
-export async function notifyNewBlogComment(env, commentData) {
-  if (!await isEnabled(env, 'admin_alert_blog_comment')) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '📝 New Blog Comment!';
-  const message = `
-**Blog:** ${commentData.blogTitle || 'N/A'}
-**Author:** ${commentData.name || 'Anonymous'}
-**Email:** ${commentData.email || 'N/A'}
-**Comment:** ${(commentData.comment || '').substring(0, 200)}
-  `.trim();
-  
-  await sendWebhook(env, NOTIFICATION_TYPES.NEW_BLOG_COMMENT, {
-    title,
-    message,
-    link: `${baseUrl}/admin/dashboard.html#blog-comments`,
-    color: 3447003, // Blue
-    extra: commentData
-  });
-  
-  const adminEmail = await getSetting(env, 'admin_email');
-  if (adminEmail) {
-    await sendEmail(env, adminEmail, title,
-      generateEmailHTML(title, message.replace(/\n/g, '<br>').replace(/\*\*/g, ''), 'Review & Approve', `${baseUrl}/admin/dashboard.html#blog-comments`),
-      message.replace(/\*\*/g, '')
-    );
-  }
-}
-
-/**
- * Notify admin of new forum question
- */
-export async function notifyNewForumQuestion(env, questionData) {
-  if (!await isEnabled(env, 'admin_alert_forum_question')) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '❓ New Forum Question!';
-  const message = `
-**Title:** ${questionData.title || 'N/A'}
-**Author:** ${questionData.name || 'Anonymous'}
-**Email:** ${questionData.email || 'N/A'}
-**Question:** ${(questionData.content || '').substring(0, 200)}
-  `.trim();
-  
-  await sendWebhook(env, NOTIFICATION_TYPES.NEW_FORUM_QUESTION, {
-    title,
-    message,
-    link: `${baseUrl}/admin/dashboard.html#forum`,
-    color: 10181046, // Purple
-    extra: questionData
-  });
-  
-  const adminEmail = await getSetting(env, 'admin_email');
-  if (adminEmail) {
-    await sendEmail(env, adminEmail, title,
-      generateEmailHTML(title, message.replace(/\n/g, '<br>').replace(/\*\*/g, ''), 'Review & Approve', `${baseUrl}/admin/dashboard.html#forum`),
-      message.replace(/\*\*/g, '')
-    );
-  }
-}
-
-/**
- * Notify admin of new forum reply
- */
-export async function notifyNewForumReply(env, replyData) {
-  if (!await isEnabled(env, 'admin_alert_forum_reply')) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '💬 New Forum Reply!';
-  const message = `
-**Question:** ${replyData.questionTitle || 'N/A'}
-**Reply By:** ${replyData.name || 'Anonymous'}
-**Email:** ${replyData.email || 'N/A'}
-**Reply:** ${(replyData.content || '').substring(0, 200)}
-  `.trim();
-  
-  await sendWebhook(env, NOTIFICATION_TYPES.NEW_FORUM_REPLY, {
-    title,
-    message,
-    link: `${baseUrl}/admin/dashboard.html#forum`,
-    color: 10181046, // Purple
-    extra: replyData
-  });
-  
-  const adminEmail = await getSetting(env, 'admin_email');
-  if (adminEmail) {
-    await sendEmail(env, adminEmail, title,
-      generateEmailHTML(title, message.replace(/\n/g, '<br>').replace(/\*\*/g, ''), 'Review & Approve', `${baseUrl}/admin/dashboard.html#forum`),
-      message.replace(/\*\*/g, '')
-    );
-  }
-}
-
-/**
- * Notify admin of new chat message
- */
-export async function notifyNewChatMessage(env, chatData) {
-  if (!await isEnabled(env, 'admin_alert_chat_message')) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '💬 New Support Message!';
-  const message = `
-**From:** ${chatData.name || 'Customer'}
-**Email:** ${chatData.email || 'N/A'}
-**Message:** ${(chatData.content || '').substring(0, 200)}
-  `.trim();
-  
-  await sendWebhook(env, NOTIFICATION_TYPES.NEW_CHAT_MESSAGE, {
-    title,
-    message,
-    link: `${baseUrl}/admin/dashboard.html#chats`,
-    color: 15105570, // Orange
-    extra: chatData
-  });
-  
-  const adminEmail = await getSetting(env, 'admin_email');
-  if (adminEmail) {
-    await sendEmail(env, adminEmail, title,
-      generateEmailHTML(title, message.replace(/\n/g, '<br>').replace(/\*\*/g, ''), 'Reply Now', `${baseUrl}/admin/dashboard.html#chats`),
-      message.replace(/\*\*/g, '')
-    );
-  }
-}
-
-// ==================== CUSTOMER NOTIFICATIONS ====================
-
-/**
- * Send order confirmation to customer
- */
-export async function notifyCustomerOrderConfirmed(env, orderData) {
-  if (!await isEnabled(env, 'customer_email_order_confirmed')) return;
-  if (!orderData.email) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '🎉 Order Confirmed!';
-  const message = `
-Thank you for your order! We've received your request and are working on it.
-
-<strong>Order ID:</strong> ${orderData.orderId}<br>
-<strong>Product:</strong> ${orderData.productTitle || 'Custom Video'}<br>
-<strong>Amount:</strong> $${orderData.amount || 0}<br>
-<strong>Estimated Delivery:</strong> ${orderData.deliveryTime || '24 hours'}
-
-You can track your order status anytime using the link below.
-  `.trim();
-  
-  await sendEmail(env, orderData.email, title,
-    generateEmailHTML(title, message, 'Track Your Order', `${baseUrl}/order/${orderData.orderId}`, 'Thank you for choosing WishesU!'),
-    message.replace(/<[^>]*>/g, '')
-  );
-}
-
-/**
- * Send delivery notification to customer
- */
-export async function notifyCustomerOrderDelivered(env, orderData) {
-  if (!await isEnabled(env, 'customer_email_order_delivered')) return;
-  if (!orderData.email) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '🎬 Your Video is Ready!';
-  const message = `
-Great news! Your personalized video is ready for viewing.
-
-<strong>Order ID:</strong> ${orderData.orderId}<br>
-<strong>Product:</strong> ${orderData.productTitle || 'Custom Video'}
-
-Click the button below to watch your video. We hope you love it!
-
-If you're happy with your video, we'd really appreciate a review ⭐
-  `.trim();
-  
-  await sendEmail(env, orderData.email, title,
-    generateEmailHTML(title, message, '🎬 Watch Your Video', `${baseUrl}/order/${orderData.orderId}`, 'Thank you for choosing WishesU!'),
-    message.replace(/<[^>]*>/g, '')
-  );
-}
-
-/**
- * Send chat reply notification to customer
- */
-export async function notifyCustomerChatReply(env, chatData) {
-  if (!await isEnabled(env, 'customer_email_chat_reply')) return;
-  if (!chatData.email) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '💬 New Reply to Your Message';
-  const message = `
-Hi ${chatData.name || 'there'},
-
-You have a new reply to your support message:
-
-<div style="background:#f3f4f6;padding:15px;border-radius:8px;margin:15px 0;border-left:4px solid #667eea;">
-${(chatData.replyContent || '').substring(0, 500)}
-</div>
-
-Click below to continue the conversation.
-  `.trim();
-  
-  await sendEmail(env, chatData.email, title,
-    generateEmailHTML(title, message, 'View Conversation', baseUrl, 'This is an automated notification. Please do not reply to this email.'),
-    message.replace(/<[^>]*>/g, '')
-  );
-}
-
-/**
- * Send forum reply notification to question author
- */
-export async function notifyCustomerForumReply(env, replyData) {
-  if (!await isEnabled(env, 'customer_email_forum_reply')) return;
-  if (!replyData.questionAuthorEmail) return;
-  
-  const baseUrl = env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev';
-  const title = '💬 New Reply to Your Question';
-  const message = `
-Hi ${replyData.questionAuthorName || 'there'},
-
-Someone replied to your forum question: <strong>"${replyData.questionTitle}"</strong>
-
-<div style="background:#f3f4f6;padding:15px;border-radius:8px;margin:15px 0;border-left:4px solid #667eea;">
-<strong>${replyData.replyAuthorName || 'Someone'}:</strong><br>
-${(replyData.replyContent || '').substring(0, 500)}
-</div>
-
-Click below to view the full discussion.
-  `.trim();
-  
-  await sendEmail(env, replyData.questionAuthorEmail, title,
-    generateEmailHTML(title, message, 'View Discussion', `${baseUrl}/forum/${replyData.questionSlug}`, 'This is an automated notification.'),
-    message.replace(/<[^>]*>/g, '')
-  );
-}
-
-/**
- * Test automation settings
- */
-export async function testAutomation(env, type) {
-  try {
-    const testData = {
-      title: '🧪 Test Notification',
-      message: 'This is a test notification from your WishesU automation system.\n\nIf you see this, your setup is working correctly!',
-      link: env.SITE_URL || 'https://wishesu1.waqaskhan1437.workers.dev',
-      color: 5814783
-    };
-    
-    if (type === 'webhook') {
-      const result = await sendWebhook(env, 'test', testData);
-      return json(result);
-    } else if (type === 'email') {
-      const adminEmail = await getSetting(env, 'admin_email');
-      if (!adminEmail) {
-        return json({ success: false, error: 'Admin email not configured' });
-      }
-      const result = await sendEmail(env, adminEmail, testData.title,
-        generateEmailHTML(testData.title, testData.message.replace(/\n/g, '<br>'), 'Visit Site', testData.link),
-        testData.message
-      );
-      return json(result);
-    }
-    
-    return json({ success: false, error: 'Invalid test type' });
-  } catch (e) {
-    return json({ success: false, error: e.message });
   }
 }
 
@@ -881,8 +184,399 @@ export async function testAutomation(env, type) {
 export async function clearAutomationLogs(env) {
   try {
     await env.DB.prepare('DELETE FROM automation_logs').run();
-    return json({ success: true, message: 'Logs cleared' });
+    return json({ success: true });
   } catch (e) {
     return json({ error: e.message }, 500);
   }
 }
+
+// =============================================
+// WEBHOOK FUNCTIONS
+// =============================================
+
+async function sendWebhook(env, webhook, payload) {
+  if (!webhook?.enabled || !webhook.url) return { success: false, error: 'Disabled' };
+  
+  try {
+    let body, headers = { 'Content-Type': 'application/json' };
+    
+    switch (webhook.type) {
+      case 'slack':
+        body = JSON.stringify({
+          text: payload.title,
+          blocks: [
+            { type: 'header', text: { type: 'plain_text', text: payload.title } },
+            { type: 'section', text: { type: 'mrkdwn', text: payload.message } }
+          ]
+        });
+        break;
+        
+      case 'discord':
+        body = JSON.stringify({
+          content: payload.title,
+          embeds: [{ title: payload.title, description: payload.message, color: 0x667eea }]
+        });
+        break;
+        
+      case 'custom':
+      default:
+        if (webhook.headers) {
+          try { headers = { ...headers, ...JSON.parse(webhook.headers) }; } catch (e) {}
+        }
+        if (webhook.secret) headers['X-Webhook-Secret'] = webhook.secret;
+        
+        // Custom body template support
+        if (webhook.bodyTemplate) {
+          body = webhook.bodyTemplate
+            .replace(/\{\{event\}\}/g, payload.event || '')
+            .replace(/\{\{title\}\}/g, payload.title || '')
+            .replace(/\{\{message\}\}/g, JSON.stringify(payload.message || '').slice(1,-1))
+            .replace(/\{\{data\}\}/g, JSON.stringify(payload.data || {}));
+        } else {
+          body = JSON.stringify({ event: payload.event, title: payload.title, message: payload.message, data: payload.data, timestamp: new Date().toISOString() });
+        }
+    }
+    
+    const res = await fetch(webhook.url, { method: webhook.method || 'POST', headers, body });
+    const resText = await res.text();
+    await logAutomation(env, 'webhook', webhook.name, payload.title, '', res.ok ? 'sent' : 'failed', resText);
+    return { success: res.ok };
+  } catch (e) {
+    await logAutomation(env, 'webhook', webhook.name, payload.title, '', 'error', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+async function sendToWebhooks(env, webhookIds, payload, allWebhooks) {
+  if (!webhookIds?.length) return [];
+  const webhooks = allWebhooks.filter(w => webhookIds.includes(w.id) && w.enabled);
+  const results = await Promise.allSettled(webhooks.map(w => sendWebhook(env, w, payload)));
+  return results.map((r, i) => ({ webhook: webhooks[i].name, success: r.status === 'fulfilled' && r.value?.success }));
+}
+
+// =============================================
+// EMAIL FUNCTIONS
+// =============================================
+
+async function sendEmail(env, service, to, subject, htmlBody, textBody) {
+  if (!service?.enabled || !service.apiKey || !service.fromEmail) {
+    return { success: false, error: 'Service not configured' };
+  }
+  
+  const { type, apiKey, fromName, fromEmail } = service;
+  
+  try {
+    let res;
+    
+    switch (type) {
+      case 'resend':
+        res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ from: `${fromName} <${fromEmail}>`, to: [to], subject, html: htmlBody, text: textBody })
+        });
+        break;
+        
+      case 'sendgrid':
+        res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            personalizations: [{ to: [{ email: to }] }],
+            from: { email: fromEmail, name: fromName },
+            subject,
+            content: [{ type: 'text/plain', value: textBody }, { type: 'text/html', value: htmlBody }]
+          })
+        });
+        break;
+        
+      case 'mailgun':
+        const domain = fromEmail.split('@')[1];
+        const fd = new FormData();
+        fd.append('from', `${fromName} <${fromEmail}>`);
+        fd.append('to', to);
+        fd.append('subject', subject);
+        fd.append('html', htmlBody);
+        fd.append('text', textBody);
+        res = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${btoa(`api:${apiKey}`)}` },
+          body: fd
+        });
+        break;
+        
+      case 'postmark':
+        res = await fetch('https://api.postmarkapp.com/email', {
+          method: 'POST',
+          headers: { 'X-Postmark-Server-Token': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ From: `${fromName} <${fromEmail}>`, To: to, Subject: subject, HtmlBody: htmlBody, TextBody: textBody })
+        });
+        break;
+        
+      case 'brevo':
+        res = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sender: { name: fromName, email: fromEmail }, to: [{ email: to }], subject, htmlContent: htmlBody, textContent: textBody })
+        });
+        break;
+        
+      case 'elasticemail':
+        res = await fetch('https://api.elasticemail.com/v4/emails', {
+          method: 'POST',
+          headers: { 'X-ElasticEmail-ApiKey': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            Recipients: [{ Email: to }],
+            Content: { From: fromEmail, FromName: fromName, Subject: subject, Body: [{ ContentType: 'HTML', Content: htmlBody }, { ContentType: 'PlainText', Content: textBody }] }
+          })
+        });
+        break;
+        
+      case 'custom':
+        if (!service.customUrl) return { success: false, error: 'Custom URL missing' };
+        let headers = { 'Content-Type': 'application/json' };
+        if (service.customHeaders) {
+          try { headers = { ...headers, ...JSON.parse(service.customHeaders) }; } catch (e) {}
+        }
+        const replacePlaceholders = (str) => str
+          .replace(/\{\{to\}\}/g, to)
+          .replace(/\{\{subject\}\}/g, subject)
+          .replace(/\{\{html\}\}/g, JSON.stringify(htmlBody).slice(1,-1))
+          .replace(/\{\{text\}\}/g, JSON.stringify(textBody).slice(1,-1))
+          .replace(/\{\{from_name\}\}/g, fromName)
+          .replace(/\{\{from_email\}\}/g, fromEmail)
+          .replace(/\{\{api_key\}\}/g, apiKey);
+        
+        for (const k of Object.keys(headers)) headers[k] = replacePlaceholders(String(headers[k]));
+        res = await fetch(service.customUrl, {
+          method: service.customMethod || 'POST',
+          headers,
+          body: replacePlaceholders(service.customBody || '{}')
+        });
+        break;
+        
+      default:
+        return { success: false, error: `Unknown type: ${type}` };
+    }
+    
+    const resText = await res.text();
+    await logAutomation(env, 'email', to, subject, '', res.ok ? 'sent' : 'failed', resText);
+    return { success: res.ok };
+  } catch (e) {
+    await logAutomation(env, 'email', to, subject, '', 'error', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+function generateEmailHTML(title, message, buttonText, buttonUrl) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 20px;"><tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+<tr><td style="background:linear-gradient(135deg,#667eea,#764ba2);padding:30px;text-align:center;"><h1 style="margin:0;color:#fff;font-size:24px;">${title}</h1></td></tr>
+<tr><td style="padding:30px;"><div style="color:#333;font-size:15px;line-height:1.6;white-space:pre-line;">${message}</div>
+${buttonText && buttonUrl ? `<div style="text-align:center;margin-top:25px;"><a href="${buttonUrl}" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:12px 28px;text-decoration:none;border-radius:8px;font-weight:bold;">${buttonText}</a></div>` : ''}
+</td></tr>
+<tr><td style="background:#f9fafb;padding:15px;text-align:center;color:#666;font-size:12px;">Sent via WishesU</td></tr>
+</table></td></tr></table></body></html>`;
+}
+
+// =============================================
+// NOTIFICATION DISPATCHER
+// =============================================
+
+async function dispatchNotification(env, notificationType, payload, recipientEmail = null) {
+  const config = await getConfig(env);
+  if (!config.enabled) return { success: false, error: 'Automation disabled' };
+  
+  const routing = config.routing?.[notificationType];
+  if (!routing?.enabled) return { success: false, error: 'Route disabled' };
+  
+  const results = { webhooks: [], email: null };
+  
+  // Send webhooks (parallel)
+  if (routing.webhooks?.length) {
+    results.webhooks = await sendToWebhooks(env, routing.webhooks, payload, config.webhooks || []);
+  }
+  
+  // Send email
+  const service = routing.emailService ? (config.emailServices || []).find(s => s.id === routing.emailService) : null;
+  const to = recipientEmail || (routing.adminEmail ? config.adminEmail : null);
+  
+  if (to && (service || routing.adminEmail)) {
+    const emailService = service || (config.emailServices || []).find(s => s.enabled);
+    if (emailService) {
+      const html = generateEmailHTML(payload.title, payload.message, payload.buttonText, payload.buttonUrl);
+      results.email = await sendEmail(env, emailService, to, payload.title, html, payload.message);
+    }
+  }
+  
+  return { success: true, results };
+}
+
+// =============================================
+// NOTIFICATION TRIGGERS
+// =============================================
+
+export async function notifyNewOrder(env, data) {
+  return dispatchNotification(env, 'new_order', {
+    event: 'new_order',
+    title: '🎉 New Order Received!',
+    message: `Order #${data.orderId || data.id}\nProduct: ${data.productTitle || data.product_title}\nAmount: $${data.amount || data.total}\nCustomer: ${data.customerName || data.customer_name}\nEmail: ${data.email}`,
+    data,
+    buttonText: 'View Order',
+    buttonUrl: data.adminUrl || '/admin/dashboard.html#orders'
+  });
+}
+
+export async function notifyNewTip(env, data) {
+  return dispatchNotification(env, 'new_tip', {
+    event: 'new_tip',
+    title: '💰 New Tip Received!',
+    message: `Amount: $${data.amount}\nFrom: ${data.name || 'Anonymous'}\nMessage: ${data.message || 'No message'}`,
+    data
+  });
+}
+
+export async function notifyNewReview(env, data) {
+  return dispatchNotification(env, 'new_review', {
+    event: 'new_review',
+    title: '⭐ New Review!',
+    message: `Product: ${data.productTitle || data.product_title}\nRating: ${'⭐'.repeat(data.rating || 5)}\nCustomer: ${data.customerName || data.customer_name}\nReview: ${data.reviewText || data.review_text || 'No comment'}`,
+    data,
+    buttonText: 'Manage Reviews',
+    buttonUrl: '/admin/dashboard.html#reviews'
+  });
+}
+
+export async function notifyBlogComment(env, data) {
+  return dispatchNotification(env, 'blog_comment', {
+    event: 'blog_comment',
+    title: '💬 New Blog Comment!',
+    message: `Post: ${data.postTitle || data.post_title}\nAuthor: ${data.authorName || data.author_name}\nComment: ${data.content || data.comment}`,
+    data,
+    buttonText: 'Moderate',
+    buttonUrl: '/admin/dashboard.html#blog-comments'
+  });
+}
+
+export async function notifyForumQuestion(env, data) {
+  return dispatchNotification(env, 'forum_question', {
+    event: 'forum_question',
+    title: '❓ New Forum Question!',
+    message: `Title: ${data.title}\nAuthor: ${data.authorName || data.author_name}\nQuestion: ${data.content || data.body}`,
+    data,
+    buttonText: 'View',
+    buttonUrl: data.url || `/forum/question.html?id=${data.id}`
+  });
+}
+
+export async function notifyForumReply(env, data) {
+  return dispatchNotification(env, 'forum_reply', {
+    event: 'forum_reply',
+    title: '💬 New Forum Reply!',
+    message: `Question: ${data.questionTitle || data.question_title}\nReply by: ${data.authorName || data.author_name}\nReply: ${data.content || data.body}`,
+    data
+  });
+}
+
+export async function notifyChatMessage(env, data) {
+  return dispatchNotification(env, 'chat_message', {
+    event: 'chat_message',
+    title: '💬 New Chat Message!',
+    message: `From: ${data.senderName || data.sender_name || 'Customer'}\nMessage: ${data.message || data.content}`,
+    data,
+    buttonText: 'View Chats',
+    buttonUrl: '/admin/dashboard.html#chats'
+  });
+}
+
+export async function notifyOrderDelivered(env, data) {
+  return dispatchNotification(env, 'customer_order_delivered', {
+    event: 'order_delivered',
+    title: '🎬 Your Video is Ready!',
+    message: `Hi ${data.customerName || 'there'}!\n\nYour video for "${data.productTitle || data.product_title}" is ready!\n\nClick below to view and download.`,
+    data,
+    buttonText: 'View Video',
+    buttonUrl: data.deliveryUrl || data.delivery_url
+  }, data.email);
+}
+
+export async function notifyCustomerOrderConfirmed(env, data) {
+  return dispatchNotification(env, 'customer_order_confirmed', {
+    event: 'order_confirmed',
+    title: '✅ Order Confirmed!',
+    message: `Hi ${data.customerName || 'there'}!\n\nThank you for your order!\n\nOrder #${data.orderId || data.order_id}\nProduct: ${data.productTitle || data.product_title}\nAmount: $${data.amount || data.total}\n\nWe'll notify you when ready!`,
+    data,
+    buttonText: 'Track Order',
+    buttonUrl: data.trackingUrl || data.tracking_url
+  }, data.email);
+}
+
+export async function notifyCustomerChatReply(env, data) {
+  return dispatchNotification(env, 'customer_chat_reply', {
+    event: 'chat_reply',
+    title: '💬 New Reply!',
+    message: `Hi ${data.customerName || 'there'}!\n\nYou have a new reply:\n"${data.replyMessage || data.reply}"`,
+    data,
+    buttonText: 'View',
+    buttonUrl: data.chatUrl
+  }, data.customerEmail);
+}
+
+export async function notifyCustomerForumReply(env, data) {
+  return dispatchNotification(env, 'customer_forum_reply', {
+    event: 'forum_reply',
+    title: '💬 Reply to Your Question',
+    message: `Hi ${data.customerName || 'there'}!\n\nSomeone replied to "${data.questionTitle || data.question_title}":\n\n"${data.replyContent || data.reply}"`,
+    data,
+    buttonText: 'View',
+    buttonUrl: data.questionUrl
+  }, data.customerEmail);
+}
+
+// =============================================
+// TEST FUNCTIONS
+// =============================================
+
+export async function testWebhook(env, webhookId) {
+  const config = await getConfig(env, true);
+  const webhook = (config.webhooks || []).find(w => w.id === webhookId);
+  if (!webhook) return json({ success: false, error: 'Webhook not found' });
+  
+  const result = await sendWebhook(env, { ...webhook, enabled: true }, {
+    event: 'test', title: '🧪 Test Notification', message: 'Test from WishesU Automation', data: { test: true }
+  });
+  return json(result);
+}
+
+export async function testEmail(env, serviceId, testEmail) {
+  const config = await getConfig(env, true);
+  const service = (config.emailServices || []).find(s => s.id === serviceId);
+  if (!service) return json({ success: false, error: 'Service not found' });
+  
+  const to = testEmail || config.adminEmail;
+  if (!to) return json({ success: false, error: 'No email address' });
+  
+  const html = generateEmailHTML('🧪 Test Email', 'This is a test email from WishesU Automation.\n\nIf you received this, your email service is configured correctly!', 'Dashboard', '/admin/dashboard.html');
+  const result = await sendEmail(env, { ...service, enabled: true }, to, '🧪 Test Email - WishesU', html, 'Test email');
+  return json(result);
+}
+
+export async function testNotification(env, body) {
+  const testData = {
+    new_order: { orderId: 'TEST-001', productTitle: 'Test Product', amount: 25, customerName: 'Test Customer', email: 'test@example.com' },
+    new_tip: { amount: 10, name: 'Test Tipper', message: 'Great!' },
+    new_review: { productTitle: 'Test Product', rating: 5, customerName: 'Happy Customer', reviewText: 'Amazing!' },
+    blog_comment: { postTitle: 'Test Post', authorName: 'Commenter', content: 'Great article!' },
+    forum_question: { title: 'Test Question', authorName: 'User', content: 'How does this work?' },
+    chat_message: { senderName: 'Customer', message: 'Hello!' }
+  };
+  
+  const data = testData[body.type] || testData.new_order;
+  const fn = { new_order: notifyNewOrder, new_tip: notifyNewTip, new_review: notifyNewReview, blog_comment: notifyBlogComment, forum_question: notifyForumQuestion, chat_message: notifyChatMessage };
+  const result = await (fn[body.type] || notifyNewOrder)(env, data);
+  return json(result);
+}
+
+export { NOTIFICATION_TYPES };

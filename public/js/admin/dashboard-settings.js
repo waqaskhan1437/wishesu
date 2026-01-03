@@ -1752,7 +1752,14 @@ document.addEventListener('DOMContentLoaded', function() {
   function setupAutomationHandlers() {
     const openBtn = document.getElementById('open-automation-settings');
     if (openBtn) {
-      openBtn.addEventListener('click', () => openAutomationModal());
+      openBtn.addEventListener('click', () => {
+        // Use new Advanced Automation UI
+        if (window.AdvAutomation) {
+          window.AdvAutomation.open();
+        } else {
+          alert('Advanced Automation module not loaded');
+        }
+      });
     }
   }
   

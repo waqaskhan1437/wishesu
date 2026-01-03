@@ -172,7 +172,9 @@ import {
   saveAutomationSettings,
   getAutomationLogs,
   clearAutomationLogs,
-  testAutomation
+  testNotification,
+  testWebhook,
+  testEmail
 } from './controllers/automation.js';
 
 /**
@@ -303,13 +305,25 @@ export async function routeApiRequest(req, env, url, path, method) {
     return getAutomationLogs(env, limit);
   }
 
-  if (method === 'DELETE' && path === '/api/admin/automation/logs') {
+  if (method === 'DELETE' && path === '/api/admin/automation/logs' || 
+      method === 'POST' && path === '/api/admin/automation/logs/clear') {
     return clearAutomationLogs(env);
   }
 
   if (method === 'POST' && path === '/api/admin/automation/test') {
     const body = await req.json().catch(() => ({}));
-    return testAutomation(env, body.type);
+    return testNotification(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/admin/automation/test/webhook') {
+    const webhookId = url.searchParams.get('id');
+    return testWebhook(env, webhookId);
+  }
+
+  if (method === 'POST' && path === '/api/admin/automation/test/email') {
+    const serviceId = url.searchParams.get('id');
+    const testEmailAddr = url.searchParams.get('email');
+    return testEmail(env, serviceId, testEmailAddr);
   }
 
   // ----- CACHE PURGE -----
