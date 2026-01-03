@@ -220,14 +220,13 @@
           border-radius: 12px;
           overflow: hidden;
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-          transition: all 0.3s ease;
           cursor: pointer;
           display: flex;
           flex-direction: column;
+          contain: layout style paint;
         }
 
         .product-card:hover {
-          transform: translateY(-8px);
           box-shadow: 0 12px 24px rgba(0,0,0,0.15);
         }
 
@@ -243,7 +242,6 @@
           width: 100%;
           height: 100%;
           object-fit: cover;
-          transition: transform 0.3s ease;
         }
 
         .product-card:hover .product-thumbnail img {
@@ -369,17 +367,15 @@
           font-weight: 600;
           font-size: 1rem;
           cursor: pointer;
-          transition: all 0.2s ease;
+          transition: box-shadow 0.15s ease;
           margin-top: auto;
         }
 
         .book-now-btn:hover {
-          transform: translateY(-2px);
           box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
         }
 
         .book-now-btn:active {
-          transform: translateY(0);
         }
 
         /* Responsive */

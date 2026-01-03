@@ -120,7 +120,7 @@
         align-items: center;
         justify-content: center;
         color: white;
-        transition: all 0.2s ease;
+        transition: background-color 0.15s ease, transform 0.15s ease;
         z-index: 10;
         pointer-events: none;
       `;
@@ -217,7 +217,7 @@
       // Optimize thumbnail URL for smaller size
       img.src = optimizeImageUrl(product.thumbnail_url, 280);
       img.className = 'thumb active';
-      img.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid #667eea; transition: all 0.3s;';
+      img.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid #667eea; transition: border-color 0.15s ease; contain: layout;';
       img.alt = (product.title || 'Product') + ' - Thumbnail';
       img.dataset.type = 'main';
       img.loading = 'lazy';
@@ -262,7 +262,7 @@
                 facade.appendChild(mainImg);
 
                 const playBtn = document.createElement('div');
-                playBtn.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80px; height: 80px; background: rgba(0, 0, 0, 0.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; transition: all 0.2s ease; z-index: 10; backdrop-filter: blur(2px);';
+                playBtn.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80px; height: 80px; background: rgba(0, 0, 0, 0.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; transition: background-color 0.15s ease, transform 0.15s ease; z-index: 10;';
                 playBtn.innerHTML = '<svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" style="display:block; margin-left:4px;"><path d="M8 5v14l11-7z"></path></svg>';
                 facade.appendChild(playBtn);
 
@@ -305,7 +305,7 @@
           const galleryThumb = document.createElement('img');
           galleryThumb.src = imageUrl;
           galleryThumb.className = 'thumb';
-          galleryThumb.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid transparent; transition: all 0.3s;';
+          galleryThumb.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid transparent; transition: border-color 0.15s ease; contain: layout;';
           galleryThumb.alt = (product.title || 'Product') + ' - Gallery Image ' + (index + 1);
           galleryThumb.dataset.type = 'gallery';
           
@@ -509,7 +509,7 @@
       font-size: 1.2rem;
       font-weight: 700;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: transform 0.15s ease, filter 0.15s ease;
       box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
     `;
     panel.appendChild(bookNowBtn);
@@ -520,7 +520,7 @@
     addonsContainer.style.cssText = `
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.5s ease-out, opacity 0.3s ease;
+      transition: max-height 0.4s ease-out, opacity 0.25s ease;
       opacity: 0;
     `;
     

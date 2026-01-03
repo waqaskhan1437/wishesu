@@ -391,21 +391,22 @@
 
             if (window.productThumbnailsSlider) {
               const galleryThumb = document.createElement('div');
-              galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: all 0.3s; background:#000;';
+              galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: border-color 0.15s ease, transform 0.15s ease; background:#1a1a2e; contain: layout style;';
 
-              // Use actual video as thumbnail source - browser shows video frame automatically
-              // NO controls attribute - just shows first frame
-              const videoThumb = document.createElement('video');
-              videoThumb.src = portfolioVideoUrl;
-              videoThumb.preload = 'metadata'; // Load just first frame
-              videoThumb.muted = true;
-              videoThumb.playsInline = true;
-              videoThumb.setAttribute('playsinline', '');
-              videoThumb.setAttribute('webkit-playsinline', '');
-              // IMPORTANT: No controls attribute - this is just for thumbnail display
-              videoThumb.controls = false;
-              videoThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover; pointer-events: none;';
-              galleryThumb.appendChild(videoThumb);
+              // PERFORMANCE FIX: Use image thumbnail instead of video element with preload
+              // This prevents loading video metadata for ALL thumbnails (major CPU/network saver)
+              const posterUrl = review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url;
+              if (posterUrl) {
+                const thumbImg = document.createElement('img');
+                thumbImg.src = posterUrl;
+                thumbImg.alt = 'Review video';
+                thumbImg.loading = 'lazy';
+                thumbImg.style.cssText = 'width: 100%; height: 100%; object-fit: cover; pointer-events: none;';
+                galleryThumb.appendChild(thumbImg);
+              } else {
+                // Fallback: Show gradient placeholder instead of loading video
+                galleryThumb.style.background = 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)';
+              }
 
               // Add review badge to gallery thumbnail
               const badge = document.createElement('div');
@@ -415,7 +416,7 @@
               const playIcon = document.createElement('div');
               playIcon.className = 'thumb-play-btn';
               playIcon.innerHTML = '▶';
-              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px; opacity:1 !important; z-index:100; pointer-events:none;';
+              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px; z-index:100; pointer-events:none;';
 
               galleryThumb.appendChild(badge);
               galleryThumb.appendChild(playIcon);
@@ -432,10 +433,10 @@
                 scrollToPlayer();
 	              // Always use the unified setPlayerSource function
 	              // Fallback to product thumbnail if review poster is missing to avoid black screen.
-	              setPlayerSource(portfolioVideoUrl, review.thumbnail_url || product.thumbnail_url);
+	              setPlayerSource(portfolioVideoUrl, review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url);
               };
 
-              // Hover effect
+              // Hover effect - use CSS class instead of inline styles for better performance
               galleryThumb.onmouseenter = () => {
                 galleryThumb.style.transform = 'scale(1.05)';
               };
@@ -444,20 +445,22 @@
               };
 
               window.productThumbnailsSlider.appendChild(galleryThumb);
-
-              // Update slider arrows visibility
-              setTimeout(() => {
-                const slider = window.productThumbnailsSlider;
-                const container = slider.parentElement;
-                if (slider && container && slider.scrollWidth > slider.clientWidth) {
-                  const leftArrow = container.querySelector('button:first-of-type');
-                  const rightArrow = container.querySelector('button:last-of-type');
-                  if (leftArrow) leftArrow.style.display = 'block';
-                  if (rightArrow) rightArrow.style.display = 'block';
-                }
-              }, 50);
             }
           });
+          
+          // Update slider arrows visibility after all thumbs added (single check instead of per-thumb)
+          if (sliderReviews.length > 0) {
+            setTimeout(() => {
+              const slider = window.productThumbnailsSlider;
+              const container = slider ? slider.parentElement : null;
+              if (slider && container && slider.scrollWidth > slider.clientWidth) {
+                const leftArrow = container.querySelector('button:first-of-type');
+                const rightArrow = container.querySelector('button:last-of-type');
+                if (leftArrow) leftArrow.style.display = 'block';
+                if (rightArrow) rightArrow.style.display = 'block';
+              }
+            }, 100);
+          }
 
           // Initial render - add grid to container first, then render page
           container.innerHTML = '';

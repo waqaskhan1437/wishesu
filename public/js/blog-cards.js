@@ -175,14 +175,13 @@
           border-radius: 12px;
           overflow: hidden;
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-          transition: all 0.3s ease;
           cursor: pointer;
           display: flex;
           flex-direction: column;
+          contain: layout style paint;
         }
 
         .blog-card:hover {
-          transform: translateY(-8px);
           box-shadow: 0 12px 24px rgba(0,0,0,0.15);
         }
 
@@ -198,11 +197,9 @@
           width: 100%;
           height: 100%;
           object-fit: cover;
-          transition: transform 0.3s ease;
         }
 
         .blog-card:hover .blog-thumbnail img {
-          transform: scale(1.05);
         }
 
         .blog-content {
@@ -249,12 +246,11 @@
           border-radius: 8px;
           font-weight: 600;
           font-size: 1rem;
-          transition: all 0.2s ease;
+          transition: box-shadow 0.15s ease;
           margin-top: auto;
         }
 
         .blog-read-more:hover {
-          transform: translateY(-2px);
           box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
         }
 
@@ -282,7 +278,7 @@
           color: #374151;
           text-decoration: none;
           font-weight: 600;
-          transition: all 0.2s;
+          transition: border-color 0.15s ease, color 0.15s ease;
         }
 
         .page-link:hover {
