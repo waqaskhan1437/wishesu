@@ -56,6 +56,10 @@ export async function getAutomationSettings(env) {
       'email_api_key',
       'email_from_name',
       'email_from_address',
+      'custom_email_api_url',
+      'custom_email_api_method',
+      'custom_email_api_headers',
+      'custom_email_api_body',
       'slack_webhook_url',
       'discord_webhook_url',
       'custom_webhook_url',
@@ -100,6 +104,10 @@ export async function saveAutomationSettings(env, body) {
       'email_api_key',
       'email_from_name',
       'email_from_address',
+      'custom_email_api_url',
+      'custom_email_api_method',
+      'custom_email_api_headers',
+      'custom_email_api_body',
       'slack_webhook_url',
       'discord_webhook_url',
       'custom_webhook_url',
@@ -393,6 +401,56 @@ async function sendEmail(env, to, subject, htmlBody, textBody) {
             HtmlBody: htmlBody,
             TextBody: textBody
           })
+        });
+        break;
+      
+      case 'custom':
+        // Custom API - allows any email service
+        const customUrl = await getSetting(env, 'custom_email_api_url');
+        const customMethod = await getSetting(env, 'custom_email_api_method') || 'POST';
+        const customHeadersStr = await getSetting(env, 'custom_email_api_headers') || '{}';
+        const customBodyTemplate = await getSetting(env, 'custom_email_api_body') || '';
+        
+        if (!customUrl) {
+          return { success: false, error: 'Custom API URL not configured' };
+        }
+        
+        // Parse headers JSON
+        let customHeaders = {};
+        try {
+          customHeaders = JSON.parse(customHeadersStr);
+        } catch (e) {
+          console.warn('Failed to parse custom headers:', e);
+        }
+        
+        // Add content-type if not specified
+        if (!customHeaders['Content-Type'] && !customHeaders['content-type']) {
+          customHeaders['Content-Type'] = 'application/json';
+        }
+        
+        // Replace placeholders in body template
+        // Available: {{to}}, {{subject}}, {{html}}, {{text}}, {{from_name}}, {{from_email}}, {{api_key}}
+        let customBody = customBodyTemplate
+          .replace(/\{\{to\}\}/g, to)
+          .replace(/\{\{subject\}\}/g, subject)
+          .replace(/\{\{html\}\}/g, JSON.stringify(htmlBody).slice(1, -1)) // Escape for JSON
+          .replace(/\{\{text\}\}/g, JSON.stringify(textBody).slice(1, -1))
+          .replace(/\{\{from_name\}\}/g, fromName)
+          .replace(/\{\{from_email\}\}/g, fromEmail)
+          .replace(/\{\{api_key\}\}/g, apiKey);
+        
+        // Replace placeholders in headers too
+        const processedHeaders = {};
+        for (const [key, value] of Object.entries(customHeaders)) {
+          processedHeaders[key] = String(value)
+            .replace(/\{\{api_key\}\}/g, apiKey)
+            .replace(/\{\{from_email\}\}/g, fromEmail);
+        }
+        
+        response = await fetch(customUrl, {
+          method: customMethod,
+          headers: processedHeaders,
+          body: customBody
         });
         break;
         

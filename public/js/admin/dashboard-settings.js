@@ -2047,6 +2047,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   <option value="sendgrid" ${settings.email_service === 'sendgrid' ? 'selected' : ''}>SendGrid</option>
                   <option value="mailgun" ${settings.email_service === 'mailgun' ? 'selected' : ''}>Mailgun</option>
                   <option value="postmark" ${settings.email_service === 'postmark' ? 'selected' : ''}>Postmark</option>
+                  <option value="custom" ${settings.email_service === 'custom' ? 'selected' : ''}>🔧 Custom API (Any Service)</option>
                 </select>
               </div>
               
@@ -2066,6 +2067,47 @@ document.addEventListener('DOMContentLoaded', function() {
                 <label>From Email Address</label>
                 <input type="email" id="auto-email-from-address" value="${settings.email_from_address || ''}" placeholder="noreply@yourdomain.com">
                 <small>Must be verified with your email provider</small>
+              </div>
+              
+              <!-- Custom API Fields (shown only when custom is selected) -->
+              <div id="custom-api-fields" style="display: ${settings.email_service === 'custom' ? 'block' : 'none'}; margin-top: 20px; padding: 20px; background: #fef3c7; border-radius: 12px; border: 2px solid #f59e0b;">
+                <h4 style="margin: 0 0 15px 0; color: #92400e;">🔧 Custom API Configuration</h4>
+                
+                <div class="auto-input">
+                  <label>API Endpoint URL *</label>
+                  <input type="url" id="auto-custom-email-url" value="${settings.custom_email_api_url || ''}" placeholder="https://api.youremailservice.com/v1/send">
+                  <small>Full URL of your email API endpoint</small>
+                </div>
+                
+                <div class="auto-input">
+                  <label>HTTP Method</label>
+                  <select id="auto-custom-email-method">
+                    <option value="POST" ${(settings.custom_email_api_method || 'POST') === 'POST' ? 'selected' : ''}>POST</option>
+                    <option value="PUT" ${settings.custom_email_api_method === 'PUT' ? 'selected' : ''}>PUT</option>
+                  </select>
+                </div>
+                
+                <div class="auto-input">
+                  <label>Headers (JSON)</label>
+                  <textarea id="auto-custom-email-headers" rows="4" placeholder='{"Authorization": "Bearer {{api_key}}", "Content-Type": "application/json"}'>${settings.custom_email_api_headers || '{"Authorization": "Bearer {{api_key}}", "Content-Type": "application/json"}'}</textarea>
+                  <small>JSON object. Use <code>{{api_key}}</code> placeholder for your API key</small>
+                </div>
+                
+                <div class="auto-input">
+                  <label>Request Body Template (JSON)</label>
+                  <textarea id="auto-custom-email-body" rows="8" placeholder='{"to": "{{to}}", "from": "{{from_name}} <{{from_email}}>", "subject": "{{subject}}", "html": "{{html}}", "text": "{{text}}"}'>${settings.custom_email_api_body || '{"to": "{{to}}", "from": "{{from_name}} <{{from_email}}>", "subject": "{{subject}}", "html": "{{html}}", "text": "{{text}}"}'}</textarea>
+                  <small>Available placeholders: <code>{{to}}</code>, <code>{{subject}}</code>, <code>{{html}}</code>, <code>{{text}}</code>, <code>{{from_name}}</code>, <code>{{from_email}}</code>, <code>{{api_key}}</code></small>
+                </div>
+                
+                <div style="margin-top: 15px; padding: 12px; background: #fef9c3; border-radius: 8px;">
+                  <p style="margin: 0; font-size: 0.85em; color: #854d0e;">
+                    <strong>💡 Examples:</strong><br>
+                    <strong>Brevo:</strong> URL: https://api.brevo.com/v3/smtp/email<br>
+                    <strong>Elastic Email:</strong> URL: https://api.elasticemail.com/v4/emails<br>
+                    <strong>SparkPost:</strong> URL: https://api.sparkpost.com/api/v1/transmissions<br>
+                    Check your email service documentation for exact API format.
+                  </p>
+                </div>
               </div>
               
               <div style="margin-top: 15px; padding: 15px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
@@ -2128,6 +2170,15 @@ document.addEventListener('DOMContentLoaded', function() {
       modal.querySelector('#custom-webhook-section').style.display = type === 'custom' ? 'block' : 'none';
     });
     
+    // Email service change - show/hide custom API fields
+    const emailServiceSelect = modal.querySelector('#auto-email-service');
+    emailServiceSelect.addEventListener('change', () => {
+      const customFields = modal.querySelector('#custom-api-fields');
+      if (customFields) {
+        customFields.style.display = emailServiceSelect.value === 'custom' ? 'block' : 'none';
+      }
+    });
+    
     // Save settings
     modal.querySelector('#save-automation-btn').addEventListener('click', async () => {
       const btn = modal.querySelector('#save-automation-btn');
@@ -2156,7 +2207,12 @@ document.addEventListener('DOMContentLoaded', function() {
         custom_webhook_secret: modal.querySelector('#auto-custom-secret').value.trim(),
         email_service: modal.querySelector('#auto-email-service').value,
         email_from_name: modal.querySelector('#auto-email-from-name').value.trim(),
-        email_from_address: modal.querySelector('#auto-email-from-address').value.trim()
+        email_from_address: modal.querySelector('#auto-email-from-address').value.trim(),
+        // Custom API fields
+        custom_email_api_url: modal.querySelector('#auto-custom-email-url')?.value.trim() || '',
+        custom_email_api_method: modal.querySelector('#auto-custom-email-method')?.value || 'POST',
+        custom_email_api_headers: modal.querySelector('#auto-custom-email-headers')?.value.trim() || '',
+        custom_email_api_body: modal.querySelector('#auto-custom-email-body')?.value.trim() || ''
       };
       
       // Only include API key if changed
