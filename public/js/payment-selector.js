@@ -588,9 +588,12 @@
   /**
    * Open payment selector modal
    */
+  let onCloseCallback = null;
+  
   async function open(data) {
     checkoutData = data;
     paypalButtonsRendered = false;
+    onCloseCallback = data.onClose || null; // Store callback
     
     // Load payment methods first
     await loadPaymentMethods();
@@ -605,6 +608,7 @@
     // If no payment methods, show error
     if (paymentMethods.length === 0) {
       alert('No payment methods configured. Please contact support.');
+      if (onCloseCallback) onCloseCallback();
       return;
     }
     
@@ -630,6 +634,17 @@
     }
     selectedMethod = null;
     paypalButtonsRendered = false;
+    
+    // Call onClose callback to restore buttons
+    if (onCloseCallback) {
+      onCloseCallback();
+      onCloseCallback = null;
+    }
+    
+    // Also try global restore function
+    if (typeof window.restoreCheckoutButtons === 'function') {
+      window.restoreCheckoutButtons();
+    }
   }
 
   // Export to window

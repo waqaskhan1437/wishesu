@@ -636,7 +636,8 @@
     // Update checkout button when price changes
     window.updateCheckoutPrice = function(newTotal) {
       const checkoutBtn = document.getElementById('checkout-btn');
-      if (checkoutBtn && !useMinimal) {
+      // Don't update if button is in loading state
+      if (checkoutBtn && !useMinimal && !checkoutBtn.classList.contains('btn-loading')) {
         checkoutBtn.textContent = '✅ Proceed to Checkout - $' + newTotal.toLocaleString();
       }
     };

@@ -9,6 +9,7 @@
 
 ;(function(){
   let cachedAddonEmail = '';
+  let isCheckoutInProgress = false; // Prevent double clicks
 
   function syncEmailToWhop(email) {
     cachedAddonEmail = email || '';
@@ -44,6 +45,34 @@
     handleEmailUpdate();
   }
 
+  // Add spinner CSS once
+  function ensureSpinnerCSS() {
+    if (document.getElementById('checkout-spinner-css')) return;
+    const style = document.createElement('style');
+    style.id = 'checkout-spinner-css';
+    style.textContent = `
+      .checkout-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(255,255,255,0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: checkoutSpin 0.8s linear infinite;
+        vertical-align: middle;
+      }
+      @keyframes checkoutSpin {
+        to { transform: rotate(360deg); }
+      }
+      .btn-loading {
+        pointer-events: none !important;
+        opacity: 0.7 !important;
+        cursor: wait !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function updateTotal() {
     let addonTotal = 0;
     const selects = document.querySelectorAll('select.form-select');
@@ -57,7 +86,10 @@
     });
     window.currentTotal = window.basePrice + addonTotal;
     const btn = document.getElementById('checkout-btn');
-    if (btn) btn.textContent = '✅ Proceed to Checkout - $' + window.currentTotal.toLocaleString();
+    // Only update text if NOT in loading state
+    if (btn && !btn.classList.contains('btn-loading')) {
+      btn.textContent = '✅ Proceed to Checkout - $' + window.currentTotal.toLocaleString();
+    }
     // Also update via global function if available
     if (typeof window.updateCheckoutPrice === 'function') {
       window.updateCheckoutPrice(window.currentTotal);
@@ -65,24 +97,27 @@
   }
 
   async function handleCheckout() {
-    console.log('🔵 CHECKOUT STARTED');
-    console.log('🔵 Product Data:', window.productData);
-    console.log('🔵 Current Total:', window.currentTotal);
-    console.log('🔵 Base Price:', window.basePrice);
+    // Prevent double clicks
+    if (isCheckoutInProgress) {
+      console.warn('⚠️ Checkout already in progress');
+      return;
+    }
 
     const btn = document.getElementById('checkout-btn');
+    const payBtn = document.getElementById('apple-pay-btn');
+    
     if (!btn) {
       console.error('🔴 CHECKOUT BUTTON NOT FOUND');
       return;
     }
 
-    // Prevent double clicks
-    if (btn.disabled) {
-      console.warn('⚠️ CHECKOUT BUTTON ALREADY DISABLED');
-      return;
-    }
+    // Mark checkout in progress
+    isCheckoutInProgress = true;
+    
+    // Ensure spinner CSS exists
+    ensureSpinnerCSS();
 
-    // Validation
+    // Validation first
     let valid = true;
     document.querySelectorAll('.addon-group').forEach(grp => {
       const lbl = grp.querySelector('.addon-group-label');
@@ -95,123 +130,67 @@
       }
     });
     if (!valid) {
-      console.error('🔴 VALIDATION FAILED - Required fields missing');
+      console.error('🔴 VALIDATION FAILED');
       alert('Please fill required fields');
+      isCheckoutInProgress = false;
       return;
     }
-    console.log('✅ Validation passed');
 
+    // Store original text
     const originalText = btn.textContent;
+    const payBtnOriginal = payBtn ? payBtn.innerHTML : '';
     
-    // Also get Apple Pay button if exists
-    const applePayBtn = document.getElementById('apple-pay-btn');
-    const applePayOriginal = applePayBtn ? applePayBtn.innerHTML : '';
-    
-    // Show loading spinner on both buttons
+    // Show spinner on checkout button
+    btn.classList.add('btn-loading');
     btn.disabled = true;
-    btn.style.opacity = '0.8';
-    btn.style.cursor = 'not-allowed';
-    btn.innerHTML = `
-      <span style="display: inline-flex; align-items: center; justify-content: center; gap: 10px;">
-        <span class="checkout-spinner"></span>
-        Processing...
-      </span>
-    `;
+    btn.innerHTML = '<span class="checkout-spinner"></span> Processing...';
     
-    // Also disable Apple Pay button if exists
-    if (applePayBtn) {
-      applePayBtn.disabled = true;
-      applePayBtn.style.opacity = '0.6';
-      applePayBtn.style.cursor = 'not-allowed';
+    // Also disable Pay button
+    if (payBtn) {
+      payBtn.classList.add('btn-loading');
+      payBtn.disabled = true;
+      payBtn.innerHTML = '<span class="checkout-spinner"></span> Wait...';
     }
-    
-    // Add spinner CSS if not exists
-    if (!document.getElementById('checkout-spinner-css')) {
-      const style = document.createElement('style');
-      style.id = 'checkout-spinner-css';
-      style.textContent = `
-        .checkout-spinner {
-          display: inline-block;
-          width: 18px;
-          height: 18px;
-          border: 3px solid rgba(255,255,255,0.3);
-          border-top-color: #fff;
-          border-radius: 50%;
-          animation: checkoutSpin 0.8s linear infinite;
-        }
-        @keyframes checkoutSpin {
-          to { transform: rotate(360deg); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    
+
     // Helper to restore buttons
     const restoreButtons = () => {
+      isCheckoutInProgress = false;
+      btn.classList.remove('btn-loading');
       btn.disabled = false;
-      btn.style.opacity = '1';
-      btn.style.cursor = 'pointer';
       btn.textContent = originalText;
-      if (applePayBtn) {
-        applePayBtn.disabled = false;
-        applePayBtn.style.opacity = '1';
-        applePayBtn.style.cursor = 'pointer';
-        applePayBtn.innerHTML = applePayOriginal;
+      if (payBtn) {
+        payBtn.classList.remove('btn-loading');
+        payBtn.disabled = false;
+        payBtn.innerHTML = payBtnOriginal;
       }
     };
     
-    // 1. Check if files are still uploading
+    // Expose restore function globally for payment selector
+    window.restoreCheckoutButtons = restoreButtons;
+    
+    // Check if files are still uploading
     if (window.isUploadInProgress && window.isUploadInProgress()) {
       alert('Please wait for file uploads to complete.');
       restoreButtons();
       return;
     }
 
-    // 2. Gather form data (text fields, selects, radios, checkboxes)
+    // Gather form data
     const formEl = document.getElementById('addons-form');
     const selectedAddons = [];
 
-    console.log('🔵 Form element found:', !!formEl);
-    console.log('🔵 Form innerHTML preview:', formEl ? formEl.innerHTML.substring(0, 500) : 'N/A');
-
     if (formEl) {
-      // Method 1: FormData
       const formData = new FormData(formEl);
-      console.log('🔵 FormData entries count:', [...formData.entries()].length);
-      console.log('🔵 FormData entries:');
       for (const pair of formData.entries()) {
         const key = pair[0];
         const val = pair[1];
-        console.log(`   - ${key}:`, val instanceof File ? `[File: ${val.name}]` : val);
-
-        // Skip file inputs - they are handled by instant-upload.js
-        if (val instanceof File) {
-          continue;
-        }
-
-        if (val) {
-          selectedAddons.push({ field: key, value: val });
-        }
+        if (val instanceof File) continue;
+        if (val) selectedAddons.push({ field: key, value: val });
       }
-
-      // Method 2: Also check all form elements directly
-      console.log('🔵 Direct form elements:');
-      const allInputs = formEl.querySelectorAll('input, select, textarea');
-      allInputs.forEach(el => {
-        if (el.type === 'file') return;
-        if (el.type === 'radio' && !el.checked) return;
-        if (el.type === 'checkbox' && !el.checked) return;
-        console.log(`   - ${el.name || el.id}: ${el.value} (type: ${el.type})`);
-      });
     }
 
-    console.log('🔵 Selected addons from form:', selectedAddons);
-
-    // 3. Get uploaded files from instant-upload.js
+    // Get uploaded files from instant-upload.js
     const uploadedFiles = window.getUploadedFiles ? window.getUploadedFiles() : {};
-    console.log('📁 Files from instant-upload:', uploadedFiles);
-
-    // Add uploaded file URLs to addons
     Object.keys(uploadedFiles).forEach(inputId => {
       const fileUrl = uploadedFiles[inputId];
       if (fileUrl) {
@@ -219,15 +198,13 @@
           field: inputId,
           value: `[PHOTO LINK]: ${fileUrl}`
         });
-        console.log(`📸 Added photo: ${inputId} -> ${fileUrl}`);
       }
     });
 
-    // 4. Determine delivery time from selected addon or product default
+    // Determine delivery time
     let deliveryDays = window.productData?.delivery_time_days || 1;
     let isInstant = window.productData?.instant_delivery || false;
     
-    // Check if any addon has delivery time setting
     const deliveryAddon = selectedAddons.find(a => {
       const fieldId = (a.field || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
       return fieldId.includes('delivery') || fieldId === 'delivery-time';
@@ -250,33 +227,16 @@
             }
           }
         }
-      } catch (e) {
-        console.warn('Could not parse addon delivery config:', e);
-      }
+      } catch (e) {}
     }
     
-    // Convert days to minutes for order (instant = 60 minutes)
     const deliveryTimeMinutes = isInstant ? 60 : (deliveryDays * 24 * 60);
-    console.log('📦 Delivery:', isInstant ? 'Instant (60min)' : `${deliveryDays} day(s) (${deliveryTimeMinutes} min)`);
 
-    // 5. Open Payment Selector Modal
-    btn.innerHTML = `
-      <span style="display: inline-flex; align-items: center; justify-content: center; gap: 10px;">
-        <span class="checkout-spinner"></span>
-        Loading payment...
-      </span>
-    `;
-    
+    // Get email
     let email = cachedAddonEmail || '';
     const emailInput = document.querySelector('#addons-form input[type="email"]');
     if (emailInput && emailInput.value.includes('@')) email = emailInput.value.trim();
     if (email) syncEmailToWhop(email);
-
-    console.log('🔵 Opening Payment Selector...');
-    console.log('🔵 Product ID:', window.productData.id);
-    console.log('🔵 Amount:', window.currentTotal);
-    console.log('🔵 Email:', email || '(none)');
-    console.log('🔵 Selected Addons:', selectedAddons);
 
     // Store order data in localStorage as backup
     const orderData = {
@@ -288,39 +248,26 @@
       timestamp: Date.now()
     };
     localStorage.setItem('pendingOrderData', JSON.stringify(orderData));
-    console.log('🔵 Stored order data in localStorage:', orderData);
-
-    // Reset buttons before opening modal
-    restoreButtons();
 
     // Check if PaymentSelector is available
     if (typeof window.PaymentSelector !== 'undefined') {
-      // Open payment selector modal
+      // Open payment selector modal - buttons will be restored when modal closes
       window.PaymentSelector.open({
         productId: window.productData.id,
         amount: window.currentTotal,
         email: email,
         addons: selectedAddons,
-        deliveryTimeMinutes: deliveryTimeMinutes
+        deliveryTimeMinutes: deliveryTimeMinutes,
+        onClose: restoreButtons // Restore when modal closes
       });
     } else {
       // Fallback to direct Whop checkout
-      console.log('🔵 PaymentSelector not loaded, using direct Whop checkout...');
       await processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes, restoreButtons);
     }
   }
 
   // Direct Whop checkout (fallback)
   async function processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes, restoreButtons) {
-    btn.disabled = true;
-    btn.style.opacity = '0.8';
-    btn.innerHTML = `
-      <span style="display: inline-flex; align-items: center; justify-content: center; gap: 10px;">
-        <span class="checkout-spinner"></span>
-        Processing...
-      </span>
-    `;
-
     try {
       const response = await fetch('/api/whop/create-plan-checkout', {
         method: 'POST',
@@ -342,13 +289,8 @@
         throw new Error(data.error || 'Failed to create checkout');
       }
 
-      // Restore buttons
-      if (restoreButtons) restoreButtons();
-      else {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.textContent = originalText;
-      }
+      // Restore buttons before redirect
+      restoreButtons();
 
       if (typeof window.whopCheckout === 'function' && data.checkout_url) {
         window.whopCheckout({
@@ -368,13 +310,7 @@
     } catch (err) {
       console.error('Checkout error:', err);
       alert('Checkout Error: ' + err.message);
-      // Restore buttons on error
-      if (restoreButtons) restoreButtons();
-      else {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.textContent = originalText;
-      }
+      restoreButtons();
     }
   }
 
