@@ -51,6 +51,7 @@ export async function getProductsList(env) {
 
 /**
  * Get single product by ID or slug
+ * OPTIMIZED: Uses Promise.all for parallel queries
  */
 export async function getProduct(env, id) {
   let row;
@@ -68,18 +69,19 @@ export async function getProduct(env, id) {
     console.error('Failed to parse addons_json for product', row.id, ':', e.message);
   }
   
-  const stats = await env.DB.prepare(
-    'SELECT COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id = ? AND status = ?'
-  ).bind(row.id, 'approved').first();
-  
-  // Fetch reviews for rich results schema
-  const reviewsResult = await env.DB.prepare(
-    `SELECT reviews.*, orders.delivered_video_url, orders.delivered_thumbnail_url 
-     FROM reviews 
-     LEFT JOIN orders ON reviews.order_id = orders.order_id 
-     WHERE reviews.product_id = ? AND reviews.status = ? 
-     ORDER BY reviews.created_at DESC`
-  ).bind(row.id, 'approved').all();
+  // OPTIMIZED: Run stats and reviews queries in parallel
+  const [stats, reviewsResult] = await Promise.all([
+    env.DB.prepare(
+      'SELECT COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id = ? AND status = ?'
+    ).bind(row.id, 'approved').first(),
+    env.DB.prepare(
+      `SELECT reviews.*, orders.delivered_video_url, orders.delivered_thumbnail_url 
+       FROM reviews 
+       LEFT JOIN orders ON reviews.order_id = orders.order_id 
+       WHERE reviews.product_id = ? AND reviews.status = ? 
+       ORDER BY reviews.created_at DESC`
+    ).bind(row.id, 'approved').all()
+  ]);
 
   // Convert created_at to ISO 8601 format
   const reviews = (reviewsResult.results || []).map(review => {
@@ -244,6 +246,7 @@ export async function duplicateProduct(env, body) {
 
 /**
  * Get adjacent products (next/previous) for navigation
+ * OPTIMIZED: Uses Promise.all for parallel queries
  */
 export async function getAdjacentProducts(env, id) {
   const productId = Number(id);
@@ -256,31 +259,33 @@ export async function getAdjacentProducts(env, id) {
   
   if (!current) return json({ error: 'Product not found' }, 404);
   
-  // Get previous product (higher sort_order or lower id if same sort_order)
-  const prev = await env.DB.prepare(`
-    SELECT id, title, slug, thumbnail_url 
-    FROM products 
-    WHERE status = 'active' 
-    AND (
-      sort_order < ? 
-      OR (sort_order = ? AND id > ?)
-    )
-    ORDER BY sort_order DESC, id ASC
-    LIMIT 1
-  `).bind(current.sort_order, current.sort_order, productId).first();
-  
-  // Get next product (lower sort_order or higher id if same sort_order)
-  const next = await env.DB.prepare(`
-    SELECT id, title, slug, thumbnail_url 
-    FROM products 
-    WHERE status = 'active' 
-    AND (
-      sort_order > ? 
-      OR (sort_order = ? AND id < ?)
-    )
-    ORDER BY sort_order ASC, id DESC
-    LIMIT 1
-  `).bind(current.sort_order, current.sort_order, productId).first();
+  // OPTIMIZED: Run prev and next queries in parallel
+  const [prev, next] = await Promise.all([
+    // Get previous product (higher sort_order or lower id if same sort_order)
+    env.DB.prepare(`
+      SELECT id, title, slug, thumbnail_url 
+      FROM products 
+      WHERE status = 'active' 
+      AND (
+        sort_order < ? 
+        OR (sort_order = ? AND id > ?)
+      )
+      ORDER BY sort_order DESC, id ASC
+      LIMIT 1
+    `).bind(current.sort_order, current.sort_order, productId).first(),
+    // Get next product (lower sort_order or higher id if same sort_order)
+    env.DB.prepare(`
+      SELECT id, title, slug, thumbnail_url 
+      FROM products 
+      WHERE status = 'active' 
+      AND (
+        sort_order > ? 
+        OR (sort_order = ? AND id < ?)
+      )
+      ORDER BY sort_order ASC, id DESC
+      LIMIT 1
+    `).bind(current.sort_order, current.sort_order, productId).first()
+  ]);
   
   return json({
     previous: prev ? {

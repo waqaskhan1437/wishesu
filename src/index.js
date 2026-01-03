@@ -439,6 +439,7 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
   </style>
 </head>
 <body>
+  <script src="/js/global-components.js"></script>
   <div class="blog-hero">
     <div class="blog-hero-inner">
       <a href="/blog/" class="back-link">← Back to Blog</a>
@@ -997,6 +998,7 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
   </style>
 </head>
 <body>
+  <script src="/js/global-components.js"></script>
   <div class="forum-hero">
     <div class="forum-hero-inner">
       <a href="/forum/" class="back-link">← Back to Forum</a>
@@ -1608,8 +1610,13 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               await initDB(env);
               const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
               if (row && row.content) {
-                // Apply SEO
+                // Inject global components script for header/footer
                 let html = row.content;
+                if (html.includes('<body') && !html.includes('global-components.js')) {
+                  html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script src="/js/global-components.js"></script>');
+                }
+                
+                // Apply SEO
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
                   html = applySeoToHtml(html, seo.robots, seo.canonical);
@@ -1675,7 +1682,13 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             ).bind(defaultPageType, 'published').first();
             
             if (defaultPage && defaultPage.content) {
-              return new Response(defaultPage.content, {
+              // Inject global components script for header/footer
+              let html = defaultPage.content;
+              if (html.includes('<body') && !html.includes('global-components.js')) {
+                html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script src="/js/global-components.js"></script>');
+              }
+              
+              return new Response(html, {
                 status: 200,
                 headers: {
                   'Content-Type': 'text/html; charset=utf-8',
@@ -1732,7 +1745,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             // Check cache first
             const cachedResponse = await caches.default.match(cacheKey);
             if (cachedResponse) {
-              console.log('Cache HIT for:', req.url);
               const headers = new Headers(cachedResponse.headers);
               headers.set('X-Cache', 'HIT');
               headers.set('X-Worker-Version', VERSION);
@@ -1741,9 +1753,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 headers 
               });
             }
-            console.log('Cache MISS for:', req.url);
           } catch (cacheError) {
-            console.warn('Cache check failed:', cacheError);
             // Continue with normal processing if cache fails
           }
         }
@@ -1758,23 +1768,26 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
               if (productId && env.DB) {
                 await initDB(env);
-                const product = await env.DB.prepare(`
-                  SELECT p.*, 
-                    COUNT(r.id) as review_count, 
-                    AVG(r.rating) as rating_average
-                  FROM products p
-                  LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
-                  WHERE p.id = ?
-                  GROUP BY p.id
-                `).bind(Number(productId)).first();
                 
+                // OPTIMIZED: Run both queries in parallel
+                const [productResult, reviewsResult] = await Promise.all([
+                  env.DB.prepare(`
+                    SELECT p.*, 
+                      COUNT(r.id) as review_count, 
+                      AVG(r.rating) as rating_average
+                    FROM products p
+                    LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
+                    WHERE p.id = ?
+                    GROUP BY p.id
+                  `).bind(Number(productId)).first(),
+                  env.DB.prepare(
+                    'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC LIMIT 5'
+                  ).bind(Number(productId), 'approved').all()
+                ]);
+                
+                const product = productResult;
                 if (product) {
                   schemaProduct = product;
-                  // Fetch reviews for schema
-                  const reviewsResult = await env.DB.prepare(
-                    'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC LIMIT 5'
-                  ).bind(Number(productId), 'approved').all();
-                  
                   const reviews = reviewsResult.results || [];
                   const schemaJson = generateProductSchema(product, baseUrl, reviews);
                   html = injectSchemaIntoHTML(html, 'product-schema', schemaJson);
