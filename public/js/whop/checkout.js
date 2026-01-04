@@ -197,36 +197,11 @@
 
         console.log('📦 Final Addons array:', addons.length, 'items:', addons);
 
-        // Calculate delivery time based on selected delivery option
-        let deliveryTime = 1440; // Default: 24 hours (1 day) - FIXED!
-        const deliveryAddon = addons.find(a => a.field === 'delivery-time');
-        if (deliveryAddon) {
-            const deliveryValue = (deliveryAddon.value || '').toString().trim();
-            const v = deliveryValue.toLowerCase();
-
-            // Handle instant delivery
-            if (v.includes('instant') || v.includes('60 min') || v === 'instant') {
-                deliveryTime = 60; // 60 minutes (instant)
-            }
-            // Handle numeric days: "1", "2", "3", "4" etc
-            else if (/^\d+$/.test(deliveryValue)) {
-                // Pure number = days
-                const days = parseInt(deliveryValue, 10);
-                deliveryTime = days * 1440; // Convert days to minutes
-                console.log(`📦 Delivery: ${days} day(s) = ${deliveryTime} minutes`);
-            }
-            // Handle text formats
-            else if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) {
-                deliveryTime = 1440; // 24 hours (1 day)
-            } else if (v.includes('48') || v.includes('2 day') || v.includes('2 days')) {
-                deliveryTime = 2880; // 48 hours (2 days)
-            } else if (v.includes('3 day')) {
-                deliveryTime = 4320; // 72 hours (3 days)
-            } else if (v.includes('4 day')) {
-                deliveryTime = 5760; // 96 hours (4 days)
-            }
-        }
-        console.log('⏰ Delivery time:', deliveryTime, 'minutes');
+        // ✅ FIXED: Use pre-calculated deliveryTimeMinutes from checkout.js
+        // This value is already correctly calculated based on product info and addons
+        // Formula: instant → 60 min, otherwise → days × 24 × 60
+        const deliveryTime = pendingOrderData?.deliveryTimeMinutes || 1440;
+        console.log('⏰ Final Delivery time (from pendingOrderData):', deliveryTime, 'minutes');
 
         // Data prepare karein
         const payload = {

@@ -31,8 +31,11 @@
       { label: 'I want my own music', price: 0, textField: true, textLabel: 'Song link or details', textPlaceholder: 'Paste link or describe song' }
     ] },
     { type: 'radio', label: 'Delivery time', options: [
-      { label: 'Instant Delivery (60 Minutes)', price: 0, default: true, delivery: { instant: true, text: '' } },
-      { label: '24 Hours Express', price: 10, default: false, delivery: { instant: false, text: '24 Hours Express' } }
+      { label: 'Instant Delivery (60 Minutes)', price: 0, default: true, delivery: { instant: true, days: 1 } },
+      { label: '24 Hours Express', price: 10, default: false, delivery: { instant: false, days: 1 } },
+      { label: '2 Days Standard', price: 5, default: false, delivery: { instant: false, days: 2 } },
+      { label: '3 Days Economy', price: 0, default: false, delivery: { instant: false, days: 3 } },
+      { label: '4 Days Economy+', price: 0, default: false, delivery: { instant: false, days: 4 } }
     ] },
     { type: 'checkbox_group', label: 'Extras', options: [
       { label: 'Funny video cut', price: 10 },
