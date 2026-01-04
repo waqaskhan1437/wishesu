@@ -559,11 +559,7 @@
     addonsForm.id = 'addons-form';
     addonsForm.style.cssText = 'padding-top: 1.5rem; border-top: 1px solid #e5e7eb; margin-top: 1.5rem;';
     
-    // Add form header
-    const formHeader = document.createElement('div');
-    formHeader.style.cssText = 'margin-bottom: 1rem;';
-    formHeader.innerHTML = '<h3 style="margin:0; font-size:1.1rem; color:#374151;">📝 Customize Your Order</h3>';
-    addonsForm.appendChild(formHeader);
+    // No duplicate header - user can add custom heading via addons config
     
     if (addonGroups && addonGroups.length > 0) {
       addonGroups.forEach(group => {
@@ -652,10 +648,10 @@
         addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 1000 + 'px';
         addonsContainer.style.opacity = '1';
         addonsContainer.style.overflow = 'hidden';
-        bookNowBtn.innerHTML = '<span aria-hidden="true">📝</span> Customize Your Order';
+        bookNowBtn.innerHTML = '<span aria-hidden="true">▲</span> Close Form';
         bookNowBtn.setAttribute('aria-expanded', 'true');
-        bookNowBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-        bookNowBtn.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.4)';
+        bookNowBtn.style.background = 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)';
+        bookNowBtn.style.boxShadow = '0 4px 15px rgba(107, 114, 128, 0.4)';
         isExpanded = true;
         
         // After animation completes, remove height constraint so content can grow freely
