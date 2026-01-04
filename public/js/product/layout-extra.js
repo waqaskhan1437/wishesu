@@ -385,21 +385,7 @@
           
           // Take only last 20 for slider
           const sliderReviews = reviewsWithVideo.slice(-20);
-          
-          // Intersection Observer for lazy loading video metadata
-          const videoObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-              if (entry.isIntersecting) {
-                const video = entry.target;
-                if (video.dataset.src && !video.src) {
-                  video.src = video.dataset.src;
-                  video.preload = 'metadata';
-                }
-                videoObserver.unobserve(video);
-              }
-            });
-          }, { rootMargin: '100px' });
-          
+
           sliderReviews.forEach(review => {
             const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
 
@@ -407,20 +393,29 @@
               const galleryThumb = document.createElement('div');
               galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: border-color 0.15s ease, transform 0.15s ease; background:#1a1a2e; contain: layout style;';
 
-              // Use video element with lazy loading for authentic video thumbnail
-              const videoThumb = document.createElement('video');
-              videoThumb.dataset.src = portfolioVideoUrl; // Store URL, load on intersection
-              videoThumb.preload = 'none'; // Don't load until visible
-              videoThumb.muted = true;
-              videoThumb.playsInline = true;
-              videoThumb.setAttribute('playsinline', '');
-              videoThumb.setAttribute('webkit-playsinline', '');
-              videoThumb.controls = false;
-              videoThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover; pointer-events: none; background: #1a1a2e;';
-              galleryThumb.appendChild(videoThumb);
-              
-              // Observe for lazy loading
-              videoObserver.observe(videoThumb);
+              // Thumbnail image (no auto video requests: fixes PageSpeed console errors)
+              // Prefer a stable image URL. If a thumbnail is hosted on a flaky CDN (e.g., b-cdn.net), fall back to the main product thumbnail
+              // to avoid PageSpeed "Failed to load resource" console errors.
+              let thumbUrl = (review.delivered_thumbnail_url || review.thumbnail_url || '').toString().trim();
+              const loweredThumb = thumbUrl.toLowerCase();
+              if (!thumbUrl || loweredThumb.includes('b-cdn.net') || loweredThumb.endsWith('.mp4')) {
+                thumbUrl = (product.thumbnail_url || '').toString().trim();
+              }
+
+              if (thumbUrl) {
+                const imgThumb = document.createElement("img");
+                imgThumb.src = thumbUrl;
+                imgThumb.alt = "Review video thumbnail";
+                imgThumb.loading = "lazy";
+                imgThumb.decoding = "async";
+                imgThumb.style.cssText = "width: 100%; height: 100%; object-fit: cover; pointer-events: none; background: #1a1a2e;";
+                galleryThumb.appendChild(imgThumb);
+              } else {
+                const placeholder = document.createElement("div");
+                placeholder.textContent = "Video";
+                placeholder.style.cssText = "width: 100%; height: 100%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:12px; background:#1a1a2e;";
+                galleryThumb.appendChild(placeholder);
+              }
 
               // Add review badge to gallery thumbnail
               const badge = document.createElement('div');
