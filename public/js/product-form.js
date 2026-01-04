@@ -47,30 +47,22 @@ window.getDeliveryBadgeText = getDeliveryBadgeText;
 window.updateDeliveryPreview = updateDeliveryPreview;
 
 ;(async function initProductForm(){
-  console.log('🔵 Product Form JS Loaded');
   const params = new URLSearchParams(location.search);
   const productId = params.get('id');
-  console.log('🔵 Product ID from URL:', productId);
 
   const form = document.getElementById('product-form');
-  console.log('🔵 Form element found:', !!form);
 
   if(!form) {
-    console.error('🔴 Form not found! Exiting...');
     return;
   }
 
   setupGalleryField(form);
 
   if (productId) {
-    console.log('🔵 Loading product data for ID:', productId);
     try {
       const response = await getProduct(productId);
-      console.log('🔵 API Response:', response);
       const { product } = response;
       if (product) {
-        console.log('🔵 Product loaded:', product.title);
-        console.log('🔵 instant_delivery from DB:', product.instant_delivery);
         fillBaseFields(form, product);
         if (typeof populateSeoForm === 'function') populateSeoForm(form, product);
 
@@ -78,13 +70,9 @@ window.updateDeliveryPreview = updateDeliveryPreview;
         if (hidden) {
           const addons = Array.isArray(product.addons) ? product.addons : [];
           hidden.value = JSON.stringify(addons);
-          console.log('🔵 Addons loaded:', addons.length);
         }
-      } else {
-        console.error('🔴 Product not found in response');
       }
     } catch (err) {
-      console.error('🔴 Failed to load product:', err);
       alert('Failed to load product: ' + err.message);
     }
 
@@ -420,7 +408,6 @@ function fillBaseFields(form, product){
   // Handle instant_delivery - convert to proper boolean (handles string "0" edge case)
   const instantVal = product.instant_delivery;
   form.instant_delivery.checked = (instantVal === 1 || instantVal === '1' || instantVal === true);
-  console.log('🔵 Setting instant_delivery checkbox:', form.instant_delivery.checked, '(raw value:', instantVal, ')');
   if (form.delivery_time_days) {
     form.delivery_time_days.value = product.delivery_time_days || 1;
   }

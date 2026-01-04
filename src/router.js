@@ -498,9 +498,19 @@ export async function routeApiRequest(req, env, url, path, method) {
       const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('code_snippets').first();
       if (row && row.value) {
         const snippets = JSON.parse(row.value);
-        return json({ success: true, snippets });
+        return new Response(JSON.stringify({ success: true, snippets }), {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=60, s-maxage=300'
+          }
+        });
       }
-      return json({ success: true, snippets: [] });
+      return new Response(JSON.stringify({ success: true, snippets: [] }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=60, s-maxage=300'
+        }
+      });
     } catch (err) {
       return json({ success: true, snippets: [] });
     }

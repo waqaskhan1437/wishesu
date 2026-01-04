@@ -1,8 +1,9 @@
 /**
  * Pages controller - Dynamic page management
+ * OPTIMIZED: Added edge caching for public endpoints
  */
 
-import { json } from '../utils/response.js';
+import { json, cachedJson } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
 
 // Page type constants
@@ -15,7 +16,7 @@ const PAGE_TYPES = {
 };
 
 /**
- * Get active pages (public)
+ * Get active pages (public - cached)
  */
 export async function getPages(env) {
   const r = await env.DB.prepare(
@@ -28,7 +29,8 @@ export async function getPages(env) {
     return page;
   });
 
-  return json({ pages });
+  // Cache for 2 minutes
+  return cachedJson({ pages }, 120);
 }
 
 /**

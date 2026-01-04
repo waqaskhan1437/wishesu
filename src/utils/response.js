@@ -8,12 +8,25 @@ import { CORS } from '../config/cors.js';
  * Create a JSON response with CORS headers
  * @param {Object} data - Data to serialize
  * @param {number} status - HTTP status code
+ * @param {Object} extraHeaders - Additional headers (e.g., Cache-Control)
  * @returns {Response}
  */
-export function json(data, status = 200) {
+export function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS, 'Content-Type': 'application/json' }
+    headers: { ...CORS, 'Content-Type': 'application/json', ...extraHeaders }
+  });
+}
+
+/**
+ * Create a cached JSON response (for public, read-only endpoints)
+ * @param {Object} data - Data to serialize
+ * @param {number} maxAge - Cache duration in seconds (default 60)
+ * @returns {Response}
+ */
+export function cachedJson(data, maxAge = 60) {
+  return json(data, 200, {
+    'Cache-Control': `public, max-age=${maxAge}, s-maxage=${maxAge * 2}, stale-while-revalidate=${maxAge * 4}`
   });
 }
 

@@ -101,43 +101,43 @@
       const initials = reviewerName.charAt(0).toUpperCase();
 
       return `
-        <div class="review-card">
+        <article class="review-card" aria-label="Review by ${reviewerName}">
           <div class="review-header">
             ${showAvatar ? `
-              <div class="review-avatar">${initials}</div>
+              <div class="review-avatar" aria-hidden="true">${initials}</div>
             ` : ''}
             <div class="review-header-info">
               <div class="review-author">${reviewerName}</div>
               <div class="review-meta">
                 ${stars}
-                <span class="review-date">${date}</span>
+                <span class="review-date"><time datetime="${created_at}">${date}</time></span>
               </div>
             </div>
           </div>
           
           ${productDisplayName ? `
-            <div class="review-product">📦 ${productDisplayName}</div>
+            <div class="review-product"><span aria-hidden="true">📦</span> ${productDisplayName}</div>
           ` : ''}
           
           <div class="review-text">${reviewText}</div>
-        </div>
+        </article>
       `;
     },
 
-    // Render rating stars
+    // Render rating stars (with accessibility)
     renderStars: function(rating) {
       const fullStars = Math.floor(rating);
       let stars = '';
 
       for (let i = 0; i < 5; i++) {
         if (i < fullStars) {
-          stars += '<span class="star star-full">★</span>';
+          stars += '<span class="star star-full" aria-hidden="true">★</span>';
         } else {
-          stars += '<span class="star star-empty">☆</span>';
+          stars += '<span class="star star-empty" aria-hidden="true">☆</span>';
         }
       }
 
-      return `<div class="rating-stars">${stars}</div>`;
+      return `<div class="rating-stars" role="img" aria-label="${rating} out of 5 stars">${stars}</div>`;
     },
 
     // Add CSS styles
@@ -241,6 +241,4 @@
       document.head.appendChild(style);
     }
   };
-
-  console.log('✅ Reviews Widget Ready');
 })();

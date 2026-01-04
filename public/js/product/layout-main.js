@@ -104,9 +104,12 @@
       img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; display: block;';
       facade.appendChild(img);
 
-      // 2. The Play Button Overlay - positioned above image
-      const playBtn = document.createElement('div');
+      // 2. The Play Button Overlay - positioned above image (Accessibility Enhanced)
+      const playBtn = document.createElement('button');
       playBtn.className = 'play-btn-overlay';
+      playBtn.type = 'button';
+      playBtn.setAttribute('aria-label', 'Play video');
+      playBtn.setAttribute('role', 'button');
       playBtn.style.cssText = `
         position: absolute;
         top: 50%;
@@ -116,34 +119,42 @@
         height: 80px;
         background: rgba(0, 0, 0, 0.7);
         border-radius: 50%;
+        border: none;
         display: flex;
         align-items: center;
         justify-content: center;
         color: white;
         transition: background-color 0.15s ease, transform 0.15s ease;
         z-index: 10;
-        pointer-events: none;
+        cursor: pointer;
       `;
-      // SVG Icon
+      // SVG Icon (aria-hidden for screen readers)
       playBtn.innerHTML = `
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="white" style="display:block; margin-left:4px;">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false">
           <path d="M8 5v14l11-7z"></path>
         </svg>
       `;
       facade.appendChild(playBtn);
 
-      // 3. Hover Effects
-      facade.onmouseenter = () => {
+      // 3. Hover & Focus Effects
+      playBtn.onmouseenter = () => {
         playBtn.style.background = 'rgba(79, 70, 229, 0.9)';
         playBtn.style.transform = 'translate(-50%, -50%) scale(1.1)';
       };
-      facade.onmouseleave = () => {
+      playBtn.onmouseleave = () => {
         playBtn.style.background = 'rgba(0, 0, 0, 0.7)';
         playBtn.style.transform = 'translate(-50%, -50%) scale(1.0)';
       };
+      playBtn.onfocus = () => {
+        playBtn.style.outline = '3px solid #667eea';
+        playBtn.style.outlineOffset = '2px';
+      };
+      playBtn.onblur = () => {
+        playBtn.style.outline = 'none';
+      };
 
       // 4. Click Handler - Load the real player
-      facade.onclick = () => {
+      const loadVideo = () => {
         // Clear the facade
         videoWrapper.innerHTML = '';
         
@@ -185,6 +196,13 @@
             playerContainer.innerHTML = `<video src="${product.video_url}" controls autoplay playsinline style="width:100%;height:100%;min-height:200px;"></video>`;
           }
         }
+      };
+
+      // Add click listeners to both facade and playBtn
+      facade.onclick = loadVideo;
+      playBtn.onclick = (e) => {
+        e.stopPropagation();
+        loadVideo();
       };
 
       videoWrapper.appendChild(facade);
@@ -331,9 +349,11 @@
 
     thumbsContainer.appendChild(thumbsDiv);
 
-    // Add slider arrows
+    // Add slider arrows (with accessibility)
     const leftArrow = document.createElement('button');
     leftArrow.innerHTML = '‹';
+    leftArrow.setAttribute('aria-label', 'Previous thumbnails');
+    leftArrow.type = 'button';
     leftArrow.style.cssText = 'position: absolute; left: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: none;';
     leftArrow.onclick = () => {
       thumbsDiv.scrollBy({ left: -160, behavior: 'smooth' });
@@ -341,6 +361,8 @@
 
     const rightArrow = document.createElement('button');
     rightArrow.innerHTML = '›';
+    rightArrow.setAttribute('aria-label', 'Next thumbnails');
+    rightArrow.type = 'button';
     rightArrow.style.cssText = 'position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: none;';
     rightArrow.onclick = () => {
       thumbsDiv.scrollBy({ left: 160, behavior: 'smooth' });
@@ -374,6 +396,8 @@
     
     const ratingRow = document.createElement('div');
     ratingRow.className = 'rating-row';
+    ratingRow.setAttribute('role', 'img');
+    ratingRow.setAttribute('aria-label', `Rating: ${ratingAverage.toFixed(1)} out of 5 stars, ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`);
     
     const reviewCount = product.review_count || 0;
     const ratingAverage = product.rating_average || 5.0;
@@ -391,7 +415,7 @@
       ? 'No reviews yet' 
       : `${ratingAverage.toFixed(1)} (${reviewCount} ${reviewCount === 1 ? 'Review' : 'Reviews'})`;
     
-    ratingRow.innerHTML = `<span class="stars">${starsHtml}</span> <span class="review-count">${reviewText}</span>`;
+    ratingRow.innerHTML = `<span class="stars" aria-hidden="true">${starsHtml}</span> <span class="review-count">${reviewText}</span>`;
     panel.appendChild(ratingRow);
     
     // Badges
@@ -490,14 +514,18 @@
     
     const note = document.createElement('div');
     note.className = 'digital-note';
-    note.innerHTML = '<span>📩</span> <span><strong>Digital Delivery:</strong> Receive via WhatsApp/Email.</span>';
+    note.setAttribute('role', 'note');
+    note.innerHTML = '<span aria-hidden="true">📩</span> <span><strong>Digital Delivery:</strong> Receive via WhatsApp/Email.</span>';
     panel.appendChild(note);
     
     // Book Now Button - reveals addons form
     const bookNowBtn = document.createElement('button');
     bookNowBtn.id = 'book-now-trigger';
+    bookNowBtn.type = 'button';
     bookNowBtn.className = 'btn-book-now';
-    bookNowBtn.innerHTML = '🎬 Book Now - $' + window.basePrice.toLocaleString();
+    bookNowBtn.setAttribute('aria-expanded', 'false');
+    bookNowBtn.setAttribute('aria-controls', 'addons-container');
+    bookNowBtn.innerHTML = '<span aria-hidden="true">🎬</span> Book Now - $' + window.basePrice.toLocaleString();
     bookNowBtn.style.cssText = `
       width: 100%;
       padding: 16px 24px;
@@ -563,13 +591,17 @@
       // Minimal Checkout: Apple Pay + Card buttons side by side
       const btnContainer = document.createElement('div');
       btnContainer.style.cssText = 'display: flex; gap: 12px; flex-wrap: wrap;';
+      btnContainer.setAttribute('role', 'group');
+      btnContainer.setAttribute('aria-label', 'Payment options');
 
       // Apple Pay Button
       const applePayBtn = document.createElement('button');
       applePayBtn.id = 'apple-pay-btn';
+      applePayBtn.type = 'button';
       applePayBtn.className = 'btn-buy';
+      applePayBtn.setAttribute('aria-label', 'Pay with Apple Pay');
       applePayBtn.style.cssText = 'flex: 1; min-width: 140px; background: #000; color: #fff;';
-      applePayBtn.innerHTML = ' Pay';
+      applePayBtn.innerHTML = '<span aria-hidden="true"></span> Pay';
       applePayBtn.addEventListener('click', function(e) {
         e.preventDefault();
         if (typeof handleCheckout === 'function') handleCheckout();
@@ -578,9 +610,11 @@
       // Card Button
       const cardBtn = document.createElement('button');
       cardBtn.id = 'checkout-btn';
+      cardBtn.type = 'button';
       cardBtn.className = 'btn-buy';
+      cardBtn.setAttribute('aria-label', 'Pay with credit or debit card');
       cardBtn.style.cssText = 'flex: 1; min-width: 140px; background: #2563eb; color: #fff;';
-      cardBtn.textContent = 'Pay with Card 💳';
+      cardBtn.innerHTML = 'Pay with Card <span aria-hidden="true">💳</span>';
       cardBtn.addEventListener('click', function(e) {
         e.preventDefault();
         if (typeof handleCheckout === 'function') handleCheckout();
@@ -593,8 +627,9 @@
       // Standard Checkout Button
       const checkoutBtn = document.createElement('button');
       checkoutBtn.id = 'checkout-btn';
+      checkoutBtn.type = 'button';
       checkoutBtn.className = 'btn-buy';
-      checkoutBtn.textContent = '✅ Proceed to Checkout - $' + window.currentTotal.toLocaleString();
+      checkoutBtn.innerHTML = '<span aria-hidden="true">✅</span> Proceed to Checkout - $' + window.currentTotal.toLocaleString();
       checkoutBtn.addEventListener('click', function(e) {
         e.preventDefault();
         if (typeof handleCheckout === 'function') handleCheckout();
@@ -615,7 +650,8 @@
         addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 1000 + 'px';
         addonsContainer.style.opacity = '1';
         addonsContainer.style.overflow = 'hidden';
-        bookNowBtn.innerHTML = '📝 Customize Your Order';
+        bookNowBtn.innerHTML = '<span aria-hidden="true">📝</span> Customize Your Order';
+        bookNowBtn.setAttribute('aria-expanded', 'true');
         bookNowBtn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
         bookNowBtn.style.boxShadow = '0 4px 15px rgba(16, 185, 129, 0.4)';
         isExpanded = true;
@@ -642,7 +678,8 @@
         addonsContainer.offsetHeight;
         addonsContainer.style.maxHeight = '0';
         addonsContainer.style.opacity = '0';
-        bookNowBtn.innerHTML = '🎬 Book Now - $' + window.basePrice.toLocaleString();
+        bookNowBtn.innerHTML = '<span aria-hidden="true">🎬</span> Book Now - $' + window.basePrice.toLocaleString();
+        bookNowBtn.setAttribute('aria-expanded', 'false');
         bookNowBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
         bookNowBtn.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
         isExpanded = false;

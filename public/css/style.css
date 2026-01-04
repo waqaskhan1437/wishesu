@@ -144,6 +144,54 @@ main {
   background: rgba(102, 126, 234, 0.8);
 }
 
+/* Accessibility: Screen reader only class */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Accessibility: Focus visible styles for keyboard navigation */
+:focus-visible {
+  outline: 3px solid #667eea;
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #667eea;
+  outline-offset: 2px;
+}
+
+/* Remove default focus outline when using mouse */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Touch target minimum size (48x48px for WCAG) */
+.addon-option-card {
+  min-height: 48px;
+}
+
+.btn-buy,
+.btn-book-now {
+  min-height: 48px;
+}
+
+/* Ensure interactive elements have sufficient touch target */
+.thumb {
+  min-height: 48px;
+}
+
 .thumb {
   min-width: 140px;
   width: 140px;

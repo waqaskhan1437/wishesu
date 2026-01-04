@@ -396,5 +396,5 @@
     }
   };
 
-  console.log('✅ Product Cards System Ready');
+  
 })();

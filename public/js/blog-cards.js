@@ -330,5 +330,5 @@
     }
   };
 
-  console.log('✅ Blog Cards System Ready');
+  
 })();

@@ -16,12 +16,15 @@ const CHAR_LIMITS = {
   function renderAddonField(field) {
     const container = document.createElement('div');
     container.className = 'addon-group';
+    container.setAttribute('role', 'group');
+    if (field.label) container.setAttribute('aria-label', field.label);
 
     // 1. Create Main Label
     if (field.label) {
       const lbl = document.createElement('label');
       lbl.className = 'addon-group-label';
-      lbl.innerHTML = field.label + (field.required ? ' <span style="color:red">*</span>' : '');
+      lbl.id = field.id + '-label';
+      lbl.innerHTML = field.label + (field.required ? ' <span style="color:red" aria-hidden="true">*</span><span class="sr-only"> (required)</span>' : '');
       if (!['radio', 'checkbox_group'].includes(field.type)) lbl.htmlFor = field.id;
       container.appendChild(lbl);
     }

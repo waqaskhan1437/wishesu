@@ -2,12 +2,12 @@
  * Products controller - Product CRUD operations
  */
 
-import { json } from '../utils/response.js';
+import { json, cachedJson } from '../utils/response.js';
 import { slugifyStr, toISO8601 } from '../utils/formatting.js';
 
 /**
  * Get active products (public)
- * OPTIMIZED: Single JOIN query instead of N+1 queries
+ * OPTIMIZED: Single JOIN query + Edge caching
  */
 export async function getProducts(env) {
   const r = await env.DB.prepare(`
@@ -30,7 +30,8 @@ export async function getProducts(env) {
     rating_average: product.rating_average ? Math.round(product.rating_average * 10) / 10 : 0
   }));
 
-  return json({ products });
+  // Cache for 2 minutes on edge
+  return cachedJson({ products }, 120);
 }
 
 /**

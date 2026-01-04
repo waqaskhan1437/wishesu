@@ -1,8 +1,9 @@
 /**
  * Forum Controller - Questions and Replies with moderation
+ * OPTIMIZED: Added edge caching for public endpoints
  */
 
-import { json } from '../utils/response.js';
+import { json, cachedJson } from '../utils/response.js';
 import { 
   notifyNewForumQuestion, 
   notifyNewForumReply,
@@ -146,7 +147,8 @@ export async function getPublishedQuestions(env, url) {
       LIMIT ? OFFSET ?
     `).bind(limit, offset).all();
 
-    return json({
+    // Cache for 2 minutes
+    return cachedJson({
       success: true,
       questions: result.results || [],
       pagination: {
@@ -157,7 +159,7 @@ export async function getPublishedQuestions(env, url) {
         hasNext: offset + limit < total,
         hasPrev: page > 1
       }
-    });
+    }, 120);
   } catch (err) {
     console.error('getPublishedQuestions error:', err);
     return json({ error: err.message, questions: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false } }, 500);

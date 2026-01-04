@@ -1,11 +1,12 @@
 /**
  * Blog Controller - Blog posts CRUD operations
+ * OPTIMIZED: Added edge caching for public endpoints
  */
 
-import { json } from '../utils/response.js';
+import { json, cachedJson } from '../utils/response.js';
 
 /**
- * Get all blog posts (admin)
+ * Get all blog posts (admin - no cache)
  */
 export async function getBlogs(env) {
   try {
@@ -19,7 +20,7 @@ export async function getBlogs(env) {
 }
 
 /**
- * Get blog posts list (minimal data for admin table)
+ * Get blog posts list (minimal data for admin table - no cache)
  */
 export async function getBlogsList(env) {
   try {
@@ -34,7 +35,7 @@ export async function getBlogsList(env) {
 }
 
 /**
- * Get published blogs for archive page with pagination
+ * Get published blogs for archive page with pagination (PUBLIC - cached)
  */
 export async function getPublishedBlogs(env, url) {
   try {
@@ -57,7 +58,8 @@ export async function getPublishedBlogs(env, url) {
       LIMIT ? OFFSET ?
     `).bind(limit, offset).all();
 
-    return json({
+    // Cache for 3 minutes
+    return cachedJson({
       success: true,
       blogs: result.results || [],
       pagination: {

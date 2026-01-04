@@ -1,9 +1,9 @@
 /**
  * Reviews controller - Review management
- * OPTIMIZED: Added validation limits and caching hints
+ * OPTIMIZED: Added validation limits and edge caching
  */
 
-import { json } from '../utils/response.js';
+import { json, cachedJson } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
 import { notifyNewReview } from './automation.js';
 
@@ -16,7 +16,7 @@ const REVIEW_LIMITS = {
 };
 
 /**
- * Get reviews with filters
+ * Get reviews with filters (PUBLIC - cached)
  */
 export async function getReviews(env, url) {
   const params = url.searchParams;
@@ -67,7 +67,8 @@ export async function getReviews(env, url) {
     return review;
   });
 
-  return json({ reviews });
+  // Cache for 2 minutes - reviews don't change often
+  return cachedJson({ reviews }, 120);
 }
 
 /**

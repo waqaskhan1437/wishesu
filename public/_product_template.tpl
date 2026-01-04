@@ -65,6 +65,11 @@
     .skeleton-btn{height:50px;background:#f0f0f0;border-radius:var(--radius-sm);margin-top:1.5rem}
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
     @media(max-width:900px){.skeleton-container{display:flex;flex-direction:column}.skeleton-media{min-height:auto}.video-wrapper{overflow:visible !important}.video-wrapper video{min-height:200px}#thumbnails-slider video::-webkit-media-controls{display:none !important}}
+    /* Screen reader only - for accessibility */
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    /* Focus visible for keyboard navigation */
+    :focus-visible{outline:3px solid #667eea;outline-offset:2px}
+    button:focus-visible,a:focus-visible{outline:3px solid #667eea;outline-offset:2px}
   </style>
 
   <!-- Non-critical CSS loaded asynchronously -->
@@ -82,12 +87,15 @@
   <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
 </head>
 <body>
+  <!-- Skip to main content for keyboard users -->
+  <a href="#main-content" class="sr-only" style="position:absolute;top:-40px;left:0;background:#4f46e5;color:#fff;padding:8px 16px;z-index:100000;text-decoration:none;font-weight:600;" onfocus="this.style.top='0'" onblur="this.style.top='-40px'">Skip to main content</a>
+  
   <script src="/js/global-components.js"></script>
 
-  <main>
-    <div class="breadcrumb">
-      <a href="/">&larr; Back to Home</a>
-    </div>
+  <main id="main-content">
+    <nav class="breadcrumb" aria-label="Breadcrumb navigation">
+      <a href="/" aria-label="Go back to home page">&larr; Back to Home</a>
+    </nav>
 
     <div id="product-container" class="loading-state">
       <!-- Skeleton placeholder matching final layout to prevent CLS -->

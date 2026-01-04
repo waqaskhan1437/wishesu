@@ -378,7 +378,7 @@
         
         // Create order on PayPal
         createOrder: async (data, actions) => {
-          console.log('🅿️ Creating PayPal order...');
+          
           
           const response = await fetch('/api/paypal/create-order', {
             method: 'POST',
@@ -401,13 +401,13 @@
             throw new Error(orderData.error);
           }
           
-          console.log('🅿️ PayPal order created:', orderData.order_id);
+          
           return orderData.order_id;
         },
         
         // Capture payment after approval
         onApprove: async (data, actions) => {
-          console.log('🅿️ Payment approved, capturing...');
+          
           
           const response = await fetch('/api/paypal/capture-order', {
             method: 'POST',
@@ -418,7 +418,7 @@
           const captureData = await response.json();
           
           if (captureData.success && captureData.order_id) {
-            console.log('✅ Payment captured:', captureData.order_id);
+            
             window.PaymentSelector.close();
             // Redirect to success page
             window.location.href = `/success.html?provider=paypal_direct&order_id=${captureData.order_id}&product=${checkoutData.productId}`;
@@ -433,7 +433,7 @@
         },
         
         onCancel: () => {
-          console.log('🅿️ Payment cancelled');
+          
         }
         
       }).render('#paypal-buttons-container');
@@ -600,7 +600,7 @@
     
     // If only Whop available, use it directly (no modal)
     if (paymentMethods.length === 1 && paymentMethods[0].id === 'whop') {
-      console.log('🔵 Only Whop available, using directly');
+      
       await selectMethod('whop');
       return;
     }
@@ -655,5 +655,5 @@
     loadPaymentMethods
   };
 
-  console.log('✅ Payment Selector loaded');
+  
 })();

@@ -1,9 +1,10 @@
 /**
  * Payment Gateway - Unified payment method management
  * Supports: Whop, PayPal, Stripe (future), and custom methods
+ * OPTIMIZED: Added edge caching
  */
 
-import { json } from '../utils/response.js';
+import { json, cachedJson } from '../utils/response.js';
 
 /**
  * Get payment methods enabled status
@@ -15,7 +16,7 @@ async function getPaymentMethodsEnabled(env) {
       return JSON.parse(row.value);
     }
   } catch (e) {
-    console.log('Payment methods settings not found, using defaults');
+    
   }
   // Default: both enabled
   return { paypal_enabled: true, whop_enabled: true };
@@ -57,7 +58,7 @@ export async function getPaymentMethods(env) {
         });
       }
     } catch (e) {
-      console.log('Whop check failed:', e);
+      
     }
   }
   
@@ -100,7 +101,7 @@ export async function getPaymentMethods(env) {
         }
       }
     } catch (e) {
-      console.log('PayPal check failed:', e);
+      
     }
   }
   
@@ -121,14 +122,13 @@ export async function getPaymentMethods(env) {
         });
       }
     }
-  } catch (e) {
-    console.log('Stripe check failed:', e);
-  }
+  } catch (e) {}
   
   // Sort by priority
   methods.sort((a, b) => a.priority - b.priority);
   
-  return json({ methods });
+  // Cache for 2 minutes
+  return cachedJson({ methods }, 120);
 }
 
 /**
@@ -165,9 +165,7 @@ export async function getPaymentMethodsStatus(env) {
     if (row?.value) {
       status = JSON.parse(row.value);
     }
-  } catch (e) {
-    console.log('Payment methods status not found, using defaults');
-  }
+  } catch (e) {}
   
   // Also check if methods are configured
   let paypalConfigured = false;
@@ -191,12 +189,13 @@ export async function getPaymentMethodsStatus(env) {
     }
   } catch (e) {}
   
-  return json({
+  // Cache for 2 minutes - payment settings don't change often
+  return cachedJson({
     paypal_enabled: status.paypal_enabled !== false,
     whop_enabled: status.whop_enabled !== false,
     paypal_configured: paypalConfigured,
     whop_configured: whopConfigured
-  });
+  }, 120);
 }
 
 /**
