@@ -187,14 +187,62 @@ export async function sendMessage(env, body, reqUrl) {
     const sess2 = await env.DB.prepare('SELECT name, email FROM chat_sessions WHERE id = ?').bind(sessionId).first();
     sessionName = sess2?.name || '';
     sessionEmail = sess2?.email || '';
-  } catch (e) {}  // Notify admin about customer message (async)
-  if (role === 'user') {
-    notifyNewChatMessage(env, { sessionId, name: sessionName, email: sessionEmail, content: trimmed, isFirstMessage: isFirstUserMessage }).catch(() => {});
-  }
+  } catch (e) {}
 
+  // Notify admin about customer message (async)
+  if (role === 'user') {
+    notifyNewChatMessage(env, { 
+      name: sessionName, 
+      email: sessionEmail, 
+      content: trimmed 
+    }).catch(() => {});
+  }
+  
   // Notify customer about admin reply (async)
   if (role === 'admin' && sessionEmail) {
-    notifyCustomerChatReply(env, { sessionId, customerEmail: sessionEmail, customerName: sessionName, replyMessage: trimmed, chatUrl: '/support?email=' + encodeURIComponent(sessionEmail) }).catch(() => {});
+    notifyCustomerChatReply(env, { 
+      name: sessionName, 
+      email: sessionEmail, 
+      replyContent: trimmed 
+    }).catch(() => {});
+  }
+
+  // Trigger email alert webhook on first customer message (NON-BLOCKING)
+  if (isFirstUserMessage) {
+    try {
+      const setting = await env.DB.prepare(
+        `SELECT value FROM settings WHERE key = ?`
+      ).bind('GOOGLE_SCRIPT_URL').first();
+
+      const scriptUrl = String(setting?.value || '').trim();
+
+      if (scriptUrl) {
+        const session = await env.DB.prepare(
+          `SELECT id, name, email, created_at FROM chat_sessions WHERE id = ?`
+        ).bind(sessionId).first();
+
+        // Fire-and-forget: don't await, use ctx.waitUntil if available
+        const webhookPromise = fetch(scriptUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'first_customer_message',
+            sessionId,
+            name: session?.name || null,
+            email: session?.email || null,
+            created_at: session?.created_at || null,
+            message: trimmed
+          })
+        }).catch(e => console.error('Chat webhook failed:', e));
+        
+        // Use waitUntil if context available, otherwise fire-and-forget
+        if (ctx && typeof ctx.waitUntil === 'function') {
+          ctx.waitUntil(webhookPromise);
+        }
+      }
+    } catch (e) {
+      console.error('Chat webhook trigger failed:', e);
+    }
   }
 
   // Smart Quick Action Auto-Replies

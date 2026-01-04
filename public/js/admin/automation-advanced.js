@@ -267,37 +267,12 @@
 
   function renderWebhooksPanel() {
     const webhooks = config.webhooks || [];
-    const gs = webhooks.find(w => w && w.tag === 'google_script_hub') || {};
-    const gsUrl = gs.url || '';
-    const gsToken = '';
     return `
       <div class="aa-panel active">
         <div class="aa-card">
           <h3>🔗 Webhook Endpoints</h3>
           <p>Add multiple webhooks for different services</p>
           <button class="aa-btn aa-btn-primary aa-btn-sm" onclick="window.AdvAutomation.addWebhook()">+ Add Webhook</button>
-        </div>
-
-        <div class="aa-card">
-          <h3>🧩 Google Apps Script Hub (Quick Setup)</h3>
-          <p>Forward <b>all alerts</b> to one Google Apps Script webhook (logs + email list + sending).</p>
-          <div class="aa-row">
-            <div class="aa-col">
-              <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">Web App URL</div>
-              <input class="aa-input" id="aa-gs-url" placeholder="https://script.google.com/macros/s/.../exec" value="${escapeHtml_(gsUrl)}">
-            </div>
-            <div class="aa-col">
-              <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">WEBHOOK_TOKEN</div>
-              <input class="aa-input" id="aa-gs-token" placeholder="Paste your token" value="${escapeHtml_(gsToken)}">
-            </div>
-          </div>
-          <div class="aa-row" style="margin-top:10px">
-            <button class="aa-btn aa-btn-primary aa-btn-sm" onclick="window.AdvAutomation.applyGoogleScriptPreset()">Apply (All Alerts)</button>
-            <button class="aa-btn aa-btn-ghost aa-btn-sm" onclick="window.AdvAutomation.removeGoogleScriptPreset()">Remove</button>
-          </div>
-          <div style="color:#6b7280;font-size:11px;margin-top:8px">
-            Note: Apps Script web apps can’t reliably read custom headers. Token will be sent as <b>?token=</b>.
-          </div>
         </div>
         
         <div class="aa-list" id="aa-webhooks-list">
@@ -320,125 +295,6 @@
         </div>
       </div>
     `;
-  }
-
-  function escapeHtml_(s) {
-    s = String(s || '');
-    return s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function upsertQueryParam_(urlStr, key, val) {
-    try {
-      const u = new URL(urlStr);
-      if (val === null || val === undefined || val === '') {
-        u.searchParams.delete(key);
-      } else {
-        u.searchParams.set(key, val);
-      }
-      return u.toString();
-    } catch (e) {
-      return urlStr;
-    }
-  }
-
-  async function applyGoogleScriptPreset() {
-    try {
-      const urlEl = document.getElementById('aa-gs-url');
-      const tokenEl = document.getElementById('aa-gs-token');
-      const rawUrl = (urlEl ? urlEl.value : '').trim();
-      const token = (tokenEl ? tokenEl.value : '').trim();
-
-      if (!rawUrl) {
-        alert('Please paste your Google Apps Script Web App URL.');
-        return;
-      }
-      if (!token) {
-        alert('Please paste your WEBHOOK_TOKEN from Apps Script properties.');
-        return;
-      }
-
-      config.enabled = true;
-      config.webhooks = config.webhooks || [];
-      config.routing = config.routing || {};
-
-      const finalUrl = upsertQueryParam_(rawUrl, 'token', token);
-      let idx = config.webhooks.findIndex(w => w && w.tag === 'google_script_hub');
-
-      if (idx === -1) {
-        const id = generateId();
-        config.webhooks.push({
-          id,
-          tag: 'google_script_hub',
-          name: 'Google Apps Script Hub',
-          type: 'custom',
-          url: finalUrl,
-          method: 'POST',
-          enabled: true
-        });
-        idx = config.webhooks.length - 1;
-      } else {
-        const w = config.webhooks[idx] || {};
-        config.webhooks[idx] = {
-          ...w,
-          tag: 'google_script_hub',
-          name: w.name || 'Google Apps Script Hub',
-          type: w.type || 'custom',
-          method: w.method || 'POST',
-          url: finalUrl,
-          enabled: true
-        };
-      }
-
-      const hookId = config.webhooks[idx].id;
-      for (const key of Object.keys(NOTIFICATION_TYPES)) {
-        const r = config.routing[key] || { webhooks: [], emailService: null, adminEmail: key.startsWith('customer_') ? false : true, enabled: true };
-        const list = Array.isArray(r.webhooks) ? r.webhooks.slice() : [];
-        if (!list.includes(hookId)) list.push(hookId);
-        config.routing[key] = { ...r, webhooks: list, enabled: true };
-      }
-
-      setStatus('Saving preset...');
-      const ok = await saveConfig();
-      setStatus(ok ? '✅ Google Script Hub enabled for all alerts' : '❌ Failed to save');
-      renderPanel('webhooks');
-    } catch (e) {
-      console.error(e);
-      alert('Failed to apply preset: ' + (e.message || e));
-    }
-  }
-
-  async function removeGoogleScriptPreset() {
-    try {
-      config.webhooks = config.webhooks || [];
-      const idx = config.webhooks.findIndex(w => w && w.tag === 'google_script_hub');
-      if (idx === -1) {
-        alert('Google Apps Script Hub is not configured.');
-        return;
-      }
-      const hookId = config.webhooks[idx].id;
-      config.webhooks.splice(idx, 1);
-
-      if (config.routing) {
-        Object.keys(config.routing).forEach(k => {
-          const r = config.routing[k];
-          if (!r || !Array.isArray(r.webhooks)) return;
-          r.webhooks = r.webhooks.filter(id => id !== hookId);
-        });
-      }
-
-      setStatus('Removing preset...');
-      const ok = await saveConfig();
-      setStatus(ok ? '✅ Google Script Hub removed' : '❌ Failed to save');
-      renderPanel('webhooks');
-    } catch (e) {
-      console.error(e);
-      alert('Failed to remove: ' + (e.message || e));
-    }
   }
 
   function renderEmailPanel() {

@@ -18,7 +18,6 @@ const NOTIFICATION_TYPES = {
   FORUM_REPLY: 'forum_reply',
   CHAT_MESSAGE: 'chat_message',
   ORDER_DELIVERED: 'order_delivered',
-  ORDER_REVISION_REQUESTED: 'order_revision_requested',
   CUSTOMER_ORDER_CONFIRMED: 'customer_order_confirmed',
   CUSTOMER_ORDER_DELIVERED: 'customer_order_delivered',
   CUSTOMER_CHAT_REPLY: 'customer_chat_reply',
@@ -68,8 +67,6 @@ function getDefaultConfig() {
       forum_question: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
       forum_reply: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
       chat_message: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
-      order_delivered: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
-      order_revision_requested: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
       customer_order_confirmed: { webhooks: [], emailService: null, adminEmail: false, enabled: true },
       customer_order_delivered: { webhooks: [], emailService: null, adminEmail: false, enabled: true },
       customer_chat_reply: { webhooks: [], emailService: null, adminEmail: false, enabled: true },
@@ -231,25 +228,12 @@ async function sendWebhook(env, webhook, payload) {
         // Custom body template support
         if (webhook.bodyTemplate) {
           body = webhook.bodyTemplate
-            .replace(/\{\{notificationType\}\}/g, payload.notificationType || payload.type || '')
             .replace(/\{\{event\}\}/g, payload.event || '')
             .replace(/\{\{title\}\}/g, payload.title || '')
             .replace(/\{\{message\}\}/g, JSON.stringify(payload.message || '').slice(1,-1))
-            .replace(/\{\{data\}\}/g, JSON.stringify(payload.data || {}))
-            .replace(/\{\{buttonText\}\}/g, JSON.stringify(payload.buttonText || '').slice(1,-1))
-            .replace(/\{\{buttonUrl\}\}/g, JSON.stringify(payload.buttonUrl || '').slice(1,-1))
-            .replace(/\{\{timestamp\}\}/g, new Date().toISOString());
+            .replace(/\{\{data\}\}/g, JSON.stringify(payload.data || {}));
         } else {
-          body = JSON.stringify({
-            notificationType: payload.notificationType || null,
-            event: payload.event,
-            title: payload.title,
-            message: payload.message,
-            data: payload.data,
-            buttonText: payload.buttonText || null,
-            buttonUrl: payload.buttonUrl || null,
-            timestamp: new Date().toISOString()
-          });
+          body = JSON.stringify({ event: payload.event, title: payload.title, message: payload.message, data: payload.data, timestamp: new Date().toISOString() });
         }
     }
     
@@ -408,14 +392,11 @@ async function dispatchNotification(env, notificationType, payload, recipientEma
   const routing = config.routing?.[notificationType];
   if (!routing?.enabled) return { success: false, error: 'Route disabled' };
   
-  // Attach routing key for external webhook receivers
-  const fullPayload = { ...payload, notificationType };
-
   const results = { webhooks: [], email: null };
   
   // Send webhooks (parallel)
   if (routing.webhooks?.length) {
-    results.webhooks = await sendToWebhooks(env, routing.webhooks, fullPayload, config.webhooks || []);
+    results.webhooks = await sendToWebhooks(env, routing.webhooks, payload, config.webhooks || []);
   }
   
   // Send email
@@ -469,15 +450,10 @@ export async function notifyNewReview(env, data) {
 }
 
 export async function notifyBlogComment(env, data) {
-  const postTitle = data?.postTitle || data?.post_title || data?.blogTitle || data?.blog_title || '';
-  const authorName = data?.authorName || data?.author_name || data?.name || data?.author || '';
-  const authorEmail = data?.email || data?.authorEmail || data?.author_email || '';
-  const comment = data?.content || data?.comment || data?.message || '';
-
   return dispatchNotification(env, 'blog_comment', {
     event: 'blog_comment',
     title: '💬 New Blog Comment!',
-    message: `Post: ${postTitle}\nAuthor: ${authorName}${authorEmail ? ` <${authorEmail}>` : ''}\nComment: ${comment}`,
+    message: `Post: ${data.postTitle || data.post_title}\nAuthor: ${data.authorName || data.author_name}\nComment: ${data.content || data.comment}`,
     data,
     buttonText: 'Moderate',
     buttonUrl: '/admin/dashboard.html#blog-comments'
@@ -485,80 +461,35 @@ export async function notifyBlogComment(env, data) {
 }
 
 export async function notifyForumQuestion(env, data) {
-  const title = data?.title || '';
-  const authorName = data?.authorName || data?.author_name || data?.name || '';
-  const authorEmail = data?.email || data?.authorEmail || data?.author_email || '';
-  const question = data?.content || data?.body || data?.message || '';
-  const url = data?.url || (data?.id ? `/forum/question.html?id=${data.id}` : '/forum');
-
   return dispatchNotification(env, 'forum_question', {
     event: 'forum_question',
     title: '❓ New Forum Question!',
-    message: `Title: ${title}\nAuthor: ${authorName}${authorEmail ? ` <${authorEmail}>` : ''}\nQuestion: ${question}`,
+    message: `Title: ${data.title}\nAuthor: ${data.authorName || data.author_name}\nQuestion: ${data.content || data.body}`,
     data,
     buttonText: 'View',
-    buttonUrl: url
+    buttonUrl: data.url || `/forum/question.html?id=${data.id}`
   });
 }
 
 export async function notifyForumReply(env, data) {
-  const questionTitle = data?.questionTitle || data?.question_title || '';
-  const replyBy = data?.authorName || data?.author_name || data?.replyAuthorName || data?.name || '';
-  const replyEmail = data?.email || data?.authorEmail || data?.author_email || '';
-  const replyText = data?.content || data?.body || data?.replyContent || data?.reply || '';
-
   return dispatchNotification(env, 'forum_reply', {
     event: 'forum_reply',
     title: '💬 New Forum Reply!',
-    message: `Question: ${questionTitle}\nReply by: ${replyBy}${replyEmail ? ` <${replyEmail}>` : ''}\nReply: ${replyText}`,
+    message: `Question: ${data.questionTitle || data.question_title}\nReply by: ${data.authorName || data.author_name}\nReply: ${data.content || data.body}`,
     data
   });
 }
 
 export async function notifyChatMessage(env, data) {
-  const fromName = data?.senderName || data?.sender_name || data?.name || 'Customer';
-  const fromEmail = data?.email || data?.senderEmail || data?.sender_email || '';
-  const msg = data?.message || data?.content || '';
   return dispatchNotification(env, 'chat_message', {
     event: 'chat_message',
     title: '💬 New Chat Message!',
-    message: `From: ${fromName}${fromEmail ? ` <${fromEmail}>` : ''}\nMessage: ${msg}`,
+    message: `From: ${data.senderName || data.sender_name || 'Customer'}\nMessage: ${data.message || data.content}`,
     data,
     buttonText: 'View Chats',
     buttonUrl: '/admin/dashboard.html#chats'
   });
 }
-
-export async function notifyOrderDeliveredAdmin(env, data) {
-  const orderId = data?.orderId || data?.order_id || data?.id || '';
-  const productTitle = data?.productTitle || data?.product_title || '';
-  const email = data?.email || data?.customerEmail || data?.customer_email || '';
-  return dispatchNotification(env, 'order_delivered', {
-    event: 'order_delivered',
-    title: '🎬 Order Delivered',
-    message: `Order #${orderId}\nProduct: ${productTitle}\nCustomer: ${email}\nVideo: ${data.videoUrl || data.video_url || ''}`,
-    data,
-    buttonText: 'View Order',
-    buttonUrl: data.adminUrl || '/admin/dashboard.html#orders'
-  });
-}
-
-export async function notifyRevisionRequested(env, data) {
-  const orderId = data?.orderId || data?.order_id || data?.id || '';
-  const productTitle = data?.productTitle || data?.product_title || '';
-  const email = data?.email || data?.customerEmail || data?.customer_email || '';
-  const reason = data?.reason || data?.revision_reason || '';
-  const count = data?.revisionCount || data?.revision_count || '';
-  return dispatchNotification(env, 'order_revision_requested', {
-    event: 'order_revision_requested',
-    title: '🛠️ Revision Requested',
-    message: `Order #${orderId}\nProduct: ${productTitle}\nCustomer: ${email}\nReason: ${reason}\nRevision #: ${count}`,
-    data,
-    buttonText: 'View Order',
-    buttonUrl: data.adminUrl || '/admin/dashboard.html#orders'
-  });
-}
-
 
 export async function notifyOrderDelivered(env, data) {
   return dispatchNotification(env, 'customer_order_delivered', {
@@ -583,35 +514,25 @@ export async function notifyCustomerOrderConfirmed(env, data) {
 }
 
 export async function notifyCustomerChatReply(env, data) {
-  const toEmail = data?.customerEmail || data?.customer_email || data?.email || '';
-  const customerName = data?.customerName || data?.customer_name || data?.name || 'there';
-  const reply = data?.replyMessage || data?.reply_message || data?.replyContent || data?.reply || '';
-  const chatUrl = data?.chatUrl || data?.chat_url || '/support';
   return dispatchNotification(env, 'customer_chat_reply', {
     event: 'chat_reply',
     title: '💬 New Reply!',
-    message: `Hi ${customerName}!\n\nYou have a new reply:\n"${reply}"`,
+    message: `Hi ${data.customerName || 'there'}!\n\nYou have a new reply:\n"${data.replyMessage || data.reply}"`,
     data,
     buttonText: 'View',
-    buttonUrl: chatUrl
-  }, toEmail);
+    buttonUrl: data.chatUrl
+  }, data.customerEmail);
 }
 
 export async function notifyCustomerForumReply(env, data) {
-  const toEmail = data?.customerEmail || data?.customer_email || data?.questionAuthorEmail || data?.question_author_email || data?.email || '';
-  const customerName = data?.customerName || data?.customer_name || data?.questionAuthorName || data?.question_author_name || 'there';
-  const questionTitle = data?.questionTitle || data?.question_title || '';
-  const replyContent = data?.replyContent || data?.reply_content || data?.reply || '';
-  const slug = data?.questionSlug || data?.question_slug || '';
-  const questionUrl = data?.questionUrl || data?.question_url || (slug ? `/forum/${slug}` : '/forum');
   return dispatchNotification(env, 'customer_forum_reply', {
     event: 'forum_reply',
     title: '💬 Reply to Your Question',
-    message: `Hi ${customerName}!\n\nSomeone replied to "${questionTitle}":\n\n"${replyContent}"`,
+    message: `Hi ${data.customerName || 'there'}!\n\nSomeone replied to "${data.questionTitle || data.question_title}":\n\n"${data.replyContent || data.reply}"`,
     data,
     buttonText: 'View',
-    buttonUrl: questionUrl
-  }, toEmail);
+    buttonUrl: data.questionUrl
+  }, data.customerEmail);
 }
 
 // =============================================
@@ -647,16 +568,13 @@ export async function testNotification(env, body) {
     new_order: { orderId: 'TEST-001', productTitle: 'Test Product', amount: 25, customerName: 'Test Customer', email: 'test@example.com' },
     new_tip: { amount: 10, name: 'Test Tipper', message: 'Great!' },
     new_review: { productTitle: 'Test Product', rating: 5, customerName: 'Happy Customer', reviewText: 'Amazing!' },
-    blog_comment: { postTitle: 'Test Post', authorName: 'Commenter', email: 'commenter@example.com', content: 'Great article!' },
-    forum_question: { title: 'Test Question', authorName: 'User', email: 'user@example.com', content: 'How does this work?' },
-    forum_reply: { questionTitle: 'Test Question', authorName: 'Replier', email: 'replier@example.com', content: 'Here is an answer.' },
-    chat_message: { senderName: 'Customer', email: 'customer@example.com', message: 'Hello!' },
-    order_delivered: { orderId: 'TEST-001', productTitle: 'Test Product', email: 'customer@example.com', videoUrl: 'https://example.com/video.mp4' },
-    order_revision_requested: { orderId: 'TEST-001', productTitle: 'Test Product', email: 'customer@example.com', reason: 'Please change name', revisionCount: 2 }
+    blog_comment: { postTitle: 'Test Post', authorName: 'Commenter', content: 'Great article!' },
+    forum_question: { title: 'Test Question', authorName: 'User', content: 'How does this work?' },
+    chat_message: { senderName: 'Customer', message: 'Hello!' }
   };
   
   const data = testData[body.type] || testData.new_order;
-  const fn = { new_order: notifyNewOrder, new_tip: notifyNewTip, new_review: notifyNewReview, blog_comment: notifyBlogComment, forum_question: notifyForumQuestion, forum_reply: notifyForumReply, chat_message: notifyChatMessage, order_delivered: notifyOrderDeliveredAdmin, order_revision_requested: notifyRevisionRequested };
+  const fn = { new_order: notifyNewOrder, new_tip: notifyNewTip, new_review: notifyNewReview, blog_comment: notifyBlogComment, forum_question: notifyForumQuestion, chat_message: notifyChatMessage };
   const result = await (fn[body.type] || notifyNewOrder)(env, data);
   return json(result);
 }

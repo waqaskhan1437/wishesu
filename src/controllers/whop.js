@@ -322,7 +322,8 @@ export async function createPlanCheckout(env, body, origin) {
           product_id: product.id.toString(),
           product_title: product.title,
           addons: metadata?.addons || [],
-          amount: amount || priceValue
+          deliveryTimeMinutes: deliveryTimeMinutes,
+        amount: amount || priceValue
         },
         expires_in: '15 minutes',
         warning: 'Email prefill not available'
@@ -353,6 +354,7 @@ export async function createPlanCheckout(env, body, origin) {
         product_id: product.id.toString(),
         product_title: product.title,
         addons: metadata?.addons || [],
+        deliveryTimeMinutes: deliveryTimeMinutes,
         amount: amount || priceValue
       },
       expires_in: '15 minutes',
