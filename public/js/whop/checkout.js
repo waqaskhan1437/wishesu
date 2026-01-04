@@ -155,7 +155,6 @@
 
         // Try to get addons from multiple sources (in priority order)
         let addons = [];
-        let storedParsed = null;
 
         // Source 1: pendingOrderData.metadata.addons
         if (pendingOrderData?.metadata?.addons?.length > 0) {
@@ -167,39 +166,27 @@
             addons = savedAddons;
             console.log('📦 Addons from savedAddons backup:', addons.length);
         }
-        // Source 3: localStorage
+                // Source 3: localStorage
         else {
             try {
                 const storedData = localStorage.getItem('pendingOrderData');
                 if (storedData) {
                     const parsed = JSON.parse(storedData);
-                    storedParsed = parsed;
-
-                    // Restore missing fields from localStorage (delivery/email/amount/product)
-                    if (pendingOrderData && typeof pendingOrderData === 'object') {
-                        if (!pendingOrderData.email && parsed.email) pendingOrderData.email = parsed.email;
-                        if (!pendingOrderData.amount && parsed.amount) pendingOrderData.amount = parsed.amount;
-                        if (!pendingOrderData.productId && parsed.productId) pendingOrderData.productId = parsed.productId;
-                        if (!pendingOrderData.deliveryTimeMinutes && parsed.deliveryTimeMinutes) pendingOrderData.deliveryTimeMinutes = parsed.deliveryTimeMinutes;
-                        if (!pendingOrderData.metadata) pendingOrderData.metadata = {};
-                        if (!pendingOrderData.metadata.deliveryTimeMinutes && parsed.deliveryTimeMinutes) pendingOrderData.metadata.deliveryTimeMinutes = parsed.deliveryTimeMinutes;
-                    }
-
                     console.log('📦 Found stored order data in localStorage:', parsed);
-                    if (parsed.addons && parsed.addons.length > 0) {
+
+                    // Addons (optional)
+                    if (Array.isArray(parsed.addons) && parsed.addons.length > 0) {
                         addons = parsed.addons;
                         console.log('📦 Addons from localStorage:', addons.length);
-                        // Also update email/amount if missing
-                        if (!pendingOrderData.email && parsed.email) {
-                            pendingOrderData.email = parsed.email;
-                        }
-                        if (!pendingOrderData.amount && parsed.amount) {
-                            pendingOrderData.amount = parsed.amount;
-                        }
-                        if (!pendingOrderData.productId && parsed.productId) {
-                            pendingOrderData.productId = parsed.productId;
-                        }
                     }
+
+                    // Merge missing basics (even if there are no addons)
+                    if (!pendingOrderData) pendingOrderData = {};
+                    if (!pendingOrderData.email && parsed.email) pendingOrderData.email = parsed.email;
+                    if (!pendingOrderData.amount && parsed.amount) pendingOrderData.amount = parsed.amount;
+                    if (!pendingOrderData.productId && parsed.productId) pendingOrderData.productId = parsed.productId;
+                    if (!pendingOrderData.deliveryTimeMinutes && parsed.deliveryTimeMinutes) pendingOrderData.deliveryTimeMinutes = parsed.deliveryTimeMinutes;
+
                     // Clear localStorage after use
                     localStorage.removeItem('pendingOrderData');
                 }
@@ -213,52 +200,13 @@
         // ✅ FIXED: Use pre-calculated deliveryTimeMinutes from checkout.js
         // This value is already correctly calculated based on product info and addons
         // Formula: instant → 60 min, otherwise → days × 24 × 60
-        // ✅ Delivery time: prefer metadata/localStorage; fallback to product settings
-        let deliveryTime = Number(
-            pendingOrderData?.metadata?.deliveryTimeMinutes ??
-            pendingOrderData?.metadata?.delivery_time_minutes ??
-            pendingOrderData?.deliveryTimeMinutes ??
-            storedParsed?.deliveryTimeMinutes ??
-            storedParsed?.metadata?.deliveryTimeMinutes ??
-            0
-        );
-
-        // Fallback: if still missing, fetch product and compute from settings
-        if (!deliveryTime || deliveryTime <= 0) {
-            try {
-                const pid =
-                    pendingOrderData?.metadata?.product_id ||
-                    pendingOrderData?.metadata?.productId ||
-                    pendingOrderData?.productId ||
-                    storedParsed?.productId;
-
-                if (pid) {
-                    const pr = await fetch(`/api/product/${pid}`);
-                    if (pr.ok) {
-                        const pj = await pr.json();
-                        const p = pj?.product || pj;
-                        if (p) {
-                            if (p.instant_delivery) {
-                                deliveryTime = 60;
-                            } else {
-                                const days = parseInt(p.normal_delivery_text || p.delivery_time_days) || 1;
-                                deliveryTime = days * 24 * 60;
-                            }
-                        }
-                    }
-                }
-            } catch (e) {
-                console.log('Delivery fallback fetch failed:', e);
-            }
-        }
-
-        deliveryTime = Number(deliveryTime) || 60;
-        console.log('⏰ Final Delivery time:', deliveryTime, 'minutes');
+        const deliveryTime = Number(pendingOrderData?.deliveryTimeMinutes || pendingOrderData?.metadata?.deliveryTimeMinutes || 0) || 60;
+        console.log('⏰ Final Delivery time (from pendingOrderData):', deliveryTime, 'minutes');
 
         // Data prepare karein
         const payload = {
             // Check metadata.product_id (from backend), metadata.productId, or root productId
-            productId: pendingOrderData?.metadata?.product_id || pendingOrderData?.metadata?.productId || pendingOrderData?.productId || storedParsed?.productId || 1,
+            productId: pendingOrderData?.metadata?.product_id || pendingOrderData?.metadata?.productId || pendingOrderData?.productId || 1,
             amount: pendingOrderData?.amount || 0,
             email: pendingOrderData?.email || '',
             addons: addons, // Includes photo URLs and form data

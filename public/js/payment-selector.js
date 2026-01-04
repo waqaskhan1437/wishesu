@@ -530,6 +530,7 @@
       window.whopCheckout({
         planId: data.plan_id,
         email: data.email || checkoutData.email,
+        deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
         metadata: {
           addons: checkoutData.addons,
           product_id: checkoutData.productId,

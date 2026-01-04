@@ -64,7 +64,18 @@ function validateEmail(email) {
  * Get all orders (admin)
  */
 export async function getOrders(env) {
-  const r = await env.DB.prepare('SELECT * FROM orders ORDER BY id DESC').all();
+  // Join products so we can normalize delivery time for each product
+  const r = await env.DB.prepare(`
+    SELECT
+      o.*,
+      p.title as product_title,
+      p.instant_delivery as product_instant_delivery,
+      p.normal_delivery_text as product_normal_delivery_text
+    FROM orders o
+    LEFT JOIN products p ON o.product_id = p.id
+    ORDER BY o.id DESC
+  `).all();
+
   const orders = (r.results || []).map(row => {
     let email = '', amount = null, addons = [];
     try {
@@ -77,14 +88,69 @@ export async function getOrders(env) {
     } catch(e) {
       console.error('Failed to parse order encrypted_data for order:', row.order_id, e.message);
     }
+
+    // Normalize timestamps to ISO8601 (better JS Date parsing)
+    if (row.created_at && typeof row.created_at === 'string') row.created_at = toISO8601(row.created_at);
+    if (row.delivered_at && typeof row.delivered_at === 'string') row.delivered_at = toISO8601(row.delivered_at);
+
+    // Normalize delivery time (fix older buggy orders that used a wrong default)
+    const productRow = {
+      instant_delivery: row.product_instant_delivery,
+      normal_delivery_text: row.product_normal_delivery_text
+    };
+    row.delivery_time_minutes = getEffectiveDeliveryMinutes(row, productRow);
+
     return { ...row, email, amount, addons };
   });
+
   return json({ orders });
 }
 
 /**
  * Create order (from checkout)
  */
+/**
+ * Compute delivery time in minutes from product settings.
+ * - instant_delivery => 60 minutes
+ * - normal_delivery_text => days (default 1 day)
+ */
+function computeProductDeliveryMinutes(product) {
+  if (!product) return 60;
+  const instant = product.instant_delivery === 1 || product.instant_delivery === true;
+  if (instant) return 60;
+  const days = parseInt(product.normal_delivery_text, 10);
+  const safeDays = Number.isFinite(days) && days > 0 ? days : 1;
+  return safeDays * 24 * 60;
+}
+
+/**
+ * Fix/normalize delivery_time_minutes coming from older buggy orders.
+ * We only auto-correct common "default" values (60/1440) when the product says otherwise.
+ */
+function getEffectiveDeliveryMinutes(orderRow, productRow) {
+  const stored = Number(orderRow?.delivery_time_minutes);
+
+  const hasProduct =
+    !!productRow &&
+    (productRow.instant_delivery !== undefined || productRow.normal_delivery_text !== undefined);
+
+  const productMinutes = hasProduct ? computeProductDeliveryMinutes(productRow) : null;
+
+  if (!stored || !Number.isFinite(stored) || stored <= 0) {
+    return hasProduct ? productMinutes : 60;
+  }
+
+  // Auto-correct only when we know the product delivery settings.
+  // We only adjust common "default" values (60/1440) when the product says otherwise.
+  if (hasProduct && (stored === 60 || stored === 1440) && stored !== productMinutes) {
+    return productMinutes;
+  }
+
+  return stored;
+}
+
+
+
 export async function createOrder(env, body) {
   if (!body.productId) return json({ error: 'productId required' }, 400);
   
@@ -93,90 +159,29 @@ export async function createOrder(env, body) {
   const addons = validateAddons(body.addons);
   const amount = parseFloat(body.amount) || 0;
   
-  // Get product for title and delivery time calculation (server-truth)
+  // Get product for title and delivery time calculation
 let productTitle = '';
-const clientDeliveryMinutes = Number(body.deliveryTime) || 0;
-const hasDeliveryAddon = addons.some(a => /delivery/i.test(String(a?.field || '')));
 let deliveryMinutes = 0;
 
-const clampMinutes = (n) => {
-  const x = Number(n);
-  if (!Number.isFinite(x) || x <= 0) return 0;
-  // Cap at 365 days to avoid bad values
-  return Math.min(Math.round(x), 365 * 24 * 60);
-};
-
-const computeFromProduct = (product) => {
-  if (!product) return 0;
-  if (product.instant_delivery) return 60;
-  const days = parseInt(product.normal_delivery_text) || 1;
-  return days * 24 * 60;
-};
-
-const computeFromDeliveryAddon = (product, addonsList) => {
-  // Try to read delivery override from product addons_json config
-  if (!product || !product.addons_json) return 0;
-  let cfg;
-  try { cfg = JSON.parse(product.addons_json || '[]'); } catch (_) { return 0; }
-  if (!Array.isArray(cfg)) return 0;
-
-  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const selected = (addonsList || []).find(a => /delivery/i.test(String(a?.field || '')));
-  if (!selected) return 0;
-
-  const selVal = String(selected.value || '').trim();
-  const field = cfg.find(f => {
-    const id = norm(f?.id);
-    const label = norm(f?.label);
-    return id.includes('delivery') || label.includes('delivery');
-  });
-  if (!field || !Array.isArray(field.options)) return 0;
-
-  const opt =
-    field.options.find(o => String(o?.label || '').trim() === selVal) ||
-    field.options.find(o => norm(o?.label) === norm(selVal));
-
-  const del = opt && opt.delivery ? opt.delivery : null;
-  if (!del) return 0;
-
-  if (del.instant) return 60;
-  if (del.minutes) return parseInt(del.minutes) || 0;
-  if (del.days) return (parseInt(del.days) || 1) * 24 * 60;
-  return 0;
-};
-
 try {
-  const product = await env.DB
-    .prepare('SELECT title, instant_delivery, normal_delivery_text, addons_json FROM products WHERE id = ?')
-    .bind(Number(body.productId))
-    .first();
+  const product = await env.DB.prepare('SELECT title, instant_delivery, normal_delivery_text FROM products WHERE id = ?')
+    .bind(Number(body.productId)).first();
 
   if (product) {
     productTitle = product.title || '';
-    const productDefault = clampMinutes(computeFromProduct(product));
-    const addonDelivery = clampMinutes(computeFromDeliveryAddon(product, addons));
-    const clientClamped = clampMinutes(clientDeliveryMinutes);
-
-    if (addonDelivery) {
-      deliveryMinutes = addonDelivery;
-    } else if (hasDeliveryAddon && clientClamped) {
-      // Delivery option selected on checkout: trust client minutes
-      deliveryMinutes = clientClamped;
-    } else {
-      // No delivery addon selected: always trust product default (ignore client fallbacks like 1440)
-      deliveryMinutes = productDefault;
-    }
+    // Always use product's delivery settings (each product can be different).
+    // This also protects us from buggy clients sending a wrong default like 1440.
+    deliveryMinutes = computeProductDeliveryMinutes(product);
   }
 } catch (e) {
   console.log('Could not get product details:', e);
 }
 
 // Ensure we have a valid delivery time
-  if (!deliveryMinutes || deliveryMinutes <= 0) {
-    deliveryMinutes = 60; // Default fallback
-  }
-  
-  const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
+if (!deliveryMinutes || !Number.isFinite(deliveryMinutes) || deliveryMinutes <= 0) {
+  deliveryMinutes = 60; // Default fallback
+}
+const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   const data = JSON.stringify({
     email: email,
     amount: amount,
@@ -277,7 +282,7 @@ export async function createManualOrder(env, body) {
  */
 export async function getBuyerOrder(env, orderId) {
   const row = await env.DB.prepare(
-    'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail, p.whop_product_id FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'
+    'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail, p.whop_product_id, p.instant_delivery as product_instant_delivery, p.normal_delivery_text as product_normal_delivery_text FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'
   ).bind(orderId).first();
 
   if (!row) return json({ error: 'Order not found' }, 404);
@@ -313,6 +318,17 @@ export async function getBuyerOrder(env, orderId) {
   if (orderData.created_at && typeof orderData.created_at === 'string') {
     orderData.created_at = toISO8601(orderData.created_at);
   }
+
+if (orderData.delivered_at && typeof orderData.delivered_at === 'string') {
+  orderData.delivered_at = toISO8601(orderData.delivered_at);
+}
+
+// Normalize delivery time (fix older buggy orders that used a wrong default)
+const productRow = {
+  instant_delivery: orderData.product_instant_delivery,
+  normal_delivery_text: orderData.product_normal_delivery_text
+};
+orderData.delivery_time_minutes = getEffectiveDeliveryMinutes(orderData, productRow);
 
   return json({ order: orderData });
 }
