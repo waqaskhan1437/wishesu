@@ -328,22 +328,6 @@
         container.innerHTML = html;
       };
 
-      // Same-origin proxy for flaky/blocked third-party delivery CDNs.
-      // Keeps the content "original" (still the same mp4), but improves stability and PageSpeed.
-      const rewriteDeliveryProxy = (src) => {
-        if (!src) return src;
-        try {
-          const u = new URL(src, window.location.origin);
-          const host = (u.hostname || '').toLowerCase();
-          const path = (u.pathname || '').toLowerCase();
-          const isBunny = host.endsWith('b-cdn.net') || host.includes('bunnycdn.com') || host.endsWith('bunny.net');
-          if (isBunny && path.endsWith('.mp4')) {
-            return '/delivery' + u.pathname;
-          }
-        } catch (e) {}
-        return src;
-      };
-
       const safeSetElement = (el) => {
         if (container.dataset.universalPlayerToken !== token) return;
         container.innerHTML = '';
@@ -608,13 +592,13 @@
             for (const s of video.sources) {
               if (!s || !s.src) continue;
               sources.push({
-                src: rewriteDeliveryProxy(s.src),
+                src: s.src,
                 type: s.type || guessMimeTypeFromUrl(s.src)
               });
             }
           } else if (video.url) {
             sources.push({
-              src: rewriteDeliveryProxy(video.url),
+              src: video.url,
               type: video.typeHint || guessMimeTypeFromUrl(video.url)
             });
           }

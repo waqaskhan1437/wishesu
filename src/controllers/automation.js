@@ -527,6 +527,7 @@ export async function notifyChatMessage(env, data) {
     buttonText: 'View Chats',
     buttonUrl: '/admin/dashboard.html#chats'
   });
+}
 
 export async function notifyOrderDeliveredAdmin(env, data) {
   const orderId = data?.orderId || data?.order_id || data?.id || '';

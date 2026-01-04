@@ -206,7 +206,7 @@
       playerContainer.style.width = '100%';
       playerContainer.style.height = '400px';
 
-      if (window.UniversalVideoPlayer && order.delivered_video_url) {
+      if (window.UniversalPlayer && order.delivered_video_url) {
         // Parse video metadata if available
         let videoMetadata = null;
         if (order.delivered_video_metadata) {
@@ -218,7 +218,7 @@
         }
 
         // Render with enhanced support for Archive.org videos
-        window.UniversalVideoPlayer.render('universal-video-player', order.delivered_video_url, videoMetadata);
+        window.UniversalPlayer.render('universal-video-player', order.delivered_video_url, videoMetadata);
       } else if (order.delivered_video_url) {
         // Fallback: show a direct video element/link
         playerContainer.innerHTML = `
@@ -240,8 +240,8 @@
     if (downloadBtn) {
       downloadBtn.style.display = 'inline-flex';
 
-      if (window.UniversalVideoPlayer && order.delivered_video_url) {
-        const detected = window.UniversalVideoPlayer.detect(order.delivered_video_url);
+      if (window.UniversalPlayer && order.delivered_video_url) {
+        const detected = window.UniversalPlayer.detect(order.delivered_video_url);
         const openOnlyTypes = ['youtube', 'vimeo', 'bunny-embed'];
 
         if (openOnlyTypes.includes(detected.type)) {

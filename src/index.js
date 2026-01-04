@@ -1534,52 +1534,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         if (apiResponse) return apiResponse;
       }
 
-      // ----- DELIVERY VIDEO PROXY (BUNNY/B-CDN) -----
-      // Purpose: keep "original" delivery videos, but load them from same-origin for stability and PageSpeed.
-      // Only allows simple filenames ending with .mp4 to avoid SSRF.
-      if ((method === 'GET' || method === 'HEAD') && path.startsWith('/delivery/')) {
-        const file = path.slice('/delivery/'.length);
-        const safe = /^[0-9A-Za-z._-]+$/.test(file) && file.toLowerCase().endsWith('.mp4');
-        if (!safe) {
-          return new Response('Not found', { status: 404 });
-        }
-
-        const origin = (env.DELIVERY_CDN_ORIGIN || 'https://wishes-delivery.b-cdn.net').replace(/\/+$/g, '');
-        const upstreamUrl = `${origin}/${file}`;
-
-        const headers = new Headers();
-        const range = req.headers.get('Range');
-        if (range && method === 'GET') headers.set('Range', range);
-
-        let upstream;
-        try {
-          upstream = await fetch(upstreamUrl, {
-            method,
-            headers
-          });
-        } catch (e) {
-          return new Response('Upstream unavailable', {
-            status: 502,
-            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-          });
-        }
-
-        const outHeaders = new Headers(upstream.headers);
-        // Stable caching; video is immutable by filename/id.
-        if (!outHeaders.get('Cache-Control')) {
-          outHeaders.set('Cache-Control', 'public, max-age=86400');
-        }
-        outHeaders.set('Access-Control-Allow-Origin', '*');
-        outHeaders.set('Vary', 'Range');
-        outHeaders.set('X-Delivery-Proxy', '1');
-
-        return new Response(upstream.body, {
-          status: upstream.status,
-          statusText: upstream.statusText,
-          headers: outHeaders
-        });
-      }
-
       // ----- SECURE DOWNLOAD -----
       if (path.startsWith('/download/')) {
         const orderId = path.split('/').pop();
