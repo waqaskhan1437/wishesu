@@ -149,7 +149,7 @@ export async function createPlanCheckout(env, body, origin) {
     if (product.instant_delivery) {
       deliveryTimeMinutes = 60; // 60 minutes for instant
     } else {
-      const days = parseInt(product.delivery_time_days) || 1;
+      const days = parseInt(product.normal_delivery_text) || 1;
       deliveryTimeMinutes = days * 24 * 60; // Convert days to minutes
     }
   }
@@ -469,13 +469,13 @@ export async function handleWebhook(env, webhookData) {
           let deliveryTimeMinutes = Number(metadata.deliveryTimeMinutes) || 0;
           if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0) {
             try {
-              const product = await env.DB.prepare('SELECT instant_delivery, delivery_time_days FROM products WHERE id = ?')
+              const product = await env.DB.prepare('SELECT instant_delivery, normal_delivery_text FROM products WHERE id = ?')
                 .bind(Number(metadata.product_id)).first();
               if (product) {
                 if (product.instant_delivery) {
                   deliveryTimeMinutes = 60; // 60 minutes for instant
                 } else {
-                  const days = parseInt(product.delivery_time_days) || 1;
+                  const days = parseInt(product.normal_delivery_text) || 1;
                   deliveryTimeMinutes = days * 24 * 60; // Convert days to minutes
                 }
               } else {

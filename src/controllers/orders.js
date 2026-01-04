@@ -98,7 +98,7 @@ export async function createOrder(env, body) {
   let deliveryMinutes = Number(body.deliveryTime) || 0;
   
   try {
-    const product = await env.DB.prepare('SELECT title, instant_delivery, delivery_time_days FROM products WHERE id = ?')
+    const product = await env.DB.prepare('SELECT title, instant_delivery, normal_delivery_text FROM products WHERE id = ?')
       .bind(Number(body.productId)).first();
     if (product) {
       productTitle = product.title || '';
@@ -107,7 +107,7 @@ export async function createOrder(env, body) {
         if (product.instant_delivery) {
           deliveryMinutes = 60; // 60 minutes for instant
         } else {
-          const days = parseInt(product.delivery_time_days) || 1;
+          const days = parseInt(product.normal_delivery_text) || 1;
           deliveryMinutes = days * 24 * 60; // Convert days to minutes
         }
       }
