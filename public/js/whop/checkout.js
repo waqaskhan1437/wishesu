@@ -166,27 +166,27 @@
             addons = savedAddons;
             console.log('📦 Addons from savedAddons backup:', addons.length);
         }
-        // Source 3: localStorage
+                // Source 3: localStorage
         else {
             try {
                 const storedData = localStorage.getItem('pendingOrderData');
                 if (storedData) {
                     const parsed = JSON.parse(storedData);
                     console.log('📦 Found stored order data in localStorage:', parsed);
-                    if (parsed.addons && parsed.addons.length > 0) {
+
+                    // Addons (optional)
+                    if (Array.isArray(parsed.addons) && parsed.addons.length > 0) {
                         addons = parsed.addons;
                         console.log('📦 Addons from localStorage:', addons.length);
-                        // Also update email/amount if missing
-                        if (!pendingOrderData.email && parsed.email) {
-                            pendingOrderData.email = parsed.email;
-                        }
-                        if (!pendingOrderData.amount && parsed.amount) {
-                            pendingOrderData.amount = parsed.amount;
-                        }
-                        if (!pendingOrderData.productId && parsed.productId) {
-                            pendingOrderData.productId = parsed.productId;
-                        }
                     }
+
+                    // Merge missing basics (even if there are no addons)
+                    if (!pendingOrderData) pendingOrderData = {};
+                    if (!pendingOrderData.email && parsed.email) pendingOrderData.email = parsed.email;
+                    if (!pendingOrderData.amount && parsed.amount) pendingOrderData.amount = parsed.amount;
+                    if (!pendingOrderData.productId && parsed.productId) pendingOrderData.productId = parsed.productId;
+                    if (!pendingOrderData.deliveryTimeMinutes && parsed.deliveryTimeMinutes) pendingOrderData.deliveryTimeMinutes = parsed.deliveryTimeMinutes;
+
                     // Clear localStorage after use
                     localStorage.removeItem('pendingOrderData');
                 }
@@ -200,7 +200,7 @@
         // ✅ FIXED: Use pre-calculated deliveryTimeMinutes from checkout.js
         // This value is already correctly calculated based on product info and addons
         // Formula: instant → 60 min, otherwise → days × 24 × 60
-        const deliveryTime = pendingOrderData?.deliveryTimeMinutes || 1440;
+        const deliveryTime = Number(pendingOrderData?.deliveryTimeMinutes || pendingOrderData?.metadata?.deliveryTimeMinutes || 0) || 60;
         console.log('⏰ Final Delivery time (from pendingOrderData):', deliveryTime, 'minutes');
 
         // Data prepare karein
