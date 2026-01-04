@@ -396,11 +396,13 @@
     
     const ratingRow = document.createElement('div');
     ratingRow.className = 'rating-row';
-    ratingRow.setAttribute('role', 'img');
-    ratingRow.setAttribute('aria-label', `Rating: ${ratingAverage.toFixed(1)} out of 5 stars, ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`);
     
     const reviewCount = product.review_count || 0;
     const ratingAverage = product.rating_average || 5.0;
+    
+    // Set accessibility attributes after variables are defined
+    ratingRow.setAttribute('role', 'img');
+    ratingRow.setAttribute('aria-label', `Rating: ${ratingAverage.toFixed(1)} out of 5 stars, ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`);
     
     const fullStars = Math.floor(ratingAverage);
     const halfStar = ratingAverage % 1 >= 0.5 ? 1 : 0;
