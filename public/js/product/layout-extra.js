@@ -386,36 +386,134 @@
           // Take only last 20 for slider
           const sliderReviews = reviewsWithVideo.slice(-20);
 
+          // Same-origin proxy for delivery videos hosted on Bunny/B-CDN.
+          // Keeps videos original (same mp4), but avoids flaky third-party requests in PageSpeed.
+          const toDeliveryProxy = (src) => {
+            if (!src) return src;
+            try {
+              const u = new URL(src, window.location.origin);
+              const host = (u.hostname || '').toLowerCase();
+              const isBunny = host.endsWith('b-cdn.net') || host.includes('bunnycdn.com') || host.endsWith('bunny.net');
+              const isMp4 = (u.pathname || '').toLowerCase().endsWith('.mp4');
+              if (isBunny && isMp4) return '/delivery' + u.pathname;
+            } catch (e) {}
+            return src;
+          };
+
+          // Lazy-load small preview frames only when thumbs are visible.
+          // This avoids bulk mp4 requests while still showing the real, original video frame.
+          const ensureThumbPreview = (() => {
+            const seen = new WeakSet();
+            const setFallback = (videoEl) => {
+              if (!videoEl || videoEl.dataset.fallbackSet === '1') return;
+              videoEl.dataset.fallbackSet = '1';
+              const wrap = videoEl.parentElement;
+              if (!wrap) return;
+              wrap.innerHTML = '';
+              const ph = document.createElement('div');
+              ph.textContent = 'Preview unavailable';
+              ph.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;background:#1a1a2e;';
+              wrap.appendChild(ph);
+            };
+
+            const load = async (videoEl) => {
+              if (!videoEl || seen.has(videoEl)) return;
+              const src = (videoEl.dataset.src || '').toString().trim();
+              if (!src) return;
+              seen.add(videoEl);
+
+              try {
+                // Quick HEAD probe first so we don't spam console with failed video loads.
+                let ok = false;
+                try {
+                  const head = await fetch(src, { method: 'HEAD' });
+                  ok = !!(head && (head.ok || head.status === 206));
+                  // Some CDNs may not support HEAD for media; fall back to a tiny range probe.
+                  if (!ok && head && head.status === 405) {
+                    const probe = await fetch(src, { method: 'GET', headers: { Range: 'bytes=0-1' } });
+                    ok = !!(probe && (probe.ok || probe.status === 206));
+                  }
+                } catch (e) {
+                  // If HEAD failed, try a tiny range probe (2 bytes).
+                  const probe = await fetch(src, { method: 'GET', headers: { Range: 'bytes=0-1' } });
+                  ok = !!(probe && (probe.ok || probe.status === 206));
+                }
+                if (!ok) {
+                  setFallback(videoEl);
+                  return;
+                }
+              } catch (e) {
+                setFallback(videoEl);
+                return;
+              }
+
+              try {
+                videoEl.preload = 'metadata';
+                videoEl.src = src;
+                videoEl.load();
+              } catch (e) {
+                setFallback(videoEl);
+                return;
+              }
+
+              const onErr = () => setFallback(videoEl);
+              videoEl.addEventListener('error', onErr, { once: true });
+
+              // Try to render a real frame (not a custom thumbnail)
+              videoEl.addEventListener('loadedmetadata', () => {
+                try {
+                  // Nudge slightly forward so browsers decode a frame.
+                  videoEl.currentTime = 0.01;
+                } catch (e) {}
+              }, { once: true });
+
+              videoEl.addEventListener('seeked', () => {
+                try { videoEl.pause(); } catch (e) {}
+              }, { once: true });
+            };
+
+            let obs;
+            return (videoEl) => {
+              if (!videoEl) return;
+              if (!('IntersectionObserver' in window)) {
+                load(videoEl);
+                return;
+              }
+              if (!obs) {
+                obs = new IntersectionObserver((entries) => {
+                  entries.forEach(en => {
+                    if (en.isIntersecting) {
+                      load(en.target);
+                      obs.unobserve(en.target);
+                    }
+                  });
+                }, { root: null, rootMargin: '200px', threshold: 0.01 });
+              }
+              obs.observe(videoEl);
+            };
+          })();
+
           sliderReviews.forEach(review => {
             const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
+            const thumbVideoUrl = toDeliveryProxy(portfolioVideoUrl);
 
             if (window.productThumbnailsSlider) {
               const galleryThumb = document.createElement('div');
               galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: border-color 0.15s ease, transform 0.15s ease; background:#1a1a2e; contain: layout style;';
 
-              // Thumbnail image (no auto video requests: fixes PageSpeed console errors)
-              // Prefer a stable image URL. If a thumbnail is hosted on a flaky CDN (e.g., b-cdn.net), fall back to the main product thumbnail
-              // to avoid PageSpeed "Failed to load resource" console errors.
-              let thumbUrl = (review.delivered_thumbnail_url || review.thumbnail_url || '').toString().trim();
-              const loweredThumb = thumbUrl.toLowerCase();
-              if (!thumbUrl || loweredThumb.includes('b-cdn.net') || loweredThumb.endsWith('.mp4')) {
-                thumbUrl = (product.thumbnail_url || '').toString().trim();
-              }
-
-              if (thumbUrl) {
-                const imgThumb = document.createElement("img");
-                imgThumb.src = thumbUrl;
-                imgThumb.alt = "Review video thumbnail";
-                imgThumb.loading = "lazy";
-                imgThumb.decoding = "async";
-                imgThumb.style.cssText = "width: 100%; height: 100%; object-fit: cover; pointer-events: none; background: #1a1a2e;";
-                galleryThumb.appendChild(imgThumb);
-              } else {
-                const placeholder = document.createElement("div");
-                placeholder.textContent = "Video";
-                placeholder.style.cssText = "width: 100%; height: 100%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:12px; background:#1a1a2e;";
-                galleryThumb.appendChild(placeholder);
-              }
+              // Show the real video frame (no custom poster/thumbnail). Load lazily for performance.
+              const v = document.createElement('video');
+              v.muted = true;
+              v.playsInline = true;
+              v.setAttribute('playsinline', '');
+              v.setAttribute('webkit-playsinline', '');
+              v.preload = 'none';
+              v.disablePictureInPicture = true;
+              v.controls = false;
+              v.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none;background:#1a1a2e;';
+              v.dataset.src = thumbVideoUrl;
+              galleryThumb.appendChild(v);
+              ensureThumbPreview(v);
 
               // Add review badge to gallery thumbnail
               const badge = document.createElement('div');
@@ -441,7 +539,7 @@
                 showHighlight(review);
                 scrollToPlayer();
 	              // Always use the unified setPlayerSource function
-	              setPlayerSource(portfolioVideoUrl, review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url);
+	              setPlayerSource(thumbVideoUrl || portfolioVideoUrl, review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url);
               };
 
               // Hover effect
