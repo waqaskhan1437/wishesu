@@ -105,7 +105,6 @@
       e.preventDefault();
       
       const data = {
-        manualOrder: true,
         productId: document.getElementById('new-order-product').value,
         email: document.getElementById('new-order-email').value.trim(),
         amount: document.getElementById('new-order-amount').value,

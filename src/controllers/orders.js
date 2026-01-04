@@ -4,12 +4,13 @@
 
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
-import { getGoogleScriptUrl } from '../config/secrets.js';
-import { 
+import {
   notifyNewOrder, 
   notifyNewTip, 
   notifyCustomerOrderConfirmed,
-  notifyCustomerOrderDelivered 
+  notifyCustomerOrderDelivered,
+  notifyOrderDeliveredAdmin,
+  notifyRevisionRequested
 } from './automation.js';
 
 // Re-export from shared utility for backwards compatibility
@@ -63,19 +64,61 @@ function validateEmail(email) {
 /**
  * Get all orders (admin)
  */
-export async function getOrders(env) {
-  // Join products so we can normalize delivery time for each product
-  const r = await env.DB.prepare(`
-    SELECT
-      o.*,
-      p.title as product_title,
-      p.instant_delivery as product_instant_delivery,
-      p.normal_delivery_text as product_normal_delivery_text
-    FROM orders o
-    LEFT JOIN products p ON o.product_id = p.id
-    ORDER BY o.id DESC
-  `).all();
 
+
+/**
+ * Extract delivery minutes from addons (if a delivery addon is present).
+ * Supports values like: "Instant", "24 Hours", "48 Hours", "3 Days", numeric days/minutes.
+ */
+function parseDeliveryMinutesFromAddons(addons) {
+  if (!Array.isArray(addons)) return null;
+
+  for (const item of addons) {
+    if (!item) continue;
+    const field = String(item.field || '').toLowerCase();
+    if (!field.includes('delivery')) continue;
+
+    const raw = item.value;
+    const v = String(raw ?? '').trim().toLowerCase();
+
+    // Direct numeric values
+    const rawNum = typeof raw === 'number' ? raw : (v.match(/^\d+(?:\.\d+)?$/) ? Number(v) : NaN);
+    if (!Number.isNaN(rawNum) && rawNum > 0) {
+      // Heuristic: small numbers are days, bigger numbers are minutes
+      if (rawNum <= 30) return Math.round(rawNum * 1440);
+      return Math.round(rawNum);
+    }
+
+    if (!v) continue;
+
+    if (v.includes('instant')) return 60;
+
+    const hourMatch = v.match(/(\d+)\s*(h|hour)/);
+    if (hourMatch) return parseInt(hourMatch[1], 10) * 60;
+
+    const dayMatch = v.match(/(\d+)\s*(d|day)/);
+    if (dayMatch) return parseInt(dayMatch[1], 10) * 1440;
+
+    // Common shortcuts
+    if (v.includes('24')) return 1440;
+    if (v.includes('48')) return 2880;
+  }
+
+  return null;
+}
+
+function computeProductDefaultDeliveryMinutes(productLike) {
+  const instant = Number(productLike?.instant_delivery || productLike?.product_instant_delivery || 0) === 1;
+  if (instant) return 60;
+  const days = parseInt(
+    productLike?.normal_delivery_text || productLike?.product_delivery_days || productLike?.delivery_time_days || '0',
+    10
+  );
+  if (!Number.isNaN(days) && days > 0) return days * 1440;
+  return 60;
+}
+export async function getOrders(env) {
+  const r = await env.DB.prepare('SELECT * FROM orders ORDER BY id DESC').all();
   const orders = (r.results || []).map(row => {
     let email = '', amount = null, addons = [];
     try {
@@ -88,69 +131,14 @@ export async function getOrders(env) {
     } catch(e) {
       console.error('Failed to parse order encrypted_data for order:', row.order_id, e.message);
     }
-
-    // Normalize timestamps to ISO8601 (better JS Date parsing)
-    if (row.created_at && typeof row.created_at === 'string') row.created_at = toISO8601(row.created_at);
-    if (row.delivered_at && typeof row.delivered_at === 'string') row.delivered_at = toISO8601(row.delivered_at);
-
-    // Normalize delivery time (fix older buggy orders that used a wrong default)
-    const productRow = {
-      instant_delivery: row.product_instant_delivery,
-      normal_delivery_text: row.product_normal_delivery_text
-    };
-    row.delivery_time_minutes = getEffectiveDeliveryMinutes(row, productRow);
-
     return { ...row, email, amount, addons };
   });
-
   return json({ orders });
 }
 
 /**
  * Create order (from checkout)
  */
-/**
- * Compute delivery time in minutes from product settings.
- * - instant_delivery => 60 minutes
- * - normal_delivery_text => days (default 1 day)
- */
-function computeProductDeliveryMinutes(product) {
-  if (!product) return 60;
-  const instant = product.instant_delivery === 1 || product.instant_delivery === true;
-  if (instant) return 60;
-  const days = parseInt(product.normal_delivery_text, 10);
-  const safeDays = Number.isFinite(days) && days > 0 ? days : 1;
-  return safeDays * 24 * 60;
-}
-
-/**
- * Fix/normalize delivery_time_minutes coming from older buggy orders.
- * We only auto-correct common "default" values (60/1440) when the product says otherwise.
- */
-function getEffectiveDeliveryMinutes(orderRow, productRow) {
-  const stored = Number(orderRow?.delivery_time_minutes);
-
-  const hasProduct =
-    !!productRow &&
-    (productRow.instant_delivery !== undefined || productRow.normal_delivery_text !== undefined);
-
-  const productMinutes = hasProduct ? computeProductDeliveryMinutes(productRow) : null;
-
-  if (!stored || !Number.isFinite(stored) || stored <= 0) {
-    return hasProduct ? productMinutes : 60;
-  }
-
-  // Auto-correct only when we know the product delivery settings.
-  // We only adjust common "default" values (60/1440) when the product says otherwise.
-  if (hasProduct && (stored === 60 || stored === 1440) && stored !== productMinutes) {
-    return productMinutes;
-  }
-
-  return stored;
-}
-
-
-
 export async function createOrder(env, body) {
   if (!body.productId) return json({ error: 'productId required' }, 400);
   
@@ -160,28 +148,32 @@ export async function createOrder(env, body) {
   const amount = parseFloat(body.amount) || 0;
   
   // Get product for title and delivery time calculation
-let productTitle = '';
-let deliveryMinutes = 0;
+  let productTitle = '';
+  let deliveryMinutes = 0;
+  let productRow = null;
 
-try {
-  const product = await env.DB.prepare('SELECT title, instant_delivery, normal_delivery_text FROM products WHERE id = ?')
-    .bind(Number(body.productId)).first();
-
-  if (product) {
-    productTitle = product.title || '';
-    // Always use product's delivery settings (each product can be different).
-    // This also protects us from buggy clients sending a wrong default like 1440.
-    deliveryMinutes = computeProductDeliveryMinutes(product);
+  try {
+    productRow = await env.DB.prepare('SELECT title, instant_delivery, normal_delivery_text FROM products WHERE id = ?')
+      .bind(Number(body.productId)).first();
+    if (productRow) {
+      productTitle = productRow.title || '';
+    }
+  } catch (e) {
+    console.log('Could not get product details:', e);
   }
-} catch (e) {
-  console.log('Could not get product details:', e);
-}
 
-// Ensure we have a valid delivery time
-if (!deliveryMinutes || !Number.isFinite(deliveryMinutes) || deliveryMinutes <= 0) {
-  deliveryMinutes = 60; // Default fallback
-}
-const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
+  // Server-side delivery calculation (safe + consistent):
+  // 1) if customer selected a delivery addon, use it
+  // 2) else use product default delivery
+  // (Ignore client-provided deliveryTime to prevent wrong values)
+  const minutesFromAddons = parseDeliveryMinutesFromAddons(addons);
+  deliveryMinutes = minutesFromAddons || computeProductDefaultDeliveryMinutes(productRow);
+
+  // Clamp to reasonable range (1 hour -> 30 days)
+  if (!deliveryMinutes || deliveryMinutes < 60) deliveryMinutes = 60;
+  if (deliveryMinutes > 30 * 1440) deliveryMinutes = 30 * 1440;
+  
+  const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   const data = JSON.stringify({
     email: email,
     amount: amount,
@@ -201,34 +193,6 @@ const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   // Send notifications via Advanced Automation
   notifyNewOrder(env, { orderId, email, amount, productTitle }).catch(() => {});
   notifyCustomerOrderConfirmed(env, { orderId, email, amount, productTitle, deliveryTime }).catch(() => {});
-  
-  // FIXED: Send Google Script webhook for new order (for email notifications)
-  try {
-    const googleScriptUrl = await getGoogleScriptUrl(env);
-    if (googleScriptUrl) {
-      await fetch(googleScriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: 'order.created',
-          order: {
-            order_id: orderId,
-            product_id: body.productId,
-            product_title: productTitle,
-            email: email,
-            amount: amount,
-            delivery_time_minutes: deliveryMinutes,
-            delivery_time_text: deliveryTime,
-            status: 'paid',
-            created_at: Date.now()
-          }
-        })
-      }).catch(err => console.error('Failed to send new order webhook:', err));
-    }
-  } catch (err) {
-    console.error('Error triggering new order webhook:', err);
-  }
-  
   return json({ success: true, orderId });
 }
 
@@ -282,7 +246,7 @@ export async function createManualOrder(env, body) {
  */
 export async function getBuyerOrder(env, orderId) {
   const row = await env.DB.prepare(
-    'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail, p.whop_product_id, p.instant_delivery as product_instant_delivery, p.normal_delivery_text as product_normal_delivery_text FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'
+    'SELECT o.*, p.title as product_title, p.thumbnail_url as product_thumbnail, p.whop_product_id FROM orders o LEFT JOIN products p ON o.product_id = p.id WHERE o.order_id = ?'
   ).bind(orderId).first();
 
   if (!row) return json({ error: 'Order not found' }, 404);
@@ -318,17 +282,6 @@ export async function getBuyerOrder(env, orderId) {
   if (orderData.created_at && typeof orderData.created_at === 'string') {
     orderData.created_at = toISO8601(orderData.created_at);
   }
-
-if (orderData.delivered_at && typeof orderData.delivered_at === 'string') {
-  orderData.delivered_at = toISO8601(orderData.delivered_at);
-}
-
-// Normalize delivery time (fix older buggy orders that used a wrong default)
-const productRow = {
-  instant_delivery: orderData.product_instant_delivery,
-  normal_delivery_text: orderData.product_normal_delivery_text
-};
-orderData.delivery_time_minutes = getEffectiveDeliveryMinutes(orderData, productRow);
 
   return json({ order: orderData });
 }
@@ -415,36 +368,21 @@ export async function deliverOrder(env, body) {
     }
   } catch (e) {}
   
-  // Send customer delivery notification (async)
+  // Admin + customer delivery notifications (async)
+  notifyOrderDeliveredAdmin(env, {
+    orderId: body.orderId,
+    email: customerEmail,
+    productTitle: orderResult?.product_title || 'Your Order',
+    videoUrl: body.videoUrl,
+    thumbnailUrl: body.thumbnailUrl || null
+  }).catch(() => {});
+
   notifyCustomerOrderDelivered(env, {
     orderId: body.orderId,
     email: customerEmail,
-    productTitle: orderResult?.product_title || 'Your Order'
+    productTitle: orderResult?.product_title || 'Your Order',
+    deliveryUrl: `/buyer-order.html?id=${encodeURIComponent(body.orderId)}`
   }).catch(() => {});
-  
-  // Trigger email webhook if configured (legacy support)
-  try {
-    const googleScriptUrl = await getGoogleScriptUrl(env);
-    if (googleScriptUrl && orderResult) {
-      await fetch(googleScriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: 'order.delivered',
-          order: {
-            order_id: body.orderId,
-            product_title: orderResult.product_title || 'Your Order',
-            email: customerEmail,
-            delivered_video_url: body.videoUrl,
-            status: 'delivered'
-          }
-        })
-      }).catch(err => console.error('Failed to send delivery webhook:', err));
-    }
-  } catch (err) {
-    console.error('Error triggering delivery webhook:', err);
-  }
-  
   return json({ success: true });
 }
 
@@ -462,39 +400,22 @@ export async function requestRevision(env, body) {
   await env.DB.prepare(
     'UPDATE orders SET revision_requested=1, revision_count=revision_count+1, status=? WHERE order_id=?'
   ).bind('revision', body.orderId).run();
-  
-  // Trigger revision notification webhook if configured
+
+  // Notify admin (advanced automation)
   try {
-    const googleScriptUrl = await getGoogleScriptUrl(env);
-    if (googleScriptUrl && orderResult) {
-      let customerEmail = '';
-      try {
-        const decrypted = JSON.parse(orderResult.encrypted_data);
-        customerEmail = decrypted.email || '';
-      } catch (e) {
-        console.warn('Could not decrypt order data for email');
-      }
-      
-      await fetch(googleScriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: 'order.revision_requested',
-          order: {
-            order_id: body.orderId,
-            product_title: orderResult.product_title || 'Your Order',
-            email: customerEmail,
-            revision_reason: body.reason || 'No reason provided',
-            revision_count: (orderResult.revision_count || 0) + 1,
-            status: 'revision'
-          }
-        })
-      }).catch(err => console.error('Failed to send revision webhook:', err));
-    }
-  } catch (err) {
-    console.error('Error triggering revision webhook:', err);
-  }
-  
+    let customerEmail = '';
+    try {
+      const decrypted = JSON.parse(orderResult?.encrypted_data || '{}');
+      customerEmail = decrypted.email || '';
+    } catch (e) {}
+    notifyRevisionRequested(env, {
+      orderId: body.orderId,
+      email: customerEmail,
+      productTitle: orderResult?.product_title || 'Your Order',
+      reason: body.reason || 'No reason provided',
+      revisionCount: (orderResult?.revision_count || 0) + 1
+    }).catch(() => {});
+  } catch (e) {}
   return json({ success: true });
 }
 
