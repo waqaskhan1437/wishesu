@@ -361,7 +361,29 @@ export async function capturePayPalOrder(env, body) {
       const productId = customData.pid || metadata.product_id;
       const buyerEmail = customData.email || metadata.email || captureData.payer?.email_address || '';
       const addons = metadata.addons || [];
-      const deliveryTimeMinutes = metadata.deliveryTimeMinutes || 60;
+      
+      // Get delivery time from metadata or calculate from product
+      let deliveryTimeMinutes = Number(metadata.deliveryTimeMinutes) || 0;
+      if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0) {
+        try {
+          const product = await env.DB.prepare('SELECT instant_delivery, delivery_time_days FROM products WHERE id = ?')
+            .bind(Number(productId)).first();
+          if (product) {
+            if (product.instant_delivery) {
+              deliveryTimeMinutes = 60; // 60 minutes for instant
+            } else {
+              const days = parseInt(product.delivery_time_days) || 1;
+              deliveryTimeMinutes = days * 24 * 60; // Convert days to minutes
+            }
+          } else {
+            deliveryTimeMinutes = 60; // Default fallback
+          }
+        } catch (e) {
+          console.log('Could not get product delivery time for PayPal order:', e);
+          deliveryTimeMinutes = 60;
+        }
+      }
+      console.log('🅿️ Delivery time for PayPal order:', deliveryTimeMinutes, 'minutes');
       
       const encryptedData = JSON.stringify({
         email: buyerEmail,

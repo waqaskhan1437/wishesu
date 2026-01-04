@@ -131,7 +131,7 @@ export async function createCheckout(env, body, origin) {
  * Create dynamic plan + checkout session
  */
 export async function createPlanCheckout(env, body, origin) {
-  const { product_id, amount, email, metadata } = body || {};
+  const { product_id, amount, email, metadata, deliveryTimeMinutes: bodyDeliveryTime } = body || {};
   if (!product_id) {
     return json({ error: 'Product ID required' }, 400);
   }
@@ -141,6 +141,20 @@ export async function createPlanCheckout(env, body, origin) {
   if (!product) {
     return json({ error: 'Product not found' }, 404);
   }
+
+  // Calculate delivery time: use provided value, or calculate from product
+  let deliveryTimeMinutes = bodyDeliveryTime || metadata?.deliveryTimeMinutes;
+  if (!deliveryTimeMinutes) {
+    // Calculate from product settings
+    if (product.instant_delivery) {
+      deliveryTimeMinutes = 60; // 60 minutes for instant
+    } else {
+      const days = parseInt(product.delivery_time_days) || 1;
+      deliveryTimeMinutes = days * 24 * 60; // Convert days to minutes
+    }
+  }
+  deliveryTimeMinutes = Number(deliveryTimeMinutes) || 60;
+  console.log('📦 Delivery time calculated:', deliveryTimeMinutes, 'minutes');
 
   // Determine the base price
   const basePrice = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
@@ -262,6 +276,7 @@ export async function createPlanCheckout(env, body, origin) {
       addons: metadata?.addons || [],
       email: email || '',
       amount: amount || priceValue,
+      deliveryTimeMinutes: deliveryTimeMinutes,
       created_at: new Date().toISOString()
     };
 
@@ -451,22 +466,27 @@ export async function handleWebhook(env, webhookData) {
           const orderId = `WHOP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           
           // Get delivery time from metadata or product default
-          let deliveryTimeMinutes = metadata.deliveryTimeMinutes || 60;
-          if (!metadata.deliveryTimeMinutes) {
+          let deliveryTimeMinutes = Number(metadata.deliveryTimeMinutes) || 0;
+          if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0) {
             try {
               const product = await env.DB.prepare('SELECT instant_delivery, delivery_time_days FROM products WHERE id = ?')
                 .bind(Number(metadata.product_id)).first();
               if (product) {
                 if (product.instant_delivery) {
-                  deliveryTimeMinutes = 60;
+                  deliveryTimeMinutes = 60; // 60 minutes for instant
                 } else {
-                  deliveryTimeMinutes = (product.delivery_time_days || 1) * 24 * 60;
+                  const days = parseInt(product.delivery_time_days) || 1;
+                  deliveryTimeMinutes = days * 24 * 60; // Convert days to minutes
                 }
+              } else {
+                deliveryTimeMinutes = 60; // Default fallback
               }
             } catch (e) {
               console.log('Could not get product delivery time:', e);
+              deliveryTimeMinutes = 60;
             }
           }
+          console.log('📦 Final delivery time for order:', deliveryTimeMinutes, 'minutes');
 
           // Build encrypted_data with addons and other details
           const encryptedData = JSON.stringify({

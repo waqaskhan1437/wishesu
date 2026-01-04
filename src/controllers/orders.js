@@ -93,6 +93,34 @@ export async function createOrder(env, body) {
   const addons = validateAddons(body.addons);
   const amount = parseFloat(body.amount) || 0;
   
+  // Get product for title and delivery time calculation
+  let productTitle = '';
+  let deliveryMinutes = Number(body.deliveryTime) || 0;
+  
+  try {
+    const product = await env.DB.prepare('SELECT title, instant_delivery, delivery_time_days FROM products WHERE id = ?')
+      .bind(Number(body.productId)).first();
+    if (product) {
+      productTitle = product.title || '';
+      // Calculate delivery time if not provided
+      if (!deliveryMinutes || deliveryMinutes <= 0) {
+        if (product.instant_delivery) {
+          deliveryMinutes = 60; // 60 minutes for instant
+        } else {
+          const days = parseInt(product.delivery_time_days) || 1;
+          deliveryMinutes = days * 24 * 60; // Convert days to minutes
+        }
+      }
+    }
+  } catch (e) {
+    console.log('Could not get product details:', e);
+  }
+  
+  // Ensure we have a valid delivery time
+  if (!deliveryMinutes || deliveryMinutes <= 0) {
+    deliveryMinutes = 60; // Default fallback
+  }
+  
   const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   const data = JSON.stringify({
     email: email,
@@ -103,17 +131,11 @@ export async function createOrder(env, body) {
   
   await env.DB.prepare(
     'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
-  ).bind(orderId, Number(body.productId), data, 'PAID', Number(body.deliveryTime) || 60).run();
+  ).bind(orderId, Number(body.productId), data, 'PAID', deliveryMinutes).run();
   
-  // Get product title for notification
-  let productTitle = '';
-  try {
-    const product = await env.DB.prepare('SELECT title FROM products WHERE id = ?').bind(Number(body.productId)).first();
-    productTitle = product?.title || '';
-  } catch (e) {}
+  console.log('📦 Order created:', orderId, 'Delivery:', deliveryMinutes, 'minutes');
   
   // Send notifications (async, don't wait)
-  const deliveryMinutes = Number(body.deliveryTime) || 60;
   const deliveryTime = deliveryMinutes < 1440 ? `${Math.round(deliveryMinutes / 60)} hour(s)` : `${Math.round(deliveryMinutes / 1440)} day(s)`;
   
   // Send notifications via Advanced Automation
@@ -135,7 +157,7 @@ export async function createOrder(env, body) {
             product_title: productTitle,
             email: email,
             amount: amount,
-            delivery_time_minutes: Number(body.deliveryTime) || 60,
+            delivery_time_minutes: deliveryMinutes,
             delivery_time_text: deliveryTime,
             status: 'paid',
             created_at: Date.now()
