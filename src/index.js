@@ -1735,19 +1735,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         
         // Caching: Only cache HTML pages, never admin routes
         const shouldCache = isHTML && isSuccess && !path.startsWith('/admin') && !path.includes('/admin/');
-
-        // Normalize cache key to avoid cache fragmentation from tracking query params.
-        // Also normalize the origin so caches are shared between workers.dev and custom domains.
-        const cacheKeyUrl = new URL(req.url);
-        cacheKeyUrl.hostname = 'cache.local';
-        cacheKeyUrl.protocol = 'https:';
-        cacheKeyUrl.port = '';
-
-        for (const k of ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid','msclkid']) {
-          cacheKeyUrl.searchParams.delete(k);
-        }
-
-        const cacheKey = new Request(cacheKeyUrl.toString(), {
+        const cacheKey = new Request(req.url, { 
           method: 'GET',
           headers: { 'Accept': 'text/html' }
         });
@@ -1760,13 +1748,9 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               const headers = new Headers(cachedResponse.headers);
               headers.set('X-Cache', 'HIT');
               headers.set('X-Worker-Version', VERSION);
-              // Ensure downstream caching can help reduce repeat worker hits.
-              if (!headers.has('Cache-Control')) {
-                headers.set('Cache-Control', 'public, max-age=300');
-              }
-              return new Response(cachedResponse.body, {
-                status: cachedResponse.status,
-                headers
+              return new Response(cachedResponse.body, { 
+                status: cachedResponse.status, 
+                headers 
               });
             }
           } catch (cacheError) {
@@ -1886,8 +1870,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             headers.set('Content-Type', 'text/html; charset=utf-8');
             headers.set('X-Worker-Version', VERSION);
             headers.set('X-Cache', 'MISS');
-            // Allow caching of rendered HTML (worker cache already stores 5 min).
-            headers.set('Cache-Control', 'public, max-age=300');
 
             // Apply Robots + Canonical (admin controlled)
             if (!isAdminUI && !isAdminAPI) {
@@ -1917,7 +1899,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 
                 // Store in cache asynchronously
                 ctx.waitUntil(caches.default.put(cacheKey, cacheResponse));
-                // Avoid per-request logging on high traffic.
+                console.log('Cached response for:', req.url);
               } catch (cacheError) {
                 console.warn('Cache storage failed:', cacheError);
                 // Continue even if caching fails
@@ -1951,31 +1933,18 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
 
   // Scheduled handler for cron jobs
   async scheduled(event, env, ctx) {
-    // FIX: Only run if actually triggered by cron (prevents accidental execution on regular requests)
-    if (!event.cron) {
-      console.log('Ignoring non-cron scheduled call');
-      return;
-    }
-    
     console.log('Cron job started:', event.cron);
     
     try {
       if (env.DB) {
         await initDB(env);
-        
-        // FIX: Add timeout protection for external API calls (30 second max)
-        const cleanupPromise = cleanupExpired(env);
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Cleanup timeout after 30s')), 30000)
-        );
-        
-        const result = await Promise.race([cleanupPromise, timeoutPromise]);
+        // Cleanup expired Whop checkout sessions
+        const result = await cleanupExpired(env);
         const data = await result.json();
         console.log('Cleanup result:', data);
       }
     } catch (e) {
       console.error('Cron job error:', e);
-      // Don't throw - errors in cron shouldn't crash the worker
     }
   }
 };

@@ -64,47 +64,16 @@ window.AdminDashboard = window.AdminDashboard || {};
   
   // Live countdown updater for orders list
   AD.countdownInterval = null;
-  AD.orderElementsCache = []; // FIX: Cache DOM elements to avoid repeated queries
-  
   AD.startCountdownUpdater = function() {
     if (AD.countdownInterval) clearInterval(AD.countdownInterval);
     
-    // FIX: Build cache of DOM elements once instead of querying on every interval
-    AD.orderElementsCache = [];
-    if (AD.orders && AD.currentView === 'orders') {
+    AD.countdownInterval = setInterval(() => {
+      if (!AD.orders || AD.currentView !== 'orders') return;
+      
       AD.orders.forEach((o, i) => {
         const row = document.querySelector(`#orders-tbody tr:nth-child(${i + 1}) td:nth-child(5)`);
         if (row) {
-          AD.orderElementsCache.push({ element: row, order: o });
-        }
-      });
-    }
-    
-    AD.countdownInterval = setInterval(() => {
-      // FIX: Use cached elements instead of querying DOM every second
-      if (!AD.orders || AD.currentView !== 'orders') {
-        // Rebuild cache if view changed
-        AD.orderElementsCache = [];
-        if (AD.orders && AD.currentView === 'orders') {
-          AD.orders.forEach((o, i) => {
-            const row = document.querySelector(`#orders-tbody tr:nth-child(${i + 1}) td:nth-child(5)`);
-            if (row) {
-              AD.orderElementsCache.push({ element: row, order: o });
-            }
-          });
-        }
-        return;
-      }
-      
-      // FIX: Update only elements in cache (much faster than querying DOM)
-      AD.orderElementsCache.forEach((item, index) => {
-        if (item.element && AD.orders[index]) {
-          item.order = AD.orders[index]; // Update order reference
-          const newHTML = AD.getCountdown(item.order);
-          // FIX: Only update DOM if content actually changed
-          if (item.element.innerHTML !== newHTML) {
-            item.element.innerHTML = newHTML;
-          }
+          row.innerHTML = AD.getCountdown(o);
         }
       });
     }, 1000);

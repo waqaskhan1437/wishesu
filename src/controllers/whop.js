@@ -621,40 +621,27 @@ export async function cleanupExpired(env) {
         // Archive plan (hide it so users cannot buy again)
         if (checkout.plan_id) {
           try {
-            // FIX: Add timeout (5 seconds) for individual API calls
-            const archiveRespPromise = fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
+            // Try to archive by setting visibility to hidden
+            const archiveResp = await fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
               method: 'POST',
               headers,
               body: JSON.stringify({ visibility: 'hidden' })
             });
-            
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('API timeout')), 5000)
-            );
-            
-            const archiveResp = await Promise.race([archiveRespPromise, timeoutPromise]);
 
-            if (archiveResp && archiveResp.ok) {
+            if (archiveResp.ok) {
               success = true;
               console.log('✅ Plan archived (hidden):', checkout.plan_id);
             } else {
-              // Fallback: try DELETE with timeout
-              const deleteRespPromise = fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
+              // Fallback: try DELETE
+              const deleteResp = await fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${apiKey}` }
               });
-              
-              const deleteTimeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Delete timeout')), 5000)
-              );
-              
-              const deleteResp = await Promise.race([deleteRespPromise, deleteTimeoutPromise]);
-              success = (deleteResp && (deleteResp.ok || deleteResp.status === 404));
+              success = deleteResp.ok || deleteResp.status === 404;
               if (success) console.log('✅ Plan deleted:', checkout.plan_id);
             }
           } catch (e) {
             console.error('Plan archive failed:', checkout.plan_id, e.message);
-            // Continue processing even if individual API call fails
           }
         } else {
           success = true;
