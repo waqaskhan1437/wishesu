@@ -8,7 +8,7 @@
   const API_SYNC = '/api/chat/sync';
 
   const MAX_LEN = 500;
-  const POLL_MS = 10000;
+  const POLL_MS = 30000; // FIX: Increased from 10000 to 30000 (30 seconds) to reduce CPU load
   const COOLDOWN_MS = 10000;
 
   const LS_SESSION_OBJ = 'wishesu_chat_session';
@@ -19,7 +19,7 @@
   const LS_OPEN = 'chat_is_open';
   const TAB_ID = (crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
   const LS_POLL_LEADER = 'chat_poll_leader_v1'; // { id, ts }
-  const LEADER_STALE_MS = 15000;
+  const LEADER_STALE_MS = 45000; // FIX: Increased from 15000 to 45000 to improve tab coordination
 
   function getLeader() {
     try { return JSON.parse(localStorage.getItem(LS_POLL_LEADER) || 'null'); } catch { return null; }
@@ -577,28 +577,42 @@
   async function syncNow() {
     if (!sessionId) return;
 
-    const res = await fetch(`${API_SYNC}?sessionId=${encodeURIComponent(sessionId)}&sinceId=${encodeURIComponent(String(lastId))}`);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return;
+    try {
+      const res = await fetch(`${API_SYNC}?sessionId=${encodeURIComponent(sessionId)}&sinceId=${encodeURIComponent(String(lastId))}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
 
-    const messages = data.messages || [];
-    for (const m of messages) {
-      lastId = Math.max(lastId, Number(m.id) || lastId);
-      appendMessage(m.role, m.content, m.created_at);
+      const messages = data.messages || [];
+      for (const m of messages) {
+        lastId = Math.max(lastId, Number(m.id) || lastId);
+        appendMessage(m.role, m.content, m.created_at);
+      }
+    } catch (e) {
+      console.error('Sync error:', e);
+      // FIX: Don't stop polling on network errors, just continue
     }
   }
 
   function startPolling() {
     if (pollTimer) return;
     if (document.hidden) return;
+    // FIX: Stop if widget is not open
+    if (!isOpen) return;
 
     // Only one tab should poll to save requests
     if (!tryBecomeLeader()) return;
 
     pollTimer = window.setInterval(async () => {
-      if (!isOpen) return;
+      // FIX: Double-check isOpen on every poll
+      if (!isOpen) {
+        stopPolling();
+        releaseLeader();
+        return;
+      }
+      
       if (document.hidden) {
         stopPolling();
+        releaseLeader();
         return;
       }
 

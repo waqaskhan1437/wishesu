@@ -1933,18 +1933,31 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
 
   // Scheduled handler for cron jobs
   async scheduled(event, env, ctx) {
+    // FIX: Only run if actually triggered by cron (prevents accidental execution on regular requests)
+    if (!event.cron) {
+      console.log('Ignoring non-cron scheduled call');
+      return;
+    }
+    
     console.log('Cron job started:', event.cron);
     
     try {
       if (env.DB) {
         await initDB(env);
-        // Cleanup expired Whop checkout sessions
-        const result = await cleanupExpired(env);
+        
+        // FIX: Add timeout protection for external API calls (30 second max)
+        const cleanupPromise = cleanupExpired(env);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Cleanup timeout after 30s')), 30000)
+        );
+        
+        const result = await Promise.race([cleanupPromise, timeoutPromise]);
         const data = await result.json();
         console.log('Cleanup result:', data);
       }
     } catch (e) {
       console.error('Cron job error:', e);
+      // Don't throw - errors in cron shouldn't crash the worker
     }
   }
 };
