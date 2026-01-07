@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx wrangler deploy)",
       "Bash(node -e:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npm -s test)",
+      "Bash(npm -s run -s build)",
+      "Bash(npm -s run dev -- --local)"
     ]
   }
 }
