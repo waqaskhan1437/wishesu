@@ -1,15 +1,28 @@
 /**
  * Products controller - Product CRUD operations
+ * OPTIMIZED: Added in-memory caching for frequently accessed products
  */
 
 import { json, cachedJson } from '../utils/response.js';
 import { slugifyStr, toISO8601 } from '../utils/formatting.js';
 
+// In-memory cache for products list (reduces DB queries)
+let productsCache = null;
+let productsCacheTime = 0;
+const PRODUCTS_CACHE_TTL = 30000; // 30 seconds
+
 /**
  * Get active products (public)
- * OPTIMIZED: Single JOIN query + Edge caching
+ * OPTIMIZED: Single JOIN query + Edge caching + In-memory caching
  */
 export async function getProducts(env) {
+  const now = Date.now();
+  
+  // Return cached data if still valid
+  if (productsCache && (now - productsCacheTime) < PRODUCTS_CACHE_TTL) {
+    return cachedJson({ products: productsCache }, 120);
+  }
+  
   const r = await env.DB.prepare(`
     SELECT
       p.id, p.title, p.slug, p.normal_price, p.sale_price,
@@ -29,6 +42,10 @@ export async function getProducts(env) {
     review_count: product.review_count || 0,
     rating_average: product.rating_average ? Math.round(product.rating_average * 10) / 10 : 0
   }));
+
+  // Update cache
+  productsCache = products;
+  productsCacheTime = Date.now();
 
   // Cache for 2 minutes on edge
   return cachedJson({ products }, 120);
@@ -118,6 +135,10 @@ export async function saveProduct(env, body) {
   const title = (body.title || '').trim();
   if (!title) return json({ error: 'Title required' }, 400);
   
+  // Invalidate products cache
+  productsCache = null;
+  productsCacheTime = 0;
+  
   const slug = (body.slug || '').trim() || slugifyStr(title);
   const addonsJson = JSON.stringify(body.addons || []);
   
@@ -173,6 +194,11 @@ export async function saveProduct(env, body) {
  */
 export async function deleteProduct(env, id) {
   if (!id) return json({ error: 'ID required' }, 400);
+  
+  // Invalidate products cache
+  productsCache = null;
+  productsCacheTime = 0;
+  
   await env.DB.prepare('DELETE FROM products WHERE id = ?').bind(Number(id)).run();
   return json({ success: true });
 }
@@ -189,6 +215,11 @@ export async function updateProductStatus(env, body) {
   if (status !== 'active' && status !== 'draft') {
     return json({ error: 'invalid status' }, 400);
   }
+  
+  // Invalidate products cache
+  productsCache = null;
+  productsCacheTime = 0;
+  
   await env.DB.prepare('UPDATE products SET status = ? WHERE id = ?').bind(status, Number(id)).run();
   return json({ success: true });
 }

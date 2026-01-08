@@ -2,6 +2,12 @@
  * Database initialization and schema management
  * OPTIMIZED: Uses isolate-level caching to minimize DB operations
  * Tables are only created once per worker isolate lifecycle
+ * 
+ * Performance optimizations:
+ * - dbReady flag prevents repeated CREATE TABLE calls
+ * - migrationsDone flag runs migrations only once
+ * - pagesMigrationDone ensures page columns exist
+ * - All flags persist within worker isolate (until cold start)
  */
 
 let dbReady = false;

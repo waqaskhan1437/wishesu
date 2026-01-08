@@ -1367,6 +1367,23 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       return handleOptions(req);
     }
 
+    // OPTIMIZATION: Fast path for static assets - skip all dynamic processing
+    // These files don't need DB, SEO injection, or any processing
+    const staticExtensions = /\.(css|js|ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|mp4|webm|mp3|pdf)$/i;
+    if ((method === 'GET' || method === 'HEAD') && staticExtensions.test(path) && env.ASSETS) {
+      const assetResp = await env.ASSETS.fetch(req);
+      if (assetResp.status === 200) {
+        const headers = new Headers(assetResp.headers);
+        // Cache static assets aggressively
+        if (!headers.has('Cache-Control')) {
+          headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+        headers.set('X-Worker-Version', VERSION);
+        return new Response(assetResp.body, { status: 200, headers });
+      }
+      // If not found, fall through to normal processing
+    }
+
     // Dynamic robots.txt + sitemap.xml (SEO settings controlled from Admin)
     if ((method === 'GET' || method === 'HEAD')) {
       if (path === '/robots.txt') {

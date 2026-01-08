@@ -132,20 +132,19 @@ export async function getPublishedQuestions(env, url) {
     const limit = parseInt(url.searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
 
-    // Get total count
-    const countResult = await env.DB.prepare(`
-      SELECT COUNT(*) as total FROM forum_questions WHERE status = 'approved'
-    `).first();
+    // OPTIMIZED: Run count and data queries in parallel
+    const [countResult, result] = await Promise.all([
+      env.DB.prepare(`SELECT COUNT(*) as total FROM forum_questions WHERE status = 'approved'`).first(),
+      env.DB.prepare(`
+        SELECT id, title, slug, content, name, reply_count, created_at
+        FROM forum_questions 
+        WHERE status = 'approved'
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+      `).bind(limit, offset).all()
+    ]);
+    
     const total = countResult?.total || 0;
-
-    // Get paginated questions
-    const result = await env.DB.prepare(`
-      SELECT id, title, slug, content, name, reply_count, created_at
-      FROM forum_questions 
-      WHERE status = 'approved'
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `).bind(limit, offset).all();
 
     // Cache for 2 minutes
     return cachedJson({

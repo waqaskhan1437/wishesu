@@ -36,6 +36,7 @@ export async function getBlogsList(env) {
 
 /**
  * Get published blogs for archive page with pagination (PUBLIC - cached)
+ * OPTIMIZED: Use parallel queries for count and data
  */
 export async function getPublishedBlogs(env, url) {
   try {
@@ -43,20 +44,19 @@ export async function getPublishedBlogs(env, url) {
     const limit = parseInt(url.searchParams.get('limit') || '30');
     const offset = (page - 1) * limit;
 
-    // Get total count
-    const countResult = await env.DB.prepare(`
-      SELECT COUNT(*) as total FROM blogs WHERE status = 'published'
-    `).first();
+    // OPTIMIZED: Run count and data queries in parallel
+    const [countResult, result] = await Promise.all([
+      env.DB.prepare(`SELECT COUNT(*) as total FROM blogs WHERE status = 'published'`).first(),
+      env.DB.prepare(`
+        SELECT id, title, slug, description, thumbnail_url, created_at
+        FROM blogs 
+        WHERE status = 'published'
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+      `).bind(limit, offset).all()
+    ]);
+    
     const total = countResult?.total || 0;
-
-    // Get paginated blogs
-    const result = await env.DB.prepare(`
-      SELECT id, title, slug, description, thumbnail_url, created_at
-      FROM blogs 
-      WHERE status = 'published'
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `).bind(limit, offset).all();
 
     // Cache for 3 minutes
     return cachedJson({
