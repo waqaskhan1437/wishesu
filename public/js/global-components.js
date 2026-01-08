@@ -1,15 +1,91 @@
 /**
  * Global Components Injector
  * Automatically injects headers and footers on all pages
+ * Also loads site branding (logo, favicon)
  * Respects exclusion settings from admin panel
  */
 
 (function() {
   const STORAGE_KEY = 'siteComponents';
+  const BRANDING_KEY = 'siteBranding';
+  const BRANDING_CACHE_TTL = 300000; // 5 minutes
   
   // Don't run on admin pages
   if (window.location.pathname.startsWith('/admin')) {
     return;
+  }
+
+  // Load branding from cache or fetch
+  async function loadBranding() {
+    try {
+      // Check cache
+      const cached = localStorage.getItem(BRANDING_KEY);
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.timestamp && (Date.now() - data.timestamp) < BRANDING_CACHE_TTL) {
+          applyBranding(data.branding);
+          return;
+        }
+      }
+      
+      // Fetch from API
+      const res = await fetch('/api/settings/branding');
+      const data = await res.json();
+      
+      if (data.success && data.branding) {
+        // Cache it
+        localStorage.setItem(BRANDING_KEY, JSON.stringify({
+          branding: data.branding,
+          timestamp: Date.now()
+        }));
+        applyBranding(data.branding);
+      }
+    } catch (e) {
+      console.error('Failed to load branding:', e);
+    }
+  }
+
+  // Apply branding to page
+  function applyBranding(branding) {
+    if (!branding) return;
+    
+    // Apply favicon
+    if (branding.favicon_url) {
+      let link = document.querySelector('link[rel="icon"]') || document.querySelector('link[rel="shortcut icon"]');
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = branding.favicon_url;
+      
+      // Also add apple-touch-icon
+      let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+      if (!appleIcon) {
+        appleIcon = document.createElement('link');
+        appleIcon.rel = 'apple-touch-icon';
+        document.head.appendChild(appleIcon);
+      }
+      appleIcon.href = branding.favicon_url;
+    }
+    
+    // Replace logo images with custom logo
+    if (branding.logo_url) {
+      // Replace elements with data-site-logo attribute
+      document.querySelectorAll('[data-site-logo]').forEach(el => {
+        if (el.tagName === 'IMG') {
+          el.src = branding.logo_url;
+        } else {
+          el.style.backgroundImage = `url(${branding.logo_url})`;
+        }
+      });
+      
+      // Store for dynamic use
+      window.siteLogo = branding.logo_url;
+    }
+    
+    // Store branding globally for JS access
+    window.siteBranding = branding;
   }
 
   // Load component data
@@ -57,6 +133,9 @@
 
   // Main initialization
   function init() {
+    // Always load branding
+    loadBranding();
+    
     const data = loadData();
     if (!data) return;
     if (isExcluded(data.excludedPages)) return;

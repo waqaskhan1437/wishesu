@@ -22,6 +22,53 @@
   AD.loadSettings = function(panel) {
     const webhookUrl = window.location.origin + '/api/whop/webhook';
     panel.innerHTML = `
+    <!-- Site Branding -->
+    <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px; color: white; margin-bottom: 20px;">
+      <h3 style="margin: 0 0 10px 0; color: white;">🎨 Site Branding</h3>
+      <p style="color: rgba(255,255,255,0.85); margin-bottom: 20px;">Customize your website logo and favicon.</p>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+        <!-- Logo Upload -->
+        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px;">
+          <label style="font-weight: 600; display: block; margin-bottom: 10px;">🖼️ Site Logo</label>
+          <div id="logo-preview" style="width: 200px; height: 60px; background: rgba(255,255,255,0.9); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; overflow: hidden;">
+            <span style="color: #6b7280; font-size: 0.85em;">No logo set</span>
+          </div>
+          <input type="url" id="site-logo-url" placeholder="https://... or upload below" style="width: 100%; padding: 10px; border: none; border-radius: 6px; margin-bottom: 8px; box-sizing: border-box;">
+          <div style="display: flex; gap: 8px;">
+            <label style="flex: 1; background: white; color: #059669; padding: 10px; border-radius: 6px; text-align: center; cursor: pointer; font-weight: 600;">
+              📤 Upload Logo
+              <input type="file" id="logo-upload" accept="image/*" style="display: none;">
+            </label>
+            <button id="remove-logo-btn" style="background: rgba(255,255,255,0.3); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer;">🗑️</button>
+          </div>
+          <small style="display: block; margin-top: 8px; color: rgba(255,255,255,0.7);">Recommended: 200x60px, PNG/SVG with transparent background</small>
+        </div>
+        
+        <!-- Favicon Upload -->
+        <div style="background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px;">
+          <label style="font-weight: 600; display: block; margin-bottom: 10px;">⭐ Favicon</label>
+          <div id="favicon-preview" style="width: 64px; height: 64px; background: rgba(255,255,255,0.9); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; overflow: hidden;">
+            <span style="color: #6b7280; font-size: 0.7em;">No icon</span>
+          </div>
+          <input type="url" id="site-favicon-url" placeholder="https://... or upload below" style="width: 100%; padding: 10px; border: none; border-radius: 6px; margin-bottom: 8px; box-sizing: border-box;">
+          <div style="display: flex; gap: 8px;">
+            <label style="flex: 1; background: white; color: #059669; padding: 10px; border-radius: 6px; text-align: center; cursor: pointer; font-weight: 600;">
+              📤 Upload Favicon
+              <input type="file" id="favicon-upload" accept="image/*,.ico" style="display: none;">
+            </label>
+            <button id="remove-favicon-btn" style="background: rgba(255,255,255,0.3); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer;">🗑️</button>
+          </div>
+          <small style="display: block; margin-top: 8px; color: rgba(255,255,255,0.7);">Recommended: 32x32 or 64x64px, ICO/PNG</small>
+        </div>
+      </div>
+      
+      <button class="btn" id="save-branding-btn" style="margin-top: 20px; background: white; color: #059669; font-weight: 600; padding: 12px 24px;">
+        💾 Save Branding
+      </button>
+      <span id="branding-status" style="margin-left: 15px; font-size: 0.9em;"></span>
+    </div>
+
     <!-- Payment Methods Control -->
     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 12px; color: white; margin-bottom: 20px;">
       <h3 style="margin: 0 0 10px 0; color: white;">💳 Payment Methods</h3>
@@ -531,11 +578,13 @@
     loadPaymentMethodsSettings();
     loadCustomCssSettings();
     loadCodeSnippets();
+    loadBrandingSettings();
     document.getElementById('save-settings-btn').addEventListener('click', saveWhopSettings);
     document.getElementById('purge-cache-btn').addEventListener('click', purgeCache);
     document.getElementById('save-payment-methods-btn').addEventListener('click', savePaymentMethodsSettings);
     setupCustomCssHandlers();
     setupCodeSnippetsHandlers();
+    setupBrandingHandlers();
 
     const openSeoBtn = document.getElementById('open-seo-settings');
     if (openSeoBtn) {
@@ -622,6 +671,180 @@
       alert('❌ Failed to save payment methods');
     }
   }
+
+  // ========== SITE BRANDING ==========
+  
+  // Load branding settings
+  async function loadBrandingSettings() {
+    try {
+      const res = await fetch('/api/settings/branding');
+      const data = await res.json();
+      
+      if (data.success && data.branding) {
+        const logoUrl = data.branding.logo_url || '';
+        const faviconUrl = data.branding.favicon_url || '';
+        
+        document.getElementById('site-logo-url').value = logoUrl;
+        document.getElementById('site-favicon-url').value = faviconUrl;
+        
+        updateLogoPreview(logoUrl);
+        updateFaviconPreview(faviconUrl);
+      }
+    } catch (err) {
+      console.error('Failed to load branding settings:', err);
+    }
+  }
+  
+  // Update logo preview
+  function updateLogoPreview(url) {
+    const preview = document.getElementById('logo-preview');
+    if (url) {
+      preview.innerHTML = `<img src="${url}" style="max-width: 100%; max-height: 100%; object-fit: contain;" onerror="this.parentElement.innerHTML='<span style=\\'color: #dc2626; font-size: 0.85em;\\'>Failed to load</span>'">`;
+    } else {
+      preview.innerHTML = '<span style="color: #6b7280; font-size: 0.85em;">No logo set</span>';
+    }
+  }
+  
+  // Update favicon preview
+  function updateFaviconPreview(url) {
+    const preview = document.getElementById('favicon-preview');
+    if (url) {
+      preview.innerHTML = `<img src="${url}" style="max-width: 100%; max-height: 100%; object-fit: contain;" onerror="this.parentElement.innerHTML='<span style=\\'color: #dc2626; font-size: 0.7em;\\'>Failed</span>'">`;
+    } else {
+      preview.innerHTML = '<span style="color: #6b7280; font-size: 0.7em;">No icon</span>';
+    }
+  }
+  
+  // Setup branding event handlers
+  function setupBrandingHandlers() {
+    // Logo URL change
+    document.getElementById('site-logo-url').addEventListener('input', (e) => {
+      updateLogoPreview(e.target.value);
+    });
+    
+    // Favicon URL change
+    document.getElementById('site-favicon-url').addEventListener('input', (e) => {
+      updateFaviconPreview(e.target.value);
+    });
+    
+    // Logo upload
+    document.getElementById('logo-upload').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const statusEl = document.getElementById('branding-status');
+      statusEl.textContent = '⏳ Uploading logo...';
+      
+      try {
+        const url = await uploadBrandingFile(file, 'logo');
+        document.getElementById('site-logo-url').value = url;
+        updateLogoPreview(url);
+        statusEl.textContent = '✅ Logo uploaded!';
+        setTimeout(() => statusEl.textContent = '', 3000);
+      } catch (err) {
+        statusEl.textContent = '❌ Upload failed: ' + err.message;
+      }
+      
+      e.target.value = '';
+    });
+    
+    // Favicon upload
+    document.getElementById('favicon-upload').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const statusEl = document.getElementById('branding-status');
+      statusEl.textContent = '⏳ Uploading favicon...';
+      
+      try {
+        const url = await uploadBrandingFile(file, 'favicon');
+        document.getElementById('site-favicon-url').value = url;
+        updateFaviconPreview(url);
+        statusEl.textContent = '✅ Favicon uploaded!';
+        setTimeout(() => statusEl.textContent = '', 3000);
+      } catch (err) {
+        statusEl.textContent = '❌ Upload failed: ' + err.message;
+      }
+      
+      e.target.value = '';
+    });
+    
+    // Remove logo
+    document.getElementById('remove-logo-btn').addEventListener('click', () => {
+      document.getElementById('site-logo-url').value = '';
+      updateLogoPreview('');
+    });
+    
+    // Remove favicon
+    document.getElementById('remove-favicon-btn').addEventListener('click', () => {
+      document.getElementById('site-favicon-url').value = '';
+      updateFaviconPreview('');
+    });
+    
+    // Save branding
+    document.getElementById('save-branding-btn').addEventListener('click', saveBrandingSettings);
+  }
+  
+  // Upload branding file to R2
+  async function uploadBrandingFile(file, type) {
+    const sessionId = 'branding-' + Date.now();
+    const filename = type + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    
+    const res = await fetch(`/api/upload/temp-file?sessionId=${sessionId}&filename=${filename}`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file
+    });
+    
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Upload failed');
+    }
+    
+    // Convert r2:// URL to public URL
+    const r2Key = data.tempUrl.replace('r2://', '');
+    return `/api/r2/${r2Key}`;
+  }
+  
+  // Save branding settings
+  async function saveBrandingSettings() {
+    const btn = document.getElementById('save-branding-btn');
+    const statusEl = document.getElementById('branding-status');
+    
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
+    statusEl.textContent = '';
+    
+    try {
+      const res = await fetch('/api/settings/branding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          logo_url: document.getElementById('site-logo-url').value.trim(),
+          favicon_url: document.getElementById('site-favicon-url').value.trim()
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        statusEl.textContent = '✅ Branding saved!';
+        statusEl.style.color = '#16a34a';
+        setTimeout(() => statusEl.textContent = '', 3000);
+      } else {
+        statusEl.textContent = '❌ ' + (data.error || 'Save failed');
+        statusEl.style.color = '#dc2626';
+      }
+    } catch (err) {
+      statusEl.textContent = '❌ Error: ' + err.message;
+      statusEl.style.color = '#dc2626';
+    }
+    
+    btn.disabled = false;
+    btn.textContent = '💾 Save Branding';
+  }
+
+  // ========== END SITE BRANDING ==========
 
   async function loadWhopSettings() {
     try {

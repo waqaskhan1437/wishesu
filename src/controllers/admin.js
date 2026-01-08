@@ -481,3 +481,42 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
     headers
   });
 }
+
+/**
+ * Get site branding settings (logo, favicon)
+ */
+export async function getBrandingSettings(env) {
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('site_branding').first();
+    if (row?.value) {
+      const branding = JSON.parse(row.value);
+      return json({ success: true, branding });
+    }
+    return json({ success: true, branding: { logo_url: '', favicon_url: '' } });
+  } catch (e) {
+    console.error('Get branding error:', e);
+    return json({ success: true, branding: { logo_url: '', favicon_url: '' } });
+  }
+}
+
+/**
+ * Save site branding settings
+ */
+export async function saveBrandingSettings(env, body) {
+  try {
+    const branding = {
+      logo_url: (body.logo_url || '').trim(),
+      favicon_url: (body.favicon_url || '').trim(),
+      updated_at: Date.now()
+    };
+    
+    await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .bind('site_branding', JSON.stringify(branding))
+      .run();
+    
+    return json({ success: true });
+  } catch (e) {
+    console.error('Save branding error:', e);
+    return json({ error: e.message }, 500);
+  }
+}

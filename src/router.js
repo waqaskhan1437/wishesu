@@ -152,7 +152,9 @@ import {
   getR2File,
   uploadEncryptedFile,
   uploadTempFile,
-  getArchiveCredentials
+  getArchiveCredentials,
+  getBrandingSettings,
+  saveBrandingSettings
 } from './controllers/admin.js';
 
 // SEO (admin controls + robots/sitemap)
@@ -717,6 +719,16 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/settings/whop') {
     const body = await req.json();
     return saveWhopSettings(env, body);
+  }
+
+  // ----- BRANDING SETTINGS -----
+  if (method === 'GET' && path === '/api/settings/branding') {
+    return getBrandingSettings(env);
+  }
+
+  if (method === 'POST' && path === '/api/settings/branding') {
+    const body = await req.json();
+    return saveBrandingSettings(env, body);
   }
 
   // ----- PAGES -----
