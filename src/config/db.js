@@ -1,14 +1,16 @@
 /**
  * Database initialization and schema management
- * OPTIMIZED: Reduced unnecessary column checks, uses batch operations
+ * OPTIMIZED: Uses isolate-level caching to minimize DB operations
+ * Tables are only created once per worker isolate lifecycle
  */
 
 let dbReady = false;
 let migrationsDone = false;
-let pagesMigrationDone = false;  // Separate flag for pages migration
+let pagesMigrationDone = false;
 
 /**
  * Initialize database schema - creates all required tables
+ * OPTIMIZED: Skips if already done in this isolate
  * @param {Object} env - Environment bindings
  */
 export async function initDB(env) {

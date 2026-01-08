@@ -1,6 +1,7 @@
 /**
  * Cloudflare Worker - Main Entry Point with HTML Caching
  * Modular ES Module Structure
+ * OPTIMIZED: Moved helper functions to module level to avoid recreation per request
  */
 
 import { CORS, handleOptions } from './config/cors.js';
@@ -13,6 +14,69 @@ import { cleanupExpired } from './controllers/whop.js';
 import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildRobotsTxt, buildSitemapXml, getSeoForRequest, applySeoToHtml } from './controllers/seo.js';
+
+// =========================
+// ADMIN AUTH HELPERS (Module Level - OPTIMIZED)
+// =========================
+const ADMIN_COOKIE = 'admin_session';
+const ADMIN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
+
+function noStoreHeaders(extra = {}) {
+  return {
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
+    ...extra
+  };
+}
+
+function base64url(bytes) {
+  const b64 = btoa(String.fromCharCode(...bytes));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+async function hmacSha256(secret, message) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return base64url(new Uint8Array(sig));
+}
+
+function getCookieValue(cookieHeader, name) {
+  if (!cookieHeader) return null;
+  const parts = cookieHeader.split(';');
+  for (const p of parts) {
+    const [k, ...rest] = p.trim().split('=');
+    if (k === name) return rest.join('=') || '';
+  }
+  return null;
+}
+
+async function isAdminAuthed(req, env) {
+  const cookieHeader = req.headers.get('Cookie') || '';
+  const value = getCookieValue(cookieHeader, ADMIN_COOKIE);
+  if (!value) return false;
+
+  const [tsStr, sig] = value.split('.');
+  if (!tsStr || !sig) return false;
+
+  const ts = Number(tsStr);
+  if (!Number.isFinite(ts)) return false;
+
+  const ageSec = Math.floor((Date.now() - ts) / 1000);
+  if (ageSec < 0 || ageSec > ADMIN_MAX_AGE_SECONDS) return false;
+
+  const secret = env.ADMIN_SESSION_SECRET;
+  if (!secret) return false;
+
+  const expected = await hmacSha256(secret, tsStr);
+  return expected === sig;
+}
 
 // Blog post HTML template generator
 function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
@@ -1196,23 +1260,7 @@ export default {
     }
     const method = req.method;
 
-// =========================
-// ADMIN AUTH (ENV/SECRETS)
-// =========================
-// Required:
-//   ADMIN_EMAIL (variable)
-//   ADMIN_PASSWORD (secret)
-//   ADMIN_SESSION_SECRET (secret)  -> used to sign session cookie
-const ADMIN_COOKIE = 'admin_session';
-const ADMIN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
-function noStoreHeaders(extra = {}) {
-  return {
-    'Cache-Control': 'no-store, no-cache, must-revalidate',
-    'Pragma': 'no-cache',
-    ...extra
-  };
-}
-
+// Route flags (computed once per request)
 const isAdminUI = (path === '/admin' || path === '/admin/' || path.startsWith('/admin/'));
 const isAdminAPI = path.startsWith('/api/admin/');
 const isLoginRoute = (path === '/admin/login' || path === '/admin/login/');
@@ -1225,57 +1273,8 @@ const isAdminProtectedPage = (
   path === '/order-detail.html'
 );
 
-function base64url(bytes) {
-  const b64 = btoa(String.fromCharCode(...bytes));
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-async function hmacSha256(secret, message) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
-  return base64url(new Uint8Array(sig));
-}
-
-function getCookieValue(cookieHeader, name) {
-  if (!cookieHeader) return null;
-  const parts = cookieHeader.split(';');
-  for (const p of parts) {
-    const [k, ...rest] = p.trim().split('=');
-    if (k === name) return rest.join('=') || '';
-  }
-  return null;
-}
-
-async function isAdminAuthed() {
-  const cookieHeader = req.headers.get('Cookie') || '';
-  const value = getCookieValue(cookieHeader, ADMIN_COOKIE);
-  if (!value) return false;
-
-  const [tsStr, sig] = value.split('.');
-  if (!tsStr || !sig) return false;
-
-  const ts = Number(tsStr);
-  if (!Number.isFinite(ts)) return false;
-
-  const ageSec = Math.floor((Date.now() - ts) / 1000);
-  if (ageSec < 0 || ageSec > ADMIN_MAX_AGE_SECONDS) return false;
-
-  const secret = env.ADMIN_SESSION_SECRET;
-  if (!secret) return false;
-
-  const expected = await hmacSha256(secret, tsStr);
-  return expected === sig;
-}
-
 async function requireAdmin() {
-  const ok = await isAdminAuthed();
+  const ok = await isAdminAuthed(req, env);
   if (ok) return null;
 
   if (isAdminAPI) {
@@ -1291,7 +1290,7 @@ async function requireAdmin() {
 // Serve login page (GET)
 if (isLoginRoute && method === 'GET') {
   // Already logged in? Send to admin.
-  if (await isAdminAuthed()) {
+  if (await isAdminAuthed(req, env)) {
     return Response.redirect(new URL('/admin', req.url).toString(), 302);
   }
 

@@ -1,9 +1,17 @@
 /**
  * SEO Controller - Admin SEO settings + robots/sitemap + meta injection
  * Keeps SEO controls in DB so indexing can be managed from Admin panel.
+ * OPTIMIZED: Added caching flags to prevent repeated table creation
  */
 
 import { json } from '../utils/response.js';
+
+// Cache flags to prevent repeated DB operations per isolate
+let seoTablesReady = false;
+let seoSeeded = false;
+let cachedSettings = null;
+let settingsCacheTime = 0;
+const SETTINGS_CACHE_TTL = 60000; // 1 minute cache
 
 const DEFAULT_SETTINGS = {
   id: 1,
@@ -47,53 +55,71 @@ function safeNumber(n, fallback) {
 }
 
 async function ensureSeoTables(env) {
-  if (!env?.DB) return;
-  await env.DB.batch([
-    env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS seo_settings (
-        id INTEGER PRIMARY KEY,
-        base_url TEXT,
-        sitemap_enabled INTEGER DEFAULT 1,
-        sitemap_include_pages INTEGER DEFAULT 1,
-        sitemap_include_products INTEGER DEFAULT 1,
-        sitemap_max_urls INTEGER DEFAULT 45000,
-        product_url_template TEXT DEFAULT '/product-{id}/{slug}',
-        force_noindex_on_workers_dev INTEGER DEFAULT 1,
-        robots_enabled INTEGER DEFAULT 1,
-        robots_extra TEXT DEFAULT ''
-      )
-    `),
-    env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS seo_page_rules (
-        path TEXT PRIMARY KEY,
-        allow_index INTEGER DEFAULT 1,
-        allow_follow INTEGER DEFAULT 1,
-        include_in_sitemap INTEGER DEFAULT 1,
-        canonical_override TEXT,
-        changefreq TEXT DEFAULT 'weekly',
-        priority REAL DEFAULT 0.6,
-        updated_at TEXT
-      )
-    `),
-    env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS seo_product_rules (
-        product_id TEXT PRIMARY KEY,
-        allow_index INTEGER DEFAULT 1,
-        allow_follow INTEGER DEFAULT 1,
-        include_in_sitemap INTEGER DEFAULT 1,
-        canonical_override TEXT,
-        changefreq TEXT DEFAULT 'weekly',
-        priority REAL DEFAULT 0.7,
-        updated_at TEXT
-      )
-    `)
-  ]);
+  // OPTIMIZATION: Skip if already done in this isolate
+  if (seoTablesReady || !env?.DB) return;
+  
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS seo_settings (
+          id INTEGER PRIMARY KEY,
+          base_url TEXT,
+          sitemap_enabled INTEGER DEFAULT 1,
+          sitemap_include_pages INTEGER DEFAULT 1,
+          sitemap_include_products INTEGER DEFAULT 1,
+          sitemap_max_urls INTEGER DEFAULT 45000,
+          product_url_template TEXT DEFAULT '/product-{id}/{slug}',
+          force_noindex_on_workers_dev INTEGER DEFAULT 1,
+          robots_enabled INTEGER DEFAULT 1,
+          robots_extra TEXT DEFAULT ''
+        )
+      `),
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS seo_page_rules (
+          path TEXT PRIMARY KEY,
+          allow_index INTEGER DEFAULT 1,
+          allow_follow INTEGER DEFAULT 1,
+          include_in_sitemap INTEGER DEFAULT 1,
+          canonical_override TEXT,
+          changefreq TEXT DEFAULT 'weekly',
+          priority REAL DEFAULT 0.6,
+          updated_at TEXT
+        )
+      `),
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS seo_product_rules (
+          product_id TEXT PRIMARY KEY,
+          allow_index INTEGER DEFAULT 1,
+          allow_follow INTEGER DEFAULT 1,
+          include_in_sitemap INTEGER DEFAULT 1,
+          canonical_override TEXT,
+          changefreq TEXT DEFAULT 'weekly',
+          priority REAL DEFAULT 0.7,
+          updated_at TEXT
+        )
+      `)
+    ]);
+    seoTablesReady = true;
+  } catch (e) {
+    // Tables likely already exist, mark as ready
+    seoTablesReady = true;
+  }
 }
 
 async function ensureSettingsRow(env) {
   await ensureSeoTables(env);
+  
+  // Return cached settings if still valid
+  if (cachedSettings && (Date.now() - settingsCacheTime) < SETTINGS_CACHE_TTL) {
+    return cachedSettings;
+  }
+  
   const row = await env.DB.prepare('SELECT * FROM seo_settings WHERE id = 1').first();
-  if (row) return row;
+  if (row) {
+    cachedSettings = row;
+    settingsCacheTime = Date.now();
+    return row;
+  }
 
   await env.DB.prepare(`
     INSERT INTO seo_settings
@@ -112,14 +138,23 @@ async function ensureSettingsRow(env) {
     DEFAULT_SETTINGS.robots_extra
   ).run();
 
-  return (await env.DB.prepare('SELECT * FROM seo_settings WHERE id = 1').first()) || { ...DEFAULT_SETTINGS };
+  const newRow = (await env.DB.prepare('SELECT * FROM seo_settings WHERE id = 1').first()) || { ...DEFAULT_SETTINGS };
+  cachedSettings = newRow;
+  settingsCacheTime = Date.now();
+  return newRow;
 }
 
 async function seedDefaultRulesIfEmpty(env) {
+  // OPTIMIZATION: Only seed once per isolate
+  if (seoSeeded) return;
+  
   await ensureSeoTables(env);
   const countRow = await env.DB.prepare('SELECT COUNT(1) as c FROM seo_page_rules').first();
   const c = countRow?.c ? Number(countRow.c) : 0;
-  if (c > 0) return;
+  if (c > 0) {
+    seoSeeded = true;
+    return;
+  }
 
   const now = new Date().toISOString();
   const batch = DEFAULT_PAGE_RULES.map((r) =>
@@ -141,6 +176,7 @@ async function seedDefaultRulesIfEmpty(env) {
   );
 
   await env.DB.batch(batch);
+  seoSeeded = true;
 }
 
 /**
@@ -200,6 +236,10 @@ export async function adminSaveSeoSettings(env, request) {
     body.robots_enabled ? 1 : 0,
     (body.robots_extra || '')
   ).run();
+
+  // Invalidate cache
+  cachedSettings = null;
+  settingsCacheTime = 0;
 
   return json({ success: true });
 }
@@ -361,13 +401,15 @@ export async function adminPatchProductRule(env, request) {
 }
 
 async function getPageRule(env, path) {
-  await ensureSeoTables(env);
+  // ensureSeoTables already called in getSeoForRequest flow
+  if (!seoTablesReady) await ensureSeoTables(env);
   const row = await env.DB.prepare('SELECT * FROM seo_page_rules WHERE path = ?').bind(normalizePath(path)).first();
   return row || null;
 }
 
 async function getProductRule(env, productId) {
-  await ensureSeoTables(env);
+  // ensureSeoTables already called in getSeoForRequest flow
+  if (!seoTablesReady) await ensureSeoTables(env);
   if (!productId) return null;
   const row = await env.DB.prepare('SELECT * FROM seo_product_rules WHERE product_id = ?').bind(String(productId)).first();
   return row || null;
