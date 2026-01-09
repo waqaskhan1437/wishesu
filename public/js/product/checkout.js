@@ -238,11 +238,24 @@
     if (emailInput && emailInput.value.includes('@')) email = emailInput.value.trim();
     if (email) syncEmailToWhop(email);
 
+    // Check for applied coupon
+    let finalAmount = window.currentTotal;
+    let appliedCoupon = null;
+    
+    if (typeof window.getAppliedCoupon === 'function') {
+      appliedCoupon = window.getAppliedCoupon();
+      if (appliedCoupon && appliedCoupon.discounted_price !== undefined) {
+        finalAmount = appliedCoupon.discounted_price;
+      }
+    }
+
     // Store order data in localStorage as backup
     const orderData = {
       addons: selectedAddons,
       email: email,
-      amount: window.currentTotal,
+      amount: finalAmount,
+      originalAmount: window.currentTotal,
+      coupon: appliedCoupon,
       productId: window.productData.id,
       deliveryTimeMinutes: deliveryTimeMinutes,
       timestamp: Date.now()
@@ -254,7 +267,9 @@
       // Open payment selector modal - buttons will be restored when modal closes
       window.PaymentSelector.open({
         productId: window.productData.id,
-        amount: window.currentTotal,
+        amount: finalAmount,
+        originalAmount: window.currentTotal,
+        coupon: appliedCoupon,
         email: email,
         addons: selectedAddons,
         deliveryTimeMinutes: deliveryTimeMinutes,

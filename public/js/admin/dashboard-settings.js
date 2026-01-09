@@ -267,6 +267,24 @@
         ⚙️ Open Automation Settings
       </button>
     </div>
+
+    <!-- Coupon Codes Section -->
+    <div style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); padding: 30px; border-radius: 12px; color: white; margin-top: 20px;">
+      <h3 style="margin: 0 0 10px 0; color: white;">🎟️ Coupon Codes</h3>
+      <p style="color: rgba(255,255,255,0.85); margin-bottom: 20px;">Create and manage discount coupons for your products.</p>
+      
+      <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" id="coupons-enabled" style="width: 20px; height: 20px; cursor: pointer;">
+          <span style="font-weight: 600;">Enable Coupon System</span>
+        </label>
+        <span id="coupons-enabled-status" style="font-size: 0.85em;"></span>
+      </div>
+      
+      <button class="btn" id="open-coupons-manager" style="background: white; color: #8b5cf6; font-weight: 600; padding: 12px 24px;">
+        🎟️ Manage Coupons
+      </button>
+    </div>
     
     <!-- Export/Import Section -->
     <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
@@ -585,6 +603,8 @@
     setupCustomCssHandlers();
     setupCodeSnippetsHandlers();
     setupBrandingHandlers();
+    setupCouponsHandlers();
+    loadCouponsEnabled();
 
     const openSeoBtn = document.getElementById('open-seo-settings');
     if (openSeoBtn) {
@@ -845,6 +865,273 @@
   }
 
   // ========== END SITE BRANDING ==========
+
+  // ========== COUPONS MANAGEMENT ==========
+  
+  // Load coupons enabled status
+  async function loadCouponsEnabled() {
+    try {
+      const res = await fetch('/api/coupons/enabled');
+      const data = await res.json();
+      const checkbox = document.getElementById('coupons-enabled');
+      if (checkbox) checkbox.checked = data.enabled;
+    } catch (e) {
+      console.error('Load coupons enabled error:', e);
+    }
+  }
+  
+  // Setup coupon event handlers
+  function setupCouponsHandlers() {
+    // Toggle coupons enabled
+    document.getElementById('coupons-enabled').addEventListener('change', async (e) => {
+      const statusEl = document.getElementById('coupons-enabled-status');
+      try {
+        const res = await fetch('/api/coupons/enabled', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: e.target.checked })
+        });
+        const data = await res.json();
+        if (data.success) {
+          statusEl.textContent = e.target.checked ? '✅ Enabled' : '⚪ Disabled';
+          setTimeout(() => statusEl.textContent = '', 2000);
+        }
+      } catch (err) {
+        statusEl.textContent = '❌ Error';
+        e.target.checked = !e.target.checked;
+      }
+    });
+    
+    // Open coupons manager
+    document.getElementById('open-coupons-manager').addEventListener('click', openCouponsManager);
+  }
+  
+  // Open coupons manager modal
+  async function openCouponsManager() {
+    // Create modal
+    const modal = document.createElement('div');
+    modal.id = 'coupons-modal';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;';
+    
+    modal.innerHTML = `
+      <div style="background: white; border-radius: 16px; max-width: 900px; width: 100%; max-height: 90vh; overflow-y: auto;">
+        <div style="padding: 25px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 10;">
+          <h2 style="margin: 0;">🎟️ Coupon Codes</h2>
+          <button id="close-coupons-modal" style="background: none; border: none; font-size: 1.5em; cursor: pointer; color: #6b7280;">✕</button>
+        </div>
+        
+        <div style="padding: 25px;">
+          <!-- Add New Coupon Form -->
+          <div style="background: #f9fafb; padding: 20px; border-radius: 12px; margin-bottom: 25px;">
+            <h4 style="margin: 0 0 15px 0;">➕ Create New Coupon</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+              <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Code *</label>
+                <input type="text" id="coupon-code" placeholder="SAVE20" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; text-transform: uppercase;">
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Discount Type</label>
+                <select id="coupon-discount-type" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+                  <option value="percentage">Percentage (%)</option>
+                  <option value="fixed">Fixed Amount (€)</option>
+                </select>
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Discount Value *</label>
+                <input type="number" id="coupon-discount-value" placeholder="20" min="0" step="0.01" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Min Order (€)</label>
+                <input type="number" id="coupon-min-order" placeholder="0" min="0" step="0.01" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Max Uses (0 = unlimited)</label>
+                <input type="number" id="coupon-max-uses" placeholder="0" min="0" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Valid Until</label>
+                <input type="datetime-local" id="coupon-valid-until" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+              </div>
+            </div>
+            <div style="margin-top: 15px;">
+              <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Product IDs (comma-separated, empty = all products)</label>
+              <input type="text" id="coupon-product-ids" placeholder="1,2,3 or leave empty for all" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
+            </div>
+            <button id="create-coupon-btn" class="btn btn-primary" style="margin-top: 15px;">➕ Create Coupon</button>
+            <span id="coupon-create-status" style="margin-left: 10px; font-size: 0.9em;"></span>
+          </div>
+          
+          <!-- Coupons List -->
+          <h4 style="margin: 0 0 15px 0;">📋 Existing Coupons</h4>
+          <div id="coupons-list" style="background: #f9fafb; border-radius: 12px; min-height: 100px;">
+            <p style="text-align: center; padding: 40px; color: #6b7280;">Loading...</p>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close modal
+    modal.querySelector('#close-coupons-modal').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    
+    // Load coupons
+    loadCouponsList(modal);
+    
+    // Create coupon handler
+    modal.querySelector('#create-coupon-btn').addEventListener('click', async () => {
+      const code = modal.querySelector('#coupon-code').value.trim();
+      const discountValue = parseFloat(modal.querySelector('#coupon-discount-value').value);
+      const statusEl = modal.querySelector('#coupon-create-status');
+      
+      if (!code || !discountValue) {
+        statusEl.textContent = '❌ Code and discount value are required';
+        statusEl.style.color = '#dc2626';
+        return;
+      }
+      
+      const validUntilInput = modal.querySelector('#coupon-valid-until').value;
+      
+      try {
+        const res = await fetch('/api/coupons/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            discount_type: modal.querySelector('#coupon-discount-type').value,
+            discount_value: discountValue,
+            min_order_amount: parseFloat(modal.querySelector('#coupon-min-order').value) || 0,
+            max_uses: parseInt(modal.querySelector('#coupon-max-uses').value) || 0,
+            valid_until: validUntilInput ? new Date(validUntilInput).getTime() : null,
+            product_ids: modal.querySelector('#coupon-product-ids').value.trim() || null
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+          statusEl.textContent = '✅ Coupon created!';
+          statusEl.style.color = '#16a34a';
+          // Clear form
+          modal.querySelector('#coupon-code').value = '';
+          modal.querySelector('#coupon-discount-value').value = '';
+          modal.querySelector('#coupon-min-order').value = '';
+          modal.querySelector('#coupon-max-uses').value = '';
+          modal.querySelector('#coupon-valid-until').value = '';
+          modal.querySelector('#coupon-product-ids').value = '';
+          // Reload list
+          loadCouponsList(modal);
+        } else {
+          statusEl.textContent = '❌ ' + (data.error || 'Failed');
+          statusEl.style.color = '#dc2626';
+        }
+      } catch (err) {
+        statusEl.textContent = '❌ Error: ' + err.message;
+        statusEl.style.color = '#dc2626';
+      }
+    });
+  }
+  
+  // Load coupons list
+  async function loadCouponsList(modal) {
+    const container = modal.querySelector('#coupons-list');
+    
+    try {
+      const res = await fetch('/api/coupons');
+      const data = await res.json();
+      
+      if (!data.coupons || data.coupons.length === 0) {
+        container.innerHTML = '<p style="text-align: center; padding: 40px; color: #6b7280;">No coupons yet. Create your first one above!</p>';
+        return;
+      }
+      
+      container.innerHTML = `
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background: #e5e7eb;">
+              <th style="padding: 12px; text-align: left;">Code</th>
+              <th style="padding: 12px; text-align: left;">Discount</th>
+              <th style="padding: 12px; text-align: left;">Usage</th>
+              <th style="padding: 12px; text-align: left;">Status</th>
+              <th style="padding: 12px; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.coupons.map(c => `
+              <tr style="border-bottom: 1px solid #e5e7eb;">
+                <td style="padding: 12px;">
+                  <strong style="font-family: monospace; background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">${c.code}</strong>
+                  ${c.valid_until && c.valid_until < Date.now() ? '<span style="color: #dc2626; font-size: 0.8em; margin-left: 5px;">Expired</span>' : ''}
+                </td>
+                <td style="padding: 12px;">
+                  ${c.discount_type === 'percentage' ? c.discount_value + '%' : '€' + c.discount_value.toFixed(2)}
+                  ${c.min_order_amount > 0 ? '<br><small style="color: #6b7280;">Min: €' + c.min_order_amount.toFixed(2) + '</small>' : ''}
+                </td>
+                <td style="padding: 12px;">
+                  ${c.used_count}${c.max_uses > 0 ? ' / ' + c.max_uses : ' / ∞'}
+                </td>
+                <td style="padding: 12px;">
+                  <span style="padding: 4px 10px; border-radius: 20px; font-size: 0.85em; font-weight: 600; ${c.status === 'active' ? 'background: #d1fae5; color: #065f46;' : 'background: #fee2e2; color: #991b1b;'}">
+                    ${c.status}
+                  </span>
+                </td>
+                <td style="padding: 12px; text-align: right;">
+                  <button onclick="toggleCouponStatus(${c.id}, '${c.status === 'active' ? 'inactive' : 'active'}')" style="background: ${c.status === 'active' ? '#f59e0b' : '#16a34a'}; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; margin-right: 5px;">
+                    ${c.status === 'active' ? '⏸️ Disable' : '▶️ Enable'}
+                  </button>
+                  <button onclick="deleteCoupon(${c.id})" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer;">
+                    🗑️
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } catch (err) {
+      container.innerHTML = '<p style="text-align: center; padding: 40px; color: #dc2626;">❌ Failed to load coupons</p>';
+    }
+  }
+  
+  // Global functions for coupon actions
+  window.toggleCouponStatus = async function(id, status) {
+    try {
+      const res = await fetch('/api/coupons/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const modal = document.getElementById('coupons-modal');
+        if (modal) loadCouponsList(modal);
+      } else {
+        alert('❌ ' + (data.error || 'Failed'));
+      }
+    } catch (err) {
+      alert('❌ Error: ' + err.message);
+    }
+  };
+  
+  window.deleteCoupon = async function(id) {
+    if (!confirm('Are you sure you want to delete this coupon?')) return;
+    
+    try {
+      const res = await fetch('/api/coupons/delete?id=' + id, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        const modal = document.getElementById('coupons-modal');
+        if (modal) loadCouponsList(modal);
+      } else {
+        alert('❌ ' + (data.error || 'Failed'));
+      }
+    } catch (err) {
+      alert('❌ Error: ' + err.message);
+    }
+  };
+
+  // ========== END COUPONS MANAGEMENT ==========
 
   async function loadWhopSettings() {
     try {

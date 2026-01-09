@@ -138,6 +138,8 @@
   <script src="/js/instant-upload.js" defer></script>
   <!-- Payment methods -->
   <script src="/js/payment-selector.js" defer></script>
+  <!-- Coupon widget -->
+  <script src="/js/coupon-widget.js" defer></script>
   <!-- Whop checkout integration -->
   <script src="/js/whop/checkout.js" defer></script>
   <!-- Reviews widget -->

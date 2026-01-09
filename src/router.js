@@ -179,6 +179,19 @@ import {
   testEmail
 } from './controllers/automation.js';
 
+// Coupons
+import {
+  getCoupons,
+  getActiveCoupons,
+  getCouponsEnabled,
+  setCouponsEnabled,
+  validateCoupon,
+  createCoupon,
+  updateCoupon,
+  deleteCoupon,
+  toggleCouponStatus
+} from './controllers/coupons.js';
+
 /**
  * Route API requests to appropriate handlers
  * @param {Request} req - Request object
@@ -729,6 +742,49 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/settings/branding') {
     const body = await req.json();
     return saveBrandingSettings(env, body);
+  }
+
+  // ----- COUPONS -----
+  if (method === 'GET' && path === '/api/coupons') {
+    return getCoupons(env);
+  }
+
+  if (method === 'GET' && path === '/api/coupons/active') {
+    return getActiveCoupons(env);
+  }
+
+  if (method === 'GET' && path === '/api/coupons/enabled') {
+    return getCouponsEnabled(env);
+  }
+
+  if (method === 'POST' && path === '/api/coupons/enabled') {
+    const body = await req.json();
+    return setCouponsEnabled(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/coupons/validate') {
+    const body = await req.json();
+    return validateCoupon(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/coupons/create') {
+    const body = await req.json();
+    return createCoupon(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/coupons/update') {
+    const body = await req.json();
+    return updateCoupon(env, body);
+  }
+
+  if (method === 'DELETE' && path === '/api/coupons/delete') {
+    const id = url.searchParams.get('id');
+    return deleteCoupon(env, id);
+  }
+
+  if (method === 'POST' && path === '/api/coupons/status') {
+    const body = await req.json();
+    return toggleCouponStatus(env, body);
   }
 
   // ----- PAGES -----

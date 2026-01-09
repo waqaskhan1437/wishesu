@@ -263,38 +263,5 @@
   <script src="/js/admin/dashboard-pages.js"></script>
   <script src="/js/admin/dashboard-components.js"></script>
   <script src="/js/admin/dashboard-chats.js"></script>
-
-  <!--
-    Immediately invoke a version check against the /api/debug endpoint.  If the
-    version reported by the server does not match the build-version meta tag
-    embedded in this file, a warning will be presented to the user.  This
-    assists with debugging cases where Cloudflare serves stale HTML/JS files
-    after a deployment.
-  -->
-  <script>
-    (async function() {
-      try {
-        const meta = document.querySelector('meta[name="build-version"]');
-        if (!meta) return;
-        const localVersion = meta.getAttribute('content');
-        const resp = await fetch('/api/debug');
-        const data = await resp.json();
-        if (data.version && localVersion && data.version !== localVersion) {
-          console.warn('⚠️ Detected version mismatch:', { local: localVersion, remote: data.version });
-          const banner = document.createElement('div');
-          banner.textContent = `A new version of this dashboard is available (v${data.version}). ` +
-            'Please hard refresh (Ctrl+Shift+R) to load the latest files.';
-          banner.style.background = '#fef3c7';
-          banner.style.color = '#92400e';
-          banner.style.padding = '10px 15px';
-          banner.style.textAlign = 'center';
-          banner.style.fontWeight = '600';
-          document.body.insertBefore(banner, document.body.firstChild);
-        }
-      } catch (e) {
-        console.error('Version check failed', e);
-      }
-    })();
-  </script>
 </body>
 </html>

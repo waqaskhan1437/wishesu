@@ -188,6 +188,23 @@ export async function initDB(env) {
           created_at INTEGER,
           FOREIGN KEY (question_id) REFERENCES forum_questions(id)
         )
+      `),
+      // Coupons table
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS coupons (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT UNIQUE NOT NULL,
+          discount_type TEXT DEFAULT 'percentage',
+          discount_value REAL NOT NULL,
+          min_order_amount REAL DEFAULT 0,
+          max_uses INTEGER DEFAULT 0,
+          used_count INTEGER DEFAULT 0,
+          valid_from INTEGER,
+          valid_until INTEGER,
+          product_ids TEXT,
+          status TEXT DEFAULT 'active',
+          created_at INTEGER
+        )
       `)
     ]);
 
