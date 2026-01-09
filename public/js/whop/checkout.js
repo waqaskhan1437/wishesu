@@ -382,26 +382,25 @@
       await loadWhopScript();
       //console.log('✅ Whop script loaded successfully!');
 
-      // The embed renders async. Update price header when ready.
+      // Update price header once after script loads
+      updatePriceHeader(overlay, lastAmount);
+      
+      // Check if embed loaded - shorter interval, fewer tries
       let tries = 0;
       const interval = setInterval(() => {
         tries += 1;
-
-        // Keep updating the price header
-        updatePriceHeader(overlay, lastAmount);
-
-        // Check if Whop embed has loaded
         const embedRoot = document.getElementById('whop-embedded-checkout');
-        const hasContent = embedRoot && embedRoot.children.length > 0;
-
-        if (hasContent || tries > 40) {
+        if ((embedRoot && embedRoot.children.length > 0) || tries > 20) {
           clearInterval(interval);
         }
-      }, 150);
+      }, 200);
     } catch (err) {
       console.error('🔴 FAILED TO LOAD WHOP SCRIPT:', err);
       alert('❌ Failed to load Whop checkout:\n\n' + err.message + '\n\nPlease refresh and try again.');
       overlay.style.display = 'none';
+      // Unlock body
+      document.documentElement.classList.remove('whop-open');
+      document.body.classList.remove('whop-open');
     }
   }
 
