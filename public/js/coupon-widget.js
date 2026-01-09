@@ -14,6 +14,10 @@
   
   // Initialize coupon widget
   async function initCouponWidget() {
+    // IMPORTANT: Clear any stale coupon data from session storage on fresh page load
+    // This prevents old discounts from being applied accidentally
+    sessionStorage.removeItem('appliedCoupon');
+    
     try {
       // Check if coupons are enabled
       const res = await fetch('/api/coupons/enabled');
@@ -38,6 +42,13 @@
   
   // Setup hook for when price changes (addons selected)
   function setupPriceUpdateHook() {
+    // Expose recalculate function globally
+    window.recalculateCouponDiscount = function(newTotal) {
+      if (appliedCoupon && couponDiscountType) {
+        recalculateDiscount(newTotal);
+      }
+    };
+    
     // Override or chain to the updateCheckoutPrice function
     const originalUpdateCheckoutPrice = window.updateCheckoutPrice;
     
@@ -53,25 +64,47 @@
       }
     };
     
-    // Also listen to addon form changes directly
+    // Listen to addon form changes with multiple selectors
+    const setupFormListeners = () => {
+      // Try multiple form selectors
+      const forms = document.querySelectorAll('#addons-form, .addons-form, form[data-addons]');
+      forms.forEach(form => {
+        if (!form.dataset.couponListener) {
+          form.dataset.couponListener = 'true';
+          form.addEventListener('change', handleAddonChange);
+        }
+      });
+      
+      // Also listen to individual inputs/selects
+      const inputs = document.querySelectorAll('input.addon-checkbox, input.addon-radio, select.form-select');
+      inputs.forEach(input => {
+        if (!input.dataset.couponListener) {
+          input.dataset.couponListener = 'true';
+          input.addEventListener('change', handleAddonChange);
+        }
+      });
+    };
+    
+    // Run immediately and again after a delay
+    setupFormListeners();
+    setTimeout(setupFormListeners, 1000);
+    setTimeout(setupFormListeners, 2000);
+  }
+  
+  // Handle addon change event
+  function handleAddonChange() {
+    // Small delay to let updateTotal() run first and update window.currentTotal
     setTimeout(() => {
-      const form = document.getElementById('addons-form');
-      if (form) {
-        form.addEventListener('change', () => {
-          // Small delay to let updateTotal() run first
-          setTimeout(() => {
-            if (appliedCoupon && window.currentTotal) {
-              recalculateDiscount(window.currentTotal);
-            }
-          }, 50);
-        });
+      if (appliedCoupon && couponDiscountType && window.currentTotal) {
+        recalculateDiscount(window.currentTotal);
       }
-    }, 1000);
+    }, 100);
   }
   
   // Recalculate discount when total changes
   function recalculateDiscount(newTotal) {
     if (!appliedCoupon || !couponDiscountType) return;
+    if (!newTotal || newTotal <= 0) return;
     
     originalPrice = newTotal;
     let discount = 0;
@@ -471,22 +504,14 @@
       applePayBtn.style.background = 'linear-gradient(135deg, #16a34a, #059669)';
     }
     
-    // Update Checkout button
+    // Update Checkout button - always show original and new price
     if (checkoutBtn) {
-      if (!checkoutBtn.dataset.originalHtml) {
-        checkoutBtn.dataset.originalHtml = checkoutBtn.innerHTML;
-        checkoutBtn.dataset.originalBg = checkoutBtn.style.background;
+      if (!checkoutBtn.dataset.originalBg) {
+        checkoutBtn.dataset.originalBg = checkoutBtn.style.background || '';
       }
       
-      const btnText = checkoutBtn.textContent || '';
-      if (btnText.includes('€') || btnText.includes('$')) {
-        checkoutBtn.innerHTML = checkoutBtn.innerHTML.replace(
-          /[€$][\d.,]+/g,
-          `<span style="text-decoration: line-through; opacity: 0.7; font-size: 0.85em;">$${originalPrice.toFixed(2)}</span> $${newPrice.toFixed(2)}`
-        );
-      } else {
-        checkoutBtn.innerHTML = checkoutBtn.innerHTML + ` <span style="background: #16a34a; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">-$${discount.toFixed(2)}</span>`;
-      }
+      // Build new button HTML with strikethrough original and discounted price
+      checkoutBtn.innerHTML = `✅ Proceed to Checkout - <span style="text-decoration: line-through; opacity: 0.6; font-size: 0.85em;">$${originalPrice.toFixed(2)}</span> <span style="color: #fff; font-weight: bold;">$${newPrice.toFixed(2)}</span>`;
       checkoutBtn.style.background = 'linear-gradient(135deg, #16a34a, #059669)';
     }
   }
@@ -502,10 +527,10 @@
       applePayBtn.style.background = applePayBtn.dataset.originalBg || '#000';
     }
     
-    // Restore Checkout button
-    if (checkoutBtn && checkoutBtn.dataset.originalHtml) {
-      checkoutBtn.innerHTML = checkoutBtn.dataset.originalHtml;
+    // Restore Checkout button - let updateTotal handle the text
+    if (checkoutBtn && checkoutBtn.dataset.originalBg !== undefined) {
       checkoutBtn.style.background = checkoutBtn.dataset.originalBg || '';
+      // Text will be restored by updateTotal()
     }
   }
   
@@ -527,21 +552,25 @@
   }
   
   // Get applied coupon (for checkout process)
+  // IMPORTANT: Only return coupon if it's actually applied in the UI
   window.getAppliedCoupon = function() {
-    const stored = sessionStorage.getItem('appliedCoupon');
-    if (stored) {
-      try {
-        return JSON.parse(stored);
-      } catch (e) {}
+    // In-memory variable is the source of truth
+    // Session storage is just for persistence, not the primary check
+    if (!appliedCoupon || !couponDiscountType) {
+      // No coupon applied - clear any stale session data
+      sessionStorage.removeItem('appliedCoupon');
+      return null;
     }
-    return appliedCoupon ? {
+    
+    // Coupon is applied, return current values
+    return {
       id: appliedCoupon.id,
       code: appliedCoupon.code,
       discount: originalPrice - discountedPrice,
       discounted_price: discountedPrice,
       discount_type: couponDiscountType,
       discount_value: couponDiscountValue
-    } : null;
+    };
   };
   
   // Initialize on DOM ready

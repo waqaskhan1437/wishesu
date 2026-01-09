@@ -85,16 +85,29 @@
       if (el.dataset.price) addonTotal += parseFloat(el.dataset.price);
     });
     window.currentTotal = window.basePrice + addonTotal;
+    
+    // Check if coupon is applied - let coupon widget handle button update
+    const hasCoupon = typeof window.getAppliedCoupon === 'function' && window.getAppliedCoupon();
+    
     const btn = document.getElementById('checkout-btn');
-    // Only update text if NOT in loading state
-    if (btn && !btn.classList.contains('btn-loading')) {
+    // Only update text if NOT in loading state AND no coupon applied
+    if (btn && !btn.classList.contains('btn-loading') && !hasCoupon) {
       btn.textContent = '✅ Proceed to Checkout - $' + window.currentTotal.toLocaleString();
     }
-    // Also update via global function if available
+    
+    // Trigger coupon recalculation if applied
     if (typeof window.updateCheckoutPrice === 'function') {
       window.updateCheckoutPrice(window.currentTotal);
     }
+    
+    // Also trigger coupon recalculation directly
+    if (typeof window.recalculateCouponDiscount === 'function') {
+      window.recalculateCouponDiscount(window.currentTotal);
+    }
   }
+  
+  // Expose updateTotal globally
+  window.updateTotal = updateTotal;
 
   async function handleCheckout() {
     // Prevent double clicks
