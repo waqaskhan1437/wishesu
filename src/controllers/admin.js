@@ -482,17 +482,33 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
   });
 }
 
+// In-memory branding cache
+let brandingCache = null;
+let brandingCacheTime = 0;
+const BRANDING_CACHE_TTL = 300000; // 5 minutes
+
 /**
  * Get site branding settings (logo, favicon)
+ * OPTIMIZED: In-memory caching to reduce DB queries
  */
 export async function getBrandingSettings(env) {
+  const now = Date.now();
+  
+  // Return cached data if still valid
+  if (brandingCache && (now - brandingCacheTime) < BRANDING_CACHE_TTL) {
+    return json({ success: true, branding: brandingCache });
+  }
+  
   try {
     const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('site_branding').first();
     if (row?.value) {
-      const branding = JSON.parse(row.value);
-      return json({ success: true, branding });
+      brandingCache = JSON.parse(row.value);
+      brandingCacheTime = now;
+      return json({ success: true, branding: brandingCache });
     }
-    return json({ success: true, branding: { logo_url: '', favicon_url: '' } });
+    brandingCache = { logo_url: '', favicon_url: '' };
+    brandingCacheTime = now;
+    return json({ success: true, branding: brandingCache });
   } catch (e) {
     console.error('Get branding error:', e);
     return json({ success: true, branding: { logo_url: '', favicon_url: '' } });
@@ -513,6 +529,10 @@ export async function saveBrandingSettings(env, body) {
     await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
       .bind('site_branding', JSON.stringify(branding))
       .run();
+    
+    // Invalidate cache
+    brandingCache = branding;
+    brandingCacheTime = Date.now();
     
     return json({ success: true });
   } catch (e) {

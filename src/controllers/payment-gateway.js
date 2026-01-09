@@ -1,10 +1,15 @@
 /**
  * Payment Gateway - Unified payment method management
  * Supports: Whop, PayPal, Stripe (future), and custom methods
- * OPTIMIZED: Added edge caching
+ * OPTIMIZED: Added in-memory caching
  */
 
 import { json, cachedJson } from '../utils/response.js';
+
+// In-memory cache for payment methods
+let paymentMethodsCache = null;
+let paymentMethodsCacheTime = 0;
+const PAYMENT_CACHE_TTL = 60000; // 1 minute
 
 /**
  * Get payment methods enabled status
@@ -24,8 +29,16 @@ async function getPaymentMethodsEnabled(env) {
 
 /**
  * Get all enabled payment methods
+ * OPTIMIZED: Added in-memory caching
  */
 export async function getPaymentMethods(env) {
+  const now = Date.now();
+  
+  // Return cached data if still valid
+  if (paymentMethodsCache && (now - paymentMethodsCacheTime) < PAYMENT_CACHE_TTL) {
+    return cachedJson({ methods: paymentMethodsCache }, 60);
+  }
+  
   const methods = [];
   
   // Get enabled status
@@ -127,7 +140,11 @@ export async function getPaymentMethods(env) {
   // Sort by priority
   methods.sort((a, b) => a.priority - b.priority);
   
-  // Cache for 2 minutes
+  // Update cache
+  paymentMethodsCache = methods;
+  paymentMethodsCacheTime = Date.now();
+  
+  // Cache for 2 minutes on edge
   return cachedJson({ methods }, 120);
 }
 
@@ -150,6 +167,10 @@ export async function savePaymentMethodsEnabled(env, body) {
   await env.DB.prepare(
     'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
   ).bind('payment_methods', JSON.stringify(settings)).run();
+  
+  // Invalidate cache
+  paymentMethodsCache = null;
+  paymentMethodsCacheTime = 0;
   
   return json({ success: true, settings });
 }

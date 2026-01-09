@@ -8,7 +8,7 @@
 (function() {
   const STORAGE_KEY = 'siteComponents';
   const BRANDING_KEY = 'siteBranding';
-  const BRANDING_CACHE_TTL = 300000; // 5 minutes
+  const BRANDING_CACHE_TTL = 600000; // 10 minutes (reduced API calls)
   
   // Don't run on admin pages
   if (window.location.pathname.startsWith('/admin')) {
