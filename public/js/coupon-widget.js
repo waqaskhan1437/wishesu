@@ -14,23 +14,30 @@
     try {
       // Check if coupons are enabled
       const res = await fetch('/api/coupons/enabled');
+      if (!res.ok) {
+        console.log('Coupons not available');
+        return;
+      }
       const data = await res.json();
-      couponsEnabled = data.enabled;
+      couponsEnabled = data.enabled || false;
       
       if (!couponsEnabled) return;
       
       // Wait for checkout section to be ready
       waitForCheckout();
     } catch (e) {
-      console.error('Coupon widget init error:', e);
+      console.log('Coupon widget disabled:', e.message);
     }
   }
   
   // Wait for checkout section to exist
   function waitForCheckout() {
+    // Look for button container first (both Pay + Checkout buttons)
+    const btnContainer = document.querySelector('#apple-pay-btn')?.parentElement;
     const checkoutBtn = document.querySelector('.checkout-btn, #checkout-btn, [data-checkout-btn], .buy-now-btn');
-    if (checkoutBtn) {
-      injectCouponWidget(checkoutBtn);
+    
+    if (btnContainer || checkoutBtn) {
+      injectCouponWidget(btnContainer || checkoutBtn);
     } else {
       // Retry after DOM updates
       setTimeout(waitForCheckout, 500);
@@ -38,7 +45,7 @@
   }
   
   // Inject coupon widget HTML
-  function injectCouponWidget(checkoutBtn) {
+  function injectCouponWidget(targetElement) {
     // Don't inject twice
     if (document.getElementById('coupon-widget')) return;
     
@@ -160,9 +167,22 @@
       <div id="coupon-discount-info" style="display: none;"></div>
     `;
     
-    // Insert before checkout button
-    const parent = checkoutBtn.parentElement;
-    parent.insertBefore(widget, checkoutBtn);
+    // Find the buttons container (holds both Pay and Checkout buttons)
+    // Insert coupon widget BEFORE the button container
+    const applePayBtn = document.getElementById('apple-pay-btn');
+    const checkoutBtn = document.getElementById('checkout-btn');
+    
+    if (applePayBtn && applePayBtn.parentElement) {
+      // Both buttons exist - insert before their container
+      const btnContainer = applePayBtn.parentElement;
+      btnContainer.parentElement.insertBefore(widget, btnContainer);
+    } else if (checkoutBtn) {
+      // Single checkout button - insert before it
+      checkoutBtn.parentElement.insertBefore(widget, checkoutBtn);
+    } else if (targetElement) {
+      // Fallback - insert before target
+      targetElement.parentElement.insertBefore(widget, targetElement);
+    }
     
     // Setup event listeners
     setupCouponEvents();
@@ -302,37 +322,56 @@
   
   // Update checkout button with discounted price
   function updateCheckoutButton(newPrice, discount) {
-    const checkoutBtn = document.querySelector('.checkout-btn, #checkout-btn, [data-checkout-btn], .buy-now-btn');
-    if (!checkoutBtn) return;
+    // Update both Pay and Checkout buttons
+    const applePayBtn = document.getElementById('apple-pay-btn');
+    const checkoutBtn = document.getElementById('checkout-btn');
     
-    // Store original text
-    if (!checkoutBtn.dataset.originalText) {
-      checkoutBtn.dataset.originalText = checkoutBtn.innerHTML;
+    // Update Apple Pay button
+    if (applePayBtn) {
+      if (!applePayBtn.dataset.originalHtml) {
+        applePayBtn.dataset.originalHtml = applePayBtn.innerHTML;
+        applePayBtn.dataset.originalBg = applePayBtn.style.background;
+      }
+      applePayBtn.innerHTML = ` Pay <span style="background: #16a34a; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">-€${discount.toFixed(2)}</span>`;
+      applePayBtn.style.background = 'linear-gradient(135deg, #16a34a, #059669)';
     }
     
-    // Update button text
-    const btnText = checkoutBtn.textContent || '';
-    if (btnText.includes('€')) {
-      checkoutBtn.innerHTML = checkoutBtn.innerHTML.replace(
-        /€[\d.,]+/g,
-        `<span style="text-decoration: line-through; opacity: 0.7; font-size: 0.85em;">€${originalPrice.toFixed(2)}</span> €${newPrice.toFixed(2)}`
-      );
-    } else {
-      // Add price to button
-      const originalInner = checkoutBtn.innerHTML;
-      checkoutBtn.innerHTML = originalInner + ` <span style="background: #16a34a; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">-€${discount.toFixed(2)}</span>`;
+    // Update Checkout button
+    if (checkoutBtn) {
+      if (!checkoutBtn.dataset.originalHtml) {
+        checkoutBtn.dataset.originalHtml = checkoutBtn.innerHTML;
+        checkoutBtn.dataset.originalBg = checkoutBtn.style.background;
+      }
+      
+      const btnText = checkoutBtn.textContent || '';
+      if (btnText.includes('€') || btnText.includes('$')) {
+        checkoutBtn.innerHTML = checkoutBtn.innerHTML.replace(
+          /[€$][\d.,]+/g,
+          `<span style="text-decoration: line-through; opacity: 0.7; font-size: 0.85em;">€${originalPrice.toFixed(2)}</span> €${newPrice.toFixed(2)}`
+        );
+      } else {
+        checkoutBtn.innerHTML = checkoutBtn.innerHTML + ` <span style="background: #16a34a; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">-€${discount.toFixed(2)}</span>`;
+      }
+      checkoutBtn.style.background = 'linear-gradient(135deg, #16a34a, #059669)';
     }
-    
-    checkoutBtn.style.background = 'linear-gradient(135deg, #16a34a, #059669)';
   }
   
   // Restore checkout button
   function restoreCheckoutButton() {
-    const checkoutBtn = document.querySelector('.checkout-btn, #checkout-btn, [data-checkout-btn], .buy-now-btn');
-    if (!checkoutBtn || !checkoutBtn.dataset.originalText) return;
+    const applePayBtn = document.getElementById('apple-pay-btn');
+    const checkoutBtn = document.getElementById('checkout-btn');
     
-    checkoutBtn.innerHTML = checkoutBtn.dataset.originalText;
-    checkoutBtn.style.background = '';
+    // Restore Apple Pay button
+    if (applePayBtn && applePayBtn.dataset.originalHtml) {
+      applePayBtn.innerHTML = applePayBtn.dataset.originalHtml;
+      applePayBtn.style.background = applePayBtn.dataset.originalBg || '#000';
+    }
+    
+    // Restore Checkout button
+    if (checkoutBtn && checkoutBtn.dataset.originalHtml) {
+      checkoutBtn.innerHTML = checkoutBtn.dataset.originalHtml;
+      checkoutBtn.style.background = checkoutBtn.dataset.originalBg || '';
+    }
   }
   
   // Get product ID from URL or page

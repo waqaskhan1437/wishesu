@@ -872,38 +872,53 @@
   async function loadCouponsEnabled() {
     try {
       const res = await fetch('/api/coupons/enabled');
+      if (!res.ok) {
+        console.warn('Coupons API not available yet');
+        return;
+      }
       const data = await res.json();
       const checkbox = document.getElementById('coupons-enabled');
-      if (checkbox) checkbox.checked = data.enabled;
+      if (checkbox) checkbox.checked = data.enabled || false;
     } catch (e) {
-      console.error('Load coupons enabled error:', e);
+      console.warn('Load coupons enabled error (deploy new code?):', e);
+      // Default to disabled if error
+      const checkbox = document.getElementById('coupons-enabled');
+      if (checkbox) checkbox.checked = false;
     }
   }
   
   // Setup coupon event handlers
   function setupCouponsHandlers() {
+    const checkbox = document.getElementById('coupons-enabled');
+    const managerBtn = document.getElementById('open-coupons-manager');
+    
     // Toggle coupons enabled
-    document.getElementById('coupons-enabled').addEventListener('change', async (e) => {
-      const statusEl = document.getElementById('coupons-enabled-status');
-      try {
-        const res = await fetch('/api/coupons/enabled', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled: e.target.checked })
-        });
-        const data = await res.json();
-        if (data.success) {
-          statusEl.textContent = e.target.checked ? '✅ Enabled' : '⚪ Disabled';
-          setTimeout(() => statusEl.textContent = '', 2000);
+    if (checkbox) {
+      checkbox.addEventListener('change', async (e) => {
+        const statusEl = document.getElementById('coupons-enabled-status');
+        try {
+          const res = await fetch('/api/coupons/enabled', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: e.target.checked })
+          });
+          if (!res.ok) throw new Error('API error');
+          const data = await res.json();
+          if (data.success) {
+            statusEl.textContent = e.target.checked ? '✅ Enabled' : '⚪ Disabled';
+            setTimeout(() => statusEl.textContent = '', 2000);
+          }
+        } catch (err) {
+          statusEl.textContent = '❌ Deploy new code first';
+          e.target.checked = !e.target.checked;
         }
-      } catch (err) {
-        statusEl.textContent = '❌ Error';
-        e.target.checked = !e.target.checked;
-      }
-    });
+      });
+    }
     
     // Open coupons manager
-    document.getElementById('open-coupons-manager').addEventListener('click', openCouponsManager);
+    if (managerBtn) {
+      managerBtn.addEventListener('click', openCouponsManager);
+    }
   }
   
   // Open coupons manager modal
@@ -1039,6 +1054,7 @@
     
     try {
       const res = await fetch('/api/coupons');
+      if (!res.ok) throw new Error('API returned ' + res.status);
       const data = await res.json();
       
       if (!data.coupons || data.coupons.length === 0) {
@@ -1065,15 +1081,15 @@
                   ${c.valid_until && c.valid_until < Date.now() ? '<span style="color: #dc2626; font-size: 0.8em; margin-left: 5px;">Expired</span>' : ''}
                 </td>
                 <td style="padding: 12px;">
-                  ${c.discount_type === 'percentage' ? c.discount_value + '%' : '€' + c.discount_value.toFixed(2)}
-                  ${c.min_order_amount > 0 ? '<br><small style="color: #6b7280;">Min: €' + c.min_order_amount.toFixed(2) + '</small>' : ''}
+                  ${c.discount_type === 'percentage' ? c.discount_value + '%' : '€' + (c.discount_value || 0).toFixed(2)}
+                  ${c.min_order_amount > 0 ? '<br><small style="color: #6b7280;">Min: €' + (c.min_order_amount || 0).toFixed(2) + '</small>' : ''}
                 </td>
                 <td style="padding: 12px;">
-                  ${c.used_count}${c.max_uses > 0 ? ' / ' + c.max_uses : ' / ∞'}
+                  ${c.used_count || 0}${c.max_uses > 0 ? ' / ' + c.max_uses : ' / ∞'}
                 </td>
                 <td style="padding: 12px;">
                   <span style="padding: 4px 10px; border-radius: 20px; font-size: 0.85em; font-weight: 600; ${c.status === 'active' ? 'background: #d1fae5; color: #065f46;' : 'background: #fee2e2; color: #991b1b;'}">
-                    ${c.status}
+                    ${c.status || 'active'}
                   </span>
                 </td>
                 <td style="padding: 12px; text-align: right;">
@@ -1090,7 +1106,13 @@
         </table>
       `;
     } catch (err) {
-      container.innerHTML = '<p style="text-align: center; padding: 40px; color: #dc2626;">❌ Failed to load coupons</p>';
+      console.error('Load coupons error:', err);
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+          <p style="color: #dc2626; margin-bottom: 10px;">⚠️ Could not load coupons</p>
+          <p style="color: #6b7280; font-size: 0.9em;">Make sure you have deployed the latest code with: <code>npx wrangler deploy</code></p>
+        </div>
+      `;
     }
   }
   
