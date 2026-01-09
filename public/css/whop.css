@@ -46,6 +46,47 @@ body.whop-open {
   flex-direction: column;
 }
 
+/* CRITICAL: Ensure all Whop/Stripe content renders properly */
+.whop-container,
+.whop-container * {
+  visibility: visible !important;
+}
+
+.whop-container img,
+.whop-container svg,
+.whop-container canvas,
+.whop-container iframe,
+.whop-container video,
+.whop-container picture,
+.whop-container source {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  max-width: 100%;
+  transform: none !important;
+  filter: none !important;
+}
+
+/* Ensure QR code canvas/images are visible */
+.whop-container canvas,
+.whop-container [class*="qr"],
+.whop-container [class*="QR"],
+.whop-container [data-testid*="qr"] {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  background: transparent !important;
+}
+
+/* Ensure no clipping of Stripe elements */
+.whop-container [class*="stripe"],
+.whop-container [class*="Stripe"],
+.whop-container [id*="stripe"],
+.whop-container iframe {
+  overflow: visible !important;
+  clip: auto !important;
+  clip-path: none !important;
+}
+
 /* Header */
 .whop-price-header {
   display: flex;
