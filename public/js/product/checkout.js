@@ -244,8 +244,20 @@
     
     if (typeof window.getAppliedCoupon === 'function') {
       appliedCoupon = window.getAppliedCoupon();
-      if (appliedCoupon && appliedCoupon.discounted_price !== undefined) {
-        finalAmount = appliedCoupon.discounted_price;
+      if (appliedCoupon && appliedCoupon.discount_type) {
+        // Recalculate discount based on current total (including addons)
+        let discount = 0;
+        if (appliedCoupon.discount_type === 'percentage') {
+          discount = (window.currentTotal * appliedCoupon.discount_value) / 100;
+        } else if (appliedCoupon.discount_type === 'fixed') {
+          discount = Math.min(appliedCoupon.discount_value, window.currentTotal);
+        }
+        finalAmount = Math.max(0, window.currentTotal - discount);
+        finalAmount = Math.round(finalAmount * 100) / 100;
+        
+        // Update appliedCoupon with recalculated values
+        appliedCoupon.discount = Math.round(discount * 100) / 100;
+        appliedCoupon.discounted_price = finalAmount;
       }
     }
 

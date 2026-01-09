@@ -1,6 +1,7 @@
 /**
  * Coupon Widget for Product Page
  * Shows coupon input field above checkout button when coupons are enabled
+ * Supports live discount recalculation when addons change
  */
 
 (function() {
@@ -8,6 +9,8 @@
   let appliedCoupon = null;
   let originalPrice = 0;
   let discountedPrice = 0;
+  let couponDiscountType = null;
+  let couponDiscountValue = 0;
   
   // Initialize coupon widget
   async function initCouponWidget() {
@@ -25,9 +28,104 @@
       
       // Wait for checkout section to be ready
       waitForCheckout();
+      
+      // Setup live price update hook
+      setupPriceUpdateHook();
     } catch (e) {
       console.log('Coupon widget disabled:', e.message);
     }
+  }
+  
+  // Setup hook for when price changes (addons selected)
+  function setupPriceUpdateHook() {
+    // Override or chain to the updateCheckoutPrice function
+    const originalUpdateCheckoutPrice = window.updateCheckoutPrice;
+    
+    window.updateCheckoutPrice = function(newTotal) {
+      // Call original if exists
+      if (typeof originalUpdateCheckoutPrice === 'function') {
+        originalUpdateCheckoutPrice(newTotal);
+      }
+      
+      // Recalculate coupon discount if applied
+      if (appliedCoupon && couponDiscountType) {
+        recalculateDiscount(newTotal);
+      }
+    };
+    
+    // Also listen to addon form changes directly
+    setTimeout(() => {
+      const form = document.getElementById('addons-form');
+      if (form) {
+        form.addEventListener('change', () => {
+          // Small delay to let updateTotal() run first
+          setTimeout(() => {
+            if (appliedCoupon && window.currentTotal) {
+              recalculateDiscount(window.currentTotal);
+            }
+          }, 50);
+        });
+      }
+    }, 1000);
+  }
+  
+  // Recalculate discount when total changes
+  function recalculateDiscount(newTotal) {
+    if (!appliedCoupon || !couponDiscountType) return;
+    
+    originalPrice = newTotal;
+    let discount = 0;
+    
+    if (couponDiscountType === 'percentage') {
+      discount = (newTotal * couponDiscountValue) / 100;
+      discountedPrice = newTotal - discount;
+    } else if (couponDiscountType === 'fixed') {
+      discount = Math.min(couponDiscountValue, newTotal);
+      discountedPrice = newTotal - discount;
+    }
+    
+    // Ensure price doesn't go below 0
+    discountedPrice = Math.max(0, discountedPrice);
+    discount = Math.round(discount * 100) / 100;
+    discountedPrice = Math.round(discountedPrice * 100) / 100;
+    
+    // Update UI
+    const messageEl = document.getElementById('coupon-message');
+    const discountEl = document.getElementById('coupon-discount-info');
+    
+    if (messageEl) {
+      messageEl.innerHTML = `
+        <div class="coupon-applied">
+          <span>✅ Coupon "${appliedCoupon.code}" applied! You save $${discount.toFixed(2)}</span>
+          <button type="button" class="remove-coupon" onclick="window.removeCoupon()">Remove</button>
+        </div>
+      `;
+      messageEl.className = 'coupon-message coupon-success';
+      messageEl.style.display = 'block';
+    }
+    
+    if (discountEl) {
+      discountEl.innerHTML = `
+        <div class="discount-info">
+          <span>Original: <span class="original-price">$${originalPrice.toFixed(2)}</span></span>
+          <span>New Price: <span class="discounted-price">$${discountedPrice.toFixed(2)}</span></span>
+        </div>
+      `;
+      discountEl.style.display = 'block';
+    }
+    
+    // Update buttons
+    updateCheckoutButton(discountedPrice, discount);
+    
+    // Update session storage
+    sessionStorage.setItem('appliedCoupon', JSON.stringify({
+      id: appliedCoupon.id,
+      code: appliedCoupon.code,
+      discount: discount,
+      discounted_price: discountedPrice,
+      discount_type: couponDiscountType,
+      discount_value: couponDiscountValue
+    }));
   }
   
   // Wait for checkout section to exist
@@ -270,6 +368,10 @@
         appliedCoupon = data.coupon;
         discountedPrice = data.discounted_price;
         
+        // Store discount type and value for live recalculation
+        couponDiscountType = data.coupon.discount_type;
+        couponDiscountValue = data.coupon.discount_value;
+        
         // Show success (USD)
         showMessage(`✅ Coupon "${data.coupon.code}" applied! You save $${data.discount.toFixed(2)}`, 'success', true);
         
@@ -293,7 +395,9 @@
           id: data.coupon.id,
           code: data.coupon.code,
           discount: data.discount,
-          discounted_price: discountedPrice
+          discounted_price: discountedPrice,
+          discount_type: couponDiscountType,
+          discount_value: couponDiscountValue
         }));
         
       } else {
@@ -331,6 +435,8 @@
   window.removeCoupon = function() {
     appliedCoupon = null;
     discountedPrice = 0;
+    couponDiscountType = null;
+    couponDiscountValue = 0;
     
     document.getElementById('coupon-message').style.display = 'none';
     document.getElementById('coupon-discount-info').style.display = 'none';
@@ -342,6 +448,11 @@
     
     // Clear session storage
     sessionStorage.removeItem('appliedCoupon');
+    
+    // Trigger updateTotal to restore original button text
+    if (typeof window.updateTotal === 'function') {
+      window.updateTotal();
+    }
   };
   
   // Update checkout button with discounted price
@@ -427,7 +538,9 @@
       id: appliedCoupon.id,
       code: appliedCoupon.code,
       discount: originalPrice - discountedPrice,
-      discounted_price: discountedPrice
+      discounted_price: discountedPrice,
+      discount_type: couponDiscountType,
+      discount_value: couponDiscountValue
     } : null;
   };
   
