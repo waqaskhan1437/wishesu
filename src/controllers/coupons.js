@@ -161,7 +161,7 @@ export async function validateCoupon(env, body) {
     if (coupon.min_order_amount > 0 && order_amount < coupon.min_order_amount) {
       return json({ 
         valid: false, 
-        error: `Minimum order amount is €${coupon.min_order_amount.toFixed(2)}` 
+        error: `Minimum order amount is $${coupon.min_order_amount.toFixed(2)}` 
       });
     }
     

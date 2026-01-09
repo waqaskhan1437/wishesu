@@ -948,7 +948,7 @@
                 <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Discount Type</label>
                 <select id="coupon-discount-type" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
                   <option value="percentage">Percentage (%)</option>
-                  <option value="fixed">Fixed Amount (€)</option>
+                  <option value="fixed">Fixed Amount ($)</option>
                 </select>
               </div>
               <div>
@@ -956,7 +956,7 @@
                 <input type="number" id="coupon-discount-value" placeholder="20" min="0" step="0.01" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
               </div>
               <div>
-                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Min Order (€)</label>
+                <label style="display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;">Min Order ($)</label>
                 <input type="number" id="coupon-min-order" placeholder="0" min="0" step="0.01" style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px;">
               </div>
               <div>
@@ -1081,8 +1081,8 @@
                   ${c.valid_until && c.valid_until < Date.now() ? '<span style="color: #dc2626; font-size: 0.8em; margin-left: 5px;">Expired</span>' : ''}
                 </td>
                 <td style="padding: 12px;">
-                  ${c.discount_type === 'percentage' ? c.discount_value + '%' : '€' + (c.discount_value || 0).toFixed(2)}
-                  ${c.min_order_amount > 0 ? '<br><small style="color: #6b7280;">Min: €' + (c.min_order_amount || 0).toFixed(2) + '</small>' : ''}
+                  ${c.discount_type === 'percentage' ? c.discount_value + '%' : '$' + (c.discount_value || 0).toFixed(2)}
+                  ${c.min_order_amount > 0 ? '<br><small style="color: #6b7280;">Min: $' + (c.min_order_amount || 0).toFixed(2) + '</small>' : ''}
                 </td>
                 <td style="padding: 12px;">
                   ${c.used_count || 0}${c.max_uses > 0 ? ' / ' + c.max_uses : ' / ∞'}

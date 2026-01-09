@@ -216,11 +216,35 @@
       return;
     }
     
-    // Get current price
-    const priceEl = document.querySelector('[data-product-price], .product-price, .price-value, #product-price');
-    if (priceEl) {
-      const priceText = priceEl.textContent || priceEl.dataset.price || '';
-      originalPrice = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
+    // Get current price from window.currentTotal (set by checkout.js) or window.basePrice
+    if (window.currentTotal && window.currentTotal > 0) {
+      originalPrice = window.currentTotal;
+    } else if (window.basePrice && window.basePrice > 0) {
+      originalPrice = window.basePrice;
+    } else {
+      // Fallback: try to get from DOM
+      const priceEl = document.querySelector('[data-product-price], .product-price, .price-value, #product-price, .sale-price, .normal-price');
+      if (priceEl) {
+        const priceText = priceEl.textContent || priceEl.dataset.price || '';
+        originalPrice = parseFloat(priceText.replace(/[^0-9.]/g, '')) || 0;
+      }
+    }
+    
+    // If still no price, try checkout button text
+    if (!originalPrice || originalPrice <= 0) {
+      const checkoutBtn = document.getElementById('checkout-btn');
+      if (checkoutBtn) {
+        const btnText = checkoutBtn.textContent || '';
+        const priceMatch = btnText.match(/[\$€]?([\d,.]+)/);
+        if (priceMatch) {
+          originalPrice = parseFloat(priceMatch[1].replace(',', '')) || 0;
+        }
+      }
+    }
+    
+    if (!originalPrice || originalPrice <= 0) {
+      showMessage('Could not determine product price', 'error');
+      return;
     }
     
     // Get product ID
@@ -246,14 +270,14 @@
         appliedCoupon = data.coupon;
         discountedPrice = data.discounted_price;
         
-        // Show success
-        showMessage(`✅ Coupon "${data.coupon.code}" applied! You save €${data.discount.toFixed(2)}`, 'success', true);
+        // Show success (USD)
+        showMessage(`✅ Coupon "${data.coupon.code}" applied! You save $${data.discount.toFixed(2)}`, 'success', true);
         
-        // Show discount info
+        // Show discount info (USD)
         discountEl.innerHTML = `
           <div class="discount-info">
-            <span>Original: <span class="original-price">€${originalPrice.toFixed(2)}</span></span>
-            <span>New Price: <span class="discounted-price">€${discountedPrice.toFixed(2)}</span></span>
+            <span>Original: <span class="original-price">$${originalPrice.toFixed(2)}</span></span>
+            <span>New Price: <span class="discounted-price">$${discountedPrice.toFixed(2)}</span></span>
           </div>
         `;
         discountEl.style.display = 'block';
@@ -332,7 +356,7 @@
         applePayBtn.dataset.originalHtml = applePayBtn.innerHTML;
         applePayBtn.dataset.originalBg = applePayBtn.style.background;
       }
-      applePayBtn.innerHTML = ` Pay <span style="background: #16a34a; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">-€${discount.toFixed(2)}</span>`;
+      applePayBtn.innerHTML = ` Pay <span style="background: #16a34a; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">-$${discount.toFixed(2)}</span>`;
       applePayBtn.style.background = 'linear-gradient(135deg, #16a34a, #059669)';
     }
     
@@ -347,10 +371,10 @@
       if (btnText.includes('€') || btnText.includes('$')) {
         checkoutBtn.innerHTML = checkoutBtn.innerHTML.replace(
           /[€$][\d.,]+/g,
-          `<span style="text-decoration: line-through; opacity: 0.7; font-size: 0.85em;">€${originalPrice.toFixed(2)}</span> €${newPrice.toFixed(2)}`
+          `<span style="text-decoration: line-through; opacity: 0.7; font-size: 0.85em;">$${originalPrice.toFixed(2)}</span> $${newPrice.toFixed(2)}`
         );
       } else {
-        checkoutBtn.innerHTML = checkoutBtn.innerHTML + ` <span style="background: #16a34a; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">-€${discount.toFixed(2)}</span>`;
+        checkoutBtn.innerHTML = checkoutBtn.innerHTML + ` <span style="background: #16a34a; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">-$${discount.toFixed(2)}</span>`;
       }
       checkoutBtn.style.background = 'linear-gradient(135deg, #16a34a, #059669)';
     }
