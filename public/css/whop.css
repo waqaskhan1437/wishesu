@@ -1,9 +1,9 @@
 /*
- * Whop Checkout Overlay
- * Fixed: Double scrolling, QR code visibility, mobile hang
+ * Whop Checkout Overlay - MINIMAL
+ * Let Whop handle its own scrolling/layout
  */
 
-/* Lock body scroll when modal open */
+/* Lock body when modal open */
 html.whop-open,
 body.whop-open {
   overflow: hidden !important;
@@ -12,7 +12,7 @@ body.whop-open {
   height: 100% !important;
 }
 
-/* Overlay - full screen */
+/* Overlay */
 .whop-overlay {
   position: fixed;
   inset: 0;
@@ -20,7 +20,6 @@ body.whop-open {
   display: none;
   align-items: center;
   justify-content: center;
-  font-family: system-ui, -apple-system, sans-serif;
 }
 
 .whop-overlay[style*="flex"] {
@@ -34,7 +33,7 @@ body.whop-open {
   background: rgba(0,0,0,0.8);
 }
 
-/* Modal container - NO scroll here */
+/* Modal - NO overflow here */
 .whop-modal {
   position: relative;
   background: #fff;
@@ -45,15 +44,14 @@ body.whop-open {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
-/* Header with price */
+/* Header */
 .whop-price-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 18px;
+  padding: 12px 16px;
   background: #2563eb;
   color: #fff;
   border-radius: 12px 12px 0 0;
@@ -61,8 +59,8 @@ body.whop-open {
 }
 
 .whop-price-header-icon {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   background: rgba(255,255,255,0.15);
   border-radius: 8px;
   display: flex;
@@ -71,8 +69,8 @@ body.whop-open {
 }
 
 .whop-price-header-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   fill: #fff;
 }
 
@@ -82,26 +80,26 @@ body.whop-open {
 }
 
 .whop-price-title {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
 .whop-price-amount {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 700;
 }
 
 /* Close button */
 .whop-close {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   border: none;
   background: rgba(255,255,255,0.2);
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   cursor: pointer;
   color: #fff;
   display: flex;
@@ -112,58 +110,27 @@ body.whop-open {
   padding: 0;
 }
 
-/* MAIN CONTENT AREA - Single scroll point */
+/* CONTENT - Let Whop handle scroll */
 .whop-container {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overflow: hidden; /* NO scroll here - Whop will scroll */
+  min-height: 300px;
+  max-height: calc(85vh - 100px);
 }
 
-/* Remove any nested scrolling from Whop embed */
-.whop-container > div,
+/* Whop embed fills container */
 #whop-embedded-checkout {
-  overflow: visible !important;
-  max-height: none !important;
-  height: auto !important;
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
 }
 
-/* Ensure QR code and all media visible */
-.whop-container img,
-.whop-container svg,
-.whop-container canvas,
-.whop-container iframe {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-
-/* Footer */
+/* Footer - HIDE it since Whop has its own */
 .whop-powered-by {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 10px 16px;
-  background: #f3f4f6;
-  border-top: 1px solid #e5e7eb;
-  font-size: 0.75rem;
-  color: #6b7280;
-  border-radius: 0 0 12px 12px;
-  flex-shrink: 0;
+  display: none;
 }
 
-.whop-stripe-icon {
-  width: 12px;
-  height: 12px;
-}
-
-.whop-powered-by b {
-  color: #374151;
-}
-
-/* ===== MOBILE: Full screen ===== */
+/* ===== MOBILE ===== */
 @media (max-width: 600px) {
   .whop-modal {
     width: 100%;
@@ -175,32 +142,26 @@ body.whop-open {
 
   .whop-price-header {
     border-radius: 0;
-    padding: 12px 16px;
     padding-top: max(12px, env(safe-area-inset-top));
   }
 
   .whop-container {
+    max-height: none;
     flex: 1;
-  }
-
-  .whop-powered-by {
-    border-radius: 0;
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
   }
 
   .whop-close {
     top: max(8px, env(safe-area-inset-top));
-    right: 8px;
   }
 }
 
-/* Loading spinner when empty */
+/* Loading spinner */
 .whop-container:empty::after {
   content: '';
   display: block;
   width: 28px;
   height: 28px;
-  margin: 50px auto;
+  margin: 60px auto;
   border: 3px solid #e5e7eb;
   border-top-color: #2563eb;
   border-radius: 50%;
