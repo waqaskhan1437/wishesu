@@ -1060,11 +1060,11 @@ export async function routeApiRequest(req, env, url, path, method) {
         if (u.last_activity > user.last_activity) user.last_activity = u.last_activity;
       }
       
-      // Extract emails from orders archive_data
+      // Extract emails from orders encrypted_data
       for (const o of (orders.results || [])) {
         try {
-          if (o.archive_data) {
-            const data = JSON.parse(o.archive_data);
+          if (o.encrypted_data) {
+            const data = JSON.parse(o.encrypted_data);
             const email = (data.email || data.buyerEmail || '').toLowerCase().trim();
             const name = data.name || data.buyerName || '';
             if (email) {
