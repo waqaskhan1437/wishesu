@@ -214,7 +214,9 @@
             amount: pendingOrderData?.amount || 0,
             email: pendingOrderData?.email || '',
             addons: addons, // Includes photo URLs and form data
-            deliveryTime: deliveryTime
+            deliveryTime: deliveryTime,
+            // Send checkout session ID for idempotency check
+            checkoutSessionId: checkoutData?.id || pendingOrderData?.metadata?.checkout_session_id || null
         };
 
         // Final validation - make sure we have addons

@@ -492,21 +492,44 @@ export async function handleWebhook(env, webhookData) {
 
       console.log('Payment succeeded:', { checkoutSessionId, membershipId, metadata });
 
-      // Check if order already exists for this checkout session (idempotency)
-      if (checkoutSessionId) {
+      // Get email from webhook data for duplicate checking
+      const customerEmail = metadata.email ||
+        webhookData.data?.email ||
+        webhookData.data?.user?.email ||
+        '';
+      const productId = metadata.product_id || metadata.productId;
+
+      // Check if order already exists for this checkout session or email+product (idempotency)
+      if (checkoutSessionId || (customerEmail && productId)) {
         try {
-          const existingOrder = await env.DB.prepare(`
-            SELECT o.id FROM orders o
-            JOIN checkout_sessions cs ON o.product_id = cs.product_id
-            WHERE cs.checkout_id = ? AND o.status = 'completed'
-          `).bind(checkoutSessionId).first();
+          let existingOrder = null;
+
+          // First, try to find by checkout_session_id in encrypted_data
+          if (checkoutSessionId) {
+            existingOrder = await env.DB.prepare(`
+              SELECT o.id, o.encrypted_data FROM orders o
+              WHERE o.encrypted_data LIKE ?
+              LIMIT 1
+            `).bind(`%"whop_checkout_id":"${checkoutSessionId}"%`).first();
+          }
+
+          // If not found, check by email + product_id (within last 5 minutes)
+          if (!existingOrder && customerEmail && productId) {
+            existingOrder = await env.DB.prepare(`
+              SELECT o.id, o.encrypted_data FROM orders o
+              WHERE o.product_id = ?
+              AND o.created_at > datetime('now', '-5 minutes')
+              AND o.encrypted_data LIKE ?
+              LIMIT 1
+            `).bind(Number(productId), `%${customerEmail}%`).first();
+          }
 
           if (existingOrder) {
-            console.log('Order already exists for checkout session:', checkoutSessionId);
-            return json({ received: true, duplicate: true });
+            console.log('Order already exists, skipping duplicate creation');
+            return json({ received: true, duplicate: true, message: 'Order already processed' });
           }
         } catch (e) {
-          console.log('Order existence check skipped:', e.message);
+          console.log('Order existence check failed:', e.message);
         }
       }
 

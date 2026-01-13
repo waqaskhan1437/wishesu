@@ -300,11 +300,14 @@ export async function createOrder(env, body) {
   }
 
   const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
+  // Store whop_checkout_id if provided (for idempotency check in webhook)
   const data = JSON.stringify({
     email: email,
     amount: amount,
     productId: body.productId,
-    addons: addons
+    addons: addons,
+    whop_checkout_id: body.checkoutSessionId || null,
+    source: 'frontend'
   });
 
   await env.DB.prepare(
