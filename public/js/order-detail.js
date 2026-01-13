@@ -242,7 +242,8 @@
 
       if (window.UniversalPlayer && order.delivered_video_url) {
         const detected = window.UniversalPlayer.detect(order.delivered_video_url);
-        const openOnlyTypes = ['youtube', 'vimeo', 'bunny-embed'];
+        // Empty array - all video types use backend downloader for streaming/force-download
+        const openOnlyTypes = [];
 
         if (openOnlyTypes.includes(detected.type)) {
           downloadBtn.textContent = '🔗 Open Video';
