@@ -92,19 +92,15 @@ async function validateUploadRequest(env, req, url) {
     }
   }
 
-  // Check for user session token
-  const sessionToken = url.searchParams.get('sessionToken');
-  if (sessionToken) {
-    // Validate session token from checkout session
+  // Check for valid checkout session (user with pending order can upload)
+  const sessionId = url.searchParams.get('sessionId');
+  if (sessionId) {
     try {
-      const sessionId = url.searchParams.get('sessionId');
-      if (sessionId && env.DB) {
-        const session = await env.DB.prepare(
-          'SELECT id FROM checkout_sessions WHERE checkout_id = ? AND status = ?'
-        ).bind(sessionId, 'pending').first();
-        if (session) {
-          return null; // Valid checkout session
-        }
+      const session = await env.DB.prepare(
+        'SELECT id, status FROM checkout_sessions WHERE checkout_id = ?'
+      ).bind(sessionId).first();
+      if (session && (session.status === 'pending' || session.status === 'completed')) {
+        return null; // Valid checkout session exists
       }
     } catch (e) {
       console.log('Session validation failed:', e.message);
@@ -116,14 +112,30 @@ async function validateUploadRequest(env, req, url) {
     req.headers.get('X-Turnstile-Token') ||
     url.searchParams.get('turnstile_token');
 
+  // If no token provided, check if Turnstile is disabled for uploads
+  if (!turnstileToken) {
+    // Allow uploads without captcha if no secret key is configured
+    const secretKey = env.TURNSTILE_SECRET_KEY;
+    if (!secretKey) {
+      console.log('No Turnstile secret key configured, allowing upload without captcha');
+      return null; // No captcha required if no secret key
+    }
+    console.log('Upload rejected: No Turnstile token provided');
+    return json({
+      error: 'Captcha validation failed. Please refresh and try again.',
+      code: 'CAPTCHA_REQUIRED'
+    }, 403);
+  }
+
+  // Verify Turnstile token
   const clientIp = req.headers.get('CF-Connecting-IP') || 'unknown';
   const isValid = await verifyTurnstileToken(env, turnstileToken, clientIp);
 
   if (!isValid) {
-    console.log('Upload rejected: Invalid or missing Turnstile captcha');
+    console.log('Upload rejected: Invalid Turnstile captcha');
     return json({
       error: 'Captcha validation failed. Please refresh and try again.',
-      code: 'CAPTCHA_REQUIRED'
+      code: 'CAPTCHA_INVALID'
     }, 403);
   }
 
