@@ -211,8 +211,9 @@ export async function initDB(env) {
     dbReady = true;
 
     // Run migrations only once per deployment (not per request)
+    // CRITICAL: Await migrations to ensure database is fully ready before proceeding
     if (!migrationsDone) {
-      runMigrations(env).catch(e => console.error('Migration error:', e));
+      await runMigrations(env);
       migrationsDone = true;
     }
     

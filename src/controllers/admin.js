@@ -287,33 +287,65 @@ export async function uploadTempFile(env, req, url) {
 
     console.log('Uploading file:', filename, 'for session:', sessionId);
 
-    const buf = await req.arrayBuffer();
+    // Get content length for size validation (before reading body)
+    const contentLength = req.headers.get('content-length');
+    const fileSize = contentLength ? parseInt(contentLength, 10) : null;
 
-    // Validate file size
+    // Validate file size early (before loading into memory)
     const isVideo = filename.toLowerCase().match(/\.(mp4|mov|avi|mkv|webm|m4v|flv|wmv)$/);
     const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
     const maxSizeLabel = isVideo ? '500MB' : '10MB';
-    
-    if (buf.byteLength > maxSize) {
-      console.error('File too large:', buf.byteLength, 'bytes (max', maxSizeLabel, ')');
+
+    if (fileSize !== null && fileSize > maxSize) {
+      console.error('File too large:', fileSize, 'bytes (max', maxSizeLabel, ')');
       return json({
         error: `File too large. Maximum file size is ${maxSizeLabel} for ${isVideo ? 'videos' : 'files'}.`,
-        fileSize: buf.byteLength,
+        fileSize: fileSize,
         maxSize: maxSize,
         fileType: isVideo ? 'video' : 'file'
       }, 400);
     }
 
-    if (!buf || buf.byteLength === 0) {
-      console.error('Empty file buffer');
-      return json({ error: 'Empty file - please select a valid file' }, 400);
-    }
+    // For small files, use arrayBuffer (faster for small uploads)
+    // For large files (>50MB), stream directly to avoid memory issues
+    const SIZE_THRESHOLD = 50 * 1024 * 1024; // 50MB
 
-    console.log('File size:', (buf.byteLength / 1024 / 1024).toFixed(2), 'MB');
+    let fileData;
+    let actualSize;
+
+    if (fileSize !== null && fileSize > SIZE_THRESHOLD) {
+      // Large file: stream directly to R2 (no memory buffering)
+      console.log('Large file detected, streaming directly to R2...');
+      fileData = req.body;
+      actualSize = fileSize;
+    } else {
+      // Small file: load into memory (faster for small files)
+      const buf = await req.arrayBuffer();
+      actualSize = buf.byteLength;
+
+      // Double-check size after loading
+      if (actualSize > maxSize) {
+        console.error('File too large:', actualSize, 'bytes (max', maxSizeLabel, ')');
+        return json({
+          error: `File too large. Maximum file size is ${maxSizeLabel} for ${isVideo ? 'videos' : 'files'}.`,
+          fileSize: actualSize,
+          maxSize: maxSize,
+          fileType: isVideo ? 'video' : 'file'
+        }, 400);
+      }
+
+      if (!buf || actualSize === 0) {
+        console.error('Empty file buffer');
+        return json({ error: 'Empty file - please select a valid file' }, 400);
+      }
+
+      fileData = buf;
+      console.log('File size:', (actualSize / 1024 / 1024).toFixed(2), 'MB');
+    }
 
     const key = `temp/${sessionId}/${filename}`;
 
-    await env.R2_BUCKET.put(key, buf, {
+    await env.R2_BUCKET.put(key, fileData, {
       httpMetadata: { contentType: req.headers.get('content-type') || 'application/octet-stream' }
     });
 
@@ -374,30 +406,61 @@ export async function uploadCustomerFile(env, req, url) {
 
     console.log('Starting two-stage upload:', filename, 'Item:', itemId);
 
-    const buf = await req.arrayBuffer();
+    // Get content length for size validation (before reading body)
+    const contentLength = req.headers.get('content-length');
+    const fileSize = contentLength ? parseInt(contentLength, 10) : null;
 
-    // Validate file size
+    // Validate file size early (before loading into memory)
     const videoExtensions = /\.(mp4|mov|avi|mkv|webm|m4v|flv|wmv)$/i;
     const isVideo = videoExtensions.test(filename);
     const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024;
     const maxSizeLabel = isVideo ? '500MB' : '10MB';
-    
-    if (buf.byteLength > maxSize) {
-      console.error('File too large:', buf.byteLength, 'bytes (max', maxSizeLabel, ')');
+
+    if (fileSize !== null && fileSize > maxSize) {
+      console.error('File too large:', fileSize, 'bytes (max', maxSizeLabel, ')');
       return json({
         error: `File too large. Maximum file size is ${maxSizeLabel} for ${isVideo ? 'videos' : 'files'}.`,
-        fileSize: buf.byteLength,
+        fileSize: fileSize,
         maxSize: maxSize,
         fileType: isVideo ? 'video' : 'file'
       }, 400);
     }
 
-    if (!buf || buf.byteLength === 0) {
-      console.error('Empty file buffer');
-      return json({ error: 'Empty file' }, 400);
-    }
+    // For large files (>50MB), stream directly to avoid memory issues
+    const SIZE_THRESHOLD = 50 * 1024 * 1024; // 50MB
 
-    console.log('File size:', (buf.byteLength / 1024 / 1024).toFixed(2), 'MB');
+    let fileData;
+    let actualSize;
+
+    if (fileSize !== null && fileSize > SIZE_THRESHOLD) {
+      // Large file: stream directly to R2 (no memory buffering)
+      console.log('Large file detected, streaming directly to R2...');
+      fileData = req.body;
+      actualSize = fileSize;
+    } else {
+      // Small file: load into memory (faster for small files)
+      const buf = await req.arrayBuffer();
+      actualSize = buf.byteLength;
+
+      // Double-check size after loading
+      if (actualSize > maxSize) {
+        console.error('File too large:', actualSize, 'bytes (max', maxSizeLabel, ')');
+        return json({
+          error: `File too large. Maximum file size is ${maxSizeLabel} for ${isVideo ? 'videos' : 'files'}.`,
+          fileSize: actualSize,
+          maxSize: maxSize,
+          fileType: isVideo ? 'video' : 'file'
+        }, 400);
+      }
+
+      if (!buf || actualSize === 0) {
+        console.error('Empty file buffer');
+        return json({ error: 'Empty file' }, 400);
+      }
+
+      fileData = buf;
+      console.log('File size:', (actualSize / 1024 / 1024).toFixed(2), 'MB');
+    }
 
     // Detect content type
     const contentType = resolveContentType(filename, req.headers.get('content-type'));
@@ -406,9 +469,9 @@ export async function uploadCustomerFile(env, req, url) {
     // STAGE 1: Upload to R2 as temporary storage
     console.log('STAGE 1: Uploading to R2 temp storage...');
     const r2TempKey = `temp-archive/${itemId}/${filename}`;
-    
+
     try {
-      await env.R2_BUCKET.put(r2TempKey, buf, {
+      await env.R2_BUCKET.put(r2TempKey, fileData, {
         httpMetadata: { contentType }
       });
       console.log('R2 temp upload successful:', r2TempKey);
@@ -530,6 +593,7 @@ export async function uploadCustomerFile(env, req, url) {
 
 /**
  * Upload encrypted file for order
+ * OPTIMIZED: Uses streaming for large files
  */
 export async function uploadEncryptedFile(env, req, url) {
   if (!env.R2_BUCKET) {
@@ -541,13 +605,33 @@ export async function uploadEncryptedFile(env, req, url) {
   if (!orderId || !itemId || !filename) {
     return json({ error: 'orderId, itemId and filename required' }, 400);
   }
-  
-  const fileBuf = await req.arrayBuffer();
+
+  // Get content length for size validation
+  const contentLength = req.headers.get('content-length');
+  const fileSize = contentLength ? parseInt(contentLength, 10) : null;
+  const maxSize = 100 * 1024 * 1024; // 100MB max for encrypted files
+
+  if (fileSize !== null && fileSize > maxSize) {
+    return json({ error: 'File too large. Maximum size is 100MB.' }, 400);
+  }
+
+  // For large files, stream directly; otherwise use arrayBuffer
+  const SIZE_THRESHOLD = 50 * 1024 * 1024; // 50MB
+
+  let fileData;
+  if (fileSize !== null && fileSize > SIZE_THRESHOLD) {
+    // Large file: stream directly to R2
+    fileData = req.body;
+  } else {
+    // Small file: load into memory
+    fileData = await req.arrayBuffer();
+  }
+
   const key = `orders/${orderId}/${itemId}/${filename}`;
-  await env.R2_BUCKET.put(key, fileBuf, {
+  await env.R2_BUCKET.put(key, fileData, {
     httpMetadata: { contentType: req.headers.get('content-type') || 'application/octet-stream' }
   });
-  
+
   return json({ success: true, r2Key: key });
 }
 
