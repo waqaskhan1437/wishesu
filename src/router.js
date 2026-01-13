@@ -154,7 +154,9 @@ import {
   uploadTempFile,
   getArchiveCredentials,
   getBrandingSettings,
-  saveBrandingSettings
+  saveBrandingSettings,
+  getCobaltSettings,
+  saveCobaltSettings
 } from './controllers/admin.js';
 
 // SEO (admin controls + robots/sitemap)
@@ -742,6 +744,16 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/settings/branding') {
     const body = await req.json();
     return saveBrandingSettings(env, body);
+  }
+
+  // ----- COBALT API SETTINGS -----
+  if (method === 'GET' && path === '/api/settings/cobalt') {
+    return getCobaltSettings(env);
+  }
+
+  if (method === 'POST' && path === '/api/settings/cobalt') {
+    const body = await req.json();
+    return saveCobaltSettings(env, body);
   }
 
   // ----- COUPONS -----

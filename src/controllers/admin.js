@@ -8,6 +8,14 @@ import { VERSION } from '../config/constants.js';
 import { getMimeTypeFromFilename, resolveContentType } from '../utils/upload-helper.js';
 import { normalizeArchiveMetaValue } from '../utils/formatting.js';
 
+// Reliable Cobalt Instances List (Fallback Pool) for Auto-Healing YouTube Downloader
+const FALLBACK_INSTANCES = [
+  'https://api.cobalt.tools',      // Official
+  'https://cobalt.sipnet.net',     // Community 1
+  'https://cobalt.slpy.one',       // Community 2
+  'https://api.wuk.sh'             // Community 3
+];
+
 // Flag to track if version purge check was done
 let purgeVersionChecked = false;
 
@@ -416,15 +424,11 @@ export async function getR2File(env, key) {
 }
 
 /**
- * Upload customer file (two-stage: R2 + Archive.org)
+ * Upload customer file directly to Archive.org (NO R2 middleman)
+ * Files are uploaded straight to Archive.org as public files
  */
 export async function uploadCustomerFile(env, req, url) {
   try {
-    if (!env.R2_BUCKET) {
-      console.error('R2_BUCKET not configured');
-      return json({ error: 'R2 storage not configured' }, 500);
-    }
-
     if (!env.ARCHIVE_ACCESS_KEY || !env.ARCHIVE_SECRET_KEY) {
       console.error('Archive.org credentials not configured');
       return json({ error: 'Archive.org credentials not configured' }, 500);
@@ -439,7 +443,7 @@ export async function uploadCustomerFile(env, req, url) {
       return json({ error: 'itemId and filename required' }, 400);
     }
 
-    console.log('Starting two-stage upload:', filename, 'Item:', itemId);
+    console.log('Starting direct Archive.org upload:', filename, 'Item:', itemId);
 
     // Get content length for size validation (before reading body)
     const contentLength = req.headers.get('content-length');
@@ -461,64 +465,9 @@ export async function uploadCustomerFile(env, req, url) {
       }, 400);
     }
 
-    // For large files (>50MB), stream directly to avoid memory issues
-    const SIZE_THRESHOLD = 50 * 1024 * 1024; // 50MB
-
-    let fileData;
-    let actualSize;
-
-    if (fileSize !== null && fileSize > SIZE_THRESHOLD) {
-      // Large file: stream directly to R2 (no memory buffering)
-      console.log('Large file detected, streaming directly to R2...');
-      fileData = req.body;
-      actualSize = fileSize;
-    } else {
-      // Small file: load into memory (faster for small files)
-      const buf = await req.arrayBuffer();
-      actualSize = buf.byteLength;
-
-      // Double-check size after loading
-      if (actualSize > maxSize) {
-        console.error('File too large:', actualSize, 'bytes (max', maxSizeLabel, ')');
-        return json({
-          error: `File too large. Maximum file size is ${maxSizeLabel} for ${isVideo ? 'videos' : 'files'}.`,
-          fileSize: actualSize,
-          maxSize: maxSize,
-          fileType: isVideo ? 'video' : 'file'
-        }, 400);
-      }
-
-      if (!buf || actualSize === 0) {
-        console.error('Empty file buffer');
-        return json({ error: 'Empty file' }, 400);
-      }
-
-      fileData = buf;
-      console.log('File size:', (actualSize / 1024 / 1024).toFixed(2), 'MB');
-    }
-
     // Detect content type
     const contentType = resolveContentType(filename, req.headers.get('content-type'));
     const isVideoUpload = contentType.startsWith('video/');
-
-    // STAGE 1: Upload to R2 as temporary storage
-    console.log('STAGE 1: Uploading to R2 temp storage...');
-    const r2TempKey = `temp-archive/${itemId}/${filename}`;
-
-    try {
-      await env.R2_BUCKET.put(r2TempKey, fileData, {
-        httpMetadata: { contentType }
-      });
-      console.log('R2 temp upload successful:', r2TempKey);
-    } catch (r2Err) {
-      console.error('R2 temp upload failed:', r2Err);
-      return json({
-        error: 'Failed to upload to temp storage: ' + r2Err.message,
-        stage: 'r2-temp',
-        details: r2Err.stack
-      }, 500);
-    }
-    // OPTIMIZED: Skip R2 verification - put() throws on failure, no need to re-fetch
 
     // Get order details for metadata
     const orderIdFromQuery = url.searchParams.get('orderId');
@@ -540,7 +489,7 @@ export async function uploadCustomerFile(env, req, url) {
         if (orderRow) {
           const productTitle = orderRow.product_title || '';
           const productDescription = orderRow.product_description || '';
-          archiveDescription = productDescription 
+          archiveDescription = productDescription
             ? (productTitle ? `${productTitle} - ${productDescription}` : productDescription)
             : `Order #${orderRow.order_id} - ${productTitle || 'Video Delivery'}`;
         } else {
@@ -554,6 +503,7 @@ export async function uploadCustomerFile(env, req, url) {
       archiveDescription = `${isVideoUpload ? 'Video' : 'File'} uploaded via order delivery system`;
     }
 
+    // Prepare Archive.org headers
     const archiveHeaders = {
       Authorization: `LOW ${env.ARCHIVE_ACCESS_KEY}:${env.ARCHIVE_SECRET_KEY}`,
       'Content-Type': contentType,
@@ -566,15 +516,26 @@ export async function uploadCustomerFile(env, req, url) {
       'x-archive-meta-language': 'eng'
     };
 
-    // STAGE 2: Upload to Archive.org
-    console.log('STAGE 2: Uploading to Archive.org...');
+    // Upload directly to Archive.org (NO R2 stage)
+    console.log('Uploading directly to Archive.org...');
     const archiveUrl = `https://s3.us.archive.org/${itemId}/${filename}`;
+
+    // For large files, stream directly; otherwise buffer
+    let uploadBody;
+    if (fileSize !== null && fileSize > 50 * 1024 * 1024) {
+      // Large file: stream directly
+      uploadBody = req.body;
+    } else {
+      // Small file: load into memory
+      uploadBody = await req.arrayBuffer();
+    }
+
     let archiveResp;
     try {
       archiveResp = await fetch(archiveUrl, {
         method: 'PUT',
         headers: archiveHeaders,
-        body: buf
+        body: uploadBody
       });
 
       if (!archiveResp.ok) {
@@ -584,8 +545,7 @@ export async function uploadCustomerFile(env, req, url) {
           error: 'Archive.org upload failed',
           status: archiveResp.status,
           details: errorText,
-          stage: 'archive-upload',
-          r2Uploaded: true
+          stage: 'archive-upload'
         }, 502);
       }
       console.log('Archive.org upload successful, status:', archiveResp.status);
@@ -594,25 +554,22 @@ export async function uploadCustomerFile(env, req, url) {
       return json({
         error: 'Failed to connect to Archive.org: ' + archiveErr.message,
         stage: 'archive-connect',
-        details: archiveErr.message,
-        r2Uploaded: true
+        details: archiveErr.message
       }, 502);
     }
 
-    // OPTIMIZED: Skip blocking verification - Archive.org indexing happens async
-    // The upload was successful if we got here, verification can be done client-side if needed
+    // Return Archive.org URLs
     const downloadUrl = `https://archive.org/download/${itemId}/${filename}`;
     const embedUrl = `https://archive.org/details/${itemId}`;
 
-    console.log('Upload complete - R2 and Archive.org upload successful');
+    console.log('Upload complete - direct Archive.org upload successful');
     return json({
       success: true,
       url: downloadUrl,
       embedUrl: embedUrl,
       itemId: itemId,
       filename: filename,
-      r2Verified: true,
-      archiveVerified: true, // Archive accepted the upload, indexing happens async
+      archiveVerified: true,
       isVideo: isVideoUpload
     });
 
@@ -627,104 +584,312 @@ export async function uploadCustomerFile(env, req, url) {
 }
 
 /**
- * Upload encrypted file for order
- * OPTIMIZED: Uses streaming for large files
+ * Upload file directly to Archive.org (NO R2, NO encryption)
+ * Files are uploaded straight to Archive.org as public files
  */
 export async function uploadEncryptedFile(env, req, url) {
-  if (!env.R2_BUCKET) {
-    return json({ error: 'R2 not configured' }, 500);
+  if (!env.ARCHIVE_ACCESS_KEY || !env.ARCHIVE_SECRET_KEY) {
+    console.error('Archive.org credentials not configured');
+    return json({ error: 'Archive.org credentials not configured' }, 500);
   }
+
   const orderId = url.searchParams.get('orderId');
   const itemId = url.searchParams.get('itemId');
   const filename = url.searchParams.get('filename');
+
   if (!orderId || !itemId || !filename) {
     return json({ error: 'orderId, itemId and filename required' }, 400);
   }
 
+  // Sanitize filename
+  const sanitizedFilename = filename.replace(/[^a-zA-Z0-9_.-]/g, '-');
+
+  // Construct Archive.org item ID: order_{orderId}_{itemId}
+  const archiveItemId = `order_${orderId}_${itemId}`.replace(/[^a-zA-Z0-9_-]/g, '-');
+
+  console.log('Uploading directly to Archive.org:', sanitizedFilename, 'Item:', archiveItemId);
+
   // Get content length for size validation
   const contentLength = req.headers.get('content-length');
   const fileSize = contentLength ? parseInt(contentLength, 10) : null;
-  const maxSize = 100 * 1024 * 1024; // 100MB max for encrypted files
+  const maxSize = 500 * 1024 * 1024; // 500MB max
 
   if (fileSize !== null && fileSize > maxSize) {
-    return json({ error: 'File too large. Maximum size is 100MB.' }, 400);
+    return json({ error: 'File too large. Maximum size is 500MB.' }, 400);
   }
 
-  // For large files, stream directly; otherwise use arrayBuffer
-  const SIZE_THRESHOLD = 50 * 1024 * 1024; // 50MB
+  // Detect content type
+  const contentType = resolveContentType(sanitizedFilename, req.headers.get('content-type'));
+  const isVideoUpload = contentType.startsWith('video/');
 
-  let fileData;
-  if (fileSize !== null && fileSize > SIZE_THRESHOLD) {
-    // Large file: stream directly to R2
-    fileData = req.body;
+  // Prepare Archive.org headers
+  const archiveHeaders = {
+    Authorization: `LOW ${env.ARCHIVE_ACCESS_KEY}:${env.ARCHIVE_SECRET_KEY}`,
+    'Content-Type': contentType,
+    'x-archive-auto-make-bucket': '1',
+    'x-archive-meta-mediatype': isVideoUpload ? 'movies' : 'data',
+    'x-archive-meta-collection': 'opensource',
+    'x-archive-meta-title': normalizeArchiveMetaValue(sanitizedFilename),
+    'x-archive-meta-description': normalizeArchiveMetaValue(`Order #${orderId} - ${itemId}`),
+    'x-archive-meta-subject': 'order; delivery',
+    'x-archive-meta-language': 'eng'
+  };
+
+  // Upload directly to Archive.org
+  const archiveUrl = `https://s3.us.archive.org/${archiveItemId}/${sanitizedFilename}`;
+
+  // For large files, stream directly; otherwise buffer
+  let uploadBody;
+  if (fileSize !== null && fileSize > 50 * 1024 * 1024) {
+    // Large file: stream directly (memory efficient)
+    uploadBody = req.body;
   } else {
     // Small file: load into memory
-    fileData = await req.arrayBuffer();
+    uploadBody = await req.arrayBuffer();
   }
 
-  const key = `orders/${orderId}/${itemId}/${filename}`;
-  await env.R2_BUCKET.put(key, fileData, {
-    httpMetadata: { contentType: req.headers.get('content-type') || 'application/octet-stream' }
-  });
+  let archiveResp;
+  try {
+    archiveResp = await fetch(archiveUrl, {
+      method: 'PUT',
+      headers: archiveHeaders,
+      body: uploadBody
+    });
 
-  return json({ success: true, r2Key: key });
+    if (!archiveResp.ok) {
+      const errorText = await archiveResp.text().catch(() => 'Unknown error');
+      console.error('Archive.org upload failed:', archiveResp.status, errorText);
+      return json({
+        error: 'Archive.org upload failed',
+        status: archiveResp.status,
+        details: errorText,
+        stage: 'archive-upload'
+      }, 502);
+    }
+    console.log('Archive.org upload successful, status:', archiveResp.status);
+  } catch (archiveErr) {
+    console.error('Archive.org upload network error:', archiveErr);
+    return json({
+      error: 'Failed to connect to Archive.org: ' + archiveErr.message,
+      stage: 'archive-connect',
+      details: archiveErr.message
+    }, 502);
+  }
+
+  // Return Archive.org URLs
+  const downloadUrl = `https://archive.org/download/${archiveItemId}/${sanitizedFilename}`;
+  const embedUrl = `https://archive.org/details/${archiveItemId}`;
+
+  console.log('Upload complete - direct Archive.org upload successful');
+  return json({
+    success: true,
+    url: downloadUrl,
+    embedUrl: embedUrl,
+    itemId: archiveItemId,
+    filename: sanitizedFilename,
+    archiveVerified: true,
+    isVideo: isVideoUpload
+  });
 }
 
 /**
- * Handle secure download
+ * Resolve video URL to direct download link using Auto-Healing Cobalt API
+ * Automatically rotates through fallback instances if primary fails
+ */
+async function resolveVideoUrl(env, url) {
+  if (!url) return url;
+
+  const lowerUrl = url.toLowerCase();
+
+  // Check if this is a platform that needs resolution
+  const needsResolution = (
+    lowerUrl.includes('youtube.com') ||
+    lowerUrl.includes('youtu.be') ||
+    lowerUrl.includes('vimeo.com')
+  );
+
+  if (!needsResolution) {
+    return url;
+  }
+
+  console.log('Resolving video URL:', url);
+
+  // 1. Get current saved URL (or default)
+  let currentApiUrl = 'https://api.cobalt.tools';
+  try {
+    const setting = await env.DB.prepare("SELECT value FROM settings WHERE key = 'cobalt_url'").first();
+    if (setting?.value) currentApiUrl = setting.value;
+  } catch (e) {
+    console.log('Could not fetch cobalt_url setting, using default');
+  }
+
+  // Prepare list: Current Preferred + Fallbacks (removing duplicates)
+  const candidates = [currentApiUrl, ...FALLBACK_INSTANCES.filter(u => u !== currentApiUrl)];
+
+  // 2. Try instances one by one with Auto-Failover
+  for (const apiUrl of candidates) {
+    try {
+      console.log(`Trying YouTube API: ${apiUrl}`);
+      const apiRes = await fetch(`${apiUrl}/api/json`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; WishVideo/1.0)'
+        },
+        body: JSON.stringify({ url: url })
+      });
+
+      const data = await apiRes.json();
+
+      // Success condition - any status with a valid url
+      if (data.url || data.status === 'success' || data.status === 'stream') {
+        const resolvedUrl = data.url;
+
+        // If we had to switch to a fallback, save it as the new default (Self-Healing)
+        if (apiUrl !== currentApiUrl) {
+          console.log(`Updating default API to working instance: ${apiUrl}`);
+          try {
+            await env.DB.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)")
+              .bind('cobalt_url', apiUrl)
+              .run();
+          } catch (dbErr) {
+            console.error('Failed to update API setting:', dbErr);
+          }
+        }
+
+        console.log('Cobalt resolved to:', resolvedUrl);
+        return resolvedUrl;
+      }
+
+      // Check for error status
+      if (data.status === 'error' || data.status === 'fail') {
+        console.warn(`API Error (${apiUrl}):`, data.text || data.error || 'Unknown error');
+      }
+    } catch (e) {
+      console.warn(`API Failed (${apiUrl}):`, e.message);
+      // Continue to next candidate
+    }
+  }
+
+  console.error('All Cobalt instances failed');
+  return url; // Return original if all fail
+}
+
+/**
+ * Handle secure download with force download headers
+ * Supports YouTube/Vimeo via Cobalt API resolution
  */
 export async function handleSecureDownload(env, orderId, baseUrl) {
   const order = await env.DB.prepare(
     'SELECT archive_url, delivered_video_url FROM orders WHERE order_id = ?'
   ).bind(orderId).first();
 
-  const sourceUrl = (order?.delivered_video_url || order?.archive_url || '').toString().trim();
+  let sourceUrl = (order?.delivered_video_url || order?.archive_url || '').toString().trim();
 
   if (!sourceUrl) {
-    return new Response('Download link expired or not found', { status: 404 });
+    return new Response('Download link not found', { status: 404 });
   }
 
-  const lowered = sourceUrl.toLowerCase();
-  const openOnly =
-    lowered.includes('youtube.com') ||
-    lowered.includes('youtu.be') ||
-    lowered.includes('vimeo.com') ||
-    lowered.includes('iframe.mediadelivery.net/embed/') ||
-    lowered.includes('video.bunnycdn.com/play/') ||
-    (lowered.includes('archive.org/details/') && !lowered.includes('/download/'));
+  console.log('Processing download for:', orderId, 'Source:', sourceUrl.substring(0, 80) + '...');
 
-  if (openOnly) {
+  // Resolve YouTube/Vimeo URLs to direct download links (using configurable API)
+  const resolvedUrl = await resolveVideoUrl(env, sourceUrl);
+
+  // If URL was resolved to a direct link, download it
+  if (resolvedUrl !== sourceUrl) {
+    console.log('Downloading from resolved URL:', resolvedUrl.substring(0, 80) + '...');
+    sourceUrl = resolvedUrl;
+  }
+
+  // Fetch the file
+  let fileResp;
+  try {
+    fileResp = await fetch(sourceUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+  } catch (e) {
+    console.error('Fetch error:', e.message);
+    return new Response('Failed to fetch file: ' + e.message, { status: 502 });
+  }
+
+  // If fetch failed, try redirecting to source
+  if (!fileResp.ok) {
+    console.log('Proxy failed (' + fileResp.status + '), redirecting to source...');
     return Response.redirect(sourceUrl, 302);
   }
 
-  const fileResp = await fetch(sourceUrl);
-  if (!fileResp.ok) {
-    return new Response('File not available', { status: 404 });
-  }
+  // Determine filename from URL
+  const urlObj = new URL(sourceUrl, baseUrl);
+  let filename = urlObj.pathname.split('/').pop() || 'video.mp4';
 
-  const srcUrl = new URL(sourceUrl, baseUrl);
-  let filename = srcUrl.pathname.split('/').pop() || 'video.mp4';
+  // Clean filename - remove special chars, decode URI
   try {
     filename = decodeURIComponent(filename);
   } catch (_) {}
-  filename = filename.replace(/"/g, '');
+  filename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
 
-  const contentTypeHeader = (fileResp.headers.get('content-type') || '').split(';')[0].trim();
-  const contentType = contentTypeHeader || getMimeTypeFromFilename(filename) || 'application/octet-stream';
-
-  const headers = new Headers({ ...CORS });
-  headers.set('Content-Type', contentType);
-  headers.set('Content-Disposition', `attachment; filename="${filename}"`);
-
-  const contentLength = fileResp.headers.get('content-length');
-  if (contentLength) {
-    headers.set('Content-Length', contentLength);
+  // Ensure file has extension
+  if (!filename.includes('.')) {
+    const ext = getExtensionFromContentType(fileResp.headers.get('content-type') || '');
+    filename += ext;
   }
 
-  return new Response(fileResp.body, {
-    status: 200,
-    headers
-  });
+  // Get content type
+  let contentType = fileResp.headers.get('content-type') || '';
+  contentType = contentType.split(';')[0].trim() || getMimeTypeFromFilename(filename) || 'application/octet-stream';
+
+  // Build response headers for force download
+  const headers = new Headers({ ...CORS });
+
+  // Handle range requests for large video files (seek support)
+  const contentLength = fileResp.headers.get('content-length');
+  const hasBody = fileResp.body;
+
+  if (hasBody) {
+    headers.set('Content-Type', contentType);
+    headers.set('Content-Disposition', `attachment; filename="${filename}"`);
+    headers.set('Content-Length', contentLength || '');
+    headers.set('Accept-Ranges', 'bytes');
+    headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    headers.set('Pragma', 'no-cache');
+    headers.set('Expires', '0');
+
+    // Stream the response body
+    return new Response(fileResp.body, {
+      status: 206, // Partial Content for range support
+      statusText: 'Partial Content',
+      headers
+    });
+  }
+
+  // Fallback for responses without body
+  return Response.redirect(sourceUrl, 302);
+}
+
+/**
+ * Get file extension from content type
+ */
+function getExtensionFromContentType(contentType) {
+  const mimeToExt = {
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
+    'video/x-msvideo': '.avi',
+    'video/x-matroska': '.mkv',
+    'audio/mpeg': '.mp3',
+    'audio/wav': '.wav',
+    'audio/ogg': '.ogg',
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'application/pdf': '.pdf',
+    'application/zip': '.zip'
+  };
+  return mimeToExt[contentType] || '.mp4';
 }
 
 // In-memory branding cache
@@ -782,6 +947,56 @@ export async function saveBrandingSettings(env, body) {
     return json({ success: true });
   } catch (e) {
     console.error('Save branding error:', e);
+    return json({ error: e.message }, 500);
+  }
+}
+
+// ========== COBALT API SETTINGS ==========
+
+const cobaltCache = {};
+const COBALT_CACHE_TTL = 60000; // 1 minute cache
+
+/**
+ * Get Cobalt API URL setting
+ */
+export async function getCobaltSettings(env) {
+  const now = Date.now();
+
+  // Return cached data if still valid
+  if (cobaltCache.value && (now - cobaltCache.time) < COBALT_CACHE_TTL) {
+    return json({ success: true, settings: { cobalt_url: cobaltCache.value } });
+  }
+
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('cobalt_url').first();
+    const value = row?.value || 'https://api.cobalt.tools';
+    cobaltCache.value = value;
+    cobaltCache.time = now;
+    return json({ success: true, settings: { cobalt_url: value } });
+  } catch (e) {
+    console.error('Get cobalt settings error:', e);
+    return json({ success: true, settings: { cobalt_url: 'https://api.cobalt.tools' } });
+  }
+}
+
+/**
+ * Save Cobalt API URL setting
+ */
+export async function saveCobaltSettings(env, body) {
+  try {
+    const value = (body.cobalt_url || 'https://api.cobalt.tools').trim();
+
+    await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
+      .bind('cobalt_url', value)
+      .run();
+
+    // Update cache
+    cobaltCache.value = value;
+    cobaltCache.time = Date.now();
+
+    return json({ success: true });
+  } catch (e) {
+    console.error('Save cobalt settings error:', e);
     return json({ error: e.message }, 500);
   }
 }

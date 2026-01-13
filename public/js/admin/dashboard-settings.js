@@ -259,6 +259,27 @@
       </div>
     </div>
 
+    <!-- Cobalt API Settings -->
+    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
+      <h3>🎬 Cobalt API Settings</h3>
+      <p style="color: #6b7280; margin-bottom: 20px;">Configure the video download API URL for YouTube/Vimeo downloads.</p>
+
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; font-weight: 600; margin-bottom: 8px;">Cobalt API URL</label>
+        <input type="url" id="cobalt-api-url" placeholder="https://api.cobalt.tools"
+               style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.95em;">
+        <p style="color: #6b7280; font-size: 0.85em; margin-top: 8px;">
+          Default: <code>https://api.cobalt.tools</code><br>
+          Alternative instances: <code>https://p.cobaltapi.com</code>, <code>https://cobalt.ackee.cz</code>
+        </p>
+      </div>
+
+      <button class="btn" id="save-cobalt-btn" style="background: #059669; color: white; font-weight: 600; padding: 12px 24px;">
+        💾 Save Cobalt Settings
+      </button>
+      <span id="cobalt-status" style="margin-left: 15px; font-size: 0.9em;"></span>
+    </div>
+
     <!-- Automation & Alerts Section -->
     <div style="background: linear-gradient(135deg, #f97316 0%, #ef4444 100%); padding: 30px; border-radius: 12px; color: white; margin-top: 20px;">
       <h3 style="margin: 0 0 10px 0; color: white;">🤖 Automation & Alerts</h3>
@@ -605,6 +626,8 @@
     setupBrandingHandlers();
     setupCouponsHandlers();
     loadCouponsEnabled();
+    loadCobaltSettings();
+    setupCobaltHandlers();
 
     const openSeoBtn = document.getElementById('open-seo-settings');
     if (openSeoBtn) {
@@ -865,6 +888,75 @@
   }
 
   // ========== END SITE BRANDING ==========
+
+  // ========== COBALT API SETTINGS ==========
+
+  // Load cobalt settings
+  async function loadCobaltSettings() {
+    try {
+      const res = await fetch('/api/settings/cobalt');
+      const data = await res.json();
+
+      if (data.success && data.settings) {
+        const input = document.getElementById('cobalt-api-url');
+        if (input && data.settings.cobalt_url) {
+          input.value = data.settings.cobalt_url;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load cobalt settings:', err);
+    }
+  }
+
+  // Setup cobalt handlers
+  function setupCobaltHandlers() {
+    const saveBtn = document.getElementById('save-cobalt-btn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', saveCobaltSettings);
+    }
+  }
+
+  // Save cobalt settings
+  async function saveCobaltSettings() {
+    const btn = document.getElementById('save-cobalt-btn');
+    const statusEl = document.getElementById('cobalt-status');
+    const input = document.getElementById('cobalt-api-url');
+
+    if (!btn || !statusEl || !input) return;
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
+    statusEl.textContent = '';
+
+    try {
+      const res = await fetch('/api/settings/cobalt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cobalt_url: input.value.trim() || 'https://api.cobalt.tools'
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        statusEl.textContent = '✅ Cobalt settings saved!';
+        statusEl.style.color = '#16a34a';
+        setTimeout(() => statusEl.textContent = '', 3000);
+      } else {
+        statusEl.textContent = '❌ ' + (data.error || 'Save failed');
+        statusEl.style.color = '#dc2626';
+      }
+    } catch (err) {
+      statusEl.textContent = '❌ Error: ' + err.message;
+      statusEl.style.color = '#dc2626';
+    }
+
+    btn.disabled = false;
+    btn.textContent = '💾 Save Cobalt Settings';
+  }
+
+  // ========== END COBALT API SETTINGS ==========
 
   // ========== COUPONS MANAGEMENT ==========
   
