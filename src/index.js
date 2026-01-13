@@ -14,6 +14,7 @@ import { cleanupExpired } from './controllers/whop.js';
 import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildRobotsTxt, buildSitemapXml, getSeoForRequest, applySeoToHtml } from './controllers/seo.js';
+import { generateBlogPostHTML, generateForumQuestionHTML } from './utils/html-generators.js';
 
 // =========================
 // ADMIN AUTH HELPERS (Module Level - OPTIMIZED)

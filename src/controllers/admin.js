@@ -12,6 +12,125 @@ import { normalizeArchiveMetaValue } from '../utils/formatting.js';
 let purgeVersionChecked = false;
 
 /**
+ * Verify Cloudflare Turnstile captcha token
+ * Returns true if valid, false otherwise
+ */
+async function verifyTurnstileToken(env, token, remoteIp) {
+  if (!token) {
+    console.log('Turnstile token missing');
+    return false;
+  }
+
+  const secretKey = env.TURNSTILE_SECRET_KEY;
+  if (!secretKey) {
+    console.log('Turnstile secret key not configured');
+    // For development/testing, allow bypass if no secret configured
+    // In production, this should always be configured
+    return env.NODE_ENV === 'development' || env.ENVIRONMENT === 'development';
+  }
+
+  try {
+    const verifyUrl = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+    const response = await fetch(verifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        secret: secretKey,
+        token: token,
+        remoteip: remoteIp
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      console.log('Turnstile verification successful');
+      return true;
+    } else {
+      console.log('Turnstile verification failed:', result.error_codes);
+      return false;
+    }
+  } catch (e) {
+    console.error('Turnstile verification error:', e);
+    return false;
+  }
+}
+
+/**
+ * Validate upload request with Turnstile captcha
+ * Returns null if valid, or error Response if invalid
+ */
+async function validateUploadRequest(env, req, url) {
+  // Check for bypass token (admin uploads)
+  const bypassToken = url.searchParams.get('adminToken');
+  if (bypassToken && env.ADMIN_SESSION_SECRET) {
+    // Verify admin session
+    try {
+      const [tsStr, sig] = bypassToken.split('.');
+      if (tsStr && sig) {
+        const ts = Number(tsStr);
+        const ageSec = Math.floor((Date.now() - ts) / 1000);
+        if (ageSec >= 0 && ageSec < 3600) { // 1 hour max age
+          const enc = new TextEncoder();
+          const key = await crypto.subtle.importKey(
+            'raw',
+            enc.encode(env.ADMIN_SESSION_SECRET),
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign']
+          );
+          const sigBytes = await crypto.subtle.sign('HMAC', key, enc.encode(tsStr));
+          const expectedSig = btoa(String.fromCharCode(...new Uint8Array(sigBytes)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+          if (expectedSig === sig) {
+            return null; // Valid admin bypass
+          }
+        }
+      }
+    } catch (e) {
+      console.log('Admin bypass verification failed:', e.message);
+    }
+  }
+
+  // Check for user session token
+  const sessionToken = url.searchParams.get('sessionToken');
+  if (sessionToken) {
+    // Validate session token from checkout session
+    try {
+      const sessionId = url.searchParams.get('sessionId');
+      if (sessionId && env.DB) {
+        const session = await env.DB.prepare(
+          'SELECT id FROM checkout_sessions WHERE checkout_id = ? AND status = ?'
+        ).bind(sessionId, 'pending').first();
+        if (session) {
+          return null; // Valid checkout session
+        }
+      }
+    } catch (e) {
+      console.log('Session validation failed:', e.message);
+    }
+  }
+
+  // Check Turnstile token
+  const turnstileToken = url.searchParams.get('cf-turnstile-response') ||
+    req.headers.get('X-Turnstile-Token') ||
+    url.searchParams.get('turnstile_token');
+
+  const clientIp = req.headers.get('CF-Connecting-IP') || 'unknown';
+  const isValid = await verifyTurnstileToken(env, turnstileToken, clientIp);
+
+  if (!isValid) {
+    console.log('Upload rejected: Invalid or missing Turnstile captcha');
+    return json({
+      error: 'Captcha validation failed. Please refresh and try again.',
+      code: 'CAPTCHA_REQUIRED'
+    }, 403);
+  }
+
+  return null; // Valid
+}
+
+/**
  * Get debug info
  */
 export function getDebugInfo(env) {
@@ -143,12 +262,19 @@ export async function saveWhopSettings(env, body) {
 
 /**
  * Upload temp file to R2
+ * SECURITY: Requires Turnstile captcha validation or admin session
  */
 export async function uploadTempFile(env, req, url) {
   try {
     if (!env.R2_BUCKET) {
       console.error('R2_BUCKET not configured');
       return json({ error: 'R2 storage not configured' }, 500);
+    }
+
+    // Validate upload request (Turnstile captcha or admin session)
+    const validationError = await validateUploadRequest(env, req, url);
+    if (validationError) {
+      return validationError;
     }
 
     const sessionId = url.searchParams.get('sessionId');

@@ -28,16 +28,16 @@ const ADDON_LIMITS = {
  */
 function validateAddons(addons) {
   if (!Array.isArray(addons)) return [];
-  
+
   // Limit number of addons
   const limited = addons.slice(0, ADDON_LIMITS.totalAddons);
-  
+
   return limited.map(addon => {
     if (!addon || typeof addon !== 'object') return null;
-    
+
     let field = String(addon.field || '').trim();
     let value = String(addon.value || '').trim();
-    
+
     // Truncate if too long
     if (field.length > ADDON_LIMITS.field) {
       field = field.substring(0, ADDON_LIMITS.field);
@@ -45,9 +45,116 @@ function validateAddons(addons) {
     if (value.length > ADDON_LIMITS.value) {
       value = value.substring(0, ADDON_LIMITS.value);
     }
-    
+
     return { field, value };
   }).filter(Boolean);
+}
+
+/**
+ * Calculate addon prices from product's addon configuration
+ * Returns total addon price based on selected values
+ */
+function calculateAddonPrice(productAddonsJson, selectedAddons) {
+  if (!productAddonsJson || !selectedAddons || !Array.isArray(selectedAddons)) {
+    return 0;
+  }
+
+  let totalAddonPrice = 0;
+
+  try {
+    // Parse product addon configuration
+    const addonConfig = typeof productAddonsJson === 'string'
+      ? JSON.parse(productAddonsJson)
+      : productAddonsJson;
+
+    if (!Array.isArray(addonConfig)) return 0;
+
+    // Create a lookup map for addon fields and their options
+    const addonMap = {};
+    addonConfig.forEach(addon => {
+      if (addon.field) {
+        addonMap[addon.field.toLowerCase().trim()] = addon;
+      }
+    });
+
+    // Calculate price for each selected addon
+    selectedAddons.forEach(selected => {
+      const fieldName = (selected.field || '').toLowerCase().trim();
+      const addonDef = addonMap[fieldName];
+
+      if (addonDef && addonDef.options && Array.isArray(addonDef.options)) {
+        // Find the matching option by label/value
+        const selectedValue = (selected.value || '').trim();
+        const option = addonDef.options.find(opt =>
+          (opt.label || '').toLowerCase().trim() === selectedValue ||
+          (opt.value || '').toLowerCase().trim() === selectedValue
+        );
+
+        if (option && option.price) {
+          totalAddonPrice += Number(option.price) || 0;
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Failed to calculate addon price:', e);
+  }
+
+  return totalAddonPrice;
+}
+
+/**
+ * Calculate final price server-side from product and addons
+ * SECURITY: This prevents price manipulation from client side
+ */
+async function calculateServerSidePrice(env, productId, selectedAddons, couponCode) {
+  // Get product from database
+  const product = await env.DB.prepare(
+    'SELECT normal_price, sale_price, addons_json FROM products WHERE id = ?'
+  ).bind(Number(productId)).first();
+
+  if (!product) {
+    throw new Error('Product not found');
+  }
+
+  // Calculate base price
+  const basePrice = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
+    ? Number(product.sale_price)
+    : Number(product.normal_price);
+
+  if (isNaN(basePrice) || basePrice < 0) {
+    throw new Error('Invalid product price');
+  }
+
+  // Calculate addon prices from product configuration
+  const addonPrice = calculateAddonPrice(product.addons_json, selectedAddons);
+
+  let finalPrice = basePrice + addonPrice;
+
+  // Apply coupon if provided
+  if (couponCode) {
+    try {
+      const coupon = await env.DB.prepare(
+        'SELECT discount_type, discount_value, min_order_amount FROM coupons WHERE code = ? AND status = ?'
+      ).bind(couponCode.toUpperCase(), 'active').first();
+
+      if (coupon) {
+        const minAmount = Number(coupon.min_order_amount) || 0;
+        if (finalPrice >= minAmount) {
+          if (coupon.discount_type === 'percentage') {
+            const discount = (finalPrice * Number(coupon.discount_value)) / 100;
+            finalPrice = Math.max(0, finalPrice - discount);
+          } else if (coupon.discount_type === 'fixed') {
+            finalPrice = Math.max(0, finalPrice - Number(coupon.discount_value));
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Coupon validation failed:', e);
+    }
+  }
+
+  // Round to 2 decimal places
+  return Math.round(finalPrice * 100) / 100;
 }
 
 /**
@@ -153,55 +260,66 @@ function getEffectiveDeliveryMinutes(orderRow, productRow) {
 
 export async function createOrder(env, body) {
   if (!body.productId) return json({ error: 'productId required' }, 400);
-  
+
   // Validate and sanitize inputs
   const email = validateEmail(body.email);
   const addons = validateAddons(body.addons);
-  const amount = parseFloat(body.amount) || 0;
-  
-  // Get product for title and delivery time calculation
-let productTitle = '';
-let deliveryMinutes = 0;
 
-try {
-  const product = await env.DB.prepare('SELECT title, instant_delivery, normal_delivery_text FROM products WHERE id = ?')
-    .bind(Number(body.productId)).first();
+  // SECURITY: Calculate price server-side, ignoring client-provided amount
+  // This prevents price manipulation attacks
+  let amount = 0;
+  let productTitle = '';
+  let deliveryMinutes = 0;
 
-  if (product) {
-    productTitle = product.title || '';
-    // Always use product's delivery settings (each product can be different).
-    // This also protects us from buggy clients sending a wrong default like 1440.
-    deliveryMinutes = computeProductDeliveryMinutes(product);
+  try {
+    amount = await calculateServerSidePrice(env, body.productId, addons, body.couponCode);
+  } catch (e) {
+    console.error('Failed to calculate server-side price:', e);
+    return json({ error: 'Failed to calculate order price' }, 400);
   }
-} catch (e) {
-  console.log('Could not get product details:', e);
-}
 
-// Ensure we have a valid delivery time
-if (!deliveryMinutes || !Number.isFinite(deliveryMinutes) || deliveryMinutes <= 0) {
-  deliveryMinutes = 60; // Default fallback
-}
-const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
+  // Get product for title and delivery time calculation
+  try {
+    const product = await env.DB.prepare(
+      'SELECT title, instant_delivery, normal_delivery_text FROM products WHERE id = ?'
+    ).bind(Number(body.productId)).first();
+
+    if (product) {
+      productTitle = product.title || '';
+      // Always use product's delivery settings (each product can be different).
+      // This also protects us from buggy clients sending a wrong default like 1440.
+      deliveryMinutes = computeProductDeliveryMinutes(product);
+    }
+  } catch (e) {
+    console.log('Could not get product details:', e);
+  }
+
+  // Ensure we have a valid delivery time
+  if (!deliveryMinutes || !Number.isFinite(deliveryMinutes) || deliveryMinutes <= 0) {
+    deliveryMinutes = 60; // Default fallback
+  }
+
+  const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   const data = JSON.stringify({
     email: email,
     amount: amount,
     productId: body.productId,
     addons: addons
   });
-  
+
   await env.DB.prepare(
     'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
   ).bind(orderId, Number(body.productId), data, 'PAID', deliveryMinutes).run();
-  
-  console.log('📦 Order created:', orderId, 'Delivery:', deliveryMinutes, 'minutes');
-  
+
+  console.log('📦 Order created:', orderId, 'Delivery:', deliveryMinutes, 'minutes', 'Amount:', amount);
+
   // Send notifications (async, don't wait)
   const deliveryTime = deliveryMinutes < 1440 ? `${Math.round(deliveryMinutes / 60)} hour(s)` : `${Math.round(deliveryMinutes / 1440)} day(s)`;
-  
+
   // Send notifications via Advanced Automation
   notifyNewOrder(env, { orderId, email, amount, productTitle }).catch(() => {});
   notifyCustomerOrderConfirmed(env, { orderId, email, amount, productTitle, deliveryTime }).catch(() => {});
-  
+
   // FIXED: Send Google Script webhook for new order (for email notifications)
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
@@ -228,8 +346,8 @@ const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   } catch (err) {
     console.error('Error triggering new order webhook:', err);
   }
-  
-  return json({ success: true, orderId });
+
+  return json({ success: true, orderId, amount });
 }
 
 /**

@@ -6,6 +6,113 @@ import { json } from '../utils/response.js';
 import { getWhopApiKey } from '../config/secrets.js';
 
 /**
+ * Calculate addon prices from product's addon configuration
+ * Returns total addon price based on selected values
+ */
+function calculateAddonPrice(productAddonsJson, selectedAddons) {
+  if (!productAddonsJson || !selectedAddons || !Array.isArray(selectedAddons)) {
+    return 0;
+  }
+
+  let totalAddonPrice = 0;
+
+  try {
+    // Parse product addon configuration
+    const addonConfig = typeof productAddonsJson === 'string'
+      ? JSON.parse(productAddonsJson)
+      : productAddonsJson;
+
+    if (!Array.isArray(addonConfig)) return 0;
+
+    // Create a lookup map for addon fields and their options
+    const addonMap = {};
+    addonConfig.forEach(addon => {
+      if (addon.field) {
+        addonMap[addon.field.toLowerCase().trim()] = addon;
+      }
+    });
+
+    // Calculate price for each selected addon
+    selectedAddons.forEach(selected => {
+      const fieldName = (selected.field || '').toLowerCase().trim();
+      const addonDef = addonMap[fieldName];
+
+      if (addonDef && addonDef.options && Array.isArray(addonDef.options)) {
+        // Find the matching option by label/value
+        const selectedValue = (selected.value || '').trim();
+        const option = addonDef.options.find(opt =>
+          (opt.label || '').toLowerCase().trim() === selectedValue ||
+          (opt.value || '').toLowerCase().trim() === selectedValue
+        );
+
+        if (option && option.price) {
+          totalAddonPrice += Number(option.price) || 0;
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Failed to calculate addon price:', e);
+  }
+
+  return totalAddonPrice;
+}
+
+/**
+ * Calculate final price server-side from product and addons
+ * SECURITY: This prevents price manipulation from client side
+ */
+async function calculateServerSidePrice(env, productId, selectedAddons, couponCode) {
+  // Get product from database
+  const product = await env.DB.prepare(
+    'SELECT normal_price, sale_price, addons_json FROM products WHERE id = ?'
+  ).bind(Number(productId)).first();
+
+  if (!product) {
+    throw new Error('Product not found');
+  }
+
+  // Calculate base price
+  const basePrice = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
+    ? Number(product.sale_price)
+    : Number(product.normal_price);
+
+  if (isNaN(basePrice) || basePrice < 0) {
+    throw new Error('Invalid product price');
+  }
+
+  // Calculate addon prices from product configuration
+  const addonPrice = calculateAddonPrice(product.addons_json, selectedAddons);
+
+  let finalPrice = basePrice + addonPrice;
+
+  // Apply coupon if provided
+  if (couponCode) {
+    try {
+      const coupon = await env.DB.prepare(
+        'SELECT discount_type, discount_value, min_order_amount FROM coupons WHERE code = ? AND status = ?'
+      ).bind(couponCode.toUpperCase(), 'active').first();
+
+      if (coupon) {
+        const minAmount = Number(coupon.min_order_amount) || 0;
+        if (finalPrice >= minAmount) {
+          if (coupon.discount_type === 'percentage') {
+            const discount = (finalPrice * Number(coupon.discount_value)) / 100;
+            finalPrice = Math.max(0, finalPrice - discount);
+          } else if (coupon.discount_type === 'fixed') {
+            finalPrice = Math.max(0, finalPrice - Number(coupon.discount_value));
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Coupon validation failed:', e);
+    }
+  }
+
+  // Round to 2 decimal places
+  return Math.round(finalPrice * 100) / 100;
+}
+
+/**
  * Create checkout session using existing plan
  */
 export async function createCheckout(env, body, origin) {
@@ -131,7 +238,7 @@ export async function createCheckout(env, body, origin) {
  * Create dynamic plan + checkout session
  */
 export async function createPlanCheckout(env, body, origin) {
-  const { product_id, amount, email, metadata, deliveryTimeMinutes: bodyDeliveryTime } = body || {};
+  const { product_id, email, metadata, deliveryTimeMinutes: bodyDeliveryTime, couponCode } = body || {};
   if (!product_id) {
     return json({ error: 'Product ID required' }, 400);
   }
@@ -156,16 +263,16 @@ export async function createPlanCheckout(env, body, origin) {
   deliveryTimeMinutes = Number(deliveryTimeMinutes) || 60;
   console.log('📦 Delivery time calculated:', deliveryTimeMinutes, 'minutes');
 
-  // Determine the base price
-  const basePrice = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
-    ? Number(product.sale_price)
-    : Number(product.normal_price);
-
-  // Use the amount from frontend (includes addons) if provided, otherwise use base price
-  // Frontend sends window.currentTotal which is basePrice + addon prices
-  const priceValue = (amount !== null && amount !== undefined && !isNaN(Number(amount)) && Number(amount) > 0)
-    ? Number(amount)
-    : basePrice;
+  // SECURITY: Calculate price server-side, ignoring client-provided amount
+  // This prevents price manipulation attacks
+  let priceValue = 0;
+  try {
+    const selectedAddons = metadata?.addons || body?.addons || [];
+    priceValue = await calculateServerSidePrice(env, product_id, selectedAddons, couponCode);
+  } catch (e) {
+    console.error('Failed to calculate server-side price:', e);
+    return json({ error: 'Failed to calculate order price' }, 400);
+  }
 
   if (isNaN(priceValue) || priceValue < 0) {
     return json({ error: 'Invalid price' }, 400);
@@ -270,12 +377,13 @@ export async function createPlanCheckout(env, body, origin) {
     const expiryTime = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
     // Prepare metadata to store locally for webhook fallback
+    // SECURITY: Store server-side calculated price, not client-provided amount
     const checkoutMetadata = {
       product_id: product.id.toString(),
       product_title: product.title,
       addons: metadata?.addons || [],
       email: email || '',
-      amount: amount || priceValue,
+      amount: priceValue, // Use server-side calculated price
       deliveryTimeMinutes: deliveryTimeMinutes,
       created_at: new Date().toISOString()
     };
@@ -349,11 +457,12 @@ export async function createPlanCheckout(env, body, origin) {
       checkout_url: checkoutData.purchase_url,
       product_id: product.id,
       email: email,
+      amount: priceValue, // Return server-side calculated price
       metadata: {
         product_id: product.id.toString(),
         product_title: product.title,
         addons: metadata?.addons || [],
-        amount: amount || priceValue
+        amount: priceValue // Use server-side calculated price
       },
       expires_in: '15 minutes',
       email_prefilled: !!(email && email.includes('@'))
@@ -366,14 +475,16 @@ export async function createPlanCheckout(env, body, origin) {
 
 /**
  * Handle Whop webhook
+ * RELIABILITY: Order creation happens ONLY here, not on client redirect
+ * This ensures orders are created even if user closes browser during redirect
  */
 export async function handleWebhook(env, webhookData) {
   try {
     const eventType = webhookData.type;
-    
+
     console.log('Whop webhook received:', eventType);
-    
-    // Handle payment success
+
+    // Handle payment success - this is the ONLY place orders are created
     if (eventType === 'payment.succeeded') {
       const checkoutSessionId = webhookData.data?.checkout_session_id;
       const membershipId = webhookData.data?.id;
@@ -381,8 +492,27 @@ export async function handleWebhook(env, webhookData) {
 
       console.log('Payment succeeded:', { checkoutSessionId, membershipId, metadata });
 
+      // Check if order already exists for this checkout session (idempotency)
+      if (checkoutSessionId) {
+        try {
+          const existingOrder = await env.DB.prepare(`
+            SELECT o.id FROM orders o
+            JOIN checkout_sessions cs ON o.product_id = cs.product_id
+            WHERE cs.checkout_id = ? AND o.status = 'completed'
+          `).bind(checkoutSessionId).first();
+
+          if (existingOrder) {
+            console.log('Order already exists for checkout session:', checkoutSessionId);
+            return json({ received: true, duplicate: true });
+          }
+        } catch (e) {
+          console.log('Order existence check skipped:', e.message);
+        }
+      }
+
       // Fallback: If metadata from Whop is empty/incomplete, try to get from our database
-      if (checkoutSessionId && (!metadata.addons || !metadata.addons.length)) {
+      // This ensures we have all order details even if Whop's metadata is stripped
+      if (checkoutSessionId && (!metadata.addons || !metadata.addons.length || !metadata.amount)) {
         try {
           const sessionRow = await env.DB.prepare(
             'SELECT metadata FROM checkout_sessions WHERE checkout_id = ?'
@@ -391,24 +521,26 @@ export async function handleWebhook(env, webhookData) {
           if (sessionRow?.metadata) {
             const storedMetadata = JSON.parse(sessionRow.metadata);
             console.log('Retrieved stored metadata from DB:', storedMetadata);
-            // Merge stored metadata with webhook metadata (prefer stored for addons)
+            // Merge stored metadata with webhook metadata (prefer stored for addons, amount)
             metadata = {
               ...metadata,
               ...storedMetadata,
               // Ensure addons come from stored metadata if available
-              addons: storedMetadata.addons || metadata.addons || []
+              addons: storedMetadata.addons || metadata.addons || [],
+              // Ensure amount comes from stored metadata (server-side calculated)
+              amount: storedMetadata.amount || metadata.amount || 0
             };
           }
         } catch (e) {
           console.log('Failed to retrieve stored metadata:', e.message);
         }
       }
-      
+
       // Mark checkout as completed in database
       if (checkoutSessionId) {
         try {
           await env.DB.prepare(`
-            UPDATE checkout_sessions 
+            UPDATE checkout_sessions
             SET status = 'completed', completed_at = datetime('now')
             WHERE checkout_id = ?
           `).bind(checkoutSessionId).run();
@@ -416,7 +548,7 @@ export async function handleWebhook(env, webhookData) {
           console.log('Checkout tracking update skipped:', e.message);
         }
       }
-      
+
       // Delete the temporary checkout session from Whop
       const apiKey = await getWhopApiKey(env);
       if (checkoutSessionId && apiKey) {
@@ -425,7 +557,7 @@ export async function handleWebhook(env, webhookData) {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${apiKey}` }
           });
-          console.log('✅ Checkout session deleted immediately after payment:', checkoutSessionId);
+          console.log('Checkout session deleted immediately after payment:', checkoutSessionId);
         } catch (e) {
           console.error('Failed to delete checkout session:', e);
         }
@@ -439,32 +571,35 @@ export async function handleWebhook(env, webhookData) {
               method: 'DELETE',
               headers: { 'Authorization': `Bearer ${apiKey}` }
             });
-            console.log('🗑️ Plan deleted immediately after payment:', planId);
+            console.log('Plan deleted immediately after payment:', planId);
           }
         } catch (e) {
           console.error('Failed to delete plan:', e);
         }
       }
-      
+
       // Handle tip payment
       if (metadata.type === 'tip' && metadata.orderId) {
         try {
           await env.DB.prepare(
             'UPDATE orders SET tip_paid = 1, tip_amount = ? WHERE order_id = ?'
           ).bind(Number(metadata.tipAmount) || Number(metadata.amount) || 0, metadata.orderId).run();
-          console.log('✅ Tip marked as paid for order:', metadata.orderId);
+          console.log('Tip marked as paid for order:', metadata.orderId);
         } catch (e) {
           console.error('Failed to update tip status:', e);
         }
         // Don't create a new order for tips, just mark tip as paid
         return json({ received: true });
       }
-      
+
       // Create order in database (for regular purchases, not tips)
+      // RELIABILITY: This is the ONLY place order creation happens
+      // Client-side redirects cannot create orders - only webhook can
       if (metadata.product_id) {
         try {
+          // Generate unique order ID
           const orderId = `WHOP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          
+
           // Get delivery time from metadata or product default
           let deliveryTimeMinutes = Number(metadata.deliveryTimeMinutes) || 0;
           if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0) {
@@ -486,32 +621,45 @@ export async function handleWebhook(env, webhookData) {
               deliveryTimeMinutes = 60;
             }
           }
-          console.log('📦 Final delivery time for order:', deliveryTimeMinutes, 'minutes');
+          console.log('Final delivery time for order:', deliveryTimeMinutes, 'minutes');
+
+          // Get email from multiple sources (whop webhook data is authoritative)
+          const customerEmail = metadata.email ||
+            webhookData.data?.email ||
+            webhookData.data?.user?.email ||
+            '';
+
+          // Get amount from stored metadata (server-side calculated, not client-provided)
+          const orderAmount = metadata.amount || 0;
 
           // Build encrypted_data with addons and other details
           const encryptedData = JSON.stringify({
-            email: metadata.email || webhookData.data?.email || webhookData.data?.user?.email || '',
-            amount: metadata.amount || webhookData.data?.final_amount || 0,
+            email: customerEmail,
+            amount: orderAmount,
             productId: metadata.product_id,
-            addons: metadata.addons || []
+            addons: metadata.addons || [],
+            whop_membership_id: membershipId || null,
+            whop_checkout_id: checkoutSessionId || null
           });
 
           await env.DB.prepare(
             'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, created_at) VALUES (?, ?, ?, ?, ?, datetime("now"))'
           ).bind(orderId, Number(metadata.product_id), encryptedData, 'completed', deliveryTimeMinutes).run();
 
-          console.log('Order created:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes');
+          console.log('Order created via webhook:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes', 'Amount:', orderAmount);
         } catch (e) {
           console.error('Failed to create order:', e);
+          // Still return success to Whop so they don't retry
+          // Order can be recovered manually if needed
         }
       }
     }
-    
+
     // Handle membership validation
     if (eventType === 'membership.went_valid') {
       console.log('Membership validated:', webhookData.data?.id);
     }
-    
+
     return json({ received: true });
   } catch (e) {
     console.error('Webhook error:', e);
