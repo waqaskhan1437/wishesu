@@ -23,32 +23,38 @@ export async function getProducts(env, url) {
   const limitStr = params.get('limit');
   const limit = limitStr ? parseInt(limitStr) : 1000;
   const offset = (page - 1) * limit;
+  const filter = params.get('filter') || 'all';
 
   // Cache key based on params
-  const cacheKey = `products_p${page}_l${limit}`;
   const now = Date.now();
 
-  // Return cached data if still valid (using a map if we wanted multiple pages cached, but let's just bypass for now if specific page)
-  // Simple logic: Only cache the "default" (no params) view in the variable variables for now
-  if (!limitStr && productsCache && (now - productsCacheTime) < PRODUCTS_CACHE_TTL) {
+  // Return cached data ONLY if no specific limit/filter provided (default view)
+  if (!limitStr && filter === 'all' && productsCache && (now - productsCacheTime) < PRODUCTS_CACHE_TTL) {
     return cachedJson({ products: productsCache, pagination: { page: 1, limit: 1000, total: productsCache.length, pages: 1 } }, 120);
   }
 
+  // Build Query
+  let whereClause = "WHERE p.status = 'active'";
+  if (filter === 'featured') {
+    whereClause += " AND p.featured = 1";
+  }
+
   // Get Total Count
-  const totalRow = await env.DB.prepare('SELECT COUNT(*) as count FROM products WHERE status = ?').bind('active').first();
+  const totalRow = await env.DB.prepare(`SELECT COUNT(*) as count FROM products p ${whereClause}`).first();
   const total = totalRow?.count || 0;
 
   const r = await env.DB.prepare(`
     SELECT
       p.id, p.title, p.slug, p.normal_price, p.sale_price,
       p.thumbnail_url, p.normal_delivery_text, p.instant_delivery,
+      p.featured,
       (SELECT COUNT(*) FROM reviews WHERE product_id = p.id AND status = 'approved') as review_count,
       (SELECT AVG(rating) FROM reviews WHERE product_id = p.id AND status = 'approved') as rating_average
     FROM products p
-    WHERE p.status = ?
+    ${whereClause}
     ORDER BY p.sort_order ASC, p.id DESC
     LIMIT ? OFFSET ?
-  `).bind('active', limit, offset).all();
+  `).bind(limit, offset).all();
 
   const products = (r.results || []).map(product => ({
     ...product,
@@ -58,7 +64,7 @@ export async function getProducts(env, url) {
   }));
 
   // Update legacy cache if this was a default request
-  if (!limitStr) {
+  if (!limitStr && filter === 'all') {
     productsCache = products;
     productsCacheTime = Date.now();
   }

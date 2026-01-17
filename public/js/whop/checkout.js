@@ -386,16 +386,10 @@
 
       // Update price header once after script loads
       updatePriceHeader(overlay, lastAmount);
-      
-      // Check if embed loaded - shorter interval, fewer tries
-      let tries = 0;
-      const interval = setInterval(() => {
-        tries += 1;
-        const embedRoot = document.getElementById('whop-embedded-checkout');
-        if ((embedRoot && embedRoot.children.length > 0) || tries > 20) {
-          clearInterval(interval);
-        }
-      }, 200);
+
+      // OPTIMIZATION: Removed useless interval loop that checked for embed
+      // The Whop script handles the embed rendering internally
+
     } catch (err) {
       console.error('🔴 FAILED TO LOAD WHOP SCRIPT:', err);
       alert('❌ Failed to load Whop checkout:\n\n' + err.message + '\n\nPlease refresh and try again.');
@@ -407,4 +401,22 @@
   }
 
   window.whopCheckout = openCheckout;
+
+  // OPTIMIZATION: Preload Whop script after page load to make checkout faster
+  // Use requestIdleCallback if available, otherwise setTimeout
+  const preload = () => {
+    // Check if we are on a product page or specific page where checkout is likely
+    // Or just preload everywhere since it's a critical conversion action
+    if (window.requestIdleCallback) {
+      window.requestIdleCallback(() => loadWhopScript().catch(() => {}));
+    } else {
+      setTimeout(() => loadWhopScript().catch(() => {}), 3000);
+    }
+  };
+
+  if (document.readyState === 'complete') {
+    preload();
+  } else {
+    window.addEventListener('load', preload);
+  }
 })();

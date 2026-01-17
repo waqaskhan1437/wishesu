@@ -43,6 +43,7 @@ export async function initDB(env) {
             whop_plan TEXT, whop_price_map TEXT,
             whop_product_id TEXT,
             status TEXT DEFAULT 'active',
+            featured INTEGER DEFAULT 0,
             sort_order INTEGER DEFAULT 0
           )
         `),
@@ -262,6 +263,7 @@ async function runPagesMigration(env) {
 async function runMigrations(env) {
   const migrations = [
     { table: 'products', column: 'gallery_images', type: 'TEXT' },
+    { table: 'products', column: 'featured', type: 'INTEGER DEFAULT 0' },
     { table: 'orders', column: 'delivered_video_metadata', type: 'TEXT' },
     { table: 'orders', column: 'tip_paid', type: 'INTEGER DEFAULT 0' },
     { table: 'orders', column: 'tip_amount', type: 'REAL' },

@@ -76,6 +76,9 @@
       try {
         // Build URL
         let url = `/api/products?page=${state.page}&limit=${state.limit}`;
+        if (state.filter && state.filter !== 'all') {
+          url += `&filter=${encodeURIComponent(state.filter)}`;
+        }
 
         // Fetch
         const res = await fetch(url);
@@ -89,14 +92,12 @@
           state.pages = data.pagination.pages;
         }
 
-        // Apply Client-Side Filters (Note: ideally should be server-side)
-        if (state.filter === 'featured') {
-          products = products.filter(p => p.featured);
-        } else if (state.filter === 'top-sales') {
+        // Client-side sorting for 'top-sales' if not handled by server
+        if (state.filter === 'top-sales') {
           products = products.sort((a, b) => (b.sales || 0) - (a.sales || 0));
         }
 
-        // Apply ID filtering
+        // Apply ID filtering (client-side remains for specific IDs)
         if (state.ids && Array.isArray(state.ids) && state.ids.length > 0) {
           const idSet = new Set(state.ids.map(x => String(x)));
           products = products.filter(p => idSet.has(String(p.id)) || idSet.has(String(p.slug)));
