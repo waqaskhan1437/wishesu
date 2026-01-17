@@ -1421,7 +1421,19 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       }
 
       // ----- CANONICAL PRODUCT URLs -----
-      if ((method === 'GET' || method === 'HEAD') && (path === '/product' || path.startsWith('/product/'))) {
+      if ((method === 'GET' || method === 'HEAD') && (path === '/product' || path.startsWith('/product/') || path.startsWith('/product-'))) {
+        // BOT PROTECTION: Quick Regex Validation to prevent DB hits for invalid URLs
+        // Valid patterns: /product, /product/slug, /product-123, /product-123/slug
+        const isValidFormat =
+          path === '/product' ||
+          path === '/product/' ||
+          /^\/product\/[a-zA-Z0-9_-]+$/.test(path) ||
+          /^\/product-\d+(\/[a-zA-Z0-9_-]*)?$/.test(path);
+
+        if (!isValidFormat) {
+          return new Response('Not found', { status: 404 });
+        }
+
         if (env.DB) {
           await initDB(env);
           const redirect = await handleProductRouting(env, url, path);
@@ -1865,13 +1877,11 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               if (env.DB) {
                 await initDB(env);
                 const productsResult = await env.DB.prepare(`
-                  SELECT p.*, 
-                    COUNT(r.id) as review_count, 
-                    AVG(r.rating) as rating_average
+                  SELECT p.*,
+                    (SELECT COUNT(*) FROM reviews WHERE product_id = p.id AND status = 'approved') as review_count,
+                    (SELECT AVG(rating) FROM reviews WHERE product_id = p.id AND status = 'approved') as rating_average
                   FROM products p
-                  LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
                   WHERE p.status = 'active'
-                  GROUP BY p.id
                   ORDER BY p.sort_order ASC, p.id DESC
                 `).all();
                 
@@ -1938,7 +1948,13 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         return new Response(assetResp.body, { status: assetResp.status, headers });
       }
 
-      return new Response('Not found', { status: 404 });
+      return new Response('Not found', {
+        status: 404,
+        headers: {
+          'Cache-Control': 'public, max-age=60',
+          'X-Worker-Version': VERSION
+        }
+      });
     } catch (e) {
       console.error('Worker error:', e);
       return new Response(JSON.stringify({ error: e.message }), {

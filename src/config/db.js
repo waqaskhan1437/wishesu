@@ -75,6 +75,11 @@ export async function initDB(env) {
             delivered_video_url TEXT, delivered_thumbnail_url TEXT
           )
         `),
+        // Index for reviews by product
+        env.DB.prepare(`
+          CREATE INDEX IF NOT EXISTS idx_reviews_product_id
+          ON reviews(product_id)
+        `),
         // Settings table
         env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`),
         // Pages table

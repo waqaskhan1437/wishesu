@@ -23,11 +23,28 @@
     };
   }
 
-  // Load from localStorage
-  function loadData() {
+  // Load from API (with localStorage fallback)
+  async function loadData() {
+    try {
+      const res = await fetch('/api/settings/components');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.components) {
+          console.log('✅ Loaded components from API');
+          // Update localStorage to match server
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(json.components));
+          return { ...getDefaultData(), ...json.components };
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load components from API:', e);
+    }
+
+    // Fallback to localStorage if API fails or returns null
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
+        console.log('⚠️ Loaded components from localStorage (API fallback)');
         const data = JSON.parse(stored);
         return { ...getDefaultData(), ...data };
       }
@@ -37,14 +54,32 @@
     return getDefaultData();
   }
 
-  // Save to localStorage
-  function saveData(data) {
+  // Save to API
+  async function saveData(data) {
     try {
+      // Save to localStorage immediately (optimistic)
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       console.log('✅ Components saved to localStorage');
-      return true;
+
+      // Save to API
+      const res = await fetch('/api/settings/components', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        console.log('✅ Components saved to API');
+        return true;
+      } else {
+        console.error('Failed to save to API:', result.error);
+        alert('⚠️ Saved locally, but failed to save to server: ' + (result.error || 'Unknown error'));
+        return false;
+      }
     } catch (e) {
       console.error('Failed to save components:', e);
+      alert('⚠️ Saved locally, but failed to save to server. Please check your connection.');
       return false;
     }
   }
@@ -200,7 +235,7 @@
   ];
 
   AD.loadComponents = async function(panel) {
-    let data = loadData();
+    let data = await loadData();
     
     panel.innerHTML = `
       <style>

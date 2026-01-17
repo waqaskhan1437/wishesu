@@ -156,7 +156,9 @@ import {
   getBrandingSettings,
   saveBrandingSettings,
   getCobaltSettings,
-  saveCobaltSettings
+  saveCobaltSettings,
+  getSiteComponents,
+  saveSiteComponents
 } from './controllers/admin.js';
 
 // SEO (admin controls + robots/sitemap)
@@ -754,6 +756,16 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/settings/cobalt') {
     const body = await req.json();
     return saveCobaltSettings(env, body);
+  }
+
+  // ----- SITE COMPONENTS (HEADER/FOOTER) -----
+  if (method === 'GET' && path === '/api/settings/components') {
+    return getSiteComponents(env);
+  }
+
+  if (method === 'POST' && path === '/api/settings/components') {
+    const body = await req.json();
+    return saveSiteComponents(env, body);
   }
 
   // ----- COUPONS -----

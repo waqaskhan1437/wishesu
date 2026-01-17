@@ -89,11 +89,42 @@
   }
 
   // Load component data
-  function loadData() {
+  async function loadData() {
+    // 1. Try LocalStorage first (fastest)
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const data = JSON.parse(stored);
+        // If data is fresh (< 30 minutes), use it immediately
+        // Note: _timestamp is added when saving from API
+        if (data._timestamp && (Date.now() - data._timestamp) < 1800000) {
+          return data;
+        }
+      }
+    } catch (e) {}
+
+    // 2. Fetch from API (if missing or stale)
+    try {
+      const res = await fetch('/api/settings/components');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.components) {
+          // Add timestamp for cache validity
+          json.components._timestamp = Date.now();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(json.components));
+          return json.components;
+        }
+      }
+    } catch (e) {
+      console.warn('Components API unavailable, falling back to cache');
+    }
+
+    // 3. Fallback to stale LocalStorage data if API failed
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) return JSON.parse(stored);
     } catch (e) {}
+
     return null;
   }
 
@@ -115,6 +146,14 @@
     const wrapper = document.createElement('div');
     wrapper.id = 'global-header';
     wrapper.innerHTML = code;
+    // Execute scripts if any exist in the header code
+    Array.from(wrapper.querySelectorAll('script')).forEach(oldScript => {
+      const newScript = document.createElement('script');
+      Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+      newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+      oldScript.parentNode.replaceChild(newScript, oldScript);
+    });
+
     if (document.body.firstChild) {
       document.body.insertBefore(wrapper, document.body.firstChild);
     } else {
@@ -128,15 +167,22 @@
     const wrapper = document.createElement('div');
     wrapper.id = 'global-footer';
     wrapper.innerHTML = code;
+    // Execute scripts if any exist in the footer code
+    Array.from(wrapper.querySelectorAll('script')).forEach(oldScript => {
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+      });
     document.body.appendChild(wrapper);
   }
 
   // Main initialization
-  function init() {
+  async function init() {
     // Always load branding
     loadBranding();
-    
-    const data = loadData();
+
+    const data = await loadData();
     if (!data) return;
     if (isExcluded(data.excludedPages)) return;
 

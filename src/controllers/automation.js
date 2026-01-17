@@ -154,8 +154,14 @@ export async function saveAutomationSettings(env, body) {
 
 /**
  * Log automation event
+ * OPTIMIZED: Only logs errors/failures to prevent DB locking during high traffic
  */
 async function logAutomation(env, type, target, title, message, status, response = '') {
+  // Skip logging successful events to save DB CPU
+  if (status === 'sent' || status === 'success') {
+    return;
+  }
+
   try {
     await env.DB.prepare(`
       INSERT INTO automation_logs (type, target, title, message, status, response, created_at)

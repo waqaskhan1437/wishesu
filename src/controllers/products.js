@@ -27,12 +27,10 @@ export async function getProducts(env) {
     SELECT
       p.id, p.title, p.slug, p.normal_price, p.sale_price,
       p.thumbnail_url, p.normal_delivery_text, p.instant_delivery,
-      COUNT(r.id) as review_count,
-      AVG(r.rating) as rating_average
+      (SELECT COUNT(*) FROM reviews WHERE product_id = p.id AND status = 'approved') as review_count,
+      (SELECT AVG(rating) FROM reviews WHERE product_id = p.id AND status = 'approved') as rating_average
     FROM products p
-    LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
     WHERE p.status = ?
-    GROUP BY p.id
     ORDER BY p.sort_order ASC, p.id DESC
   `).bind('active').all();
 
