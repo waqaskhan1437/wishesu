@@ -353,7 +353,7 @@ export async function routeApiRequest(req, env, url, path, method) {
   // ----- PRODUCTS -----
   // Public products listing - cache for 60s at CDN, 30s at browser
   if (method === 'GET' && path === '/api/products') {
-    const response = await getProducts(env);
+    const response = await getProducts(env, url);
     const newHeaders = new Headers(response.headers);
     newHeaders.set('Cache-Control', 'public, max-age=30, s-maxage=60');
     return new Response(response.body, { status: response.status, headers: newHeaders });

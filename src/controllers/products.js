@@ -13,16 +13,31 @@ const PRODUCTS_CACHE_TTL = 30000; // 30 seconds
 
 /**
  * Get active products (public)
- * OPTIMIZED: Single JOIN query + Edge caching + In-memory caching
+ * OPTIMIZED: Single JOIN query + Pagination Support
  */
-export async function getProducts(env) {
+export async function getProducts(env, url) {
+  // Parsing pagination params
+  const params = url ? new URL(url).searchParams : { get: () => null };
+  const page = parseInt(params.get('page')) || 1;
+  // logic: if limit explicitly provided, use it. if not, use 1000 (legacy mode)
+  const limitStr = params.get('limit');
+  const limit = limitStr ? parseInt(limitStr) : 1000;
+  const offset = (page - 1) * limit;
+
+  // Cache key based on params
+  const cacheKey = `products_p${page}_l${limit}`;
   const now = Date.now();
-  
-  // Return cached data if still valid
-  if (productsCache && (now - productsCacheTime) < PRODUCTS_CACHE_TTL) {
-    return cachedJson({ products: productsCache }, 120);
+
+  // Return cached data if still valid (using a map if we wanted multiple pages cached, but let's just bypass for now if specific page)
+  // Simple logic: Only cache the "default" (no params) view in the variable variables for now
+  if (!limitStr && productsCache && (now - productsCacheTime) < PRODUCTS_CACHE_TTL) {
+    return cachedJson({ products: productsCache, pagination: { page: 1, limit: 1000, total: productsCache.length, pages: 1 } }, 120);
   }
-  
+
+  // Get Total Count
+  const totalRow = await env.DB.prepare('SELECT COUNT(*) as count FROM products WHERE status = ?').bind('active').first();
+  const total = totalRow?.count || 0;
+
   const r = await env.DB.prepare(`
     SELECT
       p.id, p.title, p.slug, p.normal_price, p.sale_price,
@@ -32,7 +47,8 @@ export async function getProducts(env) {
     FROM products p
     WHERE p.status = ?
     ORDER BY p.sort_order ASC, p.id DESC
-  `).bind('active').all();
+    LIMIT ? OFFSET ?
+  `).bind('active', limit, offset).all();
 
   const products = (r.results || []).map(product => ({
     ...product,
@@ -41,12 +57,22 @@ export async function getProducts(env) {
     rating_average: product.rating_average ? Math.round(product.rating_average * 10) / 10 : 0
   }));
 
-  // Update cache
-  productsCache = products;
-  productsCacheTime = Date.now();
+  // Update legacy cache if this was a default request
+  if (!limitStr) {
+    productsCache = products;
+    productsCacheTime = Date.now();
+  }
 
   // Cache for 2 minutes on edge
-  return cachedJson({ products }, 120);
+  return cachedJson({
+    products,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit)
+    }
+  }, 120);
 }
 
 /**

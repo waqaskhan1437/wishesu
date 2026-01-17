@@ -13,70 +13,133 @@
         return;
       }
 
-      const {
-        filter = 'all',        // 'all', 'featured', 'top-sales'
-        limit = 9,             // How many products
-        columns = 3,           // Cards per row
-        ids = [],              // array of product IDs or slugs to include (optional)
-        showReviews = true,    // show rating stars and count
-        showDelivery = true    // show delivery information
-      } = options;
+      // Clear container and setup structure
+      container.innerHTML = '';
 
-      // Fetch products
-      let products = [];
+      // Store state on the container DOM element
+      container._state = {
+        page: 1,
+        limit: options.limit || 12,
+        total: 0,
+        pages: 1,
+        loading: false,
+        filter: options.filter || 'all',
+        ids: options.ids || []
+      };
+
+      // Grid wrapper
+      const grid = document.createElement('div');
+      grid.className = 'product-cards-grid';
+      grid.style.display = 'grid';
+      grid.style.gridTemplateColumns = `repeat(${options.columns || 3}, 1fr)`;
+      grid.style.gap = '30px';
+      grid.style.maxWidth = '1200px';
+      grid.style.margin = '0 auto';
+      container.appendChild(grid);
+
+      // Load More Button
+      const loadBtn = document.createElement('button');
+      loadBtn.className = 'btn-load-more';
+      loadBtn.textContent = 'Load More Products';
+      loadBtn.style.display = 'none'; // Hidden until loaded
+      loadBtn.style.margin = '40px auto';
+      loadBtn.style.padding = '12px 30px';
+      loadBtn.style.background = 'white';
+      loadBtn.style.border = '1px solid #d1d5db';
+      loadBtn.style.borderRadius = '8px';
+      loadBtn.style.cursor = 'pointer';
+      loadBtn.style.fontSize = '1rem';
+      loadBtn.style.color = '#374151';
+      loadBtn.style.transition = 'all 0.2s';
+
+      loadBtn.onmouseover = () => { loadBtn.style.background = '#f9fafb'; loadBtn.style.borderColor = '#9ca3af'; };
+      loadBtn.onmouseout = () => { loadBtn.style.background = 'white'; loadBtn.style.borderColor = '#d1d5db'; };
+      loadBtn.onclick = () => this.loadMore(container, grid, loadBtn, options);
+
+      container.appendChild(loadBtn);
+
+      // Initial Load
+      await this.loadMore(container, grid, loadBtn, options);
+      this.addStyles();
+    },
+
+    // Load next page
+    loadMore: async function(container, grid, btn, options) {
+      const state = container._state;
+      if (state.loading) return;
+
+      state.loading = true;
+      btn.textContent = 'Loading...';
+      btn.disabled = true;
+      btn.style.opacity = '0.7';
+
       try {
-        const res = await fetch('/api/products');
-        const data = await res.json();
-        products = data.products || [];
+        // Build URL
+        let url = `/api/products?page=${state.page}&limit=${state.limit}`;
 
-        // Apply filters
-        if (filter === 'featured') {
+        // Fetch
+        const res = await fetch(url);
+        const data = await res.json();
+
+        let products = data.products || [];
+
+        // Update pagination from server
+        if (data.pagination) {
+          state.total = data.pagination.total;
+          state.pages = data.pagination.pages;
+        }
+
+        // Apply Client-Side Filters (Note: ideally should be server-side)
+        if (state.filter === 'featured') {
           products = products.filter(p => p.featured);
-        } else if (filter === 'top-sales') {
+        } else if (state.filter === 'top-sales') {
           products = products.sort((a, b) => (b.sales || 0) - (a.sales || 0));
         }
 
-        // If specific ids provided, filter by them (id or slug)
-        if (ids && Array.isArray(ids) && ids.length > 0) {
-          const idSet = new Set(ids.map(x => String(x)));
+        // Apply ID filtering
+        if (state.ids && Array.isArray(state.ids) && state.ids.length > 0) {
+          const idSet = new Set(state.ids.map(x => String(x)));
           products = products.filter(p => idSet.has(String(p.id)) || idSet.has(String(p.slug)));
         }
 
-        // Limit
-        products = products.slice(0, limit);
-
-        // If there are no products after filtering and limiting, show a helpful
-        // message instead of rendering an empty grid.  This provides better
-        // feedback to the user when the database is empty or an API error
-        // occurs.
-        if (!products || products.length === 0) {
-          container.innerHTML = '<p style="text-align:center;padding:40px 20px;color:#6b7280;font-size:1.1rem;">No products found.</p>';
+        // If no products found on first page
+        if (products.length === 0 && state.page === 1) {
+          grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#6b7280;">No products found.</div>';
+          btn.style.display = 'none';
           return;
+        }
+
+        // Render cards and append
+        products.forEach(p => {
+          // Check if card helper exists
+          // Create temp container to parse HTML string
+          const temp = document.createElement('div');
+          temp.innerHTML = this.renderCard(p, options);
+          while (temp.firstChild) {
+            grid.appendChild(temp.firstChild);
+          }
+        });
+
+        // Setup next page
+        state.page++;
+        state.loading = false;
+
+        // Update button state
+        if (state.page > state.pages) {
+          btn.style.display = 'none'; // Reached end
+        } else {
+          btn.style.display = 'block';
+          btn.textContent = 'Load More Products';
+          btn.disabled = false;
+          btn.style.opacity = '1';
         }
 
       } catch (err) {
         console.error('Failed to load products:', err);
-        container.innerHTML = '<p style="color: red;">Failed to load products</p>';
-        return;
+        btn.textContent = 'Error loading. Try again.';
+        btn.disabled = false;
+        state.loading = false;
       }
-
-      // Render grid
-      container.innerHTML = `
-        <div class="product-cards-grid" style="
-          display: grid;
-          grid-template-columns: repeat(${columns}, 1fr);
-          gap: 30px;
-          max-width: 1200px;
-          margin: 0 auto;
-        ">
-          ${products.map(p => this.renderCard(p, { showReviews, showDelivery })).join('')}
-        </div>
-      `;
-
-      // Schema now injected server-side for better SEO and to prevent duplicates
-
-      // Add CSS
-      this.addStyles();
     },
 
     // Render single card
