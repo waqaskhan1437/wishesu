@@ -1297,7 +1297,7 @@ if (isLoginRoute && method === 'GET') {
 
   if (env.ASSETS) {
     const r = await env.ASSETS.fetch(new Request(new URL('/admin/login.html', req.url)));
-    const h = addNoQuicHeaders(new Headers(r.headers)); h.set('Alt-Svc', 'clear');
+    const h = new Headers(r.headers); h.set('Alt-Svc', 'clear');
     h.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     h.set('Pragma', 'no-cache');
     return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
@@ -1374,7 +1374,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
     if ((method === 'GET' || method === 'HEAD') && staticExtensions.test(path) && env.ASSETS) {
       const assetResp = await env.ASSETS.fetch(req);
       if (assetResp.status === 200) {
-        const headers = addNoQuicHeaders(new Headers(assetResp.headers)); headers.set('Alt-Svc', 'clear');
+        const headers = new Headers(assetResp.headers); headers.set('Alt-Svc', 'clear');
         // Cache static assets aggressively
         if (!headers.has('Cache-Control')) {
           headers.set('Cache-Control', 'public, max-age=31536000, immutable');
@@ -1586,7 +1586,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
           // Serve these pages directly from assets
           if (env.ASSETS) {
             const assetResp = await env.ASSETS.fetch(new Request(new URL(path, req.url)));
-            const headers = addNoQuicHeaders(new Headers(assetResp.headers)); headers.set('Alt-Svc', 'clear');
+            const headers = new Headers(assetResp.headers); headers.set('Alt-Svc', 'clear');
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
             headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
@@ -1597,7 +1597,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
           // This includes: /admin, /admin/, /admin/dashboard.html, /admin/orders.html, etc.
           if (env.ASSETS) {
             const assetResp = await env.ASSETS.fetch(new Request(new URL('/admin/dashboard.html', req.url)));
-            const headers = addNoQuicHeaders(new Headers(assetResp.headers)); headers.set('Alt-Svc', 'clear');
+            const headers = new Headers(assetResp.headers); headers.set('Alt-Svc', 'clear');
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
             headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
@@ -1894,7 +1894,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               }
             }
             
-            const headers = addNoQuicHeaders(new Headers()); headers.set('Alt-Svc', 'clear');
+            const headers = new Headers(); headers.set('Alt-Svc', 'clear');
             headers.set('Content-Type', 'text/html; charset=utf-8');
             headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
             headers.set('X-Cache', 'MISS');
@@ -1941,7 +1941,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         }
         
         // For non-HTML or failed schema injection, just pass through with version header
-        const headers = addNoQuicHeaders(new Headers(assetResp.headers)); headers.set('Alt-Svc', 'clear');
+        const headers = new Headers(assetResp.headers); headers.set('Alt-Svc', 'clear');
         headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         headers.set('Pragma', 'no-cache');
         headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
@@ -1965,7 +1965,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
     }
   },
 
-  function addNoQuicHeaders(headers) {\n  headers.set('Alt-Svc', 'clear');\n  return headers;\n}\n\n// Scheduled handler for cron jobs
+  // Scheduled handler for cron jobs
   async scheduled(event, env, ctx) {
     console.log('Cron job started:', event.cron);
     
