@@ -706,20 +706,83 @@
         </section>
       `,
       products: `
-        <section style="padding:60px 20px;">
+        <section class="widget-section" style="padding:60px 20px;">
           <div style="max-width:1200px;margin:0 auto;">
             <h2 style="text-align:center;font-size:2rem;margin-bottom:40px;" contenteditable="true">Our Products</h2>
-            <div id="product-grid-widget" data-embed='{"type":"product"}'>
+            <div class="widget-config" style="background:#f0f9ff;border:2px dashed #3b82f6;border-radius:12px;padding:20px;margin-bottom:20px;">
+              <div style="display:flex;flex-wrap:wrap;gap:15px;align-items:center;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#1e40af;">
+                  📊 Layout:
+                  <select class="widget-layout" style="padding:8px 12px;border:2px solid #3b82f6;border-radius:6px;font-size:0.85rem;">
+                    <option value="grid">Grid</option>
+                    <option value="slider">Slider</option>
+                  </select>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#1e40af;">
+                  🔢 Columns:
+                  <select class="widget-columns" style="padding:8px 12px;border:2px solid #3b82f6;border-radius:6px;font-size:0.85rem;">
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                  </select>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#1e40af;">
+                  📦 Limit:
+                  <select class="widget-limit" style="padding:8px 12px;border:2px solid #3b82f6;border-radius:6px;font-size:0.85rem;">
+                    <option value="3">3</option>
+                    <option value="6" selected>6</option>
+                    <option value="9">9</option>
+                    <option value="12">12</option>
+                  </select>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#1e40af;">
+                  🏷️ Filter:
+                  <select class="widget-filter" style="padding:8px 12px;border:2px solid #3b82f6;border-radius:6px;font-size:0.85rem;">
+                    <option value="all">All Products</option>
+                    <option value="featured">Featured Only</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="product-widget-container" data-embed='{"type":"product","limit":6,"columns":3,"layout":"grid","filter":"all"}'>
               <p style="text-align:center;color:#6b7280;">Product cards will load here...</p>
             </div>
           </div>
         </section>
       `,
       blogs: `
-        <section style="padding:60px 20px;">
+        <section class="widget-section" style="padding:60px 20px;">
           <div style="max-width:1200px;margin:0 auto;">
             <h2 style="text-align:center;font-size:2rem;margin-bottom:40px;" contenteditable="true">Latest Blog Posts</h2>
-            <div id="blog-cards-widget" data-embed='{"type":"blog"}'>
+            <div class="widget-config" style="background:#f0fdf4;border:2px dashed #10b981;border-radius:12px;padding:20px;margin-bottom:20px;">
+              <div style="display:flex;flex-wrap:wrap;gap:15px;align-items:center;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#065f46;">
+                  📊 Layout:
+                  <select class="widget-layout" style="padding:8px 12px;border:2px solid #10b981;border-radius:6px;font-size:0.85rem;">
+                    <option value="grid">Grid</option>
+                    <option value="slider">Slider</option>
+                  </select>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#065f46;">
+                  🔢 Columns:
+                  <select class="widget-columns" style="padding:8px 12px;border:2px solid #10b981;border-radius:6px;font-size:0.85rem;">
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                  </select>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#065f46;">
+                  📦 Limit:
+                  <select class="widget-limit" style="padding:8px 12px;border:2px solid #10b981;border-radius:6px;font-size:0.85rem;">
+                    <option value="3">3</option>
+                    <option value="6" selected>6</option>
+                    <option value="9">9</option>
+                    <option value="12">12</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="blog-widget-container" data-embed='{"type":"blog","limit":6,"columns":3,"layout":"grid"}'>
               <p style="text-align:center;color:#6b7280;">Blog cards will load here...</p>
             </div>
           </div>
@@ -1028,19 +1091,95 @@
     }
 
     function initDynamicWidgets(wrapper) {
-      const productWidget = wrapper.querySelector('[data-embed*="product"]');
+      // Product widget
+      const productWidget = wrapper.querySelector('.product-widget-container[data-embed*="product"]');
       if (productWidget && typeof ProductCards !== 'undefined') {
         const containerId = 'pc-' + Date.now();
         productWidget.id = containerId;
-        setTimeout(() => ProductCards.render(containerId, { limit: 6, columns: 3 }), 100);
+        const config = getWidgetConfig(wrapper, 'product');
+        renderProductWidget(containerId, config);
+
+        // Listen for config changes
+        const configPanel = wrapper.querySelector('.widget-config');
+        if (configPanel) {
+          configPanel.querySelectorAll('select').forEach(sel => {
+            sel.addEventListener('change', () => {
+              const newConfig = getWidgetConfig(wrapper, 'product');
+              updateWidgetDataEmbed(productWidget, newConfig);
+              renderProductWidget(containerId, newConfig);
+            });
+          });
+        }
       }
 
-      const blogWidget = wrapper.querySelector('[data-embed*="blog"]');
+      // Blog widget
+      const blogWidget = wrapper.querySelector('.blog-widget-container[data-embed*="blog"]');
       if (blogWidget && typeof BlogCards !== 'undefined') {
         const containerId = 'bc-' + Date.now();
         blogWidget.id = containerId;
-        setTimeout(() => BlogCards.render(containerId, { limit: 6, columns: 3, showPagination: false }), 100);
+        const config = getWidgetConfig(wrapper, 'blog');
+        renderBlogWidget(containerId, config);
+
+        // Listen for config changes
+        const configPanel = wrapper.querySelector('.widget-config');
+        if (configPanel) {
+          configPanel.querySelectorAll('select').forEach(sel => {
+            sel.addEventListener('change', () => {
+              const newConfig = getWidgetConfig(wrapper, 'blog');
+              updateWidgetDataEmbed(blogWidget, newConfig);
+              renderBlogWidget(containerId, newConfig);
+            });
+          });
+        }
       }
+    }
+
+    function getWidgetConfig(wrapper, type) {
+      const configPanel = wrapper.querySelector('.widget-config');
+      if (!configPanel) return { limit: 6, columns: 3, layout: 'grid', filter: 'all' };
+
+      const layout = configPanel.querySelector('.widget-layout')?.value || 'grid';
+      const columns = parseInt(configPanel.querySelector('.widget-columns')?.value || '3');
+      const limit = parseInt(configPanel.querySelector('.widget-limit')?.value || '6');
+      const filter = configPanel.querySelector('.widget-filter')?.value || 'all';
+
+      return { type, limit, columns, layout, filter };
+    }
+
+    function updateWidgetDataEmbed(widget, config) {
+      widget.setAttribute('data-embed', JSON.stringify(config));
+    }
+
+    function renderProductWidget(containerId, config) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading products...</p>';
+
+      setTimeout(() => {
+        if (typeof ProductCards !== 'undefined') {
+          ProductCards.render(containerId, {
+            limit: config.limit,
+            columns: config.columns,
+            filter: config.filter
+          });
+        }
+      }, 100);
+    }
+
+    function renderBlogWidget(containerId, config) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading blogs...</p>';
+
+      setTimeout(() => {
+        if (typeof BlogCards !== 'undefined') {
+          BlogCards.render(containerId, {
+            limit: config.limit,
+            columns: config.columns,
+            showPagination: false
+          });
+        }
+      }, 100);
     }
 
     // Section Actions
@@ -1147,10 +1286,18 @@
         Array.from(wrapper.children).forEach(child => {
           if (!child.classList.contains('section-controls')) {
             const clone = child.cloneNode(true);
+            // Remove contenteditable
             clone.querySelectorAll('[contenteditable]').forEach(el => {
               el.removeAttribute('contenteditable');
               el.style.outline = '';
               el.style.outlineOffset = '';
+            });
+            // Remove widget-config panels (builder-only UI)
+            clone.querySelectorAll('.widget-config').forEach(el => el.remove());
+            // Clean up widget container IDs
+            clone.querySelectorAll('.product-widget-container, .blog-widget-container').forEach(el => {
+              el.removeAttribute('id');
+              el.innerHTML = ''; // Clear preview content
             });
             parts.push(clone.outerHTML);
           }
@@ -1201,14 +1348,26 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof ProductCards !== 'undefined') {
       var cid = 'pc-' + i + '-' + Date.now();
       el.id = cid;
-      ProductCards.render(cid, { limit: 6, columns: 3 });
+      var config = {limit:6,columns:3,filter:'all',layout:'grid'};
+      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
+      if (config.layout === 'slider') {
+        ProductCards.renderSlider ? ProductCards.renderSlider(cid, config) : ProductCards.render(cid, config);
+      } else {
+        ProductCards.render(cid, config);
+      }
     }
   });
   document.querySelectorAll('[data-embed*="blog"]').forEach(function(el, i) {
     if (typeof BlogCards !== 'undefined') {
       var cid = 'bc-' + i + '-' + Date.now();
       el.id = cid;
-      BlogCards.render(cid, { limit: 6, columns: 3, showPagination: false });
+      var config = {limit:6,columns:3,layout:'grid'};
+      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
+      if (config.layout === 'slider') {
+        BlogCards.renderSlider ? BlogCards.renderSlider(cid, config) : BlogCards.render(cid, config);
+      } else {
+        BlogCards.render(cid, {limit:config.limit,columns:config.columns,showPagination:false});
+      }
     }
   });
 });
@@ -1243,20 +1402,30 @@ document.addEventListener('DOMContentLoaded', function() {
       const previewWindow = window.open('', 'preview', 'width=1200,height=800');
       previewWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${title}</title><link rel="stylesheet" href="/css/style.css"><script src="/js/product-cards.js"><\/script><script src="/js/blog-cards.js"><\/script></head><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${html}<script>
 document.addEventListener('DOMContentLoaded', function() {
-  // Initialize product widgets
   document.querySelectorAll('[data-embed*="product"]').forEach(function(el, i) {
     if (typeof ProductCards !== 'undefined') {
       var cid = 'pc-preview-' + i;
       el.id = cid;
-      ProductCards.render(cid, { limit: 6, columns: 3 });
+      var config = {limit:6,columns:3,filter:'all',layout:'grid'};
+      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
+      if (config.layout === 'slider') {
+        ProductCards.renderSlider ? ProductCards.renderSlider(cid, config) : ProductCards.render(cid, config);
+      } else {
+        ProductCards.render(cid, config);
+      }
     }
   });
-  // Initialize blog widgets
   document.querySelectorAll('[data-embed*="blog"]').forEach(function(el, i) {
     if (typeof BlogCards !== 'undefined') {
       var cid = 'bc-preview-' + i;
       el.id = cid;
-      BlogCards.render(cid, { limit: 6, columns: 3, showPagination: false });
+      var config = {limit:6,columns:3,layout:'grid'};
+      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
+      if (config.layout === 'slider') {
+        BlogCards.renderSlider ? BlogCards.renderSlider(cid, config) : BlogCards.render(cid, config);
+      } else {
+        BlogCards.render(cid, {limit:config.limit,columns:config.columns,showPagination:false});
+      }
     }
   });
 });
