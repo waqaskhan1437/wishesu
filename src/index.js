@@ -1297,7 +1297,7 @@ if (isLoginRoute && method === 'GET') {
 
   if (env.ASSETS) {
     const r = await env.ASSETS.fetch(new Request(new URL('/admin/login.html', req.url)));
-    const h = new Headers(r.headers);
+    const h = new Headers(r.headers);\n    h.set('Alt-Svc', 'clear');
     h.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     h.set('Pragma', 'no-cache');
     return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
@@ -1374,12 +1374,12 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
     if ((method === 'GET' || method === 'HEAD') && staticExtensions.test(path) && env.ASSETS) {
       const assetResp = await env.ASSETS.fetch(req);
       if (assetResp.status === 200) {
-        const headers = new Headers(assetResp.headers);
+        const headers = new Headers(assetResp.headers);\n    headers.set('Alt-Svc', 'clear');
         // Cache static assets aggressively
         if (!headers.has('Cache-Control')) {
           headers.set('Cache-Control', 'public, max-age=31536000, immutable');
         }
-        headers.set('X-Worker-Version', VERSION);
+        headers.set('X-Worker-Version', VERSION);\n        headers.set('Alt-Svc', 'clear');
         return new Response(assetResp.body, { status: 200, headers });
       }
       // If not found, fall through to normal processing
@@ -1586,10 +1586,10 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
           // Serve these pages directly from assets
           if (env.ASSETS) {
             const assetResp = await env.ASSETS.fetch(new Request(new URL(path, req.url)));
-            const headers = new Headers(assetResp.headers);
+            const headers = new Headers(assetResp.headers);\n    headers.set('Alt-Svc', 'clear');
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
-            headers.set('X-Worker-Version', VERSION);
+            headers.set('X-Worker-Version', VERSION);\n        headers.set('Alt-Svc', 'clear');
             return new Response(assetResp.body, { status: assetResp.status, headers });
           }
         } else {
@@ -1597,10 +1597,10 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
           // This includes: /admin, /admin/, /admin/dashboard.html, /admin/orders.html, etc.
           if (env.ASSETS) {
             const assetResp = await env.ASSETS.fetch(new Request(new URL('/admin/dashboard.html', req.url)));
-            const headers = new Headers(assetResp.headers);
+            const headers = new Headers(assetResp.headers);\n    headers.set('Alt-Svc', 'clear');
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
-            headers.set('X-Worker-Version', VERSION);
+            headers.set('X-Worker-Version', VERSION);\n        headers.set('Alt-Svc', 'clear');
             return new Response(assetResp.body, { status: assetResp.status, headers });
           }
         }
@@ -1777,7 +1777,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             if (cachedResponse) {
               const headers = new Headers(cachedResponse.headers);
               headers.set('X-Cache', 'HIT');
-              headers.set('X-Worker-Version', VERSION);
+              headers.set('X-Worker-Version', VERSION);\n        headers.set('Alt-Svc', 'clear');
               return new Response(cachedResponse.body, { 
                 status: cachedResponse.status, 
                 headers 
@@ -1894,9 +1894,9 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               }
             }
             
-            const headers = new Headers();
+            const headers = new Headers();\n    headers.set('Alt-Svc', 'clear');
             headers.set('Content-Type', 'text/html; charset=utf-8');
-            headers.set('X-Worker-Version', VERSION);
+            headers.set('X-Worker-Version', VERSION);\n        headers.set('Alt-Svc', 'clear');
             headers.set('X-Cache', 'MISS');
 
             // Apply Robots + Canonical (admin controlled)
@@ -1941,10 +1941,10 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         }
         
         // For non-HTML or failed schema injection, just pass through with version header
-        const headers = new Headers(assetResp.headers);
+        const headers = new Headers(assetResp.headers);\n    headers.set('Alt-Svc', 'clear');
         headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         headers.set('Pragma', 'no-cache');
-        headers.set('X-Worker-Version', VERSION);
+        headers.set('X-Worker-Version', VERSION);\n        headers.set('Alt-Svc', 'clear');
         
         return new Response(assetResp.body, { status: assetResp.status, headers });
       }
