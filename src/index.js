@@ -1424,11 +1424,12 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       if ((method === 'GET' || method === 'HEAD') && (path === '/product' || path.startsWith('/product/') || path.startsWith('/product-'))) {
         // BOT PROTECTION: Quick Regex Validation to prevent DB hits for invalid URLs
         // Valid patterns: /product, /product/slug, /product-123, /product-123/slug
+        // Adjusted regex to allow any characters in slug (encoded, unicode, etc)
         const isValidFormat =
           path === '/product' ||
           path === '/product/' ||
-          /^\/product\/[a-zA-Z0-9_-]+$/.test(path) ||
-          /^\/product-\d+(\/[a-zA-Z0-9_-]*)?$/.test(path);
+          /^\/product\/[^/]+$/.test(path) ||
+          /^\/product-\d+(\/.*)?$/.test(path);
 
         if (!isValidFormat) {
           return new Response('Not found', { status: 404 });
