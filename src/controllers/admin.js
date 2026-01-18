@@ -592,7 +592,7 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
   // If fetch failed, try redirecting to source
   if (!fileResp.ok) {
     console.log('Proxy failed (' + fileResp.status + '), redirecting to source...');
-    return Response.redirect(sourceUrl, 302);
+    if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1' && url.port !== '5000') {\n    return Response.redirect(sourceUrl, 302);\n  }
   }
 
   // Determine filename from URL
@@ -640,7 +640,7 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
   }
 
   // Fallback for responses without body
-  return Response.redirect(sourceUrl, 302);
+  if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1' && url.port !== '5000') {\n    return Response.redirect(sourceUrl, 302);\n  }
 }
 
 /**

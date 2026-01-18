@@ -251,7 +251,7 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
     (lowered.includes('archive.org/details/') && !lowered.includes('/download/'));
 
   if (openOnly) {
-    return Response.redirect(sourceUrl, 302);
+    if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1' && url.port !== '5000') {\n    return Response.redirect(sourceUrl, 302);\n  }
   }
 
   const fileResp = await fetch(sourceUrl);

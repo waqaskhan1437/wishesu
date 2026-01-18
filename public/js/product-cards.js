@@ -195,11 +195,12 @@
           <span class="delivery-text">${deliveryText}</span>
         </div>
       `;
+      // OPTIMIZED: Use anchor tag for navigation instead of onclick (faster & better SEO)
       return `
-        <div class="product-card" data-product-id="${id}" onclick="window.location.href='${productUrl}'">
+        <a href="${productUrl}" class="product-card" data-product-id="${id}" style="text-decoration:none; color:inherit; display:block;">
           <!-- Thumbnail -->
           <div class="product-thumbnail">
-            <img src="${thumbnail_url || '/placeholder.jpg'}" alt="${title}">
+            <img src="${thumbnail_url || '/placeholder.jpg'}" alt="${title}" loading="lazy">
             ${hasDiscount ? `<div class="discount-badge">${discount}% OFF</div>` : ''}
           </div>
 
@@ -217,12 +218,12 @@
             <!-- Delivery Info -->
             ${showDelivery ? deliveryHtml : ''}
 
-            <!-- Book Now Button -->
-            <button class="book-now-btn" onclick="event.stopPropagation(); window.location.href='${productUrl}'">
+            <!-- Book Now Button (Styled div inside anchor) -->
+            <div class="book-now-btn">
               Book Now
-            </button>
+            </div>
           </div>
-        </div>
+        </a>
       `;
     },
 
