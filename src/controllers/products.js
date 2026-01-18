@@ -383,7 +383,7 @@ export async function handleProductRouting(env, url, path) {
         } catch (e) {}
       }
       const canonical = `/product-${p.id}/${encodeURIComponent(slug)}`;
-      if (!isDevMode) {\n        return Response.redirect(`${url.origin}${canonical}`, 301);\n      }
+      return Response.redirect(`${url.origin}${canonical}`, 301);
     }
   }
 
@@ -399,7 +399,7 @@ export async function handleProductRouting(env, url, path) {
         } catch (e) {}
       }
       const canonical = `/product-${row.id}/${encodeURIComponent(canonicalSlug)}`;
-      if (!isDevMode) {\n        return Response.redirect(`${url.origin}${canonical}`, 301);\n      }
+      return Response.redirect(`${url.origin}${canonical}`, 301);
     }
   }
 
