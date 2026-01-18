@@ -748,11 +748,19 @@
                   <select class="widget-filter" style="padding:8px 12px;border:2px solid #3b82f6;border-radius:6px;font-size:0.85rem;">
                     <option value="all">All Products</option>
                     <option value="featured">Featured Only</option>
+                    <option value="custom">Custom IDs</option>
                   </select>
                 </label>
               </div>
+              <div class="widget-custom-ids" style="display:none;margin-top:15px;">
+                <label style="font-size:0.9rem;font-weight:600;color:#1e40af;display:block;margin-bottom:8px;">
+                  🎯 Product IDs (comma separated):
+                </label>
+                <input type="text" class="widget-ids-input" placeholder="e.g. 1, 2, 5, 10 or product-slug-1, product-slug-2" style="width:100%;padding:10px;border:2px solid #3b82f6;border-radius:6px;font-size:0.85rem;">
+                <small style="color:#6b7280;display:block;margin-top:5px;">Enter product IDs or slugs separated by commas</small>
+              </div>
             </div>
-            <div class="product-widget-container" data-embed='{"type":"product","limit":6,"columns":3,"layout":"grid","filter":"all"}'>
+            <div class="product-widget-container" data-embed='{"type":"product","limit":6,"columns":3,"layout":"grid","filter":"all","ids":[]}'>
               <p style="text-align:center;color:#6b7280;">Product cards will load here...</p>
             </div>
           </div>
@@ -790,9 +798,23 @@
                   </select>
                   <input type="number" class="widget-limit-custom" min="1" max="50" placeholder="e.g. 20" style="display:none;width:70px;padding:8px;border:2px solid #10b981;border-radius:6px;font-size:0.85rem;">
                 </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#065f46;">
+                  🏷️ Filter:
+                  <select class="widget-filter" style="padding:8px 12px;border:2px solid #10b981;border-radius:6px;font-size:0.85rem;">
+                    <option value="all">All Blogs</option>
+                    <option value="custom">Custom IDs</option>
+                  </select>
+                </label>
+              </div>
+              <div class="widget-custom-ids" style="display:none;margin-top:15px;">
+                <label style="font-size:0.9rem;font-weight:600;color:#065f46;display:block;margin-bottom:8px;">
+                  🎯 Blog IDs (comma separated):
+                </label>
+                <input type="text" class="widget-ids-input" placeholder="e.g. 1, 2, 5 or blog-slug-1, blog-slug-2" style="width:100%;padding:10px;border:2px solid #10b981;border-radius:6px;font-size:0.85rem;">
+                <small style="color:#6b7280;display:block;margin-top:5px;">Enter blog IDs or slugs separated by commas</small>
               </div>
             </div>
-            <div class="blog-widget-container" data-embed='{"type":"blog","limit":6,"columns":3,"layout":"grid"}'>
+            <div class="blog-widget-container" data-embed='{"type":"blog","limit":6,"columns":3,"layout":"grid","filter":"all","ids":[]}'>
               <p style="text-align:center;color:#6b7280;">Blog cards will load here...</p>
             </div>
           </div>
@@ -1167,25 +1189,46 @@
         }
       }
 
-      return { type, limit, columns, layout, filter };
+      // Handle custom IDs
+      const idsInput = configPanel.querySelector('.widget-ids-input');
+      let ids = [];
+      if (filter === 'custom' && idsInput && idsInput.value.trim()) {
+        ids = idsInput.value.split(',').map(id => id.trim()).filter(id => id);
+      }
+
+      return { type, limit, columns, layout, filter, ids };
     }
 
     function setupLimitCustomInput(wrapper) {
       const configPanel = wrapper.querySelector('.widget-config');
       if (!configPanel) return;
 
+      // Limit custom input toggle
       const limitSelect = configPanel.querySelector('.widget-limit-select');
       const limitCustom = configPanel.querySelector('.widget-limit-custom');
-      if (!limitSelect || !limitCustom) return;
+      if (limitSelect && limitCustom) {
+        limitSelect.addEventListener('change', function() {
+          if (this.value === 'custom') {
+            limitCustom.style.display = 'block';
+            limitCustom.focus();
+          } else {
+            limitCustom.style.display = 'none';
+          }
+        });
+      }
 
-      limitSelect.addEventListener('change', function() {
-        if (this.value === 'custom') {
-          limitCustom.style.display = 'block';
-          limitCustom.focus();
-        } else {
-          limitCustom.style.display = 'none';
-        }
-      });
+      // Filter custom IDs toggle
+      const filterSelect = configPanel.querySelector('.widget-filter');
+      const customIdsDiv = configPanel.querySelector('.widget-custom-ids');
+      if (filterSelect && customIdsDiv) {
+        filterSelect.addEventListener('change', function() {
+          if (this.value === 'custom') {
+            customIdsDiv.style.display = 'block';
+          } else {
+            customIdsDiv.style.display = 'none';
+          }
+        });
+      }
     }
 
     function updateWidgetDataEmbed(widget, config) {
@@ -1199,17 +1242,16 @@
 
       setTimeout(() => {
         if (typeof ProductCards !== 'undefined') {
+          const opts = {
+            limit: config.limit,
+            columns: config.columns,
+            filter: config.filter,
+            ids: config.ids || []
+          };
           if (config.layout === 'slider' && ProductCards.renderSlider) {
-            ProductCards.renderSlider(containerId, {
-              limit: config.limit,
-              filter: config.filter
-            });
+            ProductCards.renderSlider(containerId, opts);
           } else {
-            ProductCards.render(containerId, {
-              limit: config.limit,
-              columns: config.columns,
-              filter: config.filter
-            });
+            ProductCards.render(containerId, opts);
           }
         }
       }, 100);
@@ -1222,16 +1264,16 @@
 
       setTimeout(() => {
         if (typeof BlogCards !== 'undefined') {
+          const opts = {
+            limit: config.limit,
+            columns: config.columns,
+            showPagination: false,
+            ids: config.ids || []
+          };
           if (config.layout === 'slider' && BlogCards.renderSlider) {
-            BlogCards.renderSlider(containerId, {
-              limit: config.limit
-            });
+            BlogCards.renderSlider(containerId, opts);
           } else {
-            BlogCards.render(containerId, {
-              limit: config.limit,
-              columns: config.columns,
-              showPagination: false
-            });
+            BlogCards.render(containerId, opts);
           }
         }
       }, 100);

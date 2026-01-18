@@ -28,8 +28,14 @@
       try {
         const res = await fetch(`/api/blogs/published?page=${page}&limit=${limit}`);
         const data = await res.json();
-        const blogs = data.blogs || [];
+        let blogs = data.blogs || [];
         const pagination = data.pagination || {};
+
+        // Filter by custom IDs if provided
+        if (options.ids && Array.isArray(options.ids) && options.ids.length > 0) {
+          const idSet = new Set(options.ids.map(x => String(x).trim()));
+          blogs = blogs.filter(b => idSet.has(String(b.id)) || idSet.has(String(b.slug)));
+        }
 
         if (!blogs || blogs.length === 0) {
           container.innerHTML = '<p style="text-align:center;padding:60px 20px;color:#6b7280;font-size:1.1rem;">No blog posts found.</p>';
@@ -423,7 +429,13 @@
       try {
         const res = await fetch(`/api/blogs/published?limit=${options.limit || 6}`);
         const data = await res.json();
-        const blogs = data.blogs || [];
+        let blogs = data.blogs || [];
+
+        // Filter by custom IDs if provided
+        if (options.ids && Array.isArray(options.ids) && options.ids.length > 0) {
+          const idSet = new Set(options.ids.map(x => String(x).trim()));
+          blogs = blogs.filter(b => idSet.has(String(b.id)) || idSet.has(String(b.slug)));
+        }
 
         if (blogs.length === 0) {
           container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No blog posts found.</p>';

@@ -559,7 +559,13 @@
 
         const res = await fetch(url);
         const data = await res.json();
-        const products = data.products || [];
+        let products = data.products || [];
+
+        // Filter by custom IDs if provided
+        if (options.ids && Array.isArray(options.ids) && options.ids.length > 0) {
+          const idSet = new Set(options.ids.map(x => String(x).trim()));
+          products = products.filter(p => idSet.has(String(p.id)) || idSet.has(String(p.slug)));
+        }
 
         if (products.length === 0) {
           container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No products found.</p>';
