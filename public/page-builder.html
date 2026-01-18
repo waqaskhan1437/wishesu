@@ -501,6 +501,17 @@
           <label>Meta Description</label>
           <textarea id="seo-desc" placeholder="Brief description for search engines..."></textarea>
         </div>
+        <div class="form-group">
+          <label>🖼️ Feature Image</label>
+          <div style="display:flex;gap:8px;">
+            <input type="url" id="feature_image_url" placeholder="https://..." style="flex:1;padding:10px;border:2px solid var(--border);border-radius:8px;">
+            <label for="feature-image-file" style="cursor:pointer;padding:10px 16px;background:var(--primary);color:white;border-radius:8px;font-weight:600;">📤 Upload</label>
+            <input type="file" id="feature-image-file" accept="image/*" style="display:none;">
+          </div>
+          <div id="feature-preview" style="margin-top:8px;max-height:100px;overflow:hidden;border-radius:8px;display:none;"></div>
+          <small>URL or auto-upload to R2 (10MB max).</small>
+        </div>
+        </div>
       </div>
       
       <!-- Page Type -->
@@ -573,6 +584,7 @@
 
   <script src="/js/product-cards.js"></script>
   <script src="/js/blog-cards.js"></script>
+  <script src="/js/instant-upload.js"></script>
   <script>
     // State
     let currentPageType = 'custom';
@@ -859,6 +871,27 @@
       const params = new URLSearchParams(window.location.search);
       const editPage = params.get('edit');
       if (editPage) loadExistingPage(editPage);
+    });
+
+    // Feature image preview
+    document.getElementById('feature-image-file').addEventListener('change', function() {
+      const preview = document.getElementById('feature-preview');
+      const urlInput = document.getElementById('feature_image_url');
+      if (this.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          preview.innerHTML = `<img src="${e.target.result}" style="width:80px;height:60px;object-fit:cover;border-radius:6px;">`;
+          preview.style.display = 'block';
+        };
+        reader.readAsDataURL(this.files[0]);
+      }
+    });
+    document.getElementById('feature_image_url').addEventListener('input', function() {
+      const preview = document.getElementById('feature-preview');
+      if (this.value) {
+        preview.innerHTML = `<img src="${this.value}" style="width:80px;height:60px;object-fit:cover;border-radius:6px;" onerror="this.style.display='none';">`;
+        preview.style.display = 'block';
+      } else { preview.style.display = 'none'; }
     });
 
     // Load Template

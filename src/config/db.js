@@ -242,7 +242,7 @@ export async function initDB(env) {
 async function runPagesMigration(env) {
   const pagesMigrations = [
     { column: 'page_type', type: "TEXT DEFAULT 'custom'" },
-    { column: 'is_default', type: 'INTEGER DEFAULT 0' }
+    { column: 'is_default', type: 'INTEGER DEFAULT 0' },\n    { column: 'feature_image_url', type: 'TEXT' }
   ];
   
   for (const m of pagesMigrations) {
