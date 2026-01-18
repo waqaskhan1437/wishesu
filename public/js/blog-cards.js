@@ -317,7 +317,7 @@
           .blog-cards-grid {
             grid-template-columns: 1fr !important;
           }
-          
+
           .page-numbers {
             order: 3;
             width: 100%;
@@ -325,10 +325,190 @@
             margin-top: 10px;
           }
         }
+
+        /* Blog Slider Styles */
+        .blog-slider-wrapper {
+          position: relative;
+          max-width: 1200px;
+          margin: 0 auto;
+          overflow: hidden;
+        }
+        .blog-slider-track {
+          display: flex;
+          gap: 20px;
+          transition: transform 0.4s ease;
+          padding: 10px 0;
+        }
+        .blog-slider-track .blog-card {
+          flex: 0 0 calc(33.333% - 14px);
+          min-width: calc(33.333% - 14px);
+        }
+        .blog-slider-btn {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 44px;
+          height: 44px;
+          background: white;
+          border: 2px solid #e5e7eb;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 1.2rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10;
+          transition: all 0.2s;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .blog-slider-btn:hover {
+          background: #10b981;
+          color: white;
+          border-color: #10b981;
+        }
+        .blog-slider-btn.prev { left: -22px; }
+        .blog-slider-btn.next { right: -22px; }
+        .blog-slider-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .blog-slider-dots {
+          display: flex;
+          justify-content: center;
+          gap: 8px;
+          margin-top: 20px;
+        }
+        .blog-slider-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: #d1d5db;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .blog-slider-dot.active {
+          background: #10b981;
+          transform: scale(1.2);
+        }
+        @media (max-width: 900px) {
+          .blog-slider-track .blog-card {
+            flex: 0 0 calc(50% - 10px);
+            min-width: calc(50% - 10px);
+          }
+        }
+        @media (max-width: 600px) {
+          .blog-slider-track .blog-card {
+            flex: 0 0 100%;
+            min-width: 100%;
+          }
+          .blog-slider-btn { display: none; }
+        }
       `;
       document.head.appendChild(style);
+    },
+
+    // Render slider layout
+    renderSlider: async function(containerId, options = {}) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      container.innerHTML = '<p style="text-align:center;padding:20px;color:#6b7280;">Loading...</p>';
+      this.addStyles();
+
+      try {
+        const res = await fetch(`/api/blogs/published?limit=${options.limit || 6}`);
+        const data = await res.json();
+        const blogs = data.blogs || [];
+
+        if (blogs.length === 0) {
+          container.innerHTML = '<p style="text-align:center;padding:40px;color:#6b7280;">No blog posts found.</p>';
+          return;
+        }
+
+        const visibleCount = this.getVisibleCount();
+        const totalSlides = Math.ceil(blogs.length / visibleCount);
+
+        container.innerHTML = `
+          <div class="blog-slider-wrapper">
+            <button class="blog-slider-btn prev" onclick="BlogCards.slideMove('${containerId}', -1)">❮</button>
+            <div class="blog-slider-track" data-slide="0" data-total="${totalSlides}" data-visible="${visibleCount}">
+              ${blogs.map(b => this.renderCard(b)).join('')}
+            </div>
+            <button class="blog-slider-btn next" onclick="BlogCards.slideMove('${containerId}', 1)">❯</button>
+          </div>
+          <div class="blog-slider-dots">
+            ${Array.from({length: totalSlides}, (_, i) => `<button class="blog-slider-dot${i === 0 ? ' active' : ''}" onclick="BlogCards.slideTo('${containerId}', ${i})"></button>`).join('')}
+          </div>
+        `;
+
+        this.updateSliderButtons(containerId);
+      } catch (err) {
+        container.innerHTML = '<p style="text-align:center;color:#ef4444;">Error loading blogs</p>';
+      }
+    },
+
+    getVisibleCount: function() {
+      if (window.innerWidth <= 600) return 1;
+      if (window.innerWidth <= 900) return 2;
+      return 3;
+    },
+
+    slideMove: function(containerId, direction) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const track = container.querySelector('.blog-slider-track');
+      if (!track) return;
+
+      let current = parseInt(track.dataset.slide) || 0;
+      const total = parseInt(track.dataset.total) || 1;
+      current += direction;
+      if (current < 0) current = 0;
+      if (current >= total) current = total - 1;
+
+      this.slideTo(containerId, current);
+    },
+
+    slideTo: function(containerId, index) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const track = container.querySelector('.blog-slider-track');
+      if (!track) return;
+
+      const cards = track.querySelectorAll('.blog-card');
+      if (cards.length === 0) return;
+
+      const visible = this.getVisibleCount();
+      const cardWidth = cards[0].offsetWidth + 20; // including gap
+      const offset = index * visible * cardWidth;
+
+      track.style.transform = `translateX(-${offset}px)`;
+      track.dataset.slide = index;
+
+      // Update dots
+      container.querySelectorAll('.blog-slider-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === index);
+      });
+
+      this.updateSliderButtons(containerId);
+    },
+
+    updateSliderButtons: function(containerId) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const track = container.querySelector('.blog-slider-track');
+      if (!track) return;
+
+      const current = parseInt(track.dataset.slide) || 0;
+      const total = parseInt(track.dataset.total) || 1;
+
+      const prevBtn = container.querySelector('.blog-slider-btn.prev');
+      const nextBtn = container.querySelector('.blog-slider-btn.next');
+
+      if (prevBtn) prevBtn.disabled = current === 0;
+      if (nextBtn) nextBtn.disabled = current >= total - 1;
     }
   };
 
-  
+
 })();

@@ -1157,11 +1157,18 @@
 
       setTimeout(() => {
         if (typeof ProductCards !== 'undefined') {
-          ProductCards.render(containerId, {
-            limit: config.limit,
-            columns: config.columns,
-            filter: config.filter
-          });
+          if (config.layout === 'slider' && ProductCards.renderSlider) {
+            ProductCards.renderSlider(containerId, {
+              limit: config.limit,
+              filter: config.filter
+            });
+          } else {
+            ProductCards.render(containerId, {
+              limit: config.limit,
+              columns: config.columns,
+              filter: config.filter
+            });
+          }
         }
       }, 100);
     }
@@ -1173,11 +1180,17 @@
 
       setTimeout(() => {
         if (typeof BlogCards !== 'undefined') {
-          BlogCards.render(containerId, {
-            limit: config.limit,
-            columns: config.columns,
-            showPagination: false
-          });
+          if (config.layout === 'slider' && BlogCards.renderSlider) {
+            BlogCards.renderSlider(containerId, {
+              limit: config.limit
+            });
+          } else {
+            BlogCards.render(containerId, {
+              limit: config.limit,
+              columns: config.columns,
+              showPagination: false
+            });
+          }
         }
       }, 100);
     }
