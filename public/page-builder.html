@@ -632,6 +632,12 @@
       </div>
       <div class="modal-body">
         <textarea id="code-editor" placeholder="Enter your HTML code..."></textarea>
+        <div style="margin-top:15px;padding:12px;background:#fef3c7;border-radius:8px;font-size:0.85rem;">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="preserve-custom-code" checked style="width:18px;height:18px;">
+            <span><strong>Preserve Custom Code</strong> - Uncheck to re-render product/blog widgets from API</span>
+          </label>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeCodeModal()">Cancel</button>
@@ -1272,9 +1278,23 @@
     function saveCode() {
       if (!editingSection) return;
       const code = document.getElementById('code-editor').value;
+      const preserveCustomCode = document.getElementById('preserve-custom-code').checked;
+
       editingSection.innerHTML = code + createControls();
       enableEditing(editingSection);
-      initDynamicWidgets(editingSection);
+
+      // Only re-init widgets if user unchecked "Preserve Custom Code"
+      // OR if there's a widget-config panel that needs event listeners
+      if (!preserveCustomCode) {
+        initDynamicWidgets(editingSection);
+      } else {
+        // Still setup event listeners for widget-config if present
+        const hasWidgetConfig = editingSection.querySelector('.widget-config');
+        if (hasWidgetConfig) {
+          setupLimitCustomInput(editingSection);
+        }
+      }
+
       closeCodeModal();
     }
 
