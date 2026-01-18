@@ -205,7 +205,66 @@
       transition: all 0.15s;
     }
     .section-controls button:hover { background: #374151; transform: scale(1.05); }
-    
+
+    /* Product & Blog Cards inside builder canvas */
+    #builder-canvas .product-cards-grid,
+    #builder-canvas .blog-cards-grid {
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: 20px !important;
+      max-width: 100% !important;
+    }
+    #builder-canvas .product-card,
+    #builder-canvas .blog-card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #builder-canvas .product-thumbnail,
+    #builder-canvas .blog-thumbnail {
+      aspect-ratio: 16/9;
+      overflow: hidden;
+      background: #f3f4f6;
+    }
+    #builder-canvas .product-thumbnail img,
+    #builder-canvas .blog-thumbnail img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    #builder-canvas .product-content,
+    #builder-canvas .blog-content {
+      padding: 15px;
+    }
+    #builder-canvas .product-title,
+    #builder-canvas .blog-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 0 0 8px 0;
+      color: #1f2937;
+    }
+    #builder-canvas .book-now-btn,
+    #builder-canvas .blog-read-more {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-top: 10px;
+    }
+    @media (max-width: 1200px) {
+      #builder-canvas .product-cards-grid,
+      #builder-canvas .blog-cards-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+      }
+    }
+
     /* Right Sidebar - Settings */
     .sidebar-right {
       width: 250px;
@@ -973,14 +1032,14 @@
       if (productWidget && typeof ProductCards !== 'undefined') {
         const containerId = 'pc-' + Date.now();
         productWidget.id = containerId;
-        setTimeout(() => ProductCards.render(containerId, { limit: 6 }), 100);
+        setTimeout(() => ProductCards.render(containerId, { limit: 6, columns: 3 }), 100);
       }
-      
+
       const blogWidget = wrapper.querySelector('[data-embed*="blog"]');
       if (blogWidget && typeof BlogCards !== 'undefined') {
         const containerId = 'bc-' + Date.now();
         blogWidget.id = containerId;
-        setTimeout(() => BlogCards.render(containerId, { limit: 6 }), 100);
+        setTimeout(() => BlogCards.render(containerId, { limit: 6, columns: 3, showPagination: false }), 100);
       }
     }
 
