@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx wrangler deploy)",
+      "Bash(node -e:*)",
+      "Bash(cat:*)",
+      "Bash(del \"C:\\\\Users\\\\waqas\\\\Downloads\\\\wishesu-users-fix\\\\wishesu-main\\\\public\\\\js\\\\product.js\" \"C:\\\\Users\\\\waqas\\\\Downloads\\\\wishesu-users-fix\\\\wishesu-main\\\\public\\\\js\\\\product-addons.js\")",
+      "WebFetch(domain:wishesu1.waqaskhan1437.workers.dev)"
+    ]
+  }
+}
