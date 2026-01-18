@@ -458,10 +458,13 @@
         }
 
         /* Slider Styles */
-        .product-slider-wrapper {
+        .product-slider-container {
           position: relative;
           max-width: 1200px;
           margin: 0 auto;
+          padding: 0 50px;
+        }
+        .product-slider-wrapper {
           overflow: hidden;
         }
         .product-slider-track {
@@ -492,13 +495,13 @@
           transition: all 0.2s;
           box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-        .product-slider-btn:hover {
+        .product-slider-btn:hover:not(:disabled) {
           background: #667eea;
           color: white;
           border-color: #667eea;
         }
-        .product-slider-btn.prev { left: -22px; }
-        .product-slider-btn.next { right: -22px; }
+        .product-slider-btn.prev { left: 0; }
+        .product-slider-btn.next { right: 0; }
         .product-slider-btn:disabled {
           opacity: 0.4;
           cursor: not-allowed;
@@ -529,6 +532,7 @@
           }
         }
         @media (max-width: 600px) {
+          .product-slider-container { padding: 0 10px; }
           .product-slider-track .product-card {
             flex: 0 0 100%;
             min-width: 100%;
@@ -566,10 +570,12 @@
         const totalSlides = Math.ceil(products.length / visibleCount);
 
         container.innerHTML = `
-          <div class="product-slider-wrapper">
+          <div class="product-slider-container">
             <button class="product-slider-btn prev" onclick="ProductCards.slideMove('${containerId}', -1)">❮</button>
-            <div class="product-slider-track" data-slide="0" data-total="${totalSlides}" data-visible="${visibleCount}">
-              ${products.map(p => this.renderCard(p, options)).join('')}
+            <div class="product-slider-wrapper">
+              <div class="product-slider-track" data-slide="0" data-total="${totalSlides}" data-visible="${visibleCount}">
+                ${products.map(p => this.renderCard(p, options)).join('')}
+              </div>
             </div>
             <button class="product-slider-btn next" onclick="ProductCards.slideMove('${containerId}', 1)">❯</button>
           </div>

@@ -327,10 +327,13 @@
         }
 
         /* Blog Slider Styles */
-        .blog-slider-wrapper {
+        .blog-slider-container {
           position: relative;
           max-width: 1200px;
           margin: 0 auto;
+          padding: 0 50px;
+        }
+        .blog-slider-wrapper {
           overflow: hidden;
         }
         .blog-slider-track {
@@ -361,13 +364,13 @@
           transition: all 0.2s;
           box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-        .blog-slider-btn:hover {
+        .blog-slider-btn:hover:not(:disabled) {
           background: #10b981;
           color: white;
           border-color: #10b981;
         }
-        .blog-slider-btn.prev { left: -22px; }
-        .blog-slider-btn.next { right: -22px; }
+        .blog-slider-btn.prev { left: 0; }
+        .blog-slider-btn.next { right: 0; }
         .blog-slider-btn:disabled {
           opacity: 0.4;
           cursor: not-allowed;
@@ -398,6 +401,7 @@
           }
         }
         @media (max-width: 600px) {
+          .blog-slider-container { padding: 0 10px; }
           .blog-slider-track .blog-card {
             flex: 0 0 100%;
             min-width: 100%;
@@ -430,10 +434,12 @@
         const totalSlides = Math.ceil(blogs.length / visibleCount);
 
         container.innerHTML = `
-          <div class="blog-slider-wrapper">
+          <div class="blog-slider-container">
             <button class="blog-slider-btn prev" onclick="BlogCards.slideMove('${containerId}', -1)">❮</button>
-            <div class="blog-slider-track" data-slide="0" data-total="${totalSlides}" data-visible="${visibleCount}">
-              ${blogs.map(b => this.renderCard(b)).join('')}
+            <div class="blog-slider-wrapper">
+              <div class="blog-slider-track" data-slide="0" data-total="${totalSlides}" data-visible="${visibleCount}">
+                ${blogs.map(b => this.renderCard(b)).join('')}
+              </div>
             </div>
             <button class="blog-slider-btn next" onclick="BlogCards.slideMove('${containerId}', 1)">❯</button>
           </div>

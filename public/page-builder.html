@@ -728,12 +728,14 @@
                 </label>
                 <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#1e40af;">
                   📦 Limit:
-                  <select class="widget-limit" style="padding:8px 12px;border:2px solid #3b82f6;border-radius:6px;font-size:0.85rem;">
+                  <select class="widget-limit-select" style="padding:8px 12px;border:2px solid #3b82f6;border-radius:6px;font-size:0.85rem;">
                     <option value="3">3</option>
                     <option value="6" selected>6</option>
                     <option value="9">9</option>
                     <option value="12">12</option>
+                    <option value="custom">Custom</option>
                   </select>
+                  <input type="number" class="widget-limit-custom" min="1" max="50" placeholder="e.g. 20" style="display:none;width:70px;padding:8px;border:2px solid #3b82f6;border-radius:6px;font-size:0.85rem;">
                 </label>
                 <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#1e40af;">
                   🏷️ Filter:
@@ -773,12 +775,14 @@
                 </label>
                 <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#065f46;">
                   📦 Limit:
-                  <select class="widget-limit" style="padding:8px 12px;border:2px solid #10b981;border-radius:6px;font-size:0.85rem;">
+                  <select class="widget-limit-select" style="padding:8px 12px;border:2px solid #10b981;border-radius:6px;font-size:0.85rem;">
                     <option value="3">3</option>
                     <option value="6" selected>6</option>
                     <option value="9">9</option>
                     <option value="12">12</option>
+                    <option value="custom">Custom</option>
                   </select>
+                  <input type="number" class="widget-limit-custom" min="1" max="50" placeholder="e.g. 20" style="display:none;width:70px;padding:8px;border:2px solid #10b981;border-radius:6px;font-size:0.85rem;">
                 </label>
               </div>
             </div>
@@ -1091,6 +1095,9 @@
     }
 
     function initDynamicWidgets(wrapper) {
+      // Setup custom limit input toggle
+      setupLimitCustomInput(wrapper);
+
       // Product widget
       const productWidget = wrapper.querySelector('.product-widget-container[data-embed*="product"]');
       if (productWidget && typeof ProductCards !== 'undefined') {
@@ -1102,8 +1109,8 @@
         // Listen for config changes
         const configPanel = wrapper.querySelector('.widget-config');
         if (configPanel) {
-          configPanel.querySelectorAll('select').forEach(sel => {
-            sel.addEventListener('change', () => {
+          configPanel.querySelectorAll('select, input').forEach(el => {
+            el.addEventListener('change', () => {
               const newConfig = getWidgetConfig(wrapper, 'product');
               updateWidgetDataEmbed(productWidget, newConfig);
               renderProductWidget(containerId, newConfig);
@@ -1123,8 +1130,8 @@
         // Listen for config changes
         const configPanel = wrapper.querySelector('.widget-config');
         if (configPanel) {
-          configPanel.querySelectorAll('select').forEach(sel => {
-            sel.addEventListener('change', () => {
+          configPanel.querySelectorAll('select, input').forEach(el => {
+            el.addEventListener('change', () => {
               const newConfig = getWidgetConfig(wrapper, 'blog');
               updateWidgetDataEmbed(blogWidget, newConfig);
               renderBlogWidget(containerId, newConfig);
@@ -1140,10 +1147,39 @@
 
       const layout = configPanel.querySelector('.widget-layout')?.value || 'grid';
       const columns = parseInt(configPanel.querySelector('.widget-columns')?.value || '3');
-      const limit = parseInt(configPanel.querySelector('.widget-limit')?.value || '6');
       const filter = configPanel.querySelector('.widget-filter')?.value || 'all';
 
+      // Handle custom limit
+      const limitSelect = configPanel.querySelector('.widget-limit-select');
+      const limitCustom = configPanel.querySelector('.widget-limit-custom');
+      let limit = 6;
+      if (limitSelect) {
+        if (limitSelect.value === 'custom' && limitCustom) {
+          limit = parseInt(limitCustom.value) || 6;
+        } else {
+          limit = parseInt(limitSelect.value) || 6;
+        }
+      }
+
       return { type, limit, columns, layout, filter };
+    }
+
+    function setupLimitCustomInput(wrapper) {
+      const configPanel = wrapper.querySelector('.widget-config');
+      if (!configPanel) return;
+
+      const limitSelect = configPanel.querySelector('.widget-limit-select');
+      const limitCustom = configPanel.querySelector('.widget-limit-custom');
+      if (!limitSelect || !limitCustom) return;
+
+      limitSelect.addEventListener('change', function() {
+        if (this.value === 'custom') {
+          limitCustom.style.display = 'block';
+          limitCustom.focus();
+        } else {
+          limitCustom.style.display = 'none';
+        }
+      });
     }
 
     function updateWidgetDataEmbed(widget, config) {
