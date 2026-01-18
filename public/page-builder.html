@@ -511,9 +511,8 @@
           <div id="feature-preview" style="margin-top:8px;max-height:100px;overflow:hidden;border-radius:8px;display:none;"></div>
           <small>URL or auto-upload to R2 (10MB max).</small>
         </div>
-        </div>
       </div>
-      
+
       <!-- Page Type -->
       <div class="settings-panel">
         <h3>📑 Page Type</h3>
@@ -590,6 +589,19 @@
     let currentPageType = 'custom';
     let editingSection = null;
     
+    // Get hero section with optional feature image
+    function getHeroSection() {
+      const featureImg = document.getElementById('feature_image_url').value.trim();
+      if (featureImg) {
+        return `<section style="background:linear-gradient(rgba(0,0,0,0.4),rgba(0,0,0,0.4)),url('${featureImg}') center/cover;color:white;padding:80px 20px;text-align:center;min-height:300px;">
+          <h1 style="font-size:3rem;margin-bottom:20px;font-weight:700;" contenteditable="true">Welcome to Our Site</h1>
+          <p style="font-size:1.2rem;opacity:0.9;max-width:600px;margin:0 auto 30px;" contenteditable="true">Create amazing pages with our easy-to-use builder</p>
+          <button style="background:white;color:#333;padding:15px 40px;border:none;border-radius:30px;font-weight:700;font-size:1rem;cursor:pointer;" contenteditable="true">Get Started</button>
+        </section>`;
+      }
+      return SECTIONS.hero;
+    }
+
     // Section Templates
     const SECTIONS = {
       hero: `
@@ -923,7 +935,8 @@
     function addSection(type) {
       const canvas = document.getElementById('builder-canvas');
       const wrapper = createSectionWrapper();
-      wrapper.innerHTML = SECTIONS[type] + createControls();
+      const sectionHtml = type === 'hero' ? getHeroSection() : SECTIONS[type];
+      wrapper.innerHTML = sectionHtml + createControls();
       canvas.appendChild(wrapper);
       enableEditing(wrapper);
       updateCanvasEmptyState();
@@ -1109,13 +1122,14 @@
       }
       
       const html = generateOutputHtml();
+      const ogImageMeta = featureImageUrl ? `\n  <meta property="og:image" content="${featureImageUrl}">` : '';
       const fullHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
-  <meta name="description" content="${desc.replace(/"/g, '&quot;')}">
+  <meta name="description" content="${desc.replace(/"/g, '&quot;')}">${ogImageMeta}
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/product-cards.js"><\/script>
   <script src="/js/blog-cards.js"><\/script>
@@ -1180,6 +1194,15 @@ ${html}
           document.getElementById('seo-slug').value = name;
           if (data.page_type) setPageType(data.page_type);
           document.getElementById('is-default').checked = data.is_default === 1;
+
+          // Load feature image
+          const featureImageUrl = data.feature_image_url || '';
+          document.getElementById('feature_image_url').value = featureImageUrl;
+          if (featureImageUrl) {
+            const preview = document.getElementById('feature-preview');
+            preview.innerHTML = `<img src="${featureImageUrl}" style="width:80px;height:60px;object-fit:cover;border-radius:6px;" onerror="this.style.display='none';">`;
+            preview.style.display = 'block';
+          }
           
           const body = doc.body;
           canvas.innerHTML = '';

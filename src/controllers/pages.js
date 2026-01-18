@@ -184,14 +184,14 @@ export async function savePage(env, body) {
   
   if (body.id) {
     await env.DB.prepare(
-      'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-    ).bind(body.slug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.status || 'published', Number(body.id)).run();
+      'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, feature_image_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+    ).bind(body.slug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published', Number(body.id)).run();
     return json({ success: true, id: body.id });
   }
   
   const r = await env.DB.prepare(
-    'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(body.slug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.status || 'published').run();
+    'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).bind(body.slug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published').run();
   return json({ success: true, id: r.meta?.last_row_id });
 }
 
@@ -223,8 +223,8 @@ export async function savePageBuilder(env, body) {
     // Try with new columns first, fallback to old schema
     try {
       await env.DB.prepare(
-        'UPDATE pages SET content=?, page_type=?, is_default=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-      ).bind(content, pageType, isDefault, existing.id).run();
+        'UPDATE pages SET content=?, page_type=?, is_default=?, feature_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(content, pageType, isDefault, body.feature_image_url || '', existing.id).run();
     } catch (e) {
       // Fallback: columns don't exist, use basic update
       await env.DB.prepare(
@@ -237,8 +237,8 @@ export async function savePageBuilder(env, body) {
   // Try with new columns first, fallback to old schema
   try {
     const r = await env.DB.prepare(
-      'INSERT INTO pages (slug, title, content, page_type, is_default, status) VALUES (?, ?, ?, ?, ?, ?)'
-    ).bind(name, name, content, pageType, isDefault, 'published').run();
+      'INSERT INTO pages (slug, title, content, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).bind(name, name, content, pageType, isDefault, body.feature_image_url || '', 'published').run();
     return json({ success: true, id: r.meta?.last_row_id });
   } catch (e) {
     // Fallback: columns don't exist, use basic insert
@@ -354,13 +354,14 @@ export async function duplicatePage(env, body) {
 export async function loadPageBuilder(env, name) {
   if (!name) return json({ error: 'name required' }, 400);
   
-  const row = await env.DB.prepare('SELECT content, page_type, is_default FROM pages WHERE slug = ?').bind(name).first();
-  if (!row) return json({ content: '', page_type: 'custom', is_default: 0 });
-  
-  return json({ 
-    content: row.content || '', 
+  const row = await env.DB.prepare('SELECT content, page_type, is_default, feature_image_url FROM pages WHERE slug = ?').bind(name).first();
+  if (!row) return json({ content: '', page_type: 'custom', is_default: 0, feature_image_url: '' });
+
+  return json({
+    content: row.content || '',
     page_type: row.page_type || 'custom',
-    is_default: row.is_default || 0
+    is_default: row.is_default || 0,
+    feature_image_url: row.feature_image_url || ''
   });
 }
 
