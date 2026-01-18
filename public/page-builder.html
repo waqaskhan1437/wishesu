@@ -77,7 +77,7 @@
     
     /* Left Sidebar - Templates */
     .sidebar-left {
-      width: 280px;
+      width: 240px;
       background: white;
       border-right: 1px solid var(--border);
       overflow-y: auto;
@@ -208,7 +208,7 @@
     
     /* Right Sidebar - Settings */
     .sidebar-right {
-      width: 300px;
+      width: 250px;
       background: white;
       border-left: 1px solid var(--border);
       overflow-y: auto;
@@ -397,10 +397,10 @@
     
     /* Responsive */
     @media (max-width: 1200px) {
-      .sidebar-left { width: 220px; }
-      .sidebar-right { width: 260px; }
+      .sidebar-left { width: 200px; }
+      .sidebar-right { width: 220px; }
     }
-    @media (max-width: 900px) {
+    @media (max-width: 1100px) {
       .sidebar-left, .sidebar-right { display: none; }
       #builder-canvas { padding: 15px; }
     }
@@ -1093,7 +1093,15 @@
       let slug = document.getElementById('seo-slug').value.trim();
       const desc = document.getElementById('seo-desc').value.trim();
       const isDefault = document.getElementById('is-default').checked;
-      
+
+      const saveBtn = document.getElementById('save-btn');
+      const originalText = saveBtn.textContent; saveBtn.textContent = '⏳ Saving...'; saveBtn.disabled = true;
+      while (typeof window.isUploadInProgress === 'function' && window.isUploadInProgress()) { await new Promise(r => setTimeout(r, 200)); }
+      let featureImageUrl = document.getElementById('feature_image_url').value.trim();
+      if (typeof window.getUploadedFiles === 'function') {
+        const uploads = window.getUploadedFiles(); if (uploads['feature-image-file']) featureImageUrl = uploads['feature-image-file'];
+      }
+
       if (!title) { alert('Please enter a Page Title'); return; }
       if (!slug) {
         slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -1125,7 +1133,8 @@ ${html}
             name: slug,
             content: fullHTML,
             page_type: currentPageType,
-            is_default: isDefault && currentPageType !== 'custom'
+            is_default: isDefault && currentPageType !== 'custom',
+            feature_image_url: featureImageUrl
           })
         });
         const data = await res.json();
