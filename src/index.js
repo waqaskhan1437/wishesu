@@ -1710,15 +1710,35 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       }
 
       // ----- CLEAN URL REDIRECTS -----
-      // Redirect .html URLs to clean URLs for better SEO
+      // Redirect `.html` URLs to their clean counterparts for better SEO.
+      //
+      // When the database is not configured (env.DB is undefined), dynamic
+      // routes like `/blog` or `/products` cannot be rendered by the Worker
+      // and would return a 404.  Redirecting to a clean URL in that case
+      // would therefore break links.  To prevent this, we only perform
+      // these redirects when the database is available.  Without a DB, the
+      // `.html` file will be served directly from the static assets.
       if (method === 'GET') {
         const htmlRedirects = {
+          // Only redirect HTML pages to clean paths when the clean path either
+          // exists as a static directory or can be rendered with a DB.  For
+          // example, `/forum.html` and `/blog.html` both map to directories
+          // (`/forum/` and `/blog/`) that include an `index.html` file.
           '/forum.html': '/forum',
           '/blog.html': '/blog',
-          '/products.html': '/products',
-          '/products-grid.html': '/products'
+          // There is no `/products` static directory, but there is a
+          // `products-grid.html` static file.  Instead of redirecting
+          // `/products.html` to `/products` (which requires DB data), map it
+          // directly to the static product grid file.  This ensures the grid
+          // page loads even without a database.
+          '/products.html': '/products-grid.html'
         };
-        
+
+        // Always redirect known `.html` pages to their canonical locations.
+        // These redirects either point to static directories (e.g. `/blog`)
+        // or to other HTML files (e.g. `/products-grid.html`).  Because
+        // their targets exist in the static asset directory, no DB is
+        // required to serve them, so we perform the redirect unconditionally.
         if (htmlRedirects[path]) {
           return Response.redirect(`${url.origin}${htmlRedirects[path]}`, 301);
         }
