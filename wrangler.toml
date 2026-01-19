@@ -5,16 +5,27 @@ compatibility_date = "2024-01-01"
 [assets]
 directory = "./public"
 # Expose the static asset directory as the `ASSETS` binding.  With a Worker
-# script present, Cloudflare still serves matching files automatically
-#【679589428825689†L551-L555】; however, binding the directory allows our worker to
-# explicitly fetch assets and modify response headers (for example, to set
-# `Cache-Control` and attach a version header)【679589428825689†L520-L544】.
+# script present, Cloudflare still serves matching files automatically; however,
+# binding the directory allows our worker to explicitly fetch assets and modify
+# response headers when necessary.
 binding = "ASSETS"
-# Always run the worker before serving assets.  This setting allows the
-# worker to inject custom headers and perform routing logic before
-# delegating to the static asset server.  Without this option, asset requests
-# would bypass the worker entirely when a matching file exists【679589428825689†L594-L641】.
-run_worker_first = true
+
+# Only invoke the Worker on dynamic paths.  Requests matching the patterns
+# listed here will run through your Worker; all other requests will be served
+# directly from the static assets directory without consuming CPU.  This
+# dramatically reduces CPU usage for static content like CSS/JS/images and
+# prebuilt HTML pages.
+run_worker_first = [
+  "/api/*",         # All API routes
+  "/blog/*",        # Dynamic blog post pages
+  "/forum/*",       # Dynamic forum pages
+  "/admin/login*",  # Admin login handling
+  "/admin/logout*", # Admin logout handling
+  "/admin/*"        # Catch-all for other admin routes that may require auth
+]
+
+# Serve the nearest 404.html for unknown paths that don't match a static
+# asset or Worker route.  Change to "single-page-application" if you have an SPA.
 not_found_handling = "404-page"
 
 [[d1_databases]]
