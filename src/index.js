@@ -7,7 +7,7 @@
 
 import { CORS, handleOptions } from './config/cors.js';
 import { initDB, warmupDB } from './config/db.js';
-import { VERSION } from './config/constants.js';
+import { VERSION, setVersion } from './config/constants.js';
 import { routeApiRequest } from './router.js';
 import { handleProductRouting } from './controllers/products.js';
 import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
@@ -1254,6 +1254,7 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
 
 export default {
   async fetch(req, env, ctx) {
+    setVersion(env.VERSION);
     const url = new URL(req.url);
     // Normalize the request path
     let path = url.pathname.replace(/\/+/g, '/');
@@ -2031,6 +2032,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
   // WARMING: This runs every 5 minutes (configure in wrangler.toml)
   // Keeps DB connection warm and prevents cold start issues
   async scheduled(event, env, ctx) {
+    setVersion(env.VERSION);
     console.log('Cron job started:', event.cron, 'at', new Date().toISOString());
 
     try {

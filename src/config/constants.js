@@ -2,8 +2,15 @@
  * Central constants - Shared across all modules
  */
 
-// Application version - used for cache busting and debug info
-export const VERSION = globalThis.VERSION || "15";
+// Application version - used for cache busting and debug info.
+// NOTE: Wrangler `[vars] VERSION` is provided at runtime via `env.VERSION`,
+// so the entrypoint should call `setVersion(env.VERSION)` per request.
+export let VERSION = "15";
+
+export function setVersion(value) {
+  const v = value === undefined || value === null ? '' : String(value).trim();
+  if (v) VERSION = v;
+}
 
 // Rate limiting defaults
 export const RATE_LIMIT = {

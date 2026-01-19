@@ -325,7 +325,12 @@ async function runMigrations(env) {
 __name(runMigrations, "runMigrations");
 
 // src/config/constants.js
-var VERSION = globalThis.VERSION || "15";
+var VERSION = "15";
+function setVersion(value) {
+  const v = value === void 0 || value === null ? "" : String(value).trim();
+  if (v) VERSION = v;
+}
+__name(setVersion, "setVersion");
 
 // src/utils/response.js
 function json(data, status = 200, extraHeaders = {}) {
@@ -9579,6 +9584,7 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
 __name(generateForumQuestionHTML, "generateForumQuestionHTML");
 var index_default = {
   async fetch(req, env, ctx2) {
+    setVersion(env.VERSION);
     const url = new URL(req.url);
     let path = url.pathname.replace(/\/+/g, "/");
     if (!path.startsWith("/")) {
@@ -10200,6 +10206,7 @@ var index_default = {
   // WARMING: This runs every 5 minutes (configure in wrangler.toml)
   // Keeps DB connection warm and prevents cold start issues
   async scheduled(event, env, ctx2) {
+    setVersion(env.VERSION);
     console.log("Cron job started:", event.cron, "at", (/* @__PURE__ */ new Date()).toISOString());
     try {
       if (env.DB) {
