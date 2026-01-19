@@ -1650,25 +1650,42 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
 
       // ----- DYNAMIC PAGES -----
       // Support both clean URLs (/forum) and .html URLs (/forum.html)
-      // Redirect .html to clean URL for SEO
+      // Instead of redirecting .html to clean URLs, we attempt to serve
+      // dynamic pages directly when a matching slug exists in the database.
       const coreStaticPages = ['index', 'products-grid', 'product', 'buyer-order', 'order-detail', 'order-success', 'success', 'page-builder'];
       
-      // Check for .html extension and redirect to clean URL
+      // Check for .html extension and attempt to serve a dynamic page when a slug exists.
       if (path.endsWith('.html') && !path.includes('/admin/') && !path.startsWith('/admin') && !path.startsWith('/blog/') && !path.startsWith('/forum/')) {
         const slug = path.slice(1).replace(/\.html$/, '');
-        // Only redirect non-core pages to clean URLs
+        // Only attempt to serve non-core pages via the database
         if (!coreStaticPages.includes(slug)) {
           try {
             if (env.DB) {
               await initDB(env);
-              const row = await env.DB.prepare('SELECT slug FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
-              if (row) {
-                // 301 redirect to clean URL
-                return Response.redirect(`${url.origin}/${slug}`, 301);
+              const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
+              if (row && row.content) {
+                // Serve the dynamic page content directly instead of redirecting.
+                let html = row.content;
+                // Inject global components script for header/footer if missing.
+                if (html.includes('<body') && !html.includes('global-components.js')) {
+                  html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script src="/js/global-components.js"></script>');
+                }
+                // Apply SEO tags if available.
+                try {
+                  const seo = await getSeoForRequest(env, req, { path: '/' + slug });
+                  html = applySeoToHtml(html, seo.robots, seo.canonical);
+                } catch (e) {}
+                return new Response(html, {
+                  status: 200,
+                  headers: {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'X-Worker-Version': VERSION
+                  }
+                });
               }
             }
           } catch (e) {
-            // continue to static assets
+            // Continue to static assets if dynamic lookup fails
           }
         }
       }
@@ -1709,38 +1726,35 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         }
       }
 
-      // ----- CLEAN URL REDIRECTS -----
-      // Redirect `.html` URLs to their clean counterparts for better SEO.
-      //
-      // When the database is not configured (env.DB is undefined), dynamic
-      // routes like `/blog` or `/products` cannot be rendered by the Worker
-      // and would return a 404.  Redirecting to a clean URL in that case
-      // would therefore break links.  To prevent this, we only perform
-      // these redirects when the database is available.  Without a DB, the
-      // `.html` file will be served directly from the static assets.
+      // ----- HTML ASSET MAPPINGS -----
+      // Certain `.html` routes should serve a different static file directly
+      // rather than redirecting.  This avoids broken links when no database
+      // is configured and eliminates unnecessary redirects for end users.
       if (method === 'GET') {
-        const htmlRedirects = {
-          // Only redirect HTML pages to clean paths when the clean path either
-          // exists as a static directory or can be rendered with a DB.  For
-          // example, `/forum.html` and `/blog.html` both map to directories
-          // (`/forum/` and `/blog/`) that include an `index.html` file.
-          '/forum.html': '/forum',
-          '/blog.html': '/blog',
-          // There is no `/products` static directory, but there is a
-          // `products-grid.html` static file.  Instead of redirecting
-          // `/products.html` to `/products` (which requires DB data), map it
-          // directly to the static product grid file.  This ensures the grid
-          // page loads even without a database.
-          '/products.html': '/products-grid.html'
+        const htmlAssetTargets = {
+          // Map `/products.html` to the existing grid file; this file lives in
+          // the static assets folder and can be served without DB access.
+          '/products.html': '/products-grid.html',
+          // Map blog and forum to their index files so these archives load
+          // without needing to redirect to `/blog` or `/forum`.
+          '/blog.html': '/blog/index.html',
+          '/forum.html': '/forum/index.html'
         };
 
-        // Always redirect known `.html` pages to their canonical locations.
-        // These redirects either point to static directories (e.g. `/blog`)
-        // or to other HTML files (e.g. `/products-grid.html`).  Because
-        // their targets exist in the static asset directory, no DB is
-        // required to serve them, so we perform the redirect unconditionally.
-        if (htmlRedirects[path]) {
-          return Response.redirect(`${url.origin}${htmlRedirects[path]}`, 301);
+        const target = htmlAssetTargets[path];
+        if (target) {
+          // Serve the target asset directly from the ASSETS KV.  We mirror
+          // the header behaviour used elsewhere in the router.
+          if (env.ASSETS) {
+            const assetResp = await env.ASSETS.fetch(new Request(new URL(target, req.url)));
+            const headers = new Headers(assetResp.headers);
+            headers.set('Alt-Svc', 'clear');
+            headers.set('X-Worker-Version', VERSION);
+            return new Response(assetResp.body, {
+              status: assetResp.status,
+              headers
+            });
+          }
         }
       }
 

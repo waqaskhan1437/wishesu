@@ -356,19 +356,35 @@ export async function submitQuestion(env, body) {
       }, 400);
     }
 
-    // Generate slug
-    const slug = trimmedTitle.toLowerCase()
+    // Generate a SEO‑friendly slug for the forum question.
+    // We avoid appending a timestamp so that the slug remains human readable.
+    // Instead, we create a base slug from the title (lowercase, hyphenated) and
+    // ensure uniqueness by appending an incrementing counter if needed.
+    let baseSlug = trimmedTitle.toLowerCase()
       .replace(/['"`]/g, '')
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .substring(0, 80) + '-' + Date.now();
+      .replace(/-+/g, '-')
+      .substring(0, 80);
+    if (!baseSlug) {
+      // Fallback: use a portion of the current timestamp if title yields no slug
+      baseSlug = String(Date.now());
+    }
+    let finalSlug = baseSlug;
+    let suffix = 1;
+    // Check for existing slug and append a numeric suffix until unique.
+    while (true) {
+      const existing = await env.DB.prepare('SELECT id FROM forum_questions WHERE slug = ? LIMIT 1').bind(finalSlug).first();
+      if (!existing) break;
+      finalSlug = `${baseSlug}-${suffix++}`;
+    }
 
     const now = Date.now();
 
     await env.DB.prepare(`
       INSERT INTO forum_questions (title, slug, content, name, email, status, reply_count, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
-    `).bind(trimmedTitle, slug, trimmedContent, trimmedName, trimmedEmail, now, now).run();
+    `).bind(trimmedTitle, finalSlug, trimmedContent, trimmedName, trimmedEmail, now, now).run();
 
     // Notify admin about new question (async)
     notifyNewForumQuestion(env, { 

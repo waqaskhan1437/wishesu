@@ -166,12 +166,24 @@ export async function saveBlog(env, body) {
       return json({ error: 'Title is required' }, 400);
     }
 
-    // Generate slug if not provided
-    const finalSlug = slug || title.toLowerCase()
-      .replace(/['"`]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .replace(/-+/g, '-');
+    // Generate or sanitize the slug.
+    // If a slug is provided by the user, sanitize it to ensure it follows
+    // SEO best practices (lowercase, hyphens only, trimmed). Otherwise, generate
+    // one from the title. Avoid underscores or other special characters.
+    let finalSlug;
+    if (slug && typeof slug === 'string' && slug.trim().length > 0) {
+      finalSlug = slug.toLowerCase()
+        .replace(/['"`]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-+/g, '-');
+    } else {
+      finalSlug = title.toLowerCase()
+        .replace(/['"`]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-+/g, '-');
+    }
 
     const now = Date.now();
 
@@ -292,15 +304,34 @@ export async function duplicateBlog(env, body) {
       return json({ error: 'Blog not found' }, 404);
     }
 
+    // Generate a readable slug for the duplicated blog post. Instead of
+    // appending a timestamp, which produces long and unreadable URLs,
+    // append a simple "-copy" suffix and increment it until the slug is
+    // unique. This maintains SEO best practices for short, descriptive slugs.
+    let baseSlug = (original.slug || '')
+      .toString()
+      .toLowerCase()
+      .replace(/['"`]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-+/g, '-');
+    if (!baseSlug) {
+      baseSlug = 'post';
+    }
+    let newSlugCandidate = `${baseSlug}-copy`;
+    let counter = 1;
+    while (true) {
+      const exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ? LIMIT 1').bind(newSlugCandidate).first();
+      if (!exists) break;
+      newSlugCandidate = `${baseSlug}-copy${counter++}`;
+    }
     const now = Date.now();
-    const newSlug = `${original.slug}-copy-${Date.now()}`;
-
     const result = await env.DB.prepare(`
       INSERT INTO blogs (title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
     `).bind(
       `${original.title} (Copy)`,
-      newSlug,
+      newSlugCandidate,
       original.description || '',
       original.content || '',
       original.thumbnail_url || '',
@@ -313,7 +344,7 @@ export async function duplicateBlog(env, body) {
       now
     ).run();
 
-    return json({ success: true, id: result.meta?.last_row_id });
+    return json({ success: true, id: result.meta?.last_row_id, slug: newSlugCandidate });
   } catch (err) {
     return json({ error: err.message }, 500);
   }

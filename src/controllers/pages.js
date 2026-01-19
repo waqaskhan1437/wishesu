@@ -170,8 +170,30 @@ export async function clearDefaultPage(env, body) {
  * Save page (create or update)
  */
 export async function savePage(env, body) {
-  if (!body.slug || !body.title) return json({ error: 'slug and title required' }, 400);
-  
+  if (!body.title) return json({ error: 'title required' }, 400);
+
+  // Sanitize or generate slug from provided slug or title. Enforce lower case,
+  // hyphens for separators, and trim leading/trailing hyphens. This prevents
+  // invalid characters from being stored in the database and ensures URLs
+  // remain SEO‑friendly.
+  let finalSlug;
+  if (body.slug && typeof body.slug === 'string' && body.slug.trim().length > 0) {
+    finalSlug = body.slug.toLowerCase()
+      .replace(/['"`]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-+/g, '-');
+  } else {
+    finalSlug = (body.title || '').toLowerCase()
+      .replace(/['"`]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-+/g, '-');
+  }
+  if (!finalSlug) {
+    return json({ error: 'slug could not be generated from title' }, 400);
+  }
+
   const pageType = body.page_type || 'custom';
   const isDefault = body.is_default ? 1 : 0;
   
@@ -182,17 +204,27 @@ export async function savePage(env, body) {
     ).bind(pageType).run();
   }
   
+  // When updating existing page, use the sanitized slug. When creating a new
+  // page, check for slug uniqueness and append a numeric suffix if needed.
   if (body.id) {
     await env.DB.prepare(
       'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, feature_image_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-    ).bind(body.slug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published', Number(body.id)).run();
-    return json({ success: true, id: body.id });
+    ).bind(finalSlug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published', Number(body.id)).run();
+    return json({ success: true, id: body.id, slug: finalSlug });
   }
-  
+
+  // Ensure slug uniqueness for new pages
+  let uniqueSlug = finalSlug;
+  let idx = 1;
+  while (true) {
+    const exists = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(uniqueSlug).first();
+    if (!exists) break;
+    uniqueSlug = `${finalSlug}-${idx++}`;
+  }
   const r = await env.DB.prepare(
     'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(body.slug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published').run();
-  return json({ success: true, id: r.meta?.last_row_id });
+  ).bind(uniqueSlug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published').run();
+  return json({ success: true, id: r.meta?.last_row_id, slug: uniqueSlug });
 }
 
 /**
