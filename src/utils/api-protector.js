@@ -114,13 +114,13 @@ export function protectEndpoint(handler, permission = null) {
  * })
  */
 export function protectEndpoints(endpointMap) {
-  const protected = {};
+  const protectedEndpoints = {};
 
   for (const [name, config] of Object.entries(endpointMap)) {
-    protected[name] = protectEndpoint(config.handler, config.permission);
+    protectedEndpoints[name] = protectEndpoint(config.handler, config.permission);
   }
 
-  return protected;
+  return protectedEndpoints;
 }
 
 /**
@@ -229,7 +229,6 @@ export const DEFAULT_PERMISSIONS = {
   toggleCouponStatus: 'coupons:update',
 
   // Users
-  getSessions: 'chat:list', // Chat sessions
   getAdminUsers: 'users:list',
   // Note: Popular questions aur product-specific functions ko manually add karna padega
 };
