@@ -196,6 +196,21 @@ import {
   toggleCouponStatus
 } from './controllers/coupons.js';
 
+// API Keys
+import {
+  createApiKey,
+  listApiKeys,
+  getApiKey,
+  updateApiKey,
+  deleteApiKey,
+  getPermissionsList,
+  getApiKeyAnalytics
+} from './controllers/api-keys.js';
+
+// API Auth middleware
+import { requireAdminOrApiKey } from './middleware/api-auth.js';
+import { protectEndpoint, DEFAULT_PERMISSIONS } from './utils/api-protector.js';
+
 /**
  * Route API requests to appropriate handlers
  * @param {Request} req - Request object
@@ -248,15 +263,21 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   // ----- CHAT APIs -----
   if (path === '/api/chat/start' && method === 'POST') {
+    const auth = await requireAdminOrApiKey(req, env, 'chat:send');
+    if (auth) return auth;
     const body = await req.json().catch(() => ({}));
     return startChat(env, body);
   }
 
   if (path === '/api/chat/sync' && method === 'GET') {
+    const auth = await requireAdminOrApiKey(req, env, 'chat:read');
+    if (auth) return auth;
     return syncChat(env, url);
   }
 
   if (path === '/api/chat/send' && method === 'POST') {
+    const auth = await requireAdminOrApiKey(req, env, 'chat:send');
+    if (auth) return auth;
     const body = await req.json().catch(() => ({}));
     return sendMessage(env, body, req.url);
   }
@@ -1644,6 +1665,49 @@ export async function routeApiRequest(req, env, url, path, method) {
     } catch (err) {
       return json({ error: err.message }, 500);
     }
+  }
+
+  // ----- API KEY MANAGEMENT ENDPOINTS -----
+  // Get available permissions
+  if (method === 'GET' && path === '/api/admin/api-keys/permissions') {
+    return getPermissionsList();
+  }
+
+  // Create new API key
+  if (method === 'POST' && path === '/api/admin/api-keys') {
+    const body = await req.json().catch(() => ({}));
+    return createApiKey(env, body);
+  }
+
+  // List all API keys
+  if (method === 'GET' && path === '/api/admin/api-keys') {
+    return listApiKeys(env);
+  }
+
+  // Get single API key details
+  if (method === 'GET' && path.startsWith('/api/admin/api-keys/')) {
+    const id = path.split('/').pop();
+    return getApiKey(env, id);
+  }
+
+  // Update API key
+  if (method === 'PUT' && path.startsWith('/api/admin/api-keys/')) {
+    const id = path.split('/').pop();
+    const body = await req.json().catch(() => ({}));
+    body.id = id;
+    return updateApiKey(env, body);
+  }
+
+  // Delete API key
+  if (method === 'DELETE' && path.startsWith('/api/admin/api-keys/')) {
+    const id = path.split('/').pop();
+    return deleteApiKey(env, id);
+  }
+
+  // Get API key analytics
+  if (method === 'GET' && path === '/api/admin/api-keys/analytics') {
+    const id = url.searchParams.get('id');
+    return getApiKeyAnalytics(env, id);
   }
 
   // API endpoint not found

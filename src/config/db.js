@@ -228,6 +228,39 @@ export async function initDB(env) {
             status TEXT DEFAULT 'active',
             created_at INTEGER
           )
+        `),
+        // API Keys table
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS api_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key_name TEXT NOT NULL,
+            key_value TEXT UNIQUE NOT NULL,
+            permissions TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            usage_count INTEGER DEFAULT 0,
+            last_used_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expires_at DATETIME
+          )
+        `),
+        // API Key usage logs table
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS api_key_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            api_key_id INTEGER NOT NULL,
+            endpoint TEXT NOT NULL,
+            method TEXT NOT NULL,
+            status_code INTEGER,
+            response_time_ms INTEGER,
+            ip_address TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
+          )
+        `),
+        // Index for API key usage logs
+        env.DB.prepare(`
+          CREATE INDEX IF NOT EXISTS idx_api_key_usage_key_id
+          ON api_key_usage(api_key_id)
         `)
       ]);
 
