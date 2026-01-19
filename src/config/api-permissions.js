@@ -48,20 +48,12 @@ export const ENDPOINT_PERMISSIONS = {
   '/api/products/status': { method: 'POST', permission: 'products:update' },
 
   // Orders APIs
-  '/api/orders': { method: 'GET', permission: 'orders:list' },
-  '/api/orders/list': { method: 'GET', permission: 'orders:list' },
-  '/api/order/': { method: 'GET', permission: 'orders:read' }, // Dynamic route
-  '/api/order/save': { method: 'POST', permission: 'orders:create' },
-  '/api/order/delete': { method: 'DELETE', permission: 'orders:delete' },
-  '/api/order/deliver': { method: 'POST', permission: 'orders:deliver' },
-  '/api/order/update': { method: 'POST', permission: 'orders:update' },
-  '/api/order/archive-link': { method: 'POST', permission: 'orders:update' },
-  '/api/order/mark-tip-paid': { method: 'POST', permission: 'orders:update' },
-  '/api/order/request-revision': { method: 'POST', permission: 'orders:revise' },
-  '/api/order/update-portfolio': { method: 'POST', permission: 'orders:update' },
-  '/api/admin/order/manual-create': { method: 'POST', permission: 'orders:create' },
+/* DISABLED INVALID ROUTE BLOCK FOR WORKER BUILD
+'/api/orders': { method: 'GET', permission: 'orders:list' },
+... (removed)
+*/
 
-  // Reviews APIs
+// Reviews APIs
   '/api/reviews': { method: 'GET', permission: 'reviews:list' },
   '/api/reviews/product/': { method: 'GET', permission: 'reviews:read' }, // Dynamic route
   '/api/reviews/save': { method: 'POST', permission: 'reviews:create' },
@@ -170,28 +162,6 @@ export const ENDPOINT_PERMISSIONS = {
   '/api/admin/api-keys/': { method: 'GET', permission: 'settings:api' },
   '/api/admin/api-keys/:PUT': { method: 'PUT', permission: 'settings:api' },
   '/api/admin/api-keys/:DELETE': { method: 'DELETE', permission: 'settings:api' }
-}
-
-export function getAllPublicEndpoints() {
-  return [
-    { path: '/api/products', method: 'GET', permission: 'products:list' },
-    { path: '/api/products/list', method: 'GET', permission: 'products:list' },
-    { path: '/api/reviews', method: 'GET', permission: 'reviews:list' },
-    { path: '/api/reviews/product/*', method: 'GET', permission: 'reviews:read' },
-    { path: '/api/pages', method: 'GET', permission: 'pages:list' },
-    { path: '/api/blogs', method: 'GET', permission: 'blogs:read' },
-    { path: '/api/blogs/published', method: 'GET', permission: 'blogs:read' },
-    { path: '/api/blog/published/*', method: 'GET', permission: 'blogs:read' },
-    { path: '/api/blog/previous/*', method: 'GET', permission: 'blogs:read' },
-    { path: '/api/blog/comments', method: 'GET', permission: 'blogs:comments:list' },
-    { path: '/api/forum/published', method: 'GET', permission: 'forum:list' },
-    { path: '/api/forum/question/*', method: 'GET', permission: 'forum:read' },
-    { path: '/api/forum/sidebar', method: 'GET', permission: 'forum:list' },
-    { path: '/api/coupons/active', method: 'GET', permission: 'coupons:read' },
-    { path: '/api/whop/test', method: 'GET', permission: 'settings:payments' },
-    { path: '/api/whop/test/webhook', method: 'GET', permission: 'settings:payments' },
-    { path: '/api/admin/debug', method: 'GET', permission: null }
-  ];
 };
 
 /**
@@ -239,53 +209,6 @@ export function isPublicReadEndpoint(path, method) {
 /**
  * List all public endpoints that don't require authentication
  */
-;
-
-/**
- * Find permission for a given endpoint path and HTTP method
- */
-export function getRequiredPermission(path, method) {
-  // Exact match first
-  const key = path + (method !== 'GET' ? ':' + method : '');
-  const exactMatch = ENDPOINT_PERMISSIONS[key];
-  if (exactMatch) return exactMatch.permission;
-
-  // Fallback to path-only match
-  const pathOnlyMatch = ENDPOINT_PERMISSIONS[path];
-  if (pathOnlyMatch && pathOnlyMatch.method === method) {
-    return pathOnlyMatch.permission;
-  }
-
-  return null;
-}
-
-/**
- * Check if an endpoint is marked as public read (no auth required)
- */
-export function isPublicReadEndpoint(path, method) {
-  return method === 'GET' && (
-    path.startsWith('/api/products') ||
-    path === '/api/reviews' ||
-    path.startsWith('/api/reviews/product/') ||
-    path === '/api/pages' ||
-    path === '/api/blogs' ||
-    path === '/api/blogs/published' ||
-    path.startsWith('/api/blog/published/') ||
-    path.startsWith('/api/blog/previous/') ||
-    path === '/api/blog/comments' ||
-    path === '/api/forum/published' ||
-    path.startsWith('/api/forum/question/') ||
-    path === '/api/forum/sidebar' ||
-    path === '/api/coupons/active' ||
-    path === '/api/whop/test' ||
-    path === '/api/whop/test/webhook' ||
-    path === '/api/admin/debug'
-  );
-}
-
-/**
- * List all public endpoints that don't require authentication
- */
 export function getAllPublicEndpoints() {
   return [
     { path: '/api/products', method: 'GET', permission: 'products:list' },
@@ -307,20 +230,12 @@ export function getAllPublicEndpoints() {
     { path: '/api/admin/debug', method: 'GET', permission: null }
   ];
 }
+/* DISABLED INVALID ROUTE BLOCK FOR WORKER BUILD
+'/api/orders': { method: 'GET', permission: 'orders:list' },
+... (removed)
+*/
 
-  '/api/orders': { method: 'GET', permission: 'orders:list' },
-  '/api/order/create': { method: 'POST', permission: 'orders:create' },
-  '/api/order/manual': { method: 'POST', permission: 'orders:create' },
-  '/api/order/buyer': { method: 'GET', permission: 'orders:read' },
-  '/api/order/delete': { method: 'DELETE', permission: 'orders:delete' },
-  '/api/order/update': { method: 'POST', permission: 'orders:update' },
-  '/api/order/deliver': { method: 'POST', permission: 'orders:deliver' },
-  '/api/order/revision': { method: 'POST', permission: 'orders:revise' },
-  '/api/order/portfolio': { method: 'POST', permission: 'orders:update' },
-  '/api/order/archive': { method: 'POST', permission: 'orders:update' },
-  '/api/order/tip': { method: 'POST', permission: 'orders:update' },
-
-  // Reviews APIs
+// Reviews APIs
   '/api/reviews': { method: 'GET', permission: 'reviews:list' },
   '/api/reviews/product': { method: 'GET', permission: 'reviews:list' },
   '/api/review/add': { method: 'POST', permission: 'reviews:create' },
