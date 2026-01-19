@@ -265,6 +265,25 @@ textarea:focus-visible {
 .btn-book-now:hover { transform: translateY(-2px); filter: brightness(1.1); }
 .btn-book-now:active { transform: translateY(0); }
 
+/*
+ * Mobile Sticky Book Now Button
+ *
+ * On small screens, keep the "Book Now" button visible when the user
+ * scrolls down the product page.  We use position: sticky so that the
+ * button sticks to the bottom of its container (the right column) and
+ * remains in view.  This improves accessibility and makes it easier
+ * for mobile users to initiate a booking without having to scroll
+ * back up.
+ */
+@media (max-width: 600px) {
+  .product-info-col .btn-book-now {
+    position: sticky;
+    bottom: 1rem;
+    /* Ensure it appears above other content */
+    z-index: 20;
+  }
+}
+
 /* Addons Container Animation - GPU accelerated */
 #addons-container { transition: max-height 0.4s ease-out, opacity 0.25s ease; will-change: max-height, opacity; }
 #addons-container.expanded { max-height: none !important; overflow: visible !important; opacity: 1 !important; will-change: auto; }
