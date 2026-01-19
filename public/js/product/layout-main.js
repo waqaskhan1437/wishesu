@@ -638,11 +638,21 @@
     addonsContainer.appendChild(stickyFooter);
     panel.appendChild(addonsContainer);
     
-    // Book Now click handler - expand addons form
+    // Book Now click handler - expand/collapse addons form
+    // When the form expands we hide all other info in the right panel so the
+    // form occupies the full column.  Upon collapse the info is shown again.
     let isExpanded = false;
     bookNowBtn.addEventListener('click', function(e) {
       e.preventDefault();
       if (!isExpanded) {
+        // Hide other elements in the panel (except the trigger and form container)
+        Array.from(panel.children).forEach(child => {
+          if (child !== bookNowBtn && child !== addonsContainer) {
+            child.dataset.origDisplay = child.style.display || '';
+            child.style.display = 'none';
+          }
+        });
+
         // Expand - first set expanding class for animation
         addonsContainer.classList.add('expanding');
         addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 1000 + 'px';
@@ -680,6 +690,16 @@
         bookNowBtn.setAttribute('aria-expanded', 'false');
         bookNowBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
         bookNowBtn.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+
+        // Restore previously hidden elements
+        Array.from(panel.children).forEach(child => {
+          if (child !== bookNowBtn && child !== addonsContainer) {
+            // If dataset.origDisplay is defined, restore it; otherwise blank resets to default
+            const orig = child.dataset.origDisplay;
+            child.style.display = orig !== undefined ? orig : '';
+          }
+        });
+
         isExpanded = false;
       }
     });
