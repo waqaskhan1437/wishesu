@@ -407,7 +407,22 @@ export async function handleProductRouting(env, url, path) {
     return p;
   }
 
-  // Legacy: /product?id=123 -> /product-123/<slug>
+  /*
+   * Legacy handling (removed redirects)
+   *
+   * Historically we supported two legacy product URL formats:
+   *   1. /product?id=123  → canonical slug path `/product-123/<slug>`
+   *   2. /product/<slug>  → canonical slug path `/product-<id>/<slug>`
+   *
+   * These patterns are still recognized here so that any missing slug is normalized
+   * in the database. However, we no longer redirect the visitor to the canonical
+   * path. Returning null here allows the router to continue and either serve
+   * the canonical HTML page directly (via `/product-<id>/<slug>`) or yield
+   * a 404 if no matching route exists. This ensures there are no intermediate
+   * HTTP redirects and the DB slug remains the same as the user-facing URL.
+   */
+
+  // Handle legacy /product?id=123 by ensuring slug exists in DB
   const legacyId = (path === '/product') ? url.searchParams.get('id') : null;
   if (legacyId) {
     const p = await getProductById(legacyId);
@@ -418,12 +433,13 @@ export async function handleProductRouting(env, url, path) {
           await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?').bind(slug, Number(p.id)).run();
         } catch (e) {}
       }
-      const canonical = `/product-${p.id}/${encodeURIComponent(slug)}`;
-      return Response.redirect(`${url.origin}${canonical}`, 301);
+      // We intentionally do not redirect. Returning null allows the request
+      // to fall through to normal route handling (typically 404 for /product).
+      return null;
     }
   }
 
-  // Old pretty: /product/<slug> -> /product-<id>/<slug>
+  // Handle legacy /product/<slug> by ensuring slug exists in DB
   if (path.startsWith('/product/') && path.length > '/product/'.length) {
     const slugIn = decodeURIComponent(path.slice('/product/'.length));
     const row = await getProductBySlug(slugIn);
@@ -434,8 +450,9 @@ export async function handleProductRouting(env, url, path) {
           await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?').bind(canonicalSlug, Number(row.id)).run();
         } catch (e) {}
       }
-      const canonical = `/product-${row.id}/${encodeURIComponent(canonicalSlug)}`;
-      return Response.redirect(`${url.origin}${canonical}`, 301);
+      // Again, do not redirect to canonical path. Let the router handle the
+      // current URL as-is. Users should navigate directly to `/product-<id>/<slug>`.
+      return null;
     }
   }
 
