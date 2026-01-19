@@ -15,13 +15,17 @@ binding = "ASSETS"
 # directly from the static assets directory without consuming CPU.  This
 # dramatically reduces CPU usage for static content like CSS/JS/images and
 # prebuilt HTML pages.
+# Configure which requests should run through the Worker before checking
+# for static assets.  The most specific patterns should be listed first,
+# and patterns that are subsumed by broader patterns should be omitted to
+# avoid Wrangler warnings.  Because `/admin/*` matches login/logout
+# routes, separate patterns for `/admin/login*` and `/admin/logout*`
+# are unnecessary and would be considered redundant by Wrangler.
 run_worker_first = [
-  "/api/*",         # All API routes
-  "/blog/*",        # Dynamic blog post pages
-  "/forum/*",       # Dynamic forum pages
-  "/admin/login*",  # Admin login handling
-  "/admin/logout*", # Admin logout handling
-  "/admin/*"        # Catch-all for other admin routes that may require auth
+  "/api/*",    # All API routes
+  "/blog/*",   # Dynamic blog post pages
+  "/forum/*",  # Dynamic forum pages
+  "/admin/*"   # Catch-all for all admin routes (includes login/logout)
 ]
 
 # Serve the nearest 404.html for unknown paths that don't match a static
