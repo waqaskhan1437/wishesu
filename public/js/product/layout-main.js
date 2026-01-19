@@ -644,6 +644,7 @@
     let isExpanded = false;
     bookNowBtn.addEventListener('click', function(e) {
       e.preventDefault();
+      const isMobile = window.matchMedia('(max-width: 600px)').matches;
       if (!isExpanded) {
         // Hide other elements in the panel (except the trigger and form container)
         Array.from(panel.children).forEach(child => {
@@ -662,6 +663,11 @@
         bookNowBtn.setAttribute('aria-expanded', 'true');
         bookNowBtn.style.background = 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)';
         bookNowBtn.style.boxShadow = '0 4px 15px rgba(107, 114, 128, 0.4)';
+        // On mobile, transform the addons container into a fullscreen overlay
+        if (isMobile) {
+          addonsContainer.classList.add('mobile-fullscreen');
+          document.body.classList.add('no-scroll');
+        }
         isExpanded = true;
         
         // After animation completes, remove height constraint so content can grow freely
@@ -690,6 +696,12 @@
         bookNowBtn.setAttribute('aria-expanded', 'false');
         bookNowBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
         bookNowBtn.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+
+        // If mobile fullscreen was applied, remove it and allow page scroll again
+        if (isMobile) {
+          addonsContainer.classList.remove('mobile-fullscreen');
+          document.body.classList.remove('no-scroll');
+        }
 
         // Restore previously hidden elements
         Array.from(panel.children).forEach(child => {
