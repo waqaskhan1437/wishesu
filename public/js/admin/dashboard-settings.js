@@ -259,6 +259,20 @@
       </div>
     </div>
 
+    <!-- Content Cleanup Section -->
+    <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
+      <h3>🧹 Content Cleanup</h3>
+      <p style="color: #6b7280; margin-bottom: 20px;">Delete all orders, products, reviews, pages, blog posts, forum posts, chats and checkout sessions for a fresh start, or remove all user uploaded photos. These actions cannot be undone.</p>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">
+        <button class="btn" style="background: #ef4444; color: white;" id="delete-content-btn">Delete All Content</button>
+        <button class="btn" style="background: #f97316; color: white;" id="delete-photos-btn">Delete User Photos</button>
+        <span id="cleanup-status" style="margin-left: 10px; font-size: 0.9rem; color: #6b7280;"></span>
+      </div>
+      <div style="margin-top: 15px; padding: 10px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
+        <small style="color: #92400e;"><strong>Warning:</strong> Deleting all content or photos is irreversible. Ensure you have backups if needed.</small>
+      </div>
+    </div>
+
     <!-- Cobalt API Settings -->
     <div style="background: white; padding: 30px; border-radius: 12px; margin-top: 20px;">
       <h3>🎬 Cobalt API Settings</h3>
@@ -646,6 +660,7 @@
     setupGoogleSheetsHandlers();
     setupPayPalHandlers();
     setupMaintenanceHandlers();
+    setupCleanupHandlers();
     setupWhopTestHandlers();
     setupAutomationHandlers();
   };
@@ -1554,6 +1569,59 @@
         statusSpan.style.color = '#ef4444';
       }
     });
+  }
+
+  // Setup handlers for content cleanup (delete all content and photos)
+  function setupCleanupHandlers() {
+    const contentBtn = document.getElementById('delete-content-btn');
+    const photosBtn = document.getElementById('delete-photos-btn');
+    const statusSpan = document.getElementById('cleanup-status');
+    if (contentBtn) {
+      contentBtn.addEventListener('click', async () => {
+        if (!confirm('Are you absolutely sure you want to delete all content? This will permanently remove orders, products, reviews, pages, blogs, forum posts, chat sessions, checkout sessions and more. This action cannot be undone.')) {
+          return;
+        }
+        statusSpan.textContent = 'Deleting all content...';
+        statusSpan.style.color = '#6b7280';
+        try {
+          const res = await AD.apiFetch('/api/admin/delete-all-content', { method: 'POST' });
+          if (res && res.success) {
+            const count = res.count || 0;
+            statusSpan.textContent = `✅ Deleted ${count} items`;
+            statusSpan.style.color = '#10b981';
+          } else {
+            statusSpan.textContent = '❌ Failed: ' + (res?.error || 'Unknown error');
+            statusSpan.style.color = '#ef4444';
+          }
+        } catch (err) {
+          statusSpan.textContent = '❌ Error: ' + err.message;
+          statusSpan.style.color = '#ef4444';
+        }
+      });
+    }
+    if (photosBtn) {
+      photosBtn.addEventListener('click', async () => {
+        if (!confirm('Delete all user uploaded photos (temp and order attachments)? This cannot be undone.')) {
+          return;
+        }
+        statusSpan.textContent = 'Deleting user photos...';
+        statusSpan.style.color = '#6b7280';
+        try {
+          const res = await AD.apiFetch('/api/admin/delete-user-photos', { method: 'POST' });
+          if (res && res.success) {
+            const count = res.count || 0;
+            statusSpan.textContent = `✅ Deleted ${count} photos`;
+            statusSpan.style.color = '#10b981';
+          } else {
+            statusSpan.textContent = '❌ Failed: ' + (res?.error || 'Unknown error');
+            statusSpan.style.color = '#ef4444';
+          }
+        } catch (err) {
+          statusSpan.textContent = '❌ Error: ' + err.message;
+          statusSpan.style.color = '#ef4444';
+        }
+      });
+    }
   }
 
   function setupExportImportHandlers() {

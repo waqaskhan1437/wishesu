@@ -138,6 +138,10 @@ export const ENDPOINT_PERMISSIONS = {
   '/api/admin/r2/get': { method: 'GET', permission: 'settings:admin' },
   '/api/admin/archive-credentials': { method: 'GET', permission: 'settings:admin' },
 
+  // Content and photo cleanup APIs
+  '/api/admin/delete-all-content': { method: 'POST', permission: 'settings:admin' },
+  '/api/admin/delete-user-photos': { method: 'POST', permission: 'settings:admin' },
+
   // Coupons APIs
   '/api/coupons': { method: 'GET', permission: 'coupons:list' },
   '/api/coupons/active': { method: 'GET', permission: 'coupons:read' },

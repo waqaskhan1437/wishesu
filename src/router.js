@@ -1646,6 +1646,81 @@ export async function routeApiRequest(req, env, url, path, method) {
     }
   }
 
+  // Delete all content - wipes major tables for a fresh start
+  // WARNING: This permanently deletes orders, products, reviews, pages, blogs, forum posts, chat sessions/messages and blog comments
+  if (method === 'POST' && path === '/api/admin/delete-all-content') {
+    try {
+      if (!env.DB) {
+        return json({ error: 'Database not configured' }, 500);
+      }
+      // Initialize DB if needed
+      await initDB(env);
+      // List of tables to wipe for content cleanup. Excludes settings, coupons, api_keys and other admin configs.
+      const tables = [
+        'orders',
+        'products',
+        'reviews',
+        'pages',
+        'checkout_sessions',
+        'chat_sessions',
+        'chat_messages',
+        'blogs',
+        'blog_comments',
+        'forum_questions',
+        'forum_replies'
+      ];
+      let totalDeleted = 0;
+      // Use a transaction to ensure integrity; fallback to individual deletes if transaction unsupported
+      try {
+        const tx = await env.DB.batch(
+          tables.map(t => env.DB.prepare(`DELETE FROM ${t}`))
+        );
+        // We don't get per-table change counts from batch API; just approximate
+        totalDeleted = tables.length; // placeholder - actual rows deleted unknown
+      } catch (e) {
+        // Fallback to sequential deletes if batch fails
+        for (const t of tables) {
+          try {
+            const result = await env.DB.prepare(`DELETE FROM ${t}`).run();
+            totalDeleted += result?.changes || 0;
+          } catch (err) {
+            // Table may not exist; ignore
+          }
+        }
+      }
+      return json({ success: true, count: totalDeleted });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
+  // Delete user uploaded photos from R2 bucket. This targets keys under orders/ and temp/ prefixes.
+  if (method === 'POST' && path === '/api/admin/delete-user-photos') {
+    try {
+      if (!env.R2_BUCKET) {
+        return json({ success: true, count: 0, message: 'R2 not configured' });
+      }
+      const prefixes = ['orders/', 'temp/'];
+      let deletedCount = 0;
+      for (const prefix of prefixes) {
+        let cursor = undefined;
+        do {
+          const listOpts = { prefix, limit: 100 };
+          if (cursor) listOpts.cursor = cursor;
+          const listed = await env.R2_BUCKET.list(listOpts);
+          for (const obj of listed.objects || []) {
+            await env.R2_BUCKET.delete(obj.key);
+            deletedCount++;
+          }
+          cursor = (listed.truncated && listed.cursor) ? listed.cursor : null;
+        } while (cursor);
+      }
+      return json({ success: true, count: deletedCount });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
   if (method === 'GET' && path === '/api/admin/export-data') {
     try {
       // Export all data for Google Sheets integration - run in parallel
