@@ -1392,6 +1392,36 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       // If not found, fall through to normal processing
     }
 
+    // HEALTH CHECK ENDPOINT - For external warming services (UptimeRobot, cron-job.org)
+    // This endpoint warms up DB and returns status
+    if (path === '/api/health' || path === '/_health') {
+      const startTime = Date.now();
+      let dbStatus = 'not_configured';
+
+      if (env.DB) {
+        try {
+          await initDB(env);
+          await env.DB.prepare('SELECT 1 as health').first();
+          dbStatus = 'healthy';
+        } catch (e) {
+          dbStatus = 'error: ' + e.message;
+        }
+      }
+
+      return new Response(JSON.stringify({
+        status: 'ok',
+        version: VERSION,
+        db: dbStatus,
+        responseTime: Date.now() - startTime + 'ms',
+        timestamp: new Date().toISOString()
+      }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store'
+        }
+      });
+    }
+
     // Dynamic robots.txt + sitemap.xml (SEO settings controlled from Admin)
     if ((method === 'GET' || method === 'HEAD')) {
       if (path === '/robots.txt') {
@@ -1994,12 +2024,20 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
   },
 
   // Scheduled handler for cron jobs
+  // WARMING: This runs every 5 minutes (configure in wrangler.toml)
+  // Keeps DB connection warm and prevents cold start issues
   async scheduled(event, env, ctx) {
-    console.log('Cron job started:', event.cron);
-    
+    console.log('Cron job started:', event.cron, 'at', new Date().toISOString());
+
     try {
       if (env.DB) {
+        // WARMUP: Initialize DB tables if needed
         await initDB(env);
+
+        // WARMUP: Simple query to keep D1 connection alive
+        await env.DB.prepare('SELECT 1 as warm').first();
+        console.log('DB connection warmed successfully');
+
         // Cleanup expired Whop checkout sessions
         const result = await cleanupExpired(env);
         const data = await result.json();

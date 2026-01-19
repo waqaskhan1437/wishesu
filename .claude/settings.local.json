@@ -5,7 +5,15 @@
       "Bash(node -e:*)",
       "Bash(cat:*)",
       "Bash(del \"C:\\\\Users\\\\waqas\\\\Downloads\\\\wishesu-users-fix\\\\wishesu-main\\\\public\\\\js\\\\product.js\" \"C:\\\\Users\\\\waqas\\\\Downloads\\\\wishesu-users-fix\\\\wishesu-main\\\\public\\\\js\\\\product-addons.js\")",
-      "WebFetch(domain:wishesu1.waqaskhan1437.workers.dev)"
+      "WebFetch(domain:wishesu1.waqaskhan1437.workers.dev)",
+      "WebSearch",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:blog.cloudflare.com)",
+      "WebFetch(domain:community.cloudflare.com)",
+      "WebFetch(domain:uptimerobot.com)",
+      "WebFetch(domain:cron-job.org)",
+      "WebFetch(domain:healthchecks.io)",
+      "WebFetch(domain:betterstack.com)"
     ]
   }
 }
