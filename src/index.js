@@ -1382,8 +1382,12 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       const assetResp = await env.ASSETS.fetch(req);
       if (assetResp.status === 200) {
         const headers = new Headers(assetResp.headers); headers.set('Alt-Svc', 'clear');
-        // Cache static assets aggressively
-        if (!headers.has('Cache-Control')) {
+        // Cache static assets aggressively, but avoid long-lived caching for admin assets
+        // so UI updates show up without requiring a manual hard refresh.
+        const isAdminAsset = path.startsWith('/js/admin/') || path.startsWith('/css/admin/');
+        if (isAdminAsset) {
+          headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        } else if (!headers.has('Cache-Control')) {
           headers.set('Cache-Control', 'public, max-age=31536000, immutable');
         }
         headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
@@ -2038,10 +2042,17 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         await env.DB.prepare('SELECT 1 as warm').first();
         console.log('DB connection warmed successfully');
 
-        // Cleanup expired Whop checkout sessions
-        const result = await cleanupExpired(env);
-        const data = await result.json();
-        console.log('Cleanup result:', data);
+        // Cleanup expired Whop checkout sessions (daily cron only)
+        // The 5-minute cron is intended for warming; cleanup is heavier and can increase subrequests/wall time.
+        if (event.cron === '0 2 * * *') {
+          const result = await cleanupExpired(env);
+          try {
+            const data = await result.json();
+            console.log('Cleanup result:', data);
+          } catch (_) {
+            console.log('Cleanup finished (non-JSON response)');
+          }
+        }
       }
     } catch (e) {
       console.error('Cron job error:', e);
