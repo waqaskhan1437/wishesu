@@ -528,19 +528,24 @@
     bookNowBtn.setAttribute('aria-expanded', 'false');
     bookNowBtn.setAttribute('aria-controls', 'addons-container');
     bookNowBtn.innerHTML = '<span aria-hidden="true">🎬</span> Book Now - $' + window.basePrice.toLocaleString();
+    // Apply high‑contrast golden styling to the Book Now button.  The
+    // button's colour scheme has been chosen to maximise contrast for
+    // users with low vision.  See the related CSS for more details.
     bookNowBtn.style.cssText = `
       width: 100%;
       padding: 16px 24px;
       margin-top: 1.5rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      /* Golden gradient for idle state */
+      background: linear-gradient(135deg, #FFD700 0%, #FFC107 100%);
+      color: #000;
       border: none;
       border-radius: 12px;
       font-size: 1.2rem;
       font-weight: 700;
       cursor: pointer;
       transition: transform 0.15s ease, filter 0.15s ease;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      /* Golden‑toned shadow */
+      box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
     `;
     panel.appendChild(bookNowBtn);
     
@@ -661,8 +666,12 @@
         addonsContainer.style.overflow = 'hidden';
         bookNowBtn.innerHTML = '<span aria-hidden="true">▲</span> Close Form';
         bookNowBtn.setAttribute('aria-expanded', 'true');
-        bookNowBtn.style.background = 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)';
-        bookNowBtn.style.boxShadow = '0 4px 15px rgba(107, 114, 128, 0.4)';
+        // When the form is expanded, switch to a slightly darker golden
+        // palette so the button still stands out.  We keep the text
+        // colour black for consistency with the idle state.
+        bookNowBtn.style.background = 'linear-gradient(135deg, #D1A20D 0%, #AF8A0E 100%)';
+        bookNowBtn.style.boxShadow = '0 4px 15px rgba(209, 162, 13, 0.4)';
+        bookNowBtn.style.color = '#000';
         // On mobile, transform the addons container into a fullscreen overlay
         if (isMobile) {
           addonsContainer.classList.add('mobile-fullscreen');
@@ -694,8 +703,10 @@
         addonsContainer.style.opacity = '0';
         bookNowBtn.innerHTML = '<span aria-hidden="true">🎬</span> Book Now - $' + window.basePrice.toLocaleString();
         bookNowBtn.setAttribute('aria-expanded', 'false');
-        bookNowBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-        bookNowBtn.style.boxShadow = '0 4px 15px rgba(102, 126, 234, 0.4)';
+        // Restore the original golden styling when collapsing the form
+        bookNowBtn.style.background = 'linear-gradient(135deg, #FFD700 0%, #FFC107 100%)';
+        bookNowBtn.style.boxShadow = '0 4px 15px rgba(255, 215, 0, 0.4)';
+        bookNowBtn.style.color = '#000';
 
         // If mobile fullscreen was applied, remove it and allow page scroll again
         if (isMobile) {

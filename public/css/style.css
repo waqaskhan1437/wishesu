@@ -261,7 +261,35 @@ textarea:focus-visible {
 .btn-buy:hover { background: var(--primary-hover); }
 
 /* Book Now Button - Collapsible Form Trigger */
-.btn-book-now { display: block; width: 100%; font-size: 1.2rem; font-weight: 700; padding: 1rem 1.5rem; border: none; border-radius: var(--radius); cursor: pointer; transition: transform 0.15s ease, filter 0.15s ease; text-align: center; }
+.btn-book-now {
+  /*
+   * Book Now buttons now use a high‑contrast golden colour scheme to aid
+   * visually impaired users.  We avoid relying on the default primary
+   * palette here so that the button remains clearly visible against
+   * varied page backgrounds.  A subtle gradient adds visual depth while
+   * maintaining sufficient contrast.  The text colour is set to black
+   * for maximum legibility on lighter golden tones (see
+   * https://webexpress.colorado.edu/article/531-color-contrast for
+   * guidance on gold/black contrast【353448574535686†L26-L34】).  When the form is expanded
+   * the button style is overridden inline in JavaScript to a darker
+   * golden variant but still retains the same accessible colour ratio.
+   */
+  display: block;
+  width: 100%;
+  font-size: 1.2rem;
+  font-weight: 700;
+  padding: 1rem 1.5rem;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+  text-align: center;
+  /* Golden gradient for the idle state */
+  background: linear-gradient(135deg, #FFD700 0%, #FFC107 100%);
+  color: #000;
+  /* Subtle shadow to lift the button off the page */
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+}
 .btn-book-now:hover { transform: translateY(-2px); filter: brightness(1.1); }
 .btn-book-now:active { transform: translateY(0); }
 
