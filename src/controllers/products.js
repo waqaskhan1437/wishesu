@@ -1,6 +1,7 @@
 /**
  * Products controller - Product CRUD operations
  * OPTIMIZED: Added in-memory caching for frequently accessed products
+ * COLD START FIX: Added product slug cache to reduce redirect DB queries
  */
 
 import { json, cachedJson } from '../utils/response.js';
@@ -10,6 +11,10 @@ import { slugifyStr, toISO8601 } from '../utils/formatting.js';
 let productsCache = null;
 let productsCacheTime = 0;
 const PRODUCTS_CACHE_TTL = 30000; // 30 seconds
+
+// Product slug cache for fast redirects (reduces cold start DB queries)
+const productSlugCache = new Map();
+const SLUG_CACHE_TTL = 300000; // 5 minutes
 
 /**
  * Get active products (public)
@@ -369,12 +374,43 @@ export async function getAdjacentProducts(env, id) {
 
 /**
  * Handle product routing (canonical URLs and redirects)
+ * OPTIMIZED: Uses in-memory cache to reduce DB queries on cold start
  */
 export async function handleProductRouting(env, url, path) {
+  const now = Date.now();
+
+  // Helper to get product from cache or DB
+  async function getProductById(id) {
+    const cacheKey = `id:${id}`;
+    const cached = productSlugCache.get(cacheKey);
+    if (cached && (now - cached.time) < SLUG_CACHE_TTL) {
+      return cached.data;
+    }
+    const p = await env.DB.prepare('SELECT id, title, slug FROM products WHERE id = ? LIMIT 1').bind(Number(id)).first();
+    if (p) {
+      productSlugCache.set(cacheKey, { data: p, time: now });
+    }
+    return p;
+  }
+
+  async function getProductBySlug(slug) {
+    const cacheKey = `slug:${slug}`;
+    const cached = productSlugCache.get(cacheKey);
+    if (cached && (now - cached.time) < SLUG_CACHE_TTL) {
+      return cached.data;
+    }
+    const p = await env.DB.prepare('SELECT id, title, slug FROM products WHERE slug = ? LIMIT 1').bind(slug).first();
+    if (p) {
+      productSlugCache.set(cacheKey, { data: p, time: now });
+      productSlugCache.set(`id:${p.id}`, { data: p, time: now });
+    }
+    return p;
+  }
+
   // Legacy: /product?id=123 -> /product-123/<slug>
   const legacyId = (path === '/product') ? url.searchParams.get('id') : null;
   if (legacyId) {
-    const p = await env.DB.prepare('SELECT id, title, slug FROM products WHERE id = ? LIMIT 1').bind(Number(legacyId)).first();
+    const p = await getProductById(legacyId);
     if (p) {
       const slug = p.slug ? String(p.slug) : slugifyStr(p.title);
       if (!p.slug) {
@@ -390,7 +426,7 @@ export async function handleProductRouting(env, url, path) {
   // Old pretty: /product/<slug> -> /product-<id>/<slug>
   if (path.startsWith('/product/') && path.length > '/product/'.length) {
     const slugIn = decodeURIComponent(path.slice('/product/'.length));
-    const row = await env.DB.prepare('SELECT id, title, slug FROM products WHERE slug = ? LIMIT 1').bind(slugIn).first();
+    const row = await getProductBySlug(slugIn);
     if (row) {
       const canonicalSlug = row.slug ? String(row.slug) : slugifyStr(row.title);
       if (!row.slug) {

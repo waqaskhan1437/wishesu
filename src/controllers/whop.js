@@ -4,6 +4,10 @@
 
 import { json } from '../utils/response.js';
 import { getWhopApiKey } from '../config/secrets.js';
+import { fetchWithTimeout } from '../utils/fetch-timeout.js';
+
+// API timeout constants
+const WHOP_API_TIMEOUT = 10000; // 10 seconds
 
 /**
  * Calculate addon prices from product's addon configuration
@@ -178,7 +182,7 @@ export async function createCheckout(env, body, origin) {
 
   // Create Whop checkout session
   try {
-    const whopResponse = await fetch('https://api.whop.com/api/v2/checkout_sessions', {
+    const whopResponse = await fetchWithTimeout('https://api.whop.com/api/v2/checkout_sessions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -194,7 +198,7 @@ export async function createCheckout(env, body, origin) {
           expires_at: expiryTime
         }
       })
-    });
+    }, WHOP_API_TIMEOUT);
     
     if (!whopResponse.ok) {
       const errorText = await whopResponse.text();
@@ -315,14 +319,14 @@ export async function createPlanCheckout(env, body, origin) {
 
   // First, update Product to allow multiple purchases
   try {
-    await fetch(`https://api.whop.com/api/v2/products/${finalProdId}`, {
+    await fetchWithTimeout(`https://api.whop.com/api/v2/products/${finalProdId}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ one_per_user: false })
-    });
+    }, WHOP_API_TIMEOUT);
     console.log('✅ Product updated: one_per_user = false');
   } catch (e) {
     console.log('Product update skipped:', e.message);
@@ -348,14 +352,14 @@ export async function createPlanCheckout(env, body, origin) {
 
   try {
     // Create the plan
-    const planResp = await fetch('https://api.whop.com/api/v2/plans', {
+    const planResp = await fetchWithTimeout('https://api.whop.com/api/v2/plans', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(planBody)
-    });
+    }, WHOP_API_TIMEOUT);
 
     if (!planResp.ok) {
       const errorText = await planResp.text();
@@ -409,14 +413,14 @@ export async function createPlanCheckout(env, body, origin) {
       checkoutBody.prefill = { email: email.trim() };
     }
 
-    const checkoutResp = await fetch('https://api.whop.com/api/v2/checkout_sessions', {
+    const checkoutResp = await fetchWithTimeout('https://api.whop.com/api/v2/checkout_sessions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(checkoutBody)
-    });
+    }, WHOP_API_TIMEOUT);
 
     if (!checkoutResp.ok) {
       const errorText = await checkoutResp.text();
@@ -576,10 +580,10 @@ export async function handleWebhook(env, webhookData) {
       const apiKey = await getWhopApiKey(env);
       if (checkoutSessionId && apiKey) {
         try {
-          await fetch(`https://api.whop.com/api/v2/checkout_sessions/${checkoutSessionId}`, {
+          await fetchWithTimeout(`https://api.whop.com/api/v2/checkout_sessions/${checkoutSessionId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${apiKey}` }
-          });
+          }, WHOP_API_TIMEOUT);
           console.log('Checkout session deleted immediately after payment:', checkoutSessionId);
         } catch (e) {
           console.error('Failed to delete checkout session:', e);
@@ -590,10 +594,10 @@ export async function handleWebhook(env, webhookData) {
           const row = await env.DB.prepare('SELECT plan_id FROM checkout_sessions WHERE checkout_id = ?').bind(checkoutSessionId).first();
           const planId = row && row.plan_id;
           if (planId) {
-            await fetch(`https://api.whop.com/api/v2/plans/${planId}`, {
+            await fetchWithTimeout(`https://api.whop.com/api/v2/plans/${planId}`, {
               method: 'DELETE',
               headers: { 'Authorization': `Bearer ${apiKey}` }
-            });
+            }, WHOP_API_TIMEOUT);
             console.log('Plan deleted immediately after payment:', planId);
           }
         } catch (e) {
@@ -699,13 +703,13 @@ export async function testApi(env) {
     return json({ success: false, error: 'Whop API key not configured. Please add it in Settings.' }, 500);
   }
   try {
-    const resp = await fetch('https://api.whop.com/api/v2/plans?page=1&per=1', {
+    const resp = await fetchWithTimeout('https://api.whop.com/api/v2/plans?page=1&per=1', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       }
-    });
+    }, WHOP_API_TIMEOUT);
 
     if (!resp.ok) {
       const text = await resp.text();
@@ -793,21 +797,21 @@ export async function cleanupExpired(env) {
         if (checkout.plan_id) {
           try {
             // Try to archive by setting visibility to hidden
-            const archiveResp = await fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
+            const archiveResp = await fetchWithTimeout(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
               method: 'POST',
               headers,
               body: JSON.stringify({ visibility: 'hidden' })
-            });
+            }, WHOP_API_TIMEOUT);
 
             if (archiveResp.ok) {
               success = true;
               console.log('✅ Plan archived (hidden):', checkout.plan_id);
             } else {
               // Fallback: try DELETE
-              const deleteResp = await fetch(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
+              const deleteResp = await fetchWithTimeout(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${apiKey}` }
-              });
+              }, WHOP_API_TIMEOUT);
               success = deleteResp.ok || deleteResp.status === 404;
               if (success) console.log('✅ Plan deleted:', checkout.plan_id);
             }

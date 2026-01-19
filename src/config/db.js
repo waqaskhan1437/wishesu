@@ -2,28 +2,42 @@
  * Database initialization and schema management
  * OPTIMIZED: Uses isolate-level caching to minimize DB operations
  * Tables are only created once per worker isolate lifecycle
- * 
+ *
  * Performance optimizations:
  * - dbReady flag prevents repeated CREATE TABLE calls
  * - migrationsDone flag runs migrations only once
  * - pagesMigrationDone ensures page columns exist
  * - All flags persist within worker isolate (until cold start)
+ * - Warmup initialization prevents cold start delays
  */
 
 let dbReady = false;
 let migrationsDone = false;
 let pagesMigrationDone = false;
 let initPromise = null;
+let initStartTime = 0;
+
+// Maximum time to wait for DB initialization (prevents hanging)
+const DB_INIT_TIMEOUT_MS = 5000;
 
 /**
  * Initialize database schema - creates all required tables
  * OPTIMIZED: Skips if already done in this isolate
+ * Includes timeout to prevent cold start hanging
  * @param {Object} env - Environment bindings
  */
 export async function initDB(env) {
   if (dbReady || !env.DB) return;
-  if (initPromise) return await initPromise;
+  if (initPromise) {
+    // If initialization is taking too long, don't wait
+    if (initStartTime && Date.now() - initStartTime > DB_INIT_TIMEOUT_MS) {
+      console.warn('DB init timeout - proceeding without waiting');
+      return;
+    }
+    return await initPromise;
+  }
 
+  initStartTime = Date.now();
   initPromise = (async () => {
     try {
       // Create all tables with batch execution for better performance
@@ -219,6 +233,7 @@ export async function initDB(env) {
 
       // Mark DB as ready as soon as the core CREATE TABLEs complete
       dbReady = true;
+      console.log(`DB init completed in ${Date.now() - initStartTime}ms`);
 
       // Run migrations and page migrations asynchronously (background)
       if (!migrationsDone) {
@@ -230,10 +245,26 @@ export async function initDB(env) {
       }
     } catch (e) {
       console.error('DB init error:', e);
+      // Reset on error so next request can retry
+      initPromise = null;
+      initStartTime = 0;
     }
   })();
 
   return await initPromise;
+}
+
+/**
+ * Warmup database - call this early in request lifecycle
+ * Uses ctx.waitUntil to initialize without blocking
+ * @param {Object} env - Environment bindings
+ * @param {ExecutionContext} ctx - Execution context
+ */
+export function warmupDB(env, ctx) {
+  if (dbReady || !env.DB) return;
+  if (ctx && ctx.waitUntil) {
+    ctx.waitUntil(initDB(env).catch(() => {}));
+  }
 }
 
 /**

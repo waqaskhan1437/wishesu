@@ -3,6 +3,10 @@
  */
 
 import { json } from '../utils/response.js';
+import { fetchWithTimeout } from '../utils/fetch-timeout.js';
+
+// API timeout constants
+const PAYPAL_API_TIMEOUT = 10000; // 10 seconds
 
 /**
  * Get PayPal credentials from environment/settings
@@ -50,21 +54,21 @@ function getPayPalBaseUrl(mode) {
 async function getAccessToken(credentials) {
   const baseUrl = getPayPalBaseUrl(credentials.mode);
   const auth = btoa(`${credentials.clientId}:${credentials.secret}`);
-  
-  const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
+
+  const response = await fetchWithTimeout(`${baseUrl}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${auth}`,
       'Content-Type': 'application/x-www-form-urlencoded'
     },
     body: 'grant_type=client_credentials'
-  });
-  
+  }, PAYPAL_API_TIMEOUT);
+
   if (!response.ok) {
     const error = await response.text();
     throw new Error(`PayPal auth failed: ${error}`);
   }
-  
+
   const data = await response.json();
   return data.access_token;
 }
@@ -158,14 +162,14 @@ export async function createPayPalOrder(env, body, origin) {
     console.log('🅿️ Creating PayPal order with payload:', JSON.stringify(orderPayload, null, 2));
     
     // Create order
-    const orderResponse = await fetch(`${baseUrl}/v2/checkout/orders`, {
+    const orderResponse = await fetchWithTimeout(`${baseUrl}/v2/checkout/orders`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(orderPayload)
-    });
+    }, PAYPAL_API_TIMEOUT);
     
     const responseText = await orderResponse.text();
     console.log('🅿️ PayPal response status:', orderResponse.status);
@@ -265,13 +269,13 @@ export async function capturePayPalOrder(env, body) {
     const baseUrl = getPayPalBaseUrl(credentials.mode);
     
     // Capture the order
-    const captureResponse = await fetch(`${baseUrl}/v2/checkout/orders/${order_id}/capture`, {
+    const captureResponse = await fetchWithTimeout(`${baseUrl}/v2/checkout/orders/${order_id}/capture`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       }
-    });
+    }, PAYPAL_API_TIMEOUT);
     
     const responseText = await captureResponse.text();
     console.log('🅿️ Capture response status:', captureResponse.status);

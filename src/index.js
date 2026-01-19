@@ -2,10 +2,11 @@
  * Cloudflare Worker - Main Entry Point with HTML Caching
  * Modular ES Module Structure
  * OPTIMIZED: Moved helper functions to module level to avoid recreation per request
+ * COLD START FIX: Uses warmupDB to initialize database early without blocking
  */
 
 import { CORS, handleOptions } from './config/cors.js';
-import { initDB } from './config/db.js';
+import { initDB, warmupDB } from './config/db.js';
 import { VERSION } from './config/constants.js';
 import { routeApiRequest } from './router.js';
 import { handleProductRouting } from './controllers/products.js';
@@ -1261,6 +1262,12 @@ export default {
     }
     const method = req.method;
 
+    // COLD START FIX: Start DB initialization early without blocking
+    // This runs in background while we process the request
+    if (env.DB) {
+      warmupDB(env, ctx);
+    }
+
 // Route flags (computed once per request)
 const isAdminUI = (path === '/admin' || path === '/admin/' || path.startsWith('/admin/'));
 const isAdminAPI = path.startsWith('/api/admin/');
@@ -1958,6 +1965,27 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       });
     } catch (e) {
       console.error('Worker error:', e);
+
+      // Check if it's a timeout/connection error (cold start issue)
+      const isTimeoutError = e.message?.includes('timeout') || e.message?.includes('abort');
+      const isConnectionError = e.message?.includes('connection') || e.message?.includes('network');
+
+      if (isTimeoutError || isConnectionError) {
+        // Return 503 with Retry-After header for cold start issues
+        return new Response(JSON.stringify({
+          error: 'Service temporarily unavailable. Please retry.',
+          code: 'COLD_START_RETRY'
+        }), {
+          status: 503,
+          headers: {
+            ...CORS,
+            'Content-Type': 'application/json',
+            'Retry-After': '2',
+            'Cache-Control': 'no-store'
+          }
+        });
+      }
+
       return new Response(JSON.stringify({ error: e.message }), {
         status: 500,
         headers: { ...CORS, 'Content-Type': 'application/json' }

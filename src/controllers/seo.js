@@ -2,6 +2,7 @@
  * SEO Controller - Admin SEO settings + robots/sitemap + meta injection
  * Keeps SEO controls in DB so indexing can be managed from Admin panel.
  * OPTIMIZED: Added caching flags to prevent repeated table creation
+ * COLD START FIX: Non-blocking table creation with timeout protection
  */
 
 import { json } from '../utils/response.js';
@@ -11,7 +12,9 @@ let seoTablesReady = false;
 let seoSeeded = false;
 let cachedSettings = null;
 let settingsCacheTime = 0;
+let seoInitPromise = null;
 const SETTINGS_CACHE_TTL = 60000; // 1 minute cache
+const SEO_INIT_TIMEOUT = 3000; // 3 second timeout for SEO table creation
 
 const DEFAULT_SETTINGS = {
   id: 1,
@@ -57,52 +60,77 @@ function safeNumber(n, fallback) {
 async function ensureSeoTables(env) {
   // OPTIMIZATION: Skip if already done in this isolate
   if (seoTablesReady || !env?.DB) return;
-  
+
+  // Prevent multiple concurrent initializations
+  if (seoInitPromise) {
+    try {
+      await Promise.race([
+        seoInitPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SEO init timeout')), SEO_INIT_TIMEOUT))
+      ]);
+    } catch (e) {
+      // Timeout or error - continue without waiting
+      console.warn('SEO tables init timeout, proceeding');
+    }
+    return;
+  }
+
+  seoInitPromise = (async () => {
+    try {
+      await env.DB.batch([
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS seo_settings (
+            id INTEGER PRIMARY KEY,
+            base_url TEXT,
+            sitemap_enabled INTEGER DEFAULT 1,
+            sitemap_include_pages INTEGER DEFAULT 1,
+            sitemap_include_products INTEGER DEFAULT 1,
+            sitemap_max_urls INTEGER DEFAULT 45000,
+            product_url_template TEXT DEFAULT '/product-{id}/{slug}',
+            force_noindex_on_workers_dev INTEGER DEFAULT 1,
+            robots_enabled INTEGER DEFAULT 1,
+            robots_extra TEXT DEFAULT ''
+          )
+        `),
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS seo_page_rules (
+            path TEXT PRIMARY KEY,
+            allow_index INTEGER DEFAULT 1,
+            allow_follow INTEGER DEFAULT 1,
+            include_in_sitemap INTEGER DEFAULT 1,
+            canonical_override TEXT,
+            changefreq TEXT DEFAULT 'weekly',
+            priority REAL DEFAULT 0.6,
+            updated_at TEXT
+          )
+        `),
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS seo_product_rules (
+            product_id TEXT PRIMARY KEY,
+            allow_index INTEGER DEFAULT 1,
+            allow_follow INTEGER DEFAULT 1,
+            include_in_sitemap INTEGER DEFAULT 1,
+            canonical_override TEXT,
+            changefreq TEXT DEFAULT 'weekly',
+            priority REAL DEFAULT 0.7,
+            updated_at TEXT
+          )
+        `)
+      ]);
+      seoTablesReady = true;
+    } catch (e) {
+      // Tables likely already exist, mark as ready
+      seoTablesReady = true;
+    }
+  })();
+
   try {
-    await env.DB.batch([
-      env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS seo_settings (
-          id INTEGER PRIMARY KEY,
-          base_url TEXT,
-          sitemap_enabled INTEGER DEFAULT 1,
-          sitemap_include_pages INTEGER DEFAULT 1,
-          sitemap_include_products INTEGER DEFAULT 1,
-          sitemap_max_urls INTEGER DEFAULT 45000,
-          product_url_template TEXT DEFAULT '/product-{id}/{slug}',
-          force_noindex_on_workers_dev INTEGER DEFAULT 1,
-          robots_enabled INTEGER DEFAULT 1,
-          robots_extra TEXT DEFAULT ''
-        )
-      `),
-      env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS seo_page_rules (
-          path TEXT PRIMARY KEY,
-          allow_index INTEGER DEFAULT 1,
-          allow_follow INTEGER DEFAULT 1,
-          include_in_sitemap INTEGER DEFAULT 1,
-          canonical_override TEXT,
-          changefreq TEXT DEFAULT 'weekly',
-          priority REAL DEFAULT 0.6,
-          updated_at TEXT
-        )
-      `),
-      env.DB.prepare(`
-        CREATE TABLE IF NOT EXISTS seo_product_rules (
-          product_id TEXT PRIMARY KEY,
-          allow_index INTEGER DEFAULT 1,
-          allow_follow INTEGER DEFAULT 1,
-          include_in_sitemap INTEGER DEFAULT 1,
-          canonical_override TEXT,
-          changefreq TEXT DEFAULT 'weekly',
-          priority REAL DEFAULT 0.7,
-          updated_at TEXT
-        )
-      `)
+    await Promise.race([
+      seoInitPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('SEO init timeout')), SEO_INIT_TIMEOUT))
     ]);
-    seoTablesReady = true;
   } catch (e) {
-    // Tables likely already exist, mark as ready
-    seoTablesReady = true;
+    console.warn('SEO tables init timeout');
   }
 }
 
