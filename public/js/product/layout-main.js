@@ -672,11 +672,7 @@
         bookNowBtn.style.background = 'linear-gradient(135deg, #D1A20D 0%, #AF8A0E 100%)';
         bookNowBtn.style.boxShadow = '0 4px 15px rgba(209, 162, 13, 0.4)';
         bookNowBtn.style.color = '#000';
-        // On mobile, transform the addons container into a fullscreen overlay
-        if (isMobile) {
-          addonsContainer.classList.add('mobile-fullscreen');
-          document.body.classList.add('no-scroll');
-        }
+        // On mobile, keep the form inline (reverted from fullscreen overlay)
         isExpanded = true;
         
         // After animation completes, remove height constraint so content can grow freely
@@ -708,11 +704,7 @@
         bookNowBtn.style.boxShadow = '0 4px 15px rgba(255, 215, 0, 0.4)';
         bookNowBtn.style.color = '#000';
 
-        // If mobile fullscreen was applied, remove it and allow page scroll again
-        if (isMobile) {
-          addonsContainer.classList.remove('mobile-fullscreen');
-          document.body.classList.remove('no-scroll');
-        }
+        // On mobile, nothing to remove (fullscreen overlay removed in this version)
 
         // Restore previously hidden elements
         Array.from(panel.children).forEach(child => {

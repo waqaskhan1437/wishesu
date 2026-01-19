@@ -310,31 +310,13 @@ textarea:focus-visible {
     /* Ensure it appears above other content */
     z-index: 20;
   }
-  /* Fullscreen overlay for the addons form on mobile */
-  #addons-container.mobile-fullscreen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: 100vh;
-    overflow-y: auto;
-    z-index: 1000;
-    background: #fff;
-    padding: 1rem;
-    margin: 0;
-    border-radius: 0;
-    /* Override any previous max-height settings */
-    max-height: none !important;
-    opacity: 1 !important;
-  }
+  /* The mobile fullscreen overlay for the addons form has been removed.
+     We now leave the form inline on all screen sizes. */
 }
 
-/* Prevent background scroll when mobile fullscreen form is open */
-body.no-scroll {
-  overflow: hidden;
-}
+/* The no-scroll rule used to prevent background scroll when the form
+   opened fullscreen on mobile.  Since that feature has been removed,
+   we no longer need this rule. */
 
 /* Addons Container Animation - GPU accelerated */
 #addons-container { transition: max-height 0.4s ease-out, opacity 0.25s ease; will-change: max-height, opacity; }
