@@ -1684,6 +1684,12 @@ export async function routeApiRequest(req, env, url, path, method) {
     return listApiKeys(env);
   }
 
+  // Get API key analytics
+  if (method === 'GET' && path === '/api/admin/api-keys/analytics') {
+    const id = url.searchParams.get('id');
+    return getApiKeyAnalytics(env, id);
+  }
+
   // Get single API key details
   if (method === 'GET' && path.startsWith('/api/admin/api-keys/')) {
     const id = path.split('/').pop();
@@ -1702,12 +1708,6 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'DELETE' && path.startsWith('/api/admin/api-keys/')) {
     const id = path.split('/').pop();
     return deleteApiKey(env, id);
-  }
-
-  // Get API key analytics
-  if (method === 'GET' && path === '/api/admin/api-keys/analytics') {
-    const id = url.searchParams.get('id');
-    return getApiKeyAnalytics(env, id);
   }
 
   // API endpoint not found

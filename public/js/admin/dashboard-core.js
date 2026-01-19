@@ -150,6 +150,9 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'settings': 
         if (AD.loadSettings) AD.loadSettings(panel); 
         break;
+      case 'api-keys':
+        if (AD.loadApiKeys) await AD.loadApiKeys(panel);
+        break;
       case 'seo':
         if (AD.loadSEO) await AD.loadSEO(panel);
         break;
