@@ -48,9 +48,9 @@
       const res = await fetch('/api/admin/automation/settings');
       const data = await res.json();
     config = data.config || getDefaultConfig();
-      // ensure universalWebhook exists for older configs
-    if (!config.universalWebhook) {
-      config.universalWebhook = getDefaultConfig().universalWebhook;
+    // ensure subscriptions array exists for older configs
+    if (!config.subscriptions) {
+      config.subscriptions = [];
     }
     } catch (e) {
       console.error('Load config error:', e);
@@ -63,22 +63,12 @@
     return {
       enabled: false,
       adminEmail: '',
-      // legacy webhooks array for backward compatibility
-      webhooks: [],
-      // single universal webhook for all notifications
-      universalWebhook: {
-        id: 'universal',
-        name: 'Universal',
-        url: '',
-        secret: '',
-        type: 'custom',
-        enabled: false
-      },
+      // webhook subscriptions: each subscription includes topics (events) it listens to
+      subscriptions: [],
       emailServices: [],
+      // routing used only for email configuration per event
       routing: Object.keys(NOTIFICATION_TYPES).reduce((acc, k) => {
         acc[k] = {
-          // legacy per‑type webhook list; kept for compatibility but unused
-          webhooks: [],
           emailService: null,
           adminEmail: k.startsWith('customer_') ? false : true,
           enabled: true
@@ -196,7 +186,7 @@
         <div class="aa-body">
           <div class="aa-sidebar">
             <button class="aa-nav-btn active" data-panel="general">⚙️ General</button>
-            <button class="aa-nav-btn" data-panel="webhooks">🔗 Webhook</button>
+            <button class="aa-nav-btn" data-panel="webhooks">🔗 Webhooks</button>
             <button class="aa-nav-btn" data-panel="email">📧 Email</button>
             <button class="aa-nav-btn" data-panel="routing">🔀 Routing</button>
             <button class="aa-nav-btn" data-panel="logs">📋 Logs</button>
@@ -269,8 +259,8 @@
           <h3>📊 Quick Stats</h3>
           <div class="aa-row">
             <div class="aa-col" style="text-align:center;padding:15px">
-              <div style="font-size:2em;color:#667eea">${config.universalWebhook && config.universalWebhook.enabled ? 1 : 0}</div>
-              <div style="color:#6b7280;font-size:12px">Universal Webhook</div>
+              <div style="font-size:2em;color:#667eea">${(config.subscriptions || []).filter(s => s.enabled).length}</div>
+              <div style="color:#6b7280;font-size:12px">Active Webhooks</div>
             </div>
             <div class="aa-col" style="text-align:center;padding:15px">
               <div style="font-size:2em;color:#10b981">${(config.emailServices || []).filter(s => s.enabled).length}</div>
@@ -287,45 +277,29 @@
   }
 
   function renderWebhooksPanel() {
-    const uw = config.universalWebhook || {};
-    const webhooks = config.webhooks || [];
+    const subs = config.subscriptions || [];
     return `
       <div class="aa-panel active">
-        <!-- Universal webhook configuration -->
         <div class="aa-card">
-          <h3>🔗 Universal Webhook</h3>
-          <p>This single webhook triggers all notifications. Configure below.</p>
-          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
-            <div>
-              <strong style="color:#fff">${uw.name || 'Universal'}</strong>
-              <span class="aa-badge ${uw.enabled ? 'aa-badge-on' : 'aa-badge-off'}" style="margin-left:8px">${uw.enabled ? 'ON' : 'OFF'}</span>
-              <div style="color:#6b7280;font-size:11px;margin-top:4px">${uw.type?.toUpperCase() || 'CUSTOM'} • ${uw.url?.substring(0, 40) || 'No URL'}...</div>
-            </div>
-            <div>
-              <button class="aa-btn aa-btn-ghost aa-btn-sm" onclick="window.AdvAutomation.editUniversalWebhook()">Edit</button>
-            </div>
-          </div>
+          <h3>🔗 Webhook Subscriptions</h3>
+          <p>Create endpoints and select which notifications they receive</p>
+          <button class="aa-btn aa-btn-primary aa-btn-sm" onclick="window.AdvAutomation.addSubscription()">+ Add Webhook</button>
         </div>
-        <!-- Legacy webhooks list -->
-        <div class="aa-card">
-          <h3>🔗 Legacy Webhook Endpoints</h3>
-          <p>These endpoints are retained for backward compatibility but are not used for routing.</p>
-          <button class="aa-btn aa-btn-primary aa-btn-sm" onclick="window.AdvAutomation.addWebhook()">+ Add Webhook</button>
-        </div>
-        
         <div class="aa-list" id="aa-webhooks-list">
-          ${webhooks.length === 0 ? '<div style="text-align:center;padding:30px;color:#6b7280">No legacy webhooks configured</div>' : 
-            webhooks.map((w, i) => `
+          ${subs.length === 0 ? '<div style="text-align:center;padding:30px;color:#6b7280">No webhooks configured</div>' : 
+            subs.map((s, i) => `
               <div class="aa-card" data-idx="${i}">
                 <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
                   <div>
-                    <strong style="color:#fff">${w.name || 'Unnamed'}</strong>
-                    <span class="aa-badge ${w.enabled ? 'aa-badge-on' : 'aa-badge-off'}" style="margin-left:8px">${w.enabled ? 'ON' : 'OFF'}</span>
-                    <div style="color:#6b7280;font-size:11px;margin-top:4px">${w.type?.toUpperCase() || 'CUSTOM'} • ${w.url?.substring(0, 40) || 'No URL'}...</div>
+                    <strong style="color:#fff">${s.name || 'Unnamed'}</strong>
+                    <span class="aa-badge ${s.enabled ? 'aa-badge-on' : 'aa-badge-off'}" style="margin-left:8px">${s.enabled ? 'ON' : 'OFF'}</span>
+                    <div style="color:#6b7280;font-size:11px;margin-top:4px">${s.type?.toUpperCase() || 'CUSTOM'} • ${s.url?.substring(0,40) || 'No URL'}...</div>
+                    <div style="color:#6b7280;font-size:11px;margin-top:2px">${s.topics?.length || 0} events selected</div>
                   </div>
                   <div>
-                    <button class="aa-btn aa-btn-ghost aa-btn-sm" onclick="window.AdvAutomation.editWebhook(${i})">Edit</button>
-                    <button class="aa-btn aa-btn-danger aa-btn-sm" onclick="window.AdvAutomation.deleteWebhook(${i})">×</button>
+                    <button class="aa-btn aa-btn-success aa-btn-sm" onclick="window.AdvAutomation.testWebhookById('${s.id}')">Test</button>
+                    <button class="aa-btn aa-btn-ghost aa-btn-sm" onclick="window.AdvAutomation.editSubscription(${i})">Edit</button>
+                    <button class="aa-btn aa-btn-danger aa-btn-sm" onclick="window.AdvAutomation.deleteSubscription(${i})">×</button>
                   </div>
                 </div>
               </div>
@@ -369,31 +343,27 @@
   }
 
   function renderRoutingPanel() {
-    const webhooks = config.webhooks || [];
+    // Display routing for email only; webhooks are handled via subscriptions automatically
     const services = config.emailServices || [];
-    
     return `
       <div class="aa-panel active">
         <div class="aa-card">
           <h3>🔀 Notification Routing</h3>
-          <p>Assign specific webhooks and email services to each notification type</p>
+          <p>Assign email services and admin notifications per event. Webhook subscriptions are configured separately.</p>
         </div>
-        
         <div class="aa-card" style="overflow-x:auto">
           <div class="aa-routing-grid">
             <div class="aa-routing-row header">
               <div>Notification</div>
-              <div>Webhook</div>
               <div>Email Service</div>
               <div>Admin</div>
               <div>On</div>
             </div>
             ${Object.entries(NOTIFICATION_TYPES).map(([key, info]) => {
-              const route = config.routing?.[key] || { webhooks: [], emailService: null, adminEmail: key.startsWith('customer_') ? false : true, enabled: true };
+              const route = config.routing?.[key] || { emailService: null, adminEmail: !key.startsWith('customer_'), enabled: true };
               return `
                 <div class="aa-routing-row" data-route="${key}">
                   <div class="aa-routing-label"><span>${info.icon}</span> ${info.label}</div>
-                  <div style="color:#9ca3af;font-size:12px">Universal</div>
                   <select class="aa-select" data-field="emailService" style="padding:8px">
                     <option value="">None</option>
                     ${services.map(s => `<option value="${s.id}" ${route.emailService === s.id ? 'selected' : ''}>${s.name || s.type}</option>`).join('')}
@@ -472,7 +442,7 @@
     if (panel === 'routing') {
       document.querySelectorAll('.aa-routing-row[data-route]').forEach(row => {
         const key = row.dataset.route;
-        if (!config.routing[key]) config.routing[key] = { webhooks: [], emailService: null, adminEmail: !key.startsWith('customer_'), enabled: true };
+        if (!config.routing[key]) config.routing[key] = { emailService: null, adminEmail: !key.startsWith('customer_'), enabled: true };
         // Email service
         const emailSel = row.querySelector('[data-field="emailService"]');
         if (emailSel) emailSel.onchange = () => config.routing[key].emailService = emailSel.value || null;
@@ -498,6 +468,169 @@
       document.querySelectorAll('.aa-multi-dropdown.show').forEach(d => d.classList.remove('show'));
     }
   });
+
+  /**
+   * Subscription management functions
+   * Subscriptions define a webhook endpoint and which events (topics) it listens to.
+   */
+  function addSubscription() {
+    const id = generateId();
+    showSubscriptionEditor({
+      id,
+      name: '',
+      type: 'custom',
+      url: '',
+      method: 'POST',
+      headers: '',
+      secret: '',
+      bodyTemplate: '',
+      enabled: true,
+      topics: []
+    }, -1);
+  }
+
+  function editSubscription(idx) {
+    showSubscriptionEditor(config.subscriptions[idx], idx);
+  }
+
+  function deleteSubscription(idx) {
+    if (!confirm('Delete this webhook subscription?')) return;
+    config.subscriptions.splice(idx, 1);
+    renderPanel('webhooks');
+  }
+
+  function showSubscriptionEditor(sub, idx) {
+    const isNew = idx === -1;
+    const content = document.getElementById('aa-content');
+    content.innerHTML = `
+      <div class="aa-panel active">
+        <div class="aa-card">
+          <h3>${isNew ? '➕ Add' : '✏️ Edit'} Webhook</h3>
+          <div class="aa-row">
+            <div class="aa-col">
+              <label class="aa-label">Name</label>
+              <input type="text" class="aa-input" id="subs-name" value="${sub.name || ''}" placeholder="My Webhook">
+            </div>
+            <div class="aa-col">
+              <label class="aa-label">Type</label>
+              <select class="aa-select" id="subs-type">
+                ${WEBHOOK_TYPES.map(t => `<option value="${t.id}" ${sub.type === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="aa-row">
+            <div class="aa-col">
+              <label class="aa-label">Webhook URL</label>
+              <input type="url" class="aa-input" id="subs-url" value="${sub.url || ''}" placeholder="https://hooks.slack.com/...">
+            </div>
+          </div>
+          <div class="aa-row">
+            <div class="aa-col">
+              <label class="aa-label">Events</label>
+              <div class="aa-multi-select" id="subs-topics-select">
+                <button type="button" class="aa-multi-btn" id="subs-topics-btn" onclick="window.AdvAutomation.toggleMulti(this)">Select events</button>
+                <div class="aa-multi-dropdown" id="subs-topics-dropdown">
+                  ${Object.entries(NOTIFICATION_TYPES).map(([k, v]) => `
+                    <div class="aa-multi-opt">
+                      <input type="checkbox" value="${k}" ${Array.isArray(sub.topics) && sub.topics.includes(k) ? 'checked' : ''}>
+                      ${v.label}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="subs-custom-fields" style="display:${sub.type === 'custom' ? 'block' : 'none'}">
+            <div class="aa-row">
+              <div class="aa-col" style="max-width:100px">
+                <label class="aa-label">Method</label>
+                <select class="aa-select" id="subs-method">
+                  <option value="POST" ${sub.method === 'POST' ? 'selected' : ''}>POST</option>
+                  <option value="PUT" ${sub.method === 'PUT' ? 'selected' : ''}>PUT</option>
+                </select>
+              </div>
+              <div class="aa-col">
+                <label class="aa-label">Secret (optional)</label>
+                <input type="text" class="aa-input" id="subs-secret" value="${sub.secret || ''}" placeholder="webhook-secret">
+              </div>
+            </div>
+            <div class="aa-row">
+              <div class="aa-col">
+                <label class="aa-label">Headers (JSON)</label>
+                <textarea class="aa-textarea" id="subs-headers" placeholder="{\"X-Custom\": \"value\"}">${sub.headers || ''}</textarea>
+              </div>
+            </div>
+            <div class="aa-row">
+              <div class="aa-col">
+                <label class="aa-label">Body Template (JSON) - Use {{event}}, {{title}}, {{message}}, {{data}}</label>
+                <textarea class="aa-textarea" id="subs-body" placeholder="{\"text\": \"{{title}}: {{message}}\"}">${sub.bodyTemplate || ''}</textarea>
+              </div>
+            </div>
+          </div>
+          <label class="aa-toggle" style="margin-top:15px">
+            <input type="checkbox" id="subs-enabled" ${sub.enabled ? 'checked' : ''}>
+            <div class="aa-toggle-label"><strong>Enabled</strong></div>
+          </label>
+          <div style="margin-top:20px;display:flex;gap:10px">
+            <button class="aa-btn aa-btn-primary" onclick="window.AdvAutomation.saveSubscription(${idx})">💾 Save</button>
+            <button class="aa-btn aa-btn-ghost" onclick="window.AdvAutomation.renderPanel('webhooks')">Cancel</button>
+            ${!isNew ? `<button class="aa-btn aa-btn-success" onclick="window.AdvAutomation.testWebhookById('${sub.id}')">🧪 Test</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+    // Manage multi-select selections
+    const selected = new Set(Array.isArray(sub.topics) ? sub.topics : []);
+    function renderMultiButton() {
+      const btn = document.getElementById('subs-topics-btn');
+      if (!btn) return;
+      if (selected.size === 0) {
+        btn.textContent = 'Select events';
+        btn.style.color = '#9ca3af';
+      } else {
+        btn.textContent = selected.size + (selected.size === 1 ? ' event selected' : ' events selected');
+        btn.style.color = '#fff';
+      }
+    }
+    function updateTopics() {
+      selected.clear();
+      document.querySelectorAll('#subs-topics-dropdown input:checked').forEach(cb => {
+        selected.add(cb.value);
+      });
+      renderMultiButton();
+    }
+    document.querySelectorAll('#subs-topics-dropdown input').forEach(cb => {
+      cb.onchange = updateTopics;
+    });
+    renderMultiButton();
+    document.getElementById('subs-type').onchange = function() {
+      document.getElementById('subs-custom-fields').style.display = this.value === 'custom' ? 'block' : 'none';
+    };
+    // attach selected set for retrieval during save
+    document.getElementById('subs-topics-select').selectedTopics = selected;
+  }
+
+  function saveSubscription(idx) {
+    const selected = document.getElementById('subs-topics-select').selectedTopics || new Set();
+    const sub = {
+      id: idx === -1 ? generateId() : config.subscriptions[idx].id,
+      name: document.getElementById('subs-name').value || 'Unnamed',
+      type: document.getElementById('subs-type').value,
+      url: document.getElementById('subs-url').value,
+      method: document.getElementById('subs-method')?.value || 'POST',
+      headers: document.getElementById('subs-headers')?.value || '',
+      secret: document.getElementById('subs-secret')?.value || '',
+      bodyTemplate: document.getElementById('subs-body')?.value || '',
+      enabled: document.getElementById('subs-enabled').checked,
+      topics: Array.from(selected)
+    };
+    if (idx === -1) {
+      config.subscriptions.push(sub);
+    } else {
+      config.subscriptions[idx] = sub;
+    }
+    renderPanel('webhooks');
+  }
 
   function addWebhook() {
     const id = generateId();
@@ -902,13 +1035,11 @@
     close: closeModal,
     save,
     renderPanel,
-    addWebhook,
-    editWebhook,
-    deleteWebhook,
-    saveWebhook,
+    addSubscription,
+    editSubscription,
+    deleteSubscription,
+    saveSubscription,
     testWebhookById,
-    editUniversalWebhook,
-    saveUniversalWebhook,
     addEmailService,
     editEmailService,
     deleteEmailService,
