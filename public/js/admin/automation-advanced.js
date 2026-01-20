@@ -35,6 +35,7 @@
   const WEBHOOK_TYPES = [
     { id: 'slack', name: 'Slack', desc: 'Team notifications' },
     { id: 'discord', name: 'Discord', desc: 'Community alerts' },
+    { id: 'google_chat', name: 'Google Chat', desc: 'Google Chat rooms' },
     { id: 'custom', name: 'Custom', desc: 'Any webhook URL' }
   ];
 
@@ -46,7 +47,11 @@
     try {
       const res = await fetch('/api/admin/automation/settings');
       const data = await res.json();
-      config = data.config || getDefaultConfig();
+    config = data.config || getDefaultConfig();
+      // ensure universalWebhook exists for older configs
+    if (!config.universalWebhook) {
+      config.universalWebhook = getDefaultConfig().universalWebhook;
+    }
     } catch (e) {
       console.error('Load config error:', e);
       config = getDefaultConfig();
@@ -58,10 +63,26 @@
     return {
       enabled: false,
       adminEmail: '',
+      // legacy webhooks array for backward compatibility
       webhooks: [],
+      // single universal webhook for all notifications
+      universalWebhook: {
+        id: 'universal',
+        name: 'Universal',
+        url: '',
+        secret: '',
+        type: 'custom',
+        enabled: false
+      },
       emailServices: [],
       routing: Object.keys(NOTIFICATION_TYPES).reduce((acc, k) => {
-        acc[k] = { webhooks: [], emailService: null, adminEmail: k.startsWith('customer_') ? false : true, enabled: true };
+        acc[k] = {
+          // legacy per‑type webhook list; kept for compatibility but unused
+          webhooks: [],
+          emailService: null,
+          adminEmail: k.startsWith('customer_') ? false : true,
+          enabled: true
+        };
         return acc;
       }, {})
     };
@@ -175,7 +196,7 @@
         <div class="aa-body">
           <div class="aa-sidebar">
             <button class="aa-nav-btn active" data-panel="general">⚙️ General</button>
-            <button class="aa-nav-btn" data-panel="webhooks">🔗 Webhooks</button>
+            <button class="aa-nav-btn" data-panel="webhooks">🔗 Webhook</button>
             <button class="aa-nav-btn" data-panel="email">📧 Email</button>
             <button class="aa-nav-btn" data-panel="routing">🔀 Routing</button>
             <button class="aa-nav-btn" data-panel="logs">📋 Logs</button>
@@ -248,8 +269,8 @@
           <h3>📊 Quick Stats</h3>
           <div class="aa-row">
             <div class="aa-col" style="text-align:center;padding:15px">
-              <div style="font-size:2em;color:#667eea">${(config.webhooks || []).filter(w => w.enabled).length}</div>
-              <div style="color:#6b7280;font-size:12px">Active Webhooks</div>
+              <div style="font-size:2em;color:#667eea">${config.universalWebhook && config.universalWebhook.enabled ? 1 : 0}</div>
+              <div style="color:#6b7280;font-size:12px">Universal Webhook</div>
             </div>
             <div class="aa-col" style="text-align:center;padding:15px">
               <div style="font-size:2em;color:#10b981">${(config.emailServices || []).filter(s => s.enabled).length}</div>
@@ -266,17 +287,34 @@
   }
 
   function renderWebhooksPanel() {
+    const uw = config.universalWebhook || {};
     const webhooks = config.webhooks || [];
     return `
       <div class="aa-panel active">
+        <!-- Universal webhook configuration -->
         <div class="aa-card">
-          <h3>🔗 Webhook Endpoints</h3>
-          <p>Add multiple webhooks for different services</p>
+          <h3>🔗 Universal Webhook</h3>
+          <p>This single webhook triggers all notifications. Configure below.</p>
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+            <div>
+              <strong style="color:#fff">${uw.name || 'Universal'}</strong>
+              <span class="aa-badge ${uw.enabled ? 'aa-badge-on' : 'aa-badge-off'}" style="margin-left:8px">${uw.enabled ? 'ON' : 'OFF'}</span>
+              <div style="color:#6b7280;font-size:11px;margin-top:4px">${uw.type?.toUpperCase() || 'CUSTOM'} • ${uw.url?.substring(0, 40) || 'No URL'}...</div>
+            </div>
+            <div>
+              <button class="aa-btn aa-btn-ghost aa-btn-sm" onclick="window.AdvAutomation.editUniversalWebhook()">Edit</button>
+            </div>
+          </div>
+        </div>
+        <!-- Legacy webhooks list -->
+        <div class="aa-card">
+          <h3>🔗 Legacy Webhook Endpoints</h3>
+          <p>These endpoints are retained for backward compatibility but are not used for routing.</p>
           <button class="aa-btn aa-btn-primary aa-btn-sm" onclick="window.AdvAutomation.addWebhook()">+ Add Webhook</button>
         </div>
         
         <div class="aa-list" id="aa-webhooks-list">
-          ${webhooks.length === 0 ? '<div style="text-align:center;padding:30px;color:#6b7280">No webhooks configured</div>' : 
+          ${webhooks.length === 0 ? '<div style="text-align:center;padding:30px;color:#6b7280">No legacy webhooks configured</div>' : 
             webhooks.map((w, i) => `
               <div class="aa-card" data-idx="${i}">
                 <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
@@ -345,27 +383,17 @@
           <div class="aa-routing-grid">
             <div class="aa-routing-row header">
               <div>Notification</div>
-              <div>Webhooks</div>
+              <div>Webhook</div>
               <div>Email Service</div>
               <div>Admin</div>
               <div>On</div>
             </div>
             ${Object.entries(NOTIFICATION_TYPES).map(([key, info]) => {
-              const route = config.routing?.[key] || { webhooks: [], emailService: null, adminEmail: true, enabled: true };
+              const route = config.routing?.[key] || { webhooks: [], emailService: null, adminEmail: key.startsWith('customer_') ? false : true, enabled: true };
               return `
                 <div class="aa-routing-row" data-route="${key}">
                   <div class="aa-routing-label"><span>${info.icon}</span> ${info.label}</div>
-                  <div class="aa-multi-select">
-                    <button class="aa-multi-btn" onclick="window.AdvAutomation.toggleMulti(this)">${route.webhooks?.length || 0} selected</button>
-                    <div class="aa-multi-dropdown">
-                      ${webhooks.map(w => `
-                        <label class="aa-multi-opt">
-                          <input type="checkbox" data-wh="${w.id}" ${route.webhooks?.includes(w.id) ? 'checked' : ''}>
-                          ${w.name}
-                        </label>
-                      `).join('') || '<div style="color:#6b7280;padding:8px">No webhooks</div>'}
-                    </div>
-                  </div>
+                  <div style="color:#9ca3af;font-size:12px">Universal</div>
                   <select class="aa-select" data-field="emailService" style="padding:8px">
                     <option value="">None</option>
                     ${services.map(s => `<option value="${s.id}" ${route.emailService === s.id ? 'selected' : ''}>${s.name || s.type}</option>`).join('')}
@@ -444,25 +472,13 @@
     if (panel === 'routing') {
       document.querySelectorAll('.aa-routing-row[data-route]').forEach(row => {
         const key = row.dataset.route;
-        if (!config.routing[key]) config.routing[key] = { webhooks: [], emailService: null, adminEmail: true, enabled: true };
-        
-        // Webhooks multi-select
-        row.querySelectorAll('[data-wh]').forEach(cb => {
-          cb.onchange = () => {
-            const selected = [...row.querySelectorAll('[data-wh]:checked')].map(c => c.dataset.wh);
-            config.routing[key].webhooks = selected;
-            row.querySelector('.aa-multi-btn').textContent = selected.length + ' selected';
-          };
-        });
-        
+        if (!config.routing[key]) config.routing[key] = { webhooks: [], emailService: null, adminEmail: !key.startsWith('customer_'), enabled: true };
         // Email service
         const emailSel = row.querySelector('[data-field="emailService"]');
         if (emailSel) emailSel.onchange = () => config.routing[key].emailService = emailSel.value || null;
-        
         // Admin email checkbox
         const adminCb = row.querySelector('[data-field="adminEmail"]');
         if (adminCb) adminCb.onchange = () => config.routing[key].adminEmail = adminCb.checked;
-        
         // Enabled checkbox
         const enabledCb = row.querySelector('[data-field="enabled"]');
         if (enabledCb) enabledCb.onchange = () => config.routing[key].enabled = enabledCb.checked;
@@ -597,6 +613,118 @@
       config.webhooks[idx] = webhook;
     }
     
+    renderPanel('webhooks');
+  }
+
+  /**
+   * Edit the universal webhook configuration. Opens a form similar to editing a
+   * normal webhook but writes values to config.universalWebhook instead of the
+   * webhooks array. The universal webhook triggers all notifications.
+   */
+  function editUniversalWebhook() {
+    const uw = config.universalWebhook || {};
+    showUniversalWebhookEditor({
+      id: uw.id || 'universal',
+      name: uw.name || 'Universal',
+      type: uw.type || 'custom',
+      url: uw.url || '',
+      method: uw.method || 'POST',
+      headers: uw.headers || '',
+      secret: uw.secret || '',
+      bodyTemplate: uw.bodyTemplate || '',
+      enabled: uw.enabled !== false
+    });
+  }
+
+  /**
+   * Display a form to edit the universal webhook. This reuses many of the
+   * controls from the normal webhook editor but omits deletion and test
+   * buttons.
+   */
+  function showUniversalWebhookEditor(webhook) {
+    const content = document.getElementById('aa-content');
+    content.innerHTML = `
+      <div class="aa-panel active">
+        <div class="aa-card">
+          <h3>✏️ Universal Webhook</h3>
+          <div class="aa-row">
+            <div class="aa-col">
+              <label class="aa-label">Name</label>
+              <input type="text" class="aa-input" id="uw-name" value="${webhook.name || ''}" placeholder="Universal">
+            </div>
+            <div class="aa-col">
+              <label class="aa-label">Type</label>
+              <select class="aa-select" id="uw-type">
+                ${WEBHOOK_TYPES.map(t => `<option value="${t.id}" ${webhook.type === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="aa-row">
+            <div class="aa-col">
+              <label class="aa-label">Webhook URL</label>
+              <input type="url" class="aa-input" id="uw-url" value="${webhook.url || ''}" placeholder="https://hooks.slack.com/...">
+            </div>
+          </div>
+          <div id="uw-custom-fields" style="display:${webhook.type === 'custom' ? 'block' : 'none'}">
+            <div class="aa-row">
+              <div class="aa-col" style="max-width:100px">
+                <label class="aa-label">Method</label>
+                <select class="aa-select" id="uw-method">
+                  <option value="POST" ${webhook.method === 'POST' ? 'selected' : ''}>POST</option>
+                  <option value="PUT" ${webhook.method === 'PUT' ? 'selected' : ''}>PUT</option>
+                </select>
+              </div>
+              <div class="aa-col">
+                <label class="aa-label">Secret (optional)</label>
+                <input type="text" class="aa-input" id="uw-secret" value="${webhook.secret || ''}" placeholder="webhook-secret">
+              </div>
+            </div>
+            <div class="aa-row">
+              <div class="aa-col">
+                <label class="aa-label">Headers (JSON)</label>
+                <textarea class="aa-textarea" id="uw-headers" placeholder='{"X-Custom": "value"}'>${webhook.headers || ''}</textarea>
+              </div>
+            </div>
+            <div class="aa-row">
+              <div class="aa-col">
+                <label class="aa-label">Body Template (JSON) - Use {{event}}, {{title}}, {{message}}, {{data}}</label>
+                <textarea class="aa-textarea" id="uw-body" placeholder='{"text": "{{title}}: {{message}}"}'>${webhook.bodyTemplate || ''}</textarea>
+              </div>
+            </div>
+          </div>
+          <label class="aa-toggle" style="margin-top:15px">
+            <input type="checkbox" id="uw-enabled" ${webhook.enabled ? 'checked' : ''}>
+            <div class="aa-toggle-label"><strong>Enabled</strong></div>
+          </label>
+          <div style="margin-top:20px;display:flex;gap:10px">
+            <button class="aa-btn aa-btn-primary" onclick="window.AdvAutomation.saveUniversalWebhook()">💾 Save</button>
+            <button class="aa-btn aa-btn-ghost" onclick="window.AdvAutomation.renderPanel('webhooks')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById('uw-type').onchange = function() {
+      document.getElementById('uw-custom-fields').style.display = this.value === 'custom' ? 'block' : 'none';
+    };
+  }
+
+  /**
+   * Persist changes to the universal webhook back into the config and
+   * redisplay the webhooks panel.
+   */
+  function saveUniversalWebhook() {
+    const uw = {
+      id: 'universal',
+      name: document.getElementById('uw-name').value || 'Universal',
+      type: document.getElementById('uw-type').value,
+      url: document.getElementById('uw-url').value,
+      method: document.getElementById('uw-method')?.value || 'POST',
+      headers: document.getElementById('uw-headers')?.value || '',
+      secret: document.getElementById('uw-secret')?.value || '',
+      bodyTemplate: document.getElementById('uw-body')?.value || '',
+      enabled: document.getElementById('uw-enabled').checked
+    };
+    config.universalWebhook = uw;
     renderPanel('webhooks');
   }
 
@@ -779,6 +907,8 @@
     deleteWebhook,
     saveWebhook,
     testWebhookById,
+    editUniversalWebhook,
+    saveUniversalWebhook,
     addEmailService,
     editEmailService,
     deleteEmailService,

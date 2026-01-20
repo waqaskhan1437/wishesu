@@ -59,6 +59,16 @@ function getDefaultConfig() {
     adminEmail: '',
     webhooks: [],
     emailServices: [],
+    // Single universal webhook used to deliver all notifications. If not configured or disabled,
+    // automation dispatches will be skipped to avoid unnecessary work.
+    universalWebhook: {
+      id: 'universal',
+      name: 'Universal',
+      url: '',
+      secret: '',
+      type: 'custom',
+      enabled: false
+    },
     routing: {
       new_order: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
       new_tip: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
@@ -109,6 +119,14 @@ export async function getAutomationSettings(env) {
       ...w,
       secret: w.secret ? '••••••••' : ''
     }));
+
+    // Mask universal webhook secret
+    if (safeConfig.universalWebhook) {
+      safeConfig.universalWebhook = {
+        ...safeConfig.universalWebhook,
+        secret: safeConfig.universalWebhook.secret ? '••••••••' : ''
+      };
+    }
     
     return json({ success: true, config: safeConfig });
   } catch (e) {
@@ -143,6 +161,11 @@ export async function saveAutomationSettings(env, body) {
         }
         return w;
       });
+    }
+
+    // Preserve masked secret for universal webhook
+    if (newConfig.universalWebhook && newConfig.universalWebhook.secret === '••••••••') {
+      newConfig.universalWebhook.secret = currentConfig.universalWebhook?.secret || '';
     }
     
     const success = await saveConfig(env, newConfig);
@@ -216,21 +239,25 @@ async function sendWebhook(env, webhook, payload) {
           ]
         });
         break;
-        
+
       case 'discord':
         body = JSON.stringify({
           content: payload.title,
           embeds: [{ title: payload.title, description: payload.message, color: 0x667eea }]
         });
         break;
-        
+
+      case 'google_chat':
+        // Google Chat expects a simple text payload. Combine title and message separated by a newline.
+        body = JSON.stringify({ text: `${payload.title}\n${payload.message}` });
+        break;
+
       case 'custom':
       default:
         if (webhook.headers) {
           try { headers = { ...headers, ...JSON.parse(webhook.headers) }; } catch (e) {}
         }
         if (webhook.secret) headers['X-Webhook-Secret'] = webhook.secret;
-        
         // Custom body template support
         if (webhook.bodyTemplate) {
           body = webhook.bodyTemplate
@@ -398,17 +425,20 @@ async function dispatchNotification(env, notificationType, payload, recipientEma
   const routing = config.routing?.[notificationType];
   if (!routing?.enabled) return { success: false, error: 'Route disabled' };
   
-  const results = { webhooks: [], email: null };
-  
-  // Send webhooks (parallel)
-  if (routing.webhooks?.length) {
-    results.webhooks = await sendToWebhooks(env, routing.webhooks, payload, config.webhooks || []);
+  // If no universal webhook configured or disabled, do not process to avoid unnecessary work
+  if (!config.universalWebhook || !config.universalWebhook.enabled || !config.universalWebhook.url) {
+    return { success: false, error: 'Universal webhook not configured' };
   }
-  
-  // Send email
+
+  const results = { universal: null, email: null };
+
+  // Send universal webhook
+  results.universal = await sendWebhook(env, config.universalWebhook, payload);
+
+  // Send email (optional)
   const service = routing.emailService ? (config.emailServices || []).find(s => s.id === routing.emailService) : null;
   const to = recipientEmail || (routing.adminEmail ? config.adminEmail : null);
-  
+
   if (to && (service || routing.adminEmail)) {
     const emailService = service || (config.emailServices || []).find(s => s.enabled);
     if (emailService) {
@@ -416,7 +446,7 @@ async function dispatchNotification(env, notificationType, payload, recipientEma
       results.email = await sendEmail(env, emailService, to, payload.title, html, payload.message);
     }
   }
-  
+
   return { success: true, results };
 }
 
