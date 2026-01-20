@@ -793,6 +793,55 @@ async function getConfig(env, forceRefresh = false) {
     const row = await env.DB.prepare("SELECT value FROM settings WHERE key = ?").bind("automation_config_v2").first();
     if (row?.value) {
       configCache = JSON.parse(row.value);
+      // Migrate legacy config to new schema: convert universalWebhook or webhooks array into subscriptions
+      if (configCache.universalWebhook) {
+        const uw = configCache.universalWebhook;
+        configCache.subscriptions = configCache.subscriptions || [];
+        if (uw.url) {
+          const existing = configCache.subscriptions.find((s) => s.id === "universal");
+          if (!existing) {
+            configCache.subscriptions.push({
+              id: "universal",
+              name: uw.name || "Universal",
+              url: uw.url,
+              type: uw.type || "custom",
+              secret: uw.secret || "",
+              enabled: uw.enabled !== false,
+              topics: Object.keys(configCache.routing || getDefaultConfig().routing)
+            });
+          }
+        }
+        delete configCache.universalWebhook;
+      }
+      if (configCache.webhooks) {
+        for (const wh of configCache.webhooks) {
+          const topics = [];
+          if (configCache.routing) {
+            for (const [evt, route] of Object.entries(configCache.routing)) {
+              if (route.webhooks?.includes?.(wh.id)) {
+                topics.push(evt);
+              }
+            }
+          }
+          configCache.subscriptions = configCache.subscriptions || [];
+          configCache.subscriptions.push({
+            id: wh.id,
+            name: wh.name || wh.id,
+            url: wh.url,
+            type: wh.type || "custom",
+            secret: wh.secret || "",
+            enabled: wh.enabled !== false,
+            topics
+          });
+        }
+        delete configCache.webhooks;
+        // Remove webhook lists from routing
+        if (configCache.routing) {
+          for (const key of Object.keys(configCache.routing)) {
+            delete configCache.routing[key].webhooks;
+          }
+        }
+      }
     } else {
       configCache = getDefaultConfig();
     }
@@ -808,20 +857,21 @@ function getDefaultConfig() {
   return {
     enabled: false,
     adminEmail: "",
-    webhooks: [],
+    // Use subscriptions array instead of legacy webhooks
+    subscriptions: [],
     emailServices: [],
     routing: {
-      new_order: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
-      new_tip: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
-      new_review: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
-      blog_comment: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
-      forum_question: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
-      forum_reply: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
-      chat_message: { webhooks: [], emailService: null, adminEmail: true, enabled: true },
-      customer_order_confirmed: { webhooks: [], emailService: null, adminEmail: false, enabled: true },
-      customer_order_delivered: { webhooks: [], emailService: null, adminEmail: false, enabled: true },
-      customer_chat_reply: { webhooks: [], emailService: null, adminEmail: false, enabled: true },
-      customer_forum_reply: { webhooks: [], emailService: null, adminEmail: false, enabled: true }
+      new_order: { emailService: null, adminEmail: true, enabled: true },
+      new_tip: { emailService: null, adminEmail: true, enabled: true },
+      new_review: { emailService: null, adminEmail: true, enabled: true },
+      blog_comment: { emailService: null, adminEmail: true, enabled: true },
+      forum_question: { emailService: null, adminEmail: true, enabled: true },
+      forum_reply: { emailService: null, adminEmail: true, enabled: true },
+      chat_message: { emailService: null, adminEmail: true, enabled: true },
+      customer_order_confirmed: { emailService: null, adminEmail: false, enabled: true },
+      customer_order_delivered: { emailService: null, adminEmail: false, enabled: true },
+      customer_chat_reply: { emailService: null, adminEmail: false, enabled: true },
+      customer_forum_reply: { emailService: null, adminEmail: false, enabled: true }
     }
   };
 }
@@ -846,9 +896,10 @@ async function getAutomationSettings(env) {
       ...s,
       apiKey: s.apiKey ? "\u2022\u2022\u2022\u2022" + s.apiKey.slice(-4) : ""
     }));
-    safeConfig.webhooks = (safeConfig.webhooks || []).map((w) => ({
-      ...w,
-      secret: w.secret ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : ""
+    safeConfig.subscriptions = (safeConfig.subscriptions || []).map((sub) => ({
+      ...sub,
+      secret: sub.secret ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "",
+      topics: sub.topics || []
     }));
     return json({ success: true, config: safeConfig });
   } catch (e) {
@@ -869,13 +920,15 @@ async function saveAutomationSettings(env, body) {
         return s;
       });
     }
-    if (newConfig.webhooks) {
-      newConfig.webhooks = newConfig.webhooks.map((w) => {
-        if (w.secret === "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022") {
-          const existing = currentConfig.webhooks?.find((e) => e.id === w.id);
-          w.secret = existing?.secret || "";
+    if (newConfig.subscriptions) {
+      newConfig.subscriptions = newConfig.subscriptions.map((sub) => {
+        if (sub.secret === "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022") {
+          const existing = currentConfig.subscriptions?.find((e) => e.id === sub.id);
+          sub.secret = existing?.secret || "";
         }
-        return w;
+        // ensure topics array exists
+        sub.topics = sub.topics || [];
+        return sub;
       });
     }
     const success = await saveConfig(env, newConfig);
@@ -1082,8 +1135,13 @@ async function dispatchNotification(env, notificationType, payload, recipientEma
   const routing = config.routing?.[notificationType];
   if (!routing?.enabled) return { success: false, error: "Route disabled" };
   const results = { webhooks: [], email: null };
-  if (routing.webhooks?.length) {
-    results.webhooks = await sendToWebhooks(env, routing.webhooks, payload, config.webhooks || []);
+  // Determine which subscriptions should receive this notification
+  const eligibleSubs = (config.subscriptions || []).filter((sub) => {
+    return sub.enabled && Array.isArray(sub.topics) && sub.topics.includes(notificationType);
+  });
+  for (const sub of eligibleSubs) {
+    const res = await sendWebhook(env, sub, payload);
+    results.webhooks.push({ id: sub.id, name: sub.name, success: res.success });
   }
   const service = routing.emailService ? (config.emailServices || []).find((s) => s.id === routing.emailService) : null;
   const to = recipientEmail || (routing.adminEmail ? config.adminEmail : null);
@@ -1251,7 +1309,7 @@ Someone replied to "${data.questionTitle || data.question_title}":
 __name(notifyCustomerForumReply, "notifyCustomerForumReply");
 async function testWebhook(env, webhookId) {
   const config = await getConfig(env, true);
-  const webhook = (config.webhooks || []).find((w) => w.id === webhookId);
+  const webhook = (config.subscriptions || []).find((w) => w.id === webhookId);
   if (!webhook) return json({ success: false, error: "Webhook not found" });
   const result = await sendWebhook(env, { ...webhook, enabled: true }, {
     event: "test",
