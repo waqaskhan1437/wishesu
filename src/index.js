@@ -1487,6 +1487,20 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       // ----- BLOG POST PAGES -----
       if ((method === 'GET' || method === 'HEAD') && path.startsWith('/blog/') && path !== '/blog/' && !path.includes('.')) {
         const slug = path.replace('/blog/', '').replace(/\/$/, '');
+        // Only attempt to serve from cache for GET requests. HEAD requests should
+        // still hit the cache API to return headers quickly without body.
+        if (method === 'GET' && caches && caches.default) {
+          try {
+            const cacheKey = new Request(req.url, { method: 'GET' });
+            const cachedResp = await caches.default.match(cacheKey);
+            if (cachedResp) {
+              return cachedResp;
+            }
+          } catch (err) {
+            // Cache lookup failure should not break page rendering
+            console.warn('Blog cache match error:', err);
+          }
+        }
         if (slug && env.DB) {
           try {
             await initDB(env);
@@ -1521,14 +1535,27 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               const htmlRaw = generateBlogPostHTML(blog, previousBlogs, comments);
               const html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
               
-              return new Response(html, {
+              const resp = new Response(html, {
                 status: 200,
                 headers: {
                   'Content-Type': 'text/html; charset=utf-8',
                   'X-Worker-Version': VERSION,
-                  'X-Robots-Tag': seo.robots
+                  'X-Robots-Tag': seo.robots,
+                  // Set a short max-age to hint caches while ensuring updates propagate
+                  'Cache-Control': 'public, max-age=120'
                 }
               });
+              // Store in caches.default only for GET requests
+              if (method === 'GET' && caches && caches.default) {
+                try {
+                  const cacheKey = new Request(req.url, { method: 'GET' });
+                  // We clone to avoid the body being locked
+                  await caches.default.put(cacheKey, resp.clone());
+                } catch (err) {
+                  console.warn('Blog cache put error:', err);
+                }
+              }
+              return resp;
             }
           } catch (e) {
             console.error('Blog fetch error:', e);
@@ -1539,6 +1566,18 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       // ----- FORUM QUESTION PAGES -----
       if ((method === 'GET' || method === 'HEAD') && path.startsWith('/forum/') && path !== '/forum/' && !path.includes('.')) {
         const slug = path.replace('/forum/', '').replace(/\/$/, '');
+        // Try to serve from cache for GET requests
+        if (method === 'GET' && caches && caches.default) {
+          try {
+            const cacheKey = new Request(req.url, { method: 'GET' });
+            const cachedResp = await caches.default.match(cacheKey);
+            if (cachedResp) {
+              return cachedResp;
+            }
+          } catch (err) {
+            console.warn('Forum cache match error:', err);
+          }
+        }
         if (slug && env.DB) {
           try {
             await initDB(env);
@@ -1585,14 +1624,25 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               const htmlRaw = generateForumQuestionHTML(question, replies, sidebar);
               const html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
               
-              return new Response(html, {
+              const resp = new Response(html, {
                 status: 200,
                 headers: {
                   'Content-Type': 'text/html; charset=utf-8',
                   'X-Worker-Version': VERSION,
-                  'X-Robots-Tag': seo.robots
+                  'X-Robots-Tag': seo.robots,
+                  'Cache-Control': 'public, max-age=120'
                 }
               });
+              // Put into cache for GET requests
+              if (method === 'GET' && caches && caches.default) {
+                try {
+                  const cacheKey = new Request(req.url, { method: 'GET' });
+                  await caches.default.put(cacheKey, resp.clone());
+                } catch (err) {
+                  console.warn('Forum cache put error:', err);
+                }
+              }
+              return resp;
             }
           } catch (e) {
             console.error('Forum question fetch error:', e);

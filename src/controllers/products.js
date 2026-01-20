@@ -427,12 +427,10 @@ export async function handleProductRouting(env, url, path) {
   if (legacyId) {
     const p = await getProductById(legacyId);
     if (p) {
-      const slug = p.slug ? String(p.slug) : slugifyStr(p.title);
-      if (!p.slug) {
-        try {
-          await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?').bind(slug, Number(p.id)).run();
-        } catch (e) {}
-      }
+      // Slug normalization removed: product slugs should be assigned
+      // when the product is created or updated via the admin panel.
+      // We avoid updating the DB on each legacy request to reduce CPU
+      // and DB usage on edge.
       // We intentionally do not redirect. Returning null allows the request
       // to fall through to normal route handling (typically 404 for /product).
       return null;
@@ -444,12 +442,9 @@ export async function handleProductRouting(env, url, path) {
     const slugIn = decodeURIComponent(path.slice('/product/'.length));
     const row = await getProductBySlug(slugIn);
     if (row) {
-      const canonicalSlug = row.slug ? String(row.slug) : slugifyStr(row.title);
-      if (!row.slug) {
-        try {
-          await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?').bind(canonicalSlug, Number(row.id)).run();
-        } catch (e) {}
-      }
+      // Slug normalization removed: if the product has no slug, it will be
+      // generated and saved during product creation/update. Avoid hitting the DB
+      // here to reduce CPU usage.
       // Again, do not redirect to canonical path. Let the router handle the
       // current URL as-is. Users should navigate directly to `/product-<id>/<slug>`.
       return null;
