@@ -82,6 +82,16 @@ import {
   getPaymentMethodsStatus
 } from './controllers/payment-gateway.js';
 
+// Universal Payment System (2025)
+import { 
+  handleUniversalPaymentAPI,
+  handleUniversalWebhook,
+  handleAddPaymentGateway,
+  handleGetPaymentGateways,
+  handleDeletePaymentGateway,
+  handleUpdatePaymentGateway
+} from './controllers/payment-universal.js';
+
 // Pages
 import { 
   getPages, 
@@ -673,6 +683,35 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/settings/payment-methods') {
     const body = await req.json();
     return savePaymentMethodsEnabled(env, body);
+  }
+
+  // ----- UNIVERSAL PAYMENT SYSTEM (2025) -----
+  if (method === 'GET' && path === '/api/admin/payment-universal/gateways') {
+    return handleGetPaymentGateways(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/payment-universal/gateways') {
+    const body = await req.json();
+    return handleAddPaymentGateway(env, body);
+  }
+
+  if (method === 'PUT' && path === '/api/admin/payment-universal/gateways') {
+    const body = await req.json();
+    return handleUpdatePaymentGateway(env, body);
+  }
+
+  if (method === 'DELETE' && path === '/api/admin/payment-universal/gateways') {
+    const id = url.searchParams.get('id');
+    return handleDeletePaymentGateway(env, id);
+  }
+
+  if (method === 'POST' && path === '/api/payment/universal/webhook') {
+    const body = await req.json();
+    return handleUniversalWebhook(env, body, req.headers);
+  }
+
+  if (method === 'GET' && path === '/api/payment/universal/test') {
+    return handleUniversalPaymentAPI(env);
   }
 
   // ----- ORDERS -----

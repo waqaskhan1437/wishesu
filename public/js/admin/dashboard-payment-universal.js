@@ -9,317 +9,428 @@
  * - Modular plugin architecture
  */
 
-(function(AD) {
-  
-  function toast(msg, ok=true) {
-    const el = document.getElementById('payment-toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.style.display = 'block';
-    el.style.background = ok ? '#10b981' : '#ef4444';
-    setTimeout(() => el.style.display = 'none', 3000);
-  }
+// Payment gateways management
+let paymentGateways = [];
+let currentEditingGateway = null;
 
-  async function jfetch(url, opts={}) {
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) },
-      ...opts
-    });
-    if (!res.ok) throw new Error('Request failed');
-    return res.json();
-  }
+// Initialize payment tab
+async function initPaymentTab() {
+    console.log('Initializing Payment Gateway Management...');
+    await loadPaymentGateways();
+    renderPaymentGateways();
+    setupPaymentEventListeners();
+}
 
-  async function loadPayment(panel) {
-    panel.innerHTML = `
-      <div style="max-width:1000px;margin:0 auto;padding:20px;">
-        <div id="payment-toast" style="display:none;position:fixed;top:20px;right:20px;padding:15px 25px;border-radius:10px;color:white;font-weight:600;z-index:1000;"></div>
-        
-        <!-- Header -->
-        <div style="margin-bottom:30px;">
-          <h2 style="margin:0 0 8px;font-size:28px;color:#1f2937;">💳 Universal Payment Gateway</h2>
-          <p style="margin:0;color:#6b7280;font-size:15px;">Add any payment method with custom integration</p>
+// Load payment gateways from API
+async function loadPaymentGateways() {
+    try {
+        const response = await fetch('/api/admin/payment-universal/gateways');
+        const data = await response.json();
+        if (data.success) {
+            paymentGateways = data.gateways || [];
+            console.log('Loaded payment gateways:', paymentGateways);
+        } else {
+            console.error('Failed to load payment gateways:', data.error);
+            paymentGateways = [];
+        }
+    } catch (error) {
+        console.error('Error loading payment gateways:', error);
+        paymentGateways = [];
+    }
+}
+
+// Render payment gateways table
+function renderPaymentGateways() {
+    const container = document.getElementById('main-panel');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="payment-management">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>💳 Universal Payment Gateway Manager</h2>
+                <button class="btn btn-primary" onclick="showAddGatewayModal()">+ Add Payment Gateway</button>
+            </div>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="payment-gateways-tbody">
+                        ${renderPaymentGatewayRows()}
+                    </tbody>
+                </table>
+            </div>
         </div>
-
-        <!-- Info Card -->
-        <div style="background:white;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 1px 3px rgba(0,0,0,0.1);border-left:4px solid #8b5cf6;">
-          <h3 style="margin:0 0 15px;font-size:18px;color:#1f2937;">🔧 How It Works</h3>
-          <ul style="margin:0;padding-left:20px;color:#4b5563;font-size:14px;line-height:1.8;">
-            <li><strong>Add Gateway:</strong> Configure any payment gateway</li>
-            <li><strong>Webhook Setup:</strong> Provide webhook URL and secret</li>
-            <li><strong>Custom Code:</strong> Add custom processing if needed</li>
-            <li><strong>Universal Handler:</strong> All payments processed uniformly</li>
-            <li><strong>Secure:</strong> Signature verification built-in</li>
-          </ul>
-        </div>
-
-        <!-- Add Gateway Form -->
-        <div style="background:white;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <h3 style="margin:0 0 20px;font-size:18px;color:#1f2937;">➕ Add Payment Gateway</h3>
-          
-          <div style="display:grid;gap:20px;">
-            <div>
-              <label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;font-size:14px;">Gateway Name *</label>
-              <input id="gateway-name" type="text" placeholder="Stripe, PayPal, Gumroad, etc." required
-                style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
-            </div>
-
-            <div>
-              <label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;font-size:14px;">Webhook URL</label>
-              <input id="webhook-url" type="url" placeholder="https://yoursite.com/webhooks/gateway-name"
-                style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
-              <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">Where the gateway sends payment notifications</p>
-            </div>
-
-            <div>
-              <label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;font-size:14px;">Webhook Secret</label>
-              <input id="webhook-secret" type="password" placeholder="Webhook signature secret"
-                style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
-              <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">For verifying webhook authenticity</p>
-            </div>
-
-            <div>
-              <label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;font-size:14px;">Custom Processing Code (Optional)</label>
-              <textarea id="custom-code" placeholder="// Custom code for this gateway
-// Example: 
-// if (event.type === 'payment_intent.succeeded') {
-//   // Process custom logic
-// }" rows="6"
-                style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:14px;font-family:monospace;resize:vertical;"></textarea>
-              <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">JavaScript code to handle custom gateway logic</p>
-            </div>
-
-            <div>
-              <label style="display:flex;align-items:center;cursor:pointer;margin-bottom:15px;">
-                <input id="is-enabled" type="checkbox" checked style="width:20px;height:20px;margin-right:12px;cursor:pointer;">
-                <span style="font-weight:600;color:#374151;">Enable Gateway</span>
-              </label>
-            </div>
-
-            <button onclick="AD.addPaymentGateway()" 
-              style="padding:14px 28px;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:white;border:none;border-radius:12px;cursor:pointer;font-size:16px;font-weight:600;box-shadow:0 4px 12px rgba(139,92,246,0.3);">
-              ➕ Add Payment Gateway
-            </button>
-          </div>
-        </div>
-
-        <!-- Current Gateways -->
-        <div style="background:white;border-radius:16px;padding:25px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <div style="display:flex;justify-content:space-between;align-items-center;margin-bottom:20px;">
-            <h3 style="margin:0;font-size:18px;color:#1f2937;">🌐 Active Payment Gateways</h3>
-            <span id="gateways-count" style="background:#e5e7eb;padding:5px 12px;border-radius:20px;font-size:14px;color:#4b5563;">Loading...</span>
-          </div>
-          
-          <div id="gateways-list" style="min-height:100px;">
-            <div style="text-align:center;padding:40px 20px;color:#9ca3af;">
-              <div style="font-size:48px;margin-bottom:12px;">💳</div>
-              <p style="margin:0;font-size:16px;">No payment gateways configured yet</p>
-              <p style="margin-top:8px;font-size:14px;">Add your first payment gateway to get started</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Pre-built Gateways -->
-        <div style="margin-top:30px;background:white;border-radius:16px;padding:25px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <h3 style="margin:0 0 20px;font-size:18px;color:#1f2937;">🚀 Quick Setup (Pre-built)</h3>
-          
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;">
-            <button onclick="AD.quickSetup('stripe')" 
-              style="padding:15px;background:#6366f1;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;transition:transform 0.2s;">
-              Stripe
-            </button>
-            <button onclick="AD.quickSetup('paypal')" 
-              style="padding:15px;background:#0070ba;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;transition:transform 0.2s;">
-              PayPal
-            </button>
-            <button onclick="AD.quickSetup('whop')" 
-              style="padding:15px;background:#4ade80;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;transition:transform 0.2s;">
-              Whop
-            </button>
-            <button onclick="AD.quickSetup('gumroad')" 
-              style="padding:15px;background:#ff6347;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;transition:transform 0.2s;">
-              Gumroad
-            </button>
-            <button onclick="AD.quickSetup('razorpay')" 
-              style="padding:15px;background:#008080;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;transition:transform 0.2s;">
-              Razorpay
-            </button>
-            <button onclick="AD.quickSetup('paystack')" 
-              style="padding:15px;background:#00c853;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;transition:transform 0.2s;">
-              Paystack
-            </button>
-          </div>
-        </div>
-      </div>
     `;
+}
 
-    // Load current gateways
-    await loadGatewaysList();
-  }
+// Render individual payment gateway rows
+function renderPaymentGatewayRows() {
+    if (!paymentGateways || paymentGateways.length === 0) {
+        return '<tr><td colspan="5" style="text-align: center; padding: 20px;">No payment gateways configured yet</td></tr>';
+    }
+    
+    return paymentGateways.map(gateway => `
+        <tr>
+            <td>
+                <strong>${escapeHtml(gateway.name)}</strong>
+                <div style="font-size: 0.8em; color: #666; margin-top: 4px;">${gateway.gateway_type || 'Custom'}</div>
+            </td>
+            <td>
+                ${gateway.gateway_type ? escapeHtml(gateway.gateway_type) : 'Custom'}
+            </td>
+            <td>
+                <span class="status-${gateway.enabled ? 'paid' : 'pending'}">
+                    ${gateway.enabled ? 'Active' : 'Inactive'}
+                </span>
+            </td>
+            <td>
+                ${new Date(gateway.created_at).toLocaleDateString()}
+            </td>
+            <td>
+                <button class="btn" onclick="editGateway(${gateway.id})" style="margin-right: 5px;">Edit</button>
+                <button class="btn" onclick="deleteGateway(${gateway.id})" style="background: #ef4444;">Delete</button>
+            </td>
+        </tr>
+    `).join('');
+}
 
-  async function loadGatewaysList() {
-    const panel = document.getElementById('main-panel');
-    try {
-      const data = await jfetch('/api/admin/payment/gateways');
-      const gateways = data.gateways || [];
-      
-      const listDiv = panel.querySelector('#gateways-list');
-      const countSpan = panel.querySelector('#gateways-count');
-      
-      if (gateways.length === 0) {
-        listDiv.innerHTML = `
-          <div style="text-align:center;padding:40px 20px;color:#9ca3af;">
-            <div style="font-size:48px;margin-bottom:12px;">💳</div>
-            <p style="margin:0;font-size:16px;">No payment gateways configured yet</p>
-            <p style="margin-top:8px;font-size:14px;">Add your first payment gateway to get started</p>
-          </div>
-        `;
-      } else {
-        listDiv.innerHTML = `
-          <div style="display:grid;gap:15px;">
-            ${gateways.map((gw, index) => `
-              <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;">
-                <div>
-                  <div style="font-weight:600;color:#1f2937;font-size:15px;">${gw.name}</div>
-                  <div style="font-size:13px;color:#6b7280;margin-top:4px;">${gw.webhook_url || 'No webhook'}</div>
-                  <div style="font-size:12px;color:${gw.is_enabled ? '#10b981' : '#ef4444'};margin-top:4px;">
-                    ${gw.is_enabled ? '🟢 Enabled' : '🔴 Disabled'}
-                  </div>
-                </div>
-                <div style="display:flex;gap:8px;">
-                  <button onclick="AD.editGateway(${index})" 
-                    style="padding:8px 16px;background:#374151;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
-                    Edit
-                  </button>
-                  <button onclick="AD.deleteGateway('${gw.id}')" 
-                    style="padding:8px 16px;background:#ef4444;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
-                    Delete
-                  </button>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `;
-      }
-      
-      countSpan.textContent = `${gateways.length} gateway${gateways.length !== 1 ? 's' : ''}`;
-      
-    } catch (e) {
-      listDiv.innerHTML = `
-        <div style="text-align:center;padding:40px 20px;color:#9ca3af;">
-          <div style="font-size:48px;margin-bottom:12px;">⚠️</div>
-          <p style="margin:0;font-size:16px;">Failed to load gateways</p>
-          <p style="margin-top:8px;font-size:14px;">Please try again later</p>
+// Set up event listeners for payment tab
+function setupPaymentEventListeners() {
+    // Update page title
+    document.getElementById('page-title').textContent = 'Payment Gateways';
+}
+
+// Show add gateway modal
+function showAddGatewayModal() {
+    currentEditingGateway = null;
+    showModal('Add Payment Gateway', createGatewayFormHTML());
+}
+
+// Show edit gateway modal
+function editGateway(gatewayId) {
+    const gateway = paymentGateways.find(g => g.id === gatewayId);
+    if (!gateway) return;
+    
+    currentEditingGateway = gateway;
+    showModal('Edit Payment Gateway', createGatewayFormHTML(gateway));
+}
+
+// Create gateway form HTML
+function createGatewayFormHTML(gateway = null) {
+    const isEdit = !!gateway;
+    const title = isEdit ? gateway.name : 'New Gateway';
+    const name = gateway?.name || '';
+    const gatewayType = gateway?.gateway_type || '';
+    const webhookUrl = gateway?.webhook_url || '';
+    const secret = gateway?.secret || '';
+    const customCode = gateway?.custom_code || '';
+    const enabled = gateway?.enabled !== false; // Default to true
+    
+    return `
+        <div class="gateway-form">
+            <div class="form-group">
+                <label for="gateway-name">Gateway Name *</label>
+                <input type="text" id="gateway-name" placeholder="e.g., Stripe, PayPal, Custom Gateway" 
+                       value="${escapeHtml(name)}" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="gateway-type">Gateway Type</label>
+                <select id="gateway-type">
+                    <option value="">Custom (Generic)</option>
+                    <option value="stripe" ${gatewayType === 'stripe' ? 'selected' : ''}>Stripe</option>
+                    <option value="paypal" ${gatewayType === 'paypal' ? 'selected' : ''}>PayPal</option>
+                    <option value="whop" ${gatewayType === 'whop' ? 'selected' : ''}>Whop</option>
+                    <option value="gumroad" ${gatewayType === 'gumroad' ? 'selected' : ''}>Gumroad</option>
+                    <option value="shopify" ${gatewayType === 'shopify' ? 'selected' : ''}>Shopify</option>
+                    <option value="square" ${gatewayType === 'square' ? 'selected' : ''}>Square</option>
+                    <option value="paystack" ${gatewayType === 'paystack' ? 'selected' : ''}>Paystack</option>
+                    <option value="razorpay" ${gatewayType === 'razorpay' ? 'selected' : ''}>Razorpay</option>
+                    <option value="custom" ${gatewayType === 'custom' ? 'selected' : ''}>Custom Integration</option>
+                </select>
+                <small>Select a pre-built template or choose Custom for generic integration</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="webhook-url">Webhook URL *</label>
+                <input type="url" id="webhook-url" placeholder="https://yourdomain.com/api/payment/webhook" 
+                       value="${escapeHtml(webhookUrl)}" required>
+                <small>The URL where payment gateway will send webhook notifications</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="gateway-secret">Secret Key / Signature</label>
+                <input type="password" id="gateway-secret" placeholder="Enter webhook signing secret" 
+                       value="${escapeHtml(secret)}">
+                <small>Used to verify webhook authenticity (optional but recommended)</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="custom-code">Custom Processing Code</label>
+                <textarea id="custom-code" placeholder="JavaScript code to process webhook data..." 
+                          style="width: 100%; min-height: 200px; font-family: monospace; font-size: 0.9em;">${escapeHtml(customCode)}</textarea>
+                <small>Custom JavaScript code to handle specific gateway logic (optional)</small>
+                <details style="margin-top: 10px;">
+                    <summary style="cursor: pointer; font-weight: bold;">Show Code Template</summary>
+                    <div style="margin-top: 10px; background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 0.85em;">
+                        <strong>Template:</strong><br>
+                        <code>
+function processWebhook(payload, headers) {<br>
+&nbsp;&nbsp;// Your custom processing logic here<br>
+&nbsp;&nbsp;// Return processed data or throw error<br>
+&nbsp;&nbsp;return {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;orderId: payload.order_id,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;amount: payload.amount,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;currency: payload.currency,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;status: 'completed'<br>
+&nbsp;&nbsp;};<br>
+}
+                        </code>
+                    </div>
+                </details>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="gateway-enabled" ${enabled ? 'checked' : ''}>
+                    Enable Gateway
+                </label>
+                <small>Toggle to activate/deactivate this payment gateway</small>
+            </div>
         </div>
-      `;
-    }
-  }
+        
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+            <button class="btn" onclick="closeModal()" style="background: #6c757d;">Cancel</button>
+            <button class="btn btn-primary" onclick="${isEdit ? 'updateGateway' : 'saveGateway'}()">
+                ${isEdit ? 'Update Gateway' : 'Add Gateway'}
+            </button>
+        </div>
+    `;
+}
 
-  async function addPaymentGateway() {
-    const panel = document.getElementById('main-panel');
+// Save new gateway
+async function saveGateway() {
+    const name = document.getElementById('gateway-name').value.trim();
+    const gatewayType = document.getElementById('gateway-type').value;
+    const webhookUrl = document.getElementById('webhook-url').value.trim();
+    const secret = document.getElementById('gateway-secret').value.trim();
+    const customCode = document.getElementById('custom-code').value.trim();
+    const enabled = document.getElementById('gateway-enabled').checked;
     
-    const gateway = {
-      name: panel.querySelector('#gateway-name').value.trim(),
-      webhook_url: panel.querySelector('#webhook-url').value.trim(),
-      webhook_secret: panel.querySelector('#webhook-secret').value.trim(),
-      custom_code: panel.querySelector('#custom-code').value.trim(),
-      is_enabled: panel.querySelector('#is-enabled').checked
-    };
-
-    if (!gateway.name) {
-      toast('Please enter a gateway name', false);
-      return;
+    if (!name || !webhookUrl) {
+        alert('Name and Webhook URL are required!');
+        return;
     }
-
+    
     try {
-      await jfetch('/api/admin/payment/gateways', {
-        method: 'POST',
-        body: JSON.stringify(gateway)
-      });
-      
-      // Clear form
-      panel.querySelector('#gateway-name').value = '';
-      panel.querySelector('#webhook-url').value = '';
-      panel.querySelector('#webhook-secret').value = '';
-      panel.querySelector('#custom-code').value = '';
-      panel.querySelector('#is-enabled').checked = true;
-      
-      await loadGatewaysList();
-      toast('✅ Payment gateway added successfully!', true);
-    } catch (e) {
-      toast('Failed to add payment gateway', false);
+        const response = await fetch('/api/admin/payment-universal/gateways', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name,
+                gateway_type: gatewayType,
+                webhook_url: webhookUrl,
+                secret,
+                custom_code: customCode,
+                enabled
+            })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            closeModal();
+            await loadPaymentGateways();
+            renderPaymentGateways();
+            showMessage('Payment gateway added successfully!', 'success');
+        } else {
+            showMessage(result.error || 'Failed to add payment gateway', 'error');
+        }
+    } catch (error) {
+        showMessage('Error saving payment gateway: ' + error.message, 'error');
     }
-  }
+}
 
-  async function deleteGateway(id) {
+// Update existing gateway
+async function updateGateway() {
+    if (!currentEditingGateway) return;
+    
+    const name = document.getElementById('gateway-name').value.trim();
+    const gatewayType = document.getElementById('gateway-type').value;
+    const webhookUrl = document.getElementById('webhook-url').value.trim();
+    const secret = document.getElementById('gateway-secret').value.trim();
+    const customCode = document.getElementById('custom-code').value.trim();
+    const enabled = document.getElementById('gateway-enabled').checked;
+    
+    if (!name || !webhookUrl) {
+        alert('Name and Webhook URL are required!');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/payment-universal/gateways', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: currentEditingGateway.id,
+                name,
+                gateway_type: gatewayType,
+                webhook_url: webhookUrl,
+                secret,
+                custom_code: customCode,
+                enabled
+            })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            closeModal();
+            await loadPaymentGateways();
+            renderPaymentGateways();
+            showMessage('Payment gateway updated successfully!', 'success');
+        } else {
+            showMessage(result.error || 'Failed to update payment gateway', 'error');
+        }
+    } catch (error) {
+        showMessage('Error updating payment gateway: ' + error.message, 'error');
+    }
+}
+
+// Delete gateway
+async function deleteGateway(gatewayId) {
     if (!confirm('Are you sure you want to delete this payment gateway?')) {
-      return;
+        return;
     }
-
+    
     try {
-      await jfetch('/api/admin/payment/gateways/' + id, {
-        method: 'DELETE'
-      });
-      
-      await loadGatewaysList();
-      toast('✅ Payment gateway deleted', true);
-    } catch (e) {
-      toast('Failed to delete gateway', false);
+        const response = await fetch(`/api/admin/payment-universal/gateways?id=${gatewayId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            await loadPaymentGateways();
+            renderPaymentGateways();
+            showMessage('Payment gateway deleted successfully!', 'success');
+        } else {
+            showMessage(result.error || 'Failed to delete payment gateway', 'error');
+        }
+    } catch (error) {
+        showMessage('Error deleting payment gateway: ' + error.message, 'error');
     }
-  }
+}
 
-  async function editGateway(index) {
-    toast('Edit functionality coming soon', false);
-  }
+// Modal functions
+function showModal(title, content) {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('modal-overlay');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'modal-overlay';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3>${escapeHtml(title)}</h3>
+                <button onclick="closeModal()" style="
+                    background: none;
+                    border: none;
+                    font-size: 1.5em;
+                    cursor: pointer;
+                    padding: 5px;
+                ">&times;</button>
+            </div>
+            <div id="modal-content">${content}</div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
 
-  async function quickSetup(gateway) {
-    const panel = document.getElementById('main-panel');
-    const nameInput = panel.querySelector('#gateway-name');
-    const webhookInput = panel.querySelector('#webhook-url');
-    const secretInput = panel.querySelector('#webhook-secret');
-    const codeInput = panel.querySelector('#custom-code');
-    
-    // Pre-fill based on gateway
-    nameInput.value = gateway.charAt(0).toUpperCase() + gateway.slice(1);
-    webhookInput.value = `https://your-site.com/webhooks/${gateway}`;
-    
-    // Pre-fill custom code based on gateway
-    const codeTemplates = {
-      stripe: `// Stripe webhook handler
-if (event.type === 'payment_intent.succeeded') {
-  const paymentIntent = event.data.object;
-  // Process successful payment
-  console.log('Stripe payment succeeded:', paymentIntent.id);
-}`,
-      paypal: `// PayPal webhook handler
-if (event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
-  const payment = event.resource;
-  // Process successful payment
-  console.log('PayPal payment completed:', payment.id);
-}`,
-      whop: `// Whop webhook handler
-if (event.type === 'checkout.completed') {
-  const order = event.data;
-  // Process successful order
-  console.log('Whop order completed:', order.id);
-}`,
-      gumroad: `// Gumroad webhook handler
-if (event.action === 'charge_success') {
-  const sale = event.sale;
-  // Process successful sale
-  console.log('Gumroad sale completed:', sale.product_name);
-}`
-    };
-    
-    codeInput.value = codeTemplates[gateway] || '';
-    
-    toast(`Pre-filled ${gateway} settings`, true);
-  }
+function closeModal() {
+    const modal = document.getElementById('modal-overlay');
+    if (modal) modal.remove();
+}
 
-  // Export
-  AD.loadPayment = loadPayment;
-  AD.addPaymentGateway = addPaymentGateway;
-  AD.deleteGateway = deleteGateway;
-  AD.editGateway = editGateway;
-  AD.quickSetup = quickSetup;
+// Utility function to escape HTML
+function escapeHtml(text) {
+    if (typeof text !== 'string') return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
-})(window.AdminDashboard);
+// Show message
+function showMessage(message, type = 'info') {
+    // Remove existing message if any
+    const existingMsg = document.getElementById('message-toast');
+    if (existingMsg) existingMsg.remove();
+    
+    const msgDiv = document.createElement('div');
+    msgDiv.id = 'message-toast';
+    msgDiv.textContent = message;
+    msgDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        color: white;
+        z-index: 1001;
+        animation: slideIn 0.3s ease-out;
+        ${type === 'success' ? 'background: #10b981;' : 
+          type === 'error' ? 'background: #ef4444;' : 
+          'background: #3b82f6;'}
+    `;
+    
+    document.body.appendChild(msgDiv);
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+        if (msgDiv.parentNode) {
+            msgDiv.remove();
+        }
+    }, 5000);
+}
+
+// Add CSS animation for messages
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+`;
+document.head.appendChild(style);
+
+// Export the init function for the main dashboard to call
+window.initPaymentTab = initPaymentTab;

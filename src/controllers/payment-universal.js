@@ -8,6 +8,7 @@
  * - Custom code execution
  * - Secure signature verification
  * - Modular architecture
+ * - Migration from legacy PayPal/Whop settings
  */
 
 import { json } from '../utils/response.js';
@@ -377,4 +378,205 @@ async function logWebhookEvent(env, gatewayName, payload) {
   } catch (e) {
     console.error('Webhook logging error:', e);
   }
+}
+
+/**
+ * Migrate existing PayPal settings to universal system
+ */
+export async function migratePayPalSettings(env) {
+  try {
+    // Get existing PayPal settings
+    const paypalRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('paypal').first();
+    
+    if (!paypalRow || !paypalRow.value) {
+      console.log('No existing PayPal settings to migrate');
+      return { success: true, migrated: false, message: 'No PayPal settings found to migrate' };
+    }
+    
+    const paypalSettings = JSON.parse(paypalRow.value);
+    
+    // Check if PayPal gateway already exists
+    const existingPayPal = await env.DB.prepare(
+      'SELECT id FROM payment_gateways WHERE gateway_type = ?'
+    ).bind('paypal').first();
+    
+    if (existingPayPal) {
+      console.log('PayPal gateway already exists in universal system');
+      return { success: true, migrated: false, message: 'PayPal gateway already exists' };
+    }
+    
+    // Create webhook URL based on current domain (placeholder)
+    const webhookUrl = 'https://YOURDOMAIN.COM/api/payment/universal/webhook'; // This should be replaced with actual domain
+    
+    // Create PayPal gateway in universal system
+    const result = await env.DB.prepare(`
+      INSERT INTO payment_gateways (
+        name, 
+        gateway_type, 
+        webhook_url, 
+        secret, 
+        custom_code, 
+        enabled, 
+        config,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).bind(
+      'PayPal',
+      'paypal',
+      webhookUrl,  // Will need to be updated by admin
+      paypalSettings.secret || '',  // Use existing secret
+      '', // No custom code needed for standard PayPal
+      paypalSettings.enabled || false,
+      JSON.stringify({
+        client_id: paypalSettings.client_id || '',
+        mode: paypalSettings.mode || 'sandbox'
+      })
+    ).run();
+    
+    console.log('PayPal settings migrated to universal system');
+    
+    // Optionally, backup the old settings
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO settings (key, value) 
+      VALUES (?, ?)
+    `).bind('paypal_backup', paypalRow.value).run();
+    
+    return {
+      success: true,
+      migrated: true,
+      message: 'PayPal settings successfully migrated to universal system',
+      gatewayId: result.meta.last_row_id
+    };
+    
+  } catch (error) {
+    console.error('Error migrating PayPal settings:', error);
+    return {
+      success: false,
+      error: error.message,
+      message: 'Failed to migrate PayPal settings'
+    };
+  }
+}
+
+/**
+ * Migrate existing Whop settings to universal system
+ */
+export async function migrateWhopSettings(env) {
+  try {
+    // Get existing Whop settings
+    const whopRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
+    
+    if (!whopRow || !whopRow.value) {
+      console.log('No existing Whop settings to migrate');
+      return { success: true, migrated: false, message: 'No Whop settings found to migrate' };
+    }
+    
+    const whopSettings = JSON.parse(whopRow.value);
+    
+    // Check if Whop gateway already exists
+    const existingWhop = await env.DB.prepare(
+      'SELECT id FROM payment_gateways WHERE gateway_type = ?'
+    ).bind('whop').first();
+    
+    if (existingWhop) {
+      console.log('Whop gateway already exists in universal system');
+      return { success: true, migrated: false, message: 'Whop gateway already exists' };
+    }
+    
+    // Create webhook URL based on current domain (placeholder)
+    const webhookUrl = 'https://YOURDOMAIN.COM/api/payment/universal/webhook'; // This should be replaced with actual domain
+    
+    // Create Whop gateway in universal system
+    const result = await env.DB.prepare(`
+      INSERT INTO payment_gateways (
+        name, 
+        gateway_type, 
+        webhook_url, 
+        secret, 
+        custom_code, 
+        enabled, 
+        config,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).bind(
+      'Whop',
+      'whop',
+      webhookUrl,  // Will need to be updated by admin
+      whopSettings.webhook_secret || whopSettings.api_key || '',  // Use existing secret/api key
+      '', // No custom code needed for standard Whop
+      whopSettings.enabled !== false, // Default to enabled if not specified
+      JSON.stringify({
+        api_key: whopSettings.api_key || '',
+        product_id: whopSettings.product_id || whopSettings.whop_product_id || '',
+        webhook_secret: whopSettings.webhook_secret || ''
+      })
+    ).run();
+    
+    console.log('Whop settings migrated to universal system');
+    
+    // Optionally, backup the old settings
+    await env.DB.prepare(`
+      INSERT OR REPLACE INTO settings (key, value) 
+      VALUES (?, ?)
+    `).bind('whop_backup', whopRow.value).run();
+    
+    return {
+      success: true,
+      migrated: true,
+      message: 'Whop settings successfully migrated to universal system',
+      gatewayId: result.meta.last_row_id
+    };
+    
+  } catch (error) {
+    console.error('Error migrating Whop settings:', error);
+    return {
+      success: false,
+      error: error.message,
+      message: 'Failed to migrate Whop settings'
+    };
+  }
+}
+
+/**
+ * Handle payment tab view (for admin dashboard)
+ */
+export async function handlePaymentTab(env) {
+  // Ensure the payment_gateways table exists
+  await ensurePaymentGatewaysTable(env);
+  
+  // Attempt to migrate existing PayPal and Whop settings if they exist and not yet migrated
+  await migratePayPalSettings(env).catch(console.error);
+  await migrateWhopSettings(env).catch(console.error);
+  
+  // Return a simple response indicating the payment tab is ready
+  // The actual UI is handled by the frontend JavaScript
+  return new Response(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Payment Gateways - Admin</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body>
+      <div id="payment-management-app">
+        <h1>Universal Payment Gateway Manager</h1>
+        <p>Loading payment gateway management interface...</p>
+      </div>
+      <script>
+        // Redirect to main dashboard to let the SPA handle the payment view
+        if (window.parent !== window) {
+          // If in iframe, try to trigger the payment view
+          if (window.parent && window.parent.AdminDashboard) {
+            window.parent.AdminDashboard.loadView('payment');
+          }
+        } else {
+          // If direct access, redirect to main dashboard with payment view
+          window.location.href = '/admin#payment';
+        }
+      </script>
+    </body>
+    </html>
+  `, {
+    headers: { 'Content-Type': 'text/html' }
+  });
 }

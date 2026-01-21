@@ -168,6 +168,9 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'components':
         if (AD.loadComponents) await AD.loadComponents(panel);
         break;
+      case 'payment':
+        if (window.initPaymentTab) await window.initPaymentTab();
+        break;
     }
   };
 
