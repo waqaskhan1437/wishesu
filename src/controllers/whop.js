@@ -282,11 +282,30 @@ export async function createPlanCheckout(env, body, origin) {
     return json({ error: 'Invalid price' }, 400);
   }
 
-  // Get Whop product ID
+  // Get Whop product ID - check multiple sources in order:
+  // 1. Product-specific whop_product_id
+  // 2. Payment gateway (from payment_gateways table)
+  // 3. Legacy whop settings (from settings table)
   const directProdId = (product.whop_product_id || '').trim();
   let finalProdId = directProdId;
 
   if (!finalProdId) {
+    // Try payment_gateways table first (new universal payment system)
+    try {
+      const gateway = await env.DB.prepare(
+        'SELECT whop_product_id FROM payment_gateways WHERE gateway_type = ? AND is_enabled = 1 LIMIT 1'
+      ).bind('whop').first();
+      if (gateway && gateway.whop_product_id) {
+        finalProdId = (gateway.whop_product_id || '').trim();
+        console.log('Using Whop product ID from payment_gateways:', finalProdId);
+      }
+    } catch (e) {
+      console.log('Failed to load whop settings from payment_gateways:', e);
+    }
+  }
+
+  if (!finalProdId) {
+    // Fallback to legacy settings table
     try {
       const srow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
       let settings = {};
@@ -295,6 +314,7 @@ export async function createPlanCheckout(env, body, origin) {
       }
       if (settings && settings.default_product_id) {
         finalProdId = (settings.default_product_id || '').trim();
+        console.log('Using Whop product ID from legacy settings:', finalProdId);
       }
     } catch (e) {
       console.log('Failed to load whop settings for default product ID:', e);
@@ -302,7 +322,7 @@ export async function createPlanCheckout(env, body, origin) {
   }
 
   if (!finalProdId) {
-    return json({ error: 'whop_product_id not configured for this product and no default_product_id set' }, 400);
+    return json({ error: 'whop_product_id not configured. Please set it in Payment Settings (Payment tab > Whop gateway)' }, 400);
   }
 
   const companyId = env.WHOP_COMPANY_ID;

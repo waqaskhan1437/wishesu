@@ -1,14 +1,14 @@
 /**
  * Universal Payment Gateway Controller 2025
  * Support any payment method with custom integration
- * 
+ *
  * Features:
  * - Dynamic gateway configuration
  * - Universal webhook handler
  * - Custom code execution
  * - Secure signature verification
  * - Modular architecture
- * - Migration from legacy PayPal/Whop settings
+ * - Auto-migration from legacy PayPal/Whop settings
  */
 
 import { json } from '../utils/response.js';
@@ -18,6 +18,9 @@ let gatewaysCache = null;
 let cacheTime = 0;
 const CACHE_TTL = 60000; // 1 minute
 
+// Migration flag to prevent multiple migrations
+let migrationDone = false;
+
 const DEFAULT_GATEWAYS = [];
 
 /**
@@ -25,22 +28,115 @@ const DEFAULT_GATEWAYS = [];
  */
 async function ensureTable(env) {
   if (!env.DB) return;
-  
+
   try {
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS payment_gateways (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
+        gateway_type TEXT DEFAULT '',
         webhook_url TEXT,
         webhook_secret TEXT,
         custom_code TEXT,
         is_enabled INTEGER DEFAULT 1,
+        whop_product_id TEXT DEFAULT '',
+        whop_api_key TEXT DEFAULT '',
+        whop_theme TEXT DEFAULT 'light',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `).run();
+
+    // Add new columns if they don't exist (for existing tables)
+    const columns = ['gateway_type', 'whop_product_id', 'whop_api_key', 'whop_theme'];
+    for (const col of columns) {
+      try {
+        await env.DB.prepare(`ALTER TABLE payment_gateways ADD COLUMN ${col} TEXT DEFAULT ''`).run();
+      } catch (e) {
+        // Column already exists, ignore
+      }
+    }
+
+    // Auto-migrate legacy Whop settings (only once per worker instance)
+    if (!migrationDone) {
+      await migrateLegacyWhopSettings(env);
+      migrationDone = true;
+    }
   } catch (e) {
     console.error('Payment gateways table error:', e);
+  }
+}
+
+/**
+ * Auto-migrate legacy Whop settings from 'settings' table to payment_gateways
+ * This runs once and creates a Whop gateway if legacy settings exist
+ */
+async function migrateLegacyWhopSettings(env) {
+  try {
+    // Check if Whop gateway already exists
+    const existingWhop = await env.DB.prepare(
+      'SELECT id FROM payment_gateways WHERE gateway_type = ? LIMIT 1'
+    ).bind('whop').first();
+
+    if (existingWhop) {
+      console.log('Whop gateway already exists, skipping migration');
+      return;
+    }
+
+    // Load legacy Whop settings from settings table
+    const settingsRow = await env.DB.prepare(
+      'SELECT value FROM settings WHERE key = ?'
+    ).bind('whop').first();
+
+    let legacySettings = {};
+    if (settingsRow && settingsRow.value) {
+      try {
+        legacySettings = JSON.parse(settingsRow.value);
+      } catch (e) {
+        console.log('Failed to parse legacy Whop settings:', e);
+        return;
+      }
+    }
+
+    // Check if we have any legacy settings or env variables to migrate
+    const productId = legacySettings.default_product_id || legacySettings.product_id || '';
+    const apiKey = legacySettings.api_key || env.WHOP_API_KEY || '';
+    const webhookSecret = legacySettings.webhook_secret || env.WHOP_WEBHOOK_SECRET || '';
+    const theme = legacySettings.theme || 'light';
+
+    // Only migrate if we have at least product_id or API key
+    if (!productId && !apiKey) {
+      console.log('No legacy Whop settings to migrate');
+      return;
+    }
+
+    // Get origin for webhook URL
+    const webhookUrl = '/api/whop/webhook';
+
+    // Create Whop gateway from legacy settings
+    await env.DB.prepare(`
+      INSERT INTO payment_gateways
+      (name, gateway_type, webhook_url, webhook_secret, is_enabled, whop_product_id, whop_api_key, whop_theme)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      'Whop',
+      'whop',
+      webhookUrl,
+      webhookSecret,
+      1, // enabled
+      productId,
+      '', // Don't store API key in DB - use env variable
+      theme
+    ).run();
+
+    console.log('✅ Legacy Whop settings migrated to payment_gateways');
+    console.log('   Product ID:', productId || '(not set)');
+    console.log('   API Key: Using env.WHOP_API_KEY');
+
+    // Clear cache
+    gatewaysCache = null;
+  } catch (e) {
+    console.error('Failed to migrate legacy Whop settings:', e);
   }
 }
 
@@ -73,8 +169,19 @@ export async function getPaymentGatewaysApi(env) {
     const gateways = await getPaymentGateways(env);
     // Mask sensitive data
     const safeGateways = gateways.map(gw => ({
-      ...gw,
-      webhook_secret: gw.webhook_secret ? '••••••••' : ''
+      id: gw.id,
+      name: gw.name,
+      gateway_type: gw.gateway_type || '',
+      webhook_url: gw.webhook_url || '',
+      secret: gw.webhook_secret ? '••••••••' : '',
+      custom_code: gw.custom_code || '',
+      enabled: gw.is_enabled === 1,
+      created_at: gw.created_at,
+      updated_at: gw.updated_at,
+      // Whop-specific fields
+      whop_product_id: gw.whop_product_id || '',
+      whop_api_key: gw.whop_api_key ? '••••••••' : '',
+      whop_theme: gw.whop_theme || 'light'
     }));
     return json({ success: true, gateways: safeGateways });
   } catch (e) {
@@ -91,10 +198,15 @@ export async function addPaymentGatewayApi(env, body) {
 
     const gateway = {
       name: (body.name || '').trim(),
+      gateway_type: (body.gateway_type || '').trim(),
       webhook_url: (body.webhook_url || '').trim(),
-      webhook_secret: (body.webhook_secret || '').trim(),
+      webhook_secret: (body.secret || '').trim(),
       custom_code: (body.custom_code || '').trim(),
-      is_enabled: body.is_enabled ? 1 : 0
+      is_enabled: body.enabled !== false ? 1 : 0,
+      // Whop-specific fields
+      whop_product_id: (body.whop_product_id || '').trim(),
+      whop_api_key: (body.whop_api_key || '').trim(),
+      whop_theme: (body.whop_theme || 'light').trim()
     };
 
     if (!gateway.name) {
@@ -102,15 +214,19 @@ export async function addPaymentGatewayApi(env, body) {
     }
 
     await env.DB.prepare(`
-      INSERT INTO payment_gateways 
-      (name, webhook_url, webhook_secret, custom_code, is_enabled)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO payment_gateways
+      (name, gateway_type, webhook_url, webhook_secret, custom_code, is_enabled, whop_product_id, whop_api_key, whop_theme)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       gateway.name,
+      gateway.gateway_type,
       gateway.webhook_url,
       gateway.webhook_secret,
       gateway.custom_code,
-      gateway.is_enabled
+      gateway.is_enabled,
+      gateway.whop_product_id,
+      gateway.whop_api_key,
+      gateway.whop_theme
     ).run();
 
     gatewaysCache = null; // Clear cache
@@ -130,10 +246,15 @@ export async function updatePaymentGatewayApi(env, id, body) {
 
     const gateway = {
       name: (body.name || '').trim(),
+      gateway_type: (body.gateway_type || '').trim(),
       webhook_url: (body.webhook_url || '').trim(),
-      webhook_secret: (body.webhook_secret || '').trim(),
+      webhook_secret: (body.secret || '').trim(),
       custom_code: (body.custom_code || '').trim(),
-      is_enabled: body.is_enabled ? 1 : 0
+      is_enabled: body.enabled !== false ? 1 : 0,
+      // Whop-specific fields
+      whop_product_id: (body.whop_product_id || '').trim(),
+      whop_api_key: (body.whop_api_key || '').trim(),
+      whop_theme: (body.whop_theme || 'light').trim()
     };
 
     // If webhook secret is masked, preserve the original
@@ -144,17 +265,30 @@ export async function updatePaymentGatewayApi(env, id, body) {
       gateway.webhook_secret = existing?.webhook_secret || '';
     }
 
+    // If Whop API key is masked, preserve the original
+    if (gateway.whop_api_key === '••••••••') {
+      const existing = await env.DB.prepare(
+        'SELECT whop_api_key FROM payment_gateways WHERE id = ?'
+      ).bind(id).first();
+      gateway.whop_api_key = existing?.whop_api_key || '';
+    }
+
     await env.DB.prepare(`
       UPDATE payment_gateways SET
-        name = ?, webhook_url = ?, webhook_secret = ?, custom_code = ?, is_enabled = ?,
+        name = ?, gateway_type = ?, webhook_url = ?, webhook_secret = ?, custom_code = ?, is_enabled = ?,
+        whop_product_id = ?, whop_api_key = ?, whop_theme = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(
       gateway.name,
+      gateway.gateway_type,
       gateway.webhook_url,
       gateway.webhook_secret,
       gateway.custom_code,
       gateway.is_enabled,
+      gateway.whop_product_id,
+      gateway.whop_api_key,
+      gateway.whop_theme,
       id
     ).run();
 
@@ -178,6 +312,39 @@ export async function deletePaymentGatewayApi(env, id) {
     gatewaysCache = null; // Clear cache
 
     return json({ success: true, message: 'Gateway deleted successfully' });
+  } catch (e) {
+    return json({ error: e.message }, 500);
+  }
+}
+
+/**
+ * API: Get Whop settings for checkout (public - no auth required)
+ * Returns product_id and theme for embedded checkout
+ */
+export async function getWhopCheckoutSettings(env) {
+  try {
+    await ensureTable(env);
+
+    // Find enabled Whop gateway
+    const whopGateway = await env.DB.prepare(`
+      SELECT whop_product_id, whop_theme
+      FROM payment_gateways
+      WHERE gateway_type = 'whop' AND is_enabled = 1
+      LIMIT 1
+    `).first();
+
+    if (!whopGateway || !whopGateway.whop_product_id) {
+      return json({
+        success: false,
+        error: 'Whop gateway not configured'
+      }, 404);
+    }
+
+    return json({
+      success: true,
+      product_id: whopGateway.whop_product_id,
+      theme: whopGateway.whop_theme || 'light'
+    });
   } catch (e) {
     return json({ error: e.message }, 500);
   }

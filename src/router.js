@@ -89,7 +89,8 @@ import {
   handleAddPaymentGateway,
   handleGetPaymentGateways,
   handleDeletePaymentGateway,
-  handleUpdatePaymentGateway
+  handleUpdatePaymentGateway,
+  getWhopCheckoutSettings
 } from './controllers/payment-universal.js';
 
 // Pages
@@ -712,6 +713,11 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'GET' && path === '/api/payment/universal/test') {
     return handleUniversalPaymentAPI(env);
+  }
+
+  // Public API: Get Whop checkout settings (product_id, theme)
+  if (method === 'GET' && path === '/api/payment/whop/checkout-settings') {
+    return getWhopCheckoutSettings(env);
   }
 
   // ----- ORDERS -----

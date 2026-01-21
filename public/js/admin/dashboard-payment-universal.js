@@ -133,18 +133,22 @@ function createGatewayFormHTML(gateway = null) {
     const secret = gateway?.secret || '';
     const customCode = gateway?.custom_code || '';
     const enabled = gateway?.enabled !== false; // Default to true
-    
+
+    // Whop-specific fields (API key comes from env variable WHOP_API_KEY)
+    const whopProductId = gateway?.whop_product_id || '';
+    const whopTheme = gateway?.whop_theme || 'light';
+
     return `
         <div class="gateway-form">
             <div class="form-group">
                 <label for="gateway-name">Gateway Name *</label>
-                <input type="text" id="gateway-name" placeholder="e.g., Stripe, PayPal, Custom Gateway" 
+                <input type="text" id="gateway-name" placeholder="e.g., Stripe, PayPal, Custom Gateway"
                        value="${escapeHtml(name)}" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="gateway-type">Gateway Type</label>
-                <select id="gateway-type">
+                <select id="gateway-type" onchange="toggleWhopFields()">
                     <option value="">Custom (Generic)</option>
                     <option value="stripe" ${gatewayType === 'stripe' ? 'selected' : ''}>Stripe</option>
                     <option value="paypal" ${gatewayType === 'paypal' ? 'selected' : ''}>PayPal</option>
@@ -158,24 +162,50 @@ function createGatewayFormHTML(gateway = null) {
                 </select>
                 <small>Select a pre-built template or choose Custom for generic integration</small>
             </div>
-            
+
+            <!-- Whop-specific settings (hidden by default) -->
+            <div id="whop-specific-settings" style="display: ${gatewayType === 'whop' ? 'block' : 'none'}; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                <h4 style="margin: 0 0 15px; color: #0369a1;">Whop Settings</h4>
+
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="whop-product-id">Product ID *</label>
+                    <input type="text" id="whop-product-id" placeholder="prod_xxxxxxxxxxxxx"
+                           value="${escapeHtml(whopProductId)}">
+                    <small>Whop Product ID - used for dynamic checkout on product pages</small>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="whop-theme">Checkout Theme</label>
+                    <select id="whop-theme">
+                        <option value="light" ${whopTheme === 'light' ? 'selected' : ''}>Light</option>
+                        <option value="dark" ${whopTheme === 'dark' ? 'selected' : ''}>Dark</option>
+                    </select>
+                    <small>Theme for Whop embedded checkout</small>
+                </div>
+
+                <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 10px; margin-top: 10px;">
+                    <strong style="color: #92400e;">API Key:</strong>
+                    <span style="color: #78350f;">Set in Cloudflare environment variable <code>WHOP_API_KEY</code></span>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label for="webhook-url">Webhook URL *</label>
-                <input type="url" id="webhook-url" placeholder="https://yourdomain.com/api/payment/webhook" 
+                <input type="url" id="webhook-url" placeholder="https://yourdomain.com/api/payment/webhook"
                        value="${escapeHtml(webhookUrl)}" required>
                 <small>The URL where payment gateway will send webhook notifications</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="gateway-secret">Secret Key / Signature</label>
-                <input type="password" id="gateway-secret" placeholder="Enter webhook signing secret" 
+                <input type="password" id="gateway-secret" placeholder="Enter webhook signing secret"
                        value="${escapeHtml(secret)}">
                 <small>Used to verify webhook authenticity (optional but recommended)</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="custom-code">Custom Processing Code</label>
-                <textarea id="custom-code" placeholder="JavaScript code to process webhook data..." 
+                <textarea id="custom-code" placeholder="JavaScript code to process webhook data..."
                           style="width: 100%; min-height: 200px; font-family: monospace; font-size: 0.9em;">${escapeHtml(customCode)}</textarea>
                 <small>Custom JavaScript code to handle specific gateway logic (optional)</small>
                 <details style="margin-top: 10px;">
@@ -197,7 +227,7 @@ function processWebhook(payload, headers) {<br>
                     </div>
                 </details>
             </div>
-            
+
             <div class="form-group">
                 <label>
                     <input type="checkbox" id="gateway-enabled" ${enabled ? 'checked' : ''}>
@@ -206,7 +236,7 @@ function processWebhook(payload, headers) {<br>
                 <small>Toggle to activate/deactivate this payment gateway</small>
             </div>
         </div>
-        
+
         <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
             <button class="btn" onclick="closeModal()" style="background: #6c757d;">Cancel</button>
             <button class="btn btn-primary" onclick="${isEdit ? 'updateGateway' : 'saveGateway'}()">
@@ -214,6 +244,15 @@ function processWebhook(payload, headers) {<br>
             </button>
         </div>
     `;
+}
+
+// Toggle Whop-specific fields visibility
+function toggleWhopFields() {
+    const gatewayType = document.getElementById('gateway-type').value;
+    const whopSettings = document.getElementById('whop-specific-settings');
+    if (whopSettings) {
+        whopSettings.style.display = gatewayType === 'whop' ? 'block' : 'none';
+    }
 }
 
 // Save new gateway
@@ -224,12 +263,22 @@ async function saveGateway() {
     const secret = document.getElementById('gateway-secret').value.trim();
     const customCode = document.getElementById('custom-code').value.trim();
     const enabled = document.getElementById('gateway-enabled').checked;
-    
+
+    // Whop-specific fields (API key comes from env variable, not UI)
+    const whopProductId = document.getElementById('whop-product-id')?.value.trim() || '';
+    const whopTheme = document.getElementById('whop-theme')?.value || 'light';
+
     if (!name || !webhookUrl) {
         alert('Name and Webhook URL are required!');
         return;
     }
-    
+
+    // Validate Whop Product ID when gateway type is whop
+    if (gatewayType === 'whop' && !whopProductId) {
+        alert('Whop Product ID is required for Whop gateway!');
+        return;
+    }
+
     try {
         const response = await fetch('/api/admin/payment-universal/gateways', {
             method: 'POST',
@@ -240,7 +289,10 @@ async function saveGateway() {
                 webhook_url: webhookUrl,
                 secret,
                 custom_code: customCode,
-                enabled
+                enabled,
+                // Whop-specific (API key from env variable WHOP_API_KEY)
+                whop_product_id: whopProductId,
+                whop_theme: whopTheme
             })
         });
         
@@ -261,19 +313,29 @@ async function saveGateway() {
 // Update existing gateway
 async function updateGateway() {
     if (!currentEditingGateway) return;
-    
+
     const name = document.getElementById('gateway-name').value.trim();
     const gatewayType = document.getElementById('gateway-type').value;
     const webhookUrl = document.getElementById('webhook-url').value.trim();
     const secret = document.getElementById('gateway-secret').value.trim();
     const customCode = document.getElementById('custom-code').value.trim();
     const enabled = document.getElementById('gateway-enabled').checked;
-    
+
+    // Whop-specific fields (API key comes from env variable, not UI)
+    const whopProductId = document.getElementById('whop-product-id')?.value.trim() || '';
+    const whopTheme = document.getElementById('whop-theme')?.value || 'light';
+
     if (!name || !webhookUrl) {
         alert('Name and Webhook URL are required!');
         return;
     }
-    
+
+    // Validate Whop Product ID when gateway type is whop
+    if (gatewayType === 'whop' && !whopProductId) {
+        alert('Whop Product ID is required for Whop gateway!');
+        return;
+    }
+
     try {
         const response = await fetch('/api/admin/payment-universal/gateways', {
             method: 'PUT',
@@ -285,7 +347,10 @@ async function updateGateway() {
                 webhook_url: webhookUrl,
                 secret,
                 custom_code: customCode,
-                enabled
+                enabled,
+                // Whop-specific (API key from env variable WHOP_API_KEY)
+                whop_product_id: whopProductId,
+                whop_theme: whopTheme
             })
         });
         
