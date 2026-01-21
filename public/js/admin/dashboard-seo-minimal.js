@@ -289,4 +289,4 @@
   AD.loadSEO = loadSEO;
   AD.saveMinimalSEO = saveMinimalSEO;
 
-})(window.AD = window.AD || {});
+})(window.AdminDashboard = window.AdminDashboard || {});
