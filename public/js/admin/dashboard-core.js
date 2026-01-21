@@ -162,31 +162,6 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'components':
         if (AD.loadComponents) await AD.loadComponents(panel);
         break;
-      case 'automation':
-        // Open Advanced Automation UI (modal) if available
-        panel.innerHTML = `
-          <div class="card">
-            <h2>🤖 Automation</h2>
-            <p>Open Advanced Automation settings to manage webhook subscriptions and email routing.</p>
-            <button class="btn btn-primary" id="open-automation-settings">⚙️ Open Automation Settings</button>
-          </div>
-        `;
-        // Attach handler + auto-open once
-        setTimeout(() => {
-          const btn = document.getElementById('open-automation-settings');
-          if (btn) {
-            btn.onclick = () => {
-              if (window.AdvAutomation && typeof window.AdvAutomation.open === 'function') {
-                window.AdvAutomation.open();
-              } else {
-                alert('Advanced Automation UI not loaded yet. Please refresh.');
-              }
-            };
-            // Auto-open on first visit
-            try { btn.click(); } catch (e) {}
-          }
-        }, 50);
-        break;
     }
   };
 

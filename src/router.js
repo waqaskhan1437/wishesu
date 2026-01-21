@@ -179,17 +179,6 @@ import {
   testWebhook as testWebhookV3
 } from './controllers/webhooks.js';
 
-// Automation
-import {
-  getAutomationSettings,
-  saveAutomationSettings,
-  getAutomationLogs,
-  clearAutomationLogs,
-  testNotification,
-  testWebhook,
-  testEmail
-} from './controllers/automation.js';
-
 // Coupons
 import {
   getCoupons,
@@ -350,42 +339,6 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path.startsWith('/api/admin/webhooks/test/')) {
     const endpointId = path.split('/').pop();
     return testWebhookV3(env, endpointId);
-  }
-
-  // ----- AUTOMATION (Legacy - Deprecated) -----
-  if (method === 'GET' && path === '/api/admin/automation/settings') {
-    return getAutomationSettings(env);
-  }
-
-  if (method === 'POST' && path === '/api/admin/automation/settings') {
-    const body = await req.json().catch(() => ({}));
-    return saveAutomationSettings(env, body);
-  }
-
-  if (method === 'GET' && path === '/api/admin/automation/logs') {
-    const limit = parseInt(url.searchParams.get('limit')) || 50;
-    return getAutomationLogs(env, limit);
-  }
-
-  if (method === 'DELETE' && path === '/api/admin/automation/logs' || 
-      method === 'POST' && path === '/api/admin/automation/logs/clear') {
-    return clearAutomationLogs(env);
-  }
-
-  if (method === 'POST' && path === '/api/admin/automation/test') {
-    const body = await req.json().catch(() => ({}));
-    return testNotification(env, body);
-  }
-
-  if (method === 'POST' && path === '/api/admin/automation/test/webhook') {
-    const webhookId = url.searchParams.get('id');
-    return testWebhook(env, webhookId);
-  }
-
-  if (method === 'POST' && path === '/api/admin/automation/test/email') {
-    const serviceId = url.searchParams.get('id');
-    const testEmailAddr = url.searchParams.get('email');
-    return testEmail(env, serviceId, testEmailAddr);
   }
 
   // ----- CACHE PURGE -----
