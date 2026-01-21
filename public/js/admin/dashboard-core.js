@@ -159,6 +159,9 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'noindex':
         if (AD.loadNoindex) await AD.loadNoindex(panel);
         break;
+      case 'backup':
+        if (AD.loadBackup) await AD.loadBackup(panel);
+        break;
       case 'pages':
         if (AD.loadPages) await AD.loadPages(panel);
         break;

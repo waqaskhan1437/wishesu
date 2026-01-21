@@ -176,6 +176,20 @@ import {
   removeNoindexUrl
 } from './controllers/noindex.js';
 
+// Backup System (Modern 2025)
+import {
+  getBackupHistory,
+  createBackup,
+  restoreBackup,
+  downloadBackup
+} from './controllers/backup.js';
+
+// Clean Settings (Essential Only)
+import {
+  getCleanSettingsApi,
+  saveCleanSettingsApi
+} from './controllers/settings-clean.js';
+
 // Webhooks (New Universal System v3.0)
 import {
   getWebhooksSettings,
@@ -339,6 +353,35 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path.startsWith('/api/admin/webhooks/test/')) {
     const endpointId = path.split('/').pop();
     return testWebhookV3(env, endpointId);
+  }
+
+  // ----- BACKUP SYSTEM (Modern 2025) -----
+  if (method === 'GET' && path === '/api/admin/backup/history') {
+    return getBackupHistory(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/backup/create') {
+    return createBackup(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/backup/restore') {
+    const body = await req.json().catch(() => ({}));
+    return restoreBackup(env, body);
+  }
+
+  if (method === 'GET' && path.startsWith('/api/admin/backup/download/')) {
+    const backupId = path.split('/').pop();
+    return downloadBackup(env, backupId);
+  }
+
+  // ----- CLEAN SETTINGS (Essential Only) -----
+  if (method === 'GET' && path === '/api/admin/settings/clean') {
+    return getCleanSettingsApi(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/settings/clean') {
+    const body = await req.json().catch(() => ({}));
+    return saveCleanSettingsApi(env, body);
   }
 
   // ----- CACHE PURGE -----
