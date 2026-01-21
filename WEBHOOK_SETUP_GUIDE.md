@@ -1,29 +1,57 @@
-# Universal Webhook System v3.0 - Complete Setup Guide
+# Universal Webhook System v3.0 - Setup Guide
 
-## 🎉 Kya Changes Huey Hain?
+## 🎉 System Overview
 
-### ❌ Purana System (Removed)
+Bilkul **Shopify-style webhook system** - simple aur flexible!
+
+### Key Features
 ```
-✗ Email services (Resend, SendGrid, Mailgun, etc.) - REMOVED
-✗ Individual webhook routing per event - REMOVED  
-✗ Complex automation.js controller - DEPRECATED
-✗ Separate email/webhook configuration - REMOVED
+✓ Add unlimited webhook URLs
+✓ Each URL has its own event permissions  
+✓ Works with ANY service (no vendor lock-in)
+✓ Zero worker activity if no webhooks configured
+✓ Standard JSON payload format
+✓ HMAC signature support for security
 ```
 
-### ✅ Naya System (Clean & Universal)
+### Works With
+- Google Apps Script (for Gmail notifications)
+- Make.com / Zapier / n8n (automation platforms)
+- Slack / Discord (team notifications)
+- Your own API endpoint
+- ANY HTTP endpoint that accepts JSON
+
+---
+
+## 🚀 Quick Setup (2 Minutes)
+
+### Step 1: Get Your Webhook URL
+
+Apne service se webhook URL get karein:
+
+**Example 1: Google Apps Script (Free Gmail notifications)**
 ```
-✓ Single universal webhook endpoint
-✓ Works with ANY service (Make.com, n8n, Zapier, etc.)
-✓ Clean JSON payloads
-✓ Email via external services (Make.com recommended)
-✓ Simple UI - easy configuration
+URL: https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec
+```
+
+**Example 2: Your Custom API**
+```
+URL: https://your-api.com/webhooks/orders
+```
+
+**Example 3: Slack**
+```
+URL: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+```
+
+**Example 4: Discord**
+```
+URL: https://discord.com/api/webhooks/YOUR_WEBHOOK_ID
 ```
 
 ---
 
-## 🚀 Quick Setup (5 Minutes)
-
-### Step 1: Admin Dashboard Setup
+### Step 2: Admin Dashboard Setup
 
 1. **Login to Admin Dashboard**
    ```
@@ -31,98 +59,204 @@
    ```
 
 2. **Open Webhooks Settings**
-   - Click **"⚡ Webhooks"** button (new button in dashboard)
-   - Enable master toggle: **"Enable Webhooks System"**
+   - Click **"⚡ Webhooks"** button
+   - Enable: **"Enable Webhooks System"** ✅
 
-3. **Add Webhook Endpoint**
+3. **Add Webhook URL**
    - Click **"+ Add Endpoint"**
-   - Enter name: `Make.com - All Events`
-   - Enter webhook URL (from Step 2)
-   - Select events to listen to
+   - **Name:** `Gmail Notifications` (koi bhi naam)
+   - **URL:** Paste your webhook URL
+   - **Secret:** (optional - for security verification)
+   - **Select Events:** Check the events you want
+     - ✅ Order Received (new orders)
+     - ✅ Tip Received (tips)
+     - ✅ Review Submitted (reviews)
+     - etc.
    - Click **"Save Changes"**
 
----
-
-### Step 2: Make.com Setup (Recommended for Emails)
-
-#### A. Create New Scenario
-
-1. Go to [Make.com](https://make.com) (free account works!)
-
-2. **Create New Scenario**
-
-3. **Add Webhook Module**
-   - Click **"+"** → Search **"Webhook"**
-   - Choose **"Custom Webhook"**
-   - Click **"Create a webhook"**
-   - Name it: `WishesU Events`
-   - **Copy the webhook URL**
-
-4. **Paste URL in Admin Dashboard**
-   - Go back to Admin → Webhooks
-   - Paste the URL you copied
-   - Save settings
-
-5. **Test Webhook**
-   - Click **"🧪 Test"** button in Admin
-   - Check Make.com - you should see test data!
-
-#### B. Add Email Module
-
-1. **In Make.com scenario:**
-   - Click **"+"** after webhook
-   - Search **"Email"** or your email service (Gmail, SendGrid, etc.)
-   
-2. **For Gmail:**
-   - Choose **"Gmail" → "Send an Email"**
-   - Connect your Gmail account
-   - Configure email:
-     ```
-     To: {{1.data.customerEmail}} or your-admin@email.com
-     Subject: {{1.data.event}} - New Notification
-     Body: 
-       Event: {{1.event}}
-       
-       Order ID: {{1.data.orderId}}
-       Customer: {{1.data.customerName}}
-       Email: {{1.data.customerEmail}}
-       Product: {{1.data.productTitle}}
-       Amount: ${{1.data.amount}}
-     ```
-
-3. **Save & Activate Scenario**
+4. **Test Webhook**
+   - Click **"🧪 Test"** button
+   - Check your endpoint received the test data
+   - ✅ If successful, you're done!
 
 ---
 
-### Step 3: Event Types Reference
+## 📋 Available Events
 
-Yeh events available hain webhook ke liye:
+Har event ke liye alag webhook URL add kar sakte ho, ya ek URL ko multiple events assign kar sakte ho:
 
-#### Admin Notifications
-| Event | Description | When Triggered |
-|-------|-------------|----------------|
-| `order.received` | New order placed | Customer completes payment |
-| `order.delivered` | Order completed | Admin delivers order |
-| `tip.received` | Customer sent tip | Tip payment received |
-| `review.submitted` | New review posted | Customer submits review |
-| `blog.comment` | Blog comment added | User comments on blog |
-| `forum.question` | Forum question posted | User asks question |
-| `forum.reply` | Forum reply posted | User replies to question |
-| `chat.message` | New chat message | Customer sends message |
+### Admin Notifications (for site owner)
+| Event | When Triggered | Data Included |
+|-------|----------------|---------------|
+| **Order Received** | Customer places order | orderId, customerName, email, amount, productTitle |
+| **Order Delivered** | Admin marks order complete | orderId, customerName, deliveryUrl, videoUrl |
+| **Tip Received** | Customer sends tip | amount, senderName, message |
+| **Review Submitted** | Customer posts review | productTitle, rating, comment, customerName |
+| **Blog Comment** | User comments on blog | blogTitle, authorName, comment |
+| **Forum Question** | User asks question | title, content, authorName |
+| **Forum Reply** | User replies to question | questionTitle, replyContent, authorName |
+| **Chat Message** | Customer sends chat | senderName, message |
 
-#### Customer Notifications
-| Event | Description | When Triggered |
-|-------|-------------|----------------|
-| `customer.order.confirmed` | Order confirmed | After payment success |
-| `customer.order.delivered` | Order ready | Admin marks delivered |
-| `customer.chat.reply` | Chat reply received | Admin replies to chat |
-| `customer.forum.reply` | Forum reply received | Someone replies to their question |
+### Customer Notifications (auto-reply to customers)
+| Event | When Triggered | Data Included |
+|-------|----------------|---------------|
+| **Order Confirmed** | Payment successful | orderId, customerEmail, productTitle, amount |
+| **Order Delivered** | Video ready | orderId, customerEmail, deliveryUrl |
+| **Chat Reply** | Admin replies | customerEmail, replyMessage |
+| **Forum Reply** | Someone replies | customerEmail, questionTitle, reply |
 
 ---
 
-### Step 4: Payload Structure
+## 🔧 Setup Examples
 
-Webhook sends clean JSON data:
+### Example 1: Google Apps Script (Free Gmail Emails)
+
+**Step 1: Create Google Apps Script**
+1. Go to https://script.google.com
+2. New Project → Paste this code:
+
+```javascript
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const event = data.event;
+    const payload = data.data;
+    
+    // Send email based on event
+    let subject = '';
+    let body = '';
+    let recipient = '';
+    
+    if (event === 'order.received') {
+      recipient = 'admin@yourdomain.com';
+      subject = '🎉 New Order #' + payload.orderId;
+      body = `
+New Order Received!
+
+Order ID: ${payload.orderId}
+Customer: ${payload.customerName}
+Email: ${payload.customerEmail}
+Product: ${payload.productTitle}
+Amount: $${payload.amount}
+
+Login to admin panel to view details.
+      `;
+    } 
+    else if (event === 'customer.order.confirmed') {
+      recipient = payload.customerEmail;
+      subject = '✅ Order Confirmed - ' + payload.productTitle;
+      body = `
+Hi ${payload.customerName}!
+
+Thank you for your order!
+
+Order ID: ${payload.orderId}
+Product: ${payload.productTitle}
+Amount: $${payload.amount}
+
+We'll notify you when your video is ready!
+
+Best regards,
+Your Team
+      `;
+    }
+    
+    if (recipient && subject) {
+      MailApp.sendEmail(recipient, subject, body);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({success: true}));
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({error: err.message}));
+  }
+}
+```
+
+3. **Deploy:**
+   - Click **Deploy** → New deployment
+   - Type: **Web app**
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+   - Deploy → Copy URL
+
+4. **Add to Admin Dashboard:**
+   - URL: Paste Google Script URL
+   - Events: Select `Order Received`, `Order Confirmed`
+   - Save!
+
+---
+
+### Example 2: Multiple Webhooks for Different Purposes
+
+**Scenario:** Different URLs for different tasks
+
+```
+Webhook 1: Gmail Notifications
+  URL: https://script.google.com/macros/s/.../exec
+  Events: ✅ Order Received, ✅ Tip Received
+  
+Webhook 2: Slack Team Alerts  
+  URL: https://hooks.slack.com/services/.../
+  Events: ✅ Order Received, ✅ Review Submitted
+
+Webhook 3: Custom CRM Integration
+  URL: https://your-crm.com/api/webhooks
+  Events: ✅ Order Received, ✅ Order Delivered
+  Secret: your-secret-key-123
+
+Webhook 4: Discord Community
+  URL: https://discord.com/api/webhooks/.../
+  Events: ✅ Forum Question, ✅ Forum Reply
+```
+
+Har webhook independently kaam karega sirf apni selected events ke liye!
+
+---
+
+### Example 3: Custom API Endpoint
+
+Apna khud ka endpoint banayein:
+
+```javascript
+// Node.js Express example
+app.post('/webhooks/wishesu', (req, res) => {
+  const { event, data, timestamp } = req.body;
+  
+  // Verify signature (optional but recommended)
+  const signature = req.headers['x-webhook-signature'];
+  const secret = req.headers['x-webhook-secret'];
+  
+  if (secret !== 'your-secret-key') {
+    return res.status(401).json({ error: 'Invalid secret' });
+  }
+  
+  // Process event
+  switch(event) {
+    case 'order.received':
+      // Send email via your email service
+      await sendEmail(data.customerEmail, 'Order Confirmed', ...);
+      // Update your database
+      await db.orders.create(data);
+      break;
+      
+    case 'tip.received':
+      // Send SMS notification
+      await sendSMS('+1234567890', `New tip: $${data.amount}`);
+      break;
+      
+    default:
+      console.log('Unhandled event:', event);
+  }
+  
+  res.json({ success: true });
+});
+```
+
+---
+
+## 📤 Webhook Payload Format
+
+Har webhook ko yeh standard JSON milta hai:
 
 ```json
 {
@@ -146,258 +280,259 @@ Webhook sends clean JSON data:
 }
 ```
 
----
+### Event-specific Data
 
-## 🔧 Advanced Setup Examples
-
-### Example 1: Slack Notifications
-
-1. **Create Slack Incoming Webhook**
-   - Slack → Settings → Integrations
-   - Add "Incoming Webhooks"
-   - Copy webhook URL
-
-2. **Add to Admin Dashboard**
-   - Name: `Slack Notifications`
-   - URL: Paste Slack webhook URL
-   - Events: Select all admin events
-   - Save
-
-✅ Done! Orders ab Slack mein appear honge!
-
----
-
-### Example 2: Discord Notifications
-
-1. **Create Discord Webhook**
-   - Discord Server → Settings → Integrations
-   - Create Webhook
-   - Copy URL
-
-2. **Add to Admin Dashboard**
-   - Name: `Discord Orders`
-   - URL: Discord webhook URL
-   - Events: `order.received`, `tip.received`
-   - Save
-
----
-
-### Example 3: Custom API Integration
-
-```javascript
-// Your custom endpoint receives:
-POST https://your-api.com/webhooks/wishesu
-
-Headers:
-  Content-Type: application/json
-  X-Webhook-Secret: your-secret-key (if configured)
-  X-Webhook-Signature: hmac-sha256-signature (if secret configured)
-
-Body:
+**order.received:**
+```json
 {
-  "event": "order.received",
-  "timestamp": "2026-01-21T12:30:00.000Z",
-  "data": { ... }
+  "orderId": "ORD-123",
+  "productTitle": "Product Name",
+  "customerName": "John Doe",
+  "customerEmail": "john@email.com",
+  "amount": 25.00,
+  "currency": "USD"
 }
 ```
 
-**Verify Signature (Optional but Recommended):**
+**tip.received:**
+```json
+{
+  "amount": 10.00,
+  "currency": "USD",
+  "senderName": "John Doe",
+  "message": "Great service!"
+}
+```
+
+**review.submitted:**
+```json
+{
+  "productTitle": "Product Name",
+  "customerName": "John Doe",
+  "rating": 5,
+  "comment": "Amazing product!"
+}
+```
+
+---
+
+## 🔒 Security (Optional but Recommended)
+
+### Option 1: Secret Header Verification
+
+Admin mein secret set karein:
+```
+Secret: my-secure-secret-key-123
+```
+
+Aapke endpoint par:
+```javascript
+const secret = req.headers['x-webhook-secret'];
+if (secret !== 'my-secure-secret-key-123') {
+  return res.status(401).send('Unauthorized');
+}
+```
+
+### Option 2: HMAC Signature Verification
+
+System automatically HMAC-SHA256 signature bhejta hai:
+
 ```javascript
 const crypto = require('crypto');
 
 function verifySignature(payload, signature, secret) {
   const hmac = crypto.createHmac('sha256', secret);
   hmac.update(JSON.stringify(payload));
-  const expectedSig = hmac.digest('hex');
-  return signature === expectedSig;
+  const expected = hmac.digest('hex');
+  return signature === expected;
+}
+
+// Usage
+const signature = req.headers['x-webhook-signature'];
+const isValid = verifySignature(req.body, signature, 'your-secret');
+
+if (!isValid) {
+  return res.status(401).send('Invalid signature');
 }
 ```
 
 ---
 
-## 📧 Email Setup Options
+## ⚡ Performance & Zero Activity
 
-### Option 1: Make.com (Recommended)
-- **Pros:** Free tier, easy setup, any email provider
-- **Cons:** External dependency
-- **Cost:** Free for 1,000 ops/month
+### Smart Design
+```
+❌ No webhooks configured = Zero worker activity
+✅ Webhooks configured = Only subscribed events trigger
+✅ Multiple webhooks = Parallel execution (fast)
+✅ Failed webhooks = Don't block other webhooks
+```
 
-### Option 2: n8n (Self-hosted)
-- **Pros:** Fully self-hosted, no limits
-- **Cons:** Requires server setup
-- **Cost:** Free (self-hosted)
+### What Happens When:
 
-### Option 3: Zapier
-- **Pros:** Many integrations
-- **Cons:** Expensive for high volume
-- **Cost:** $20/month minimum
+**Scenario 1: No webhooks added**
+```
+User places order → Worker processes → No webhook calls → Fast response
+```
+
+**Scenario 2: One webhook, selected events only**
+```
+User places order → Worker sends to Webhook 1 (if order.received selected)
+User posts review → Worker sends to Webhook 1 (if review.submitted selected)
+User sends chat → No webhook call (if chat.message not selected)
+```
+
+**Scenario 3: Multiple webhooks**
+```
+User places order → All parallel:
+  - Webhook 1 (Gmail) gets notification
+  - Webhook 2 (Slack) gets notification  
+  - Webhook 3 (CRM) gets notification
+  - All run simultaneously (non-blocking)
+```
 
 ---
 
 ## 🧪 Testing
 
-### Test Individual Webhook
-1. Admin Dashboard → Webhooks
-2. Find your endpoint
-3. Click **"🧪 Test"** button
-4. Check logs in your service (Make.com/n8n/etc.)
+### Test Button
+1. Admin → Webhooks
+2. Click **"🧪 Test"** on any webhook
+3. Receives test payload:
+```json
+{
+  "event": "test.webhook",
+  "timestamp": "...",
+  "data": {
+    "message": "This is a test webhook from WishesU",
+    "testId": 1234567890,
+    "note": "If you see this, your webhook is working!"
+  }
+}
+```
 
-### Test Live Events
+### Live Testing
 1. Place a test order on your site
-2. Check webhook received the `order.received` event
-3. Check email was sent (if configured)
+2. Check your webhook endpoint logs
+3. Verify data received correctly
 
 ---
 
 ## 🔍 Troubleshooting
 
-### Webhook Not Receiving Data?
+### Webhook not receiving data?
 
-**Check 1:** Master toggle enabled?
+**✅ Check 1: Master toggle enabled?**
 ```
 Admin → Webhooks → "Enable Webhooks System" = ON
 ```
 
-**Check 2:** Endpoint enabled?
+**✅ Check 2: Specific endpoint enabled?**
 ```
-Each endpoint has its own enable toggle - make sure it's ON
-```
-
-**Check 3:** Events selected?
-```
-Check that the events you want are checked in the endpoint config
+Each webhook has enable toggle - must be ON
 ```
 
-**Check 4:** URL correct?
+**✅ Check 3: Events selected?**
 ```
-Copy URL again from Make.com/n8n
-Make sure no extra spaces
-```
-
-### Emails Not Sending?
-
-**Check 1:** Make.com scenario active?
-```
-Make.com → Scenarios → Check "Active" status
+At least one event must be checked
 ```
 
-**Check 2:** Email module configured?
+**✅ Check 4: URL correct?**
 ```
-Test email module separately in Make.com
-```
-
-**Check 3:** Check Make.com logs
-```
-Make.com → History → See error messages
+Copy-paste carefully, no extra spaces
+Must be valid HTTP/HTTPS URL
 ```
 
-### Webhook Returns Error
+**✅ Check 5: Endpoint accessible?**
+```
+Test URL in browser or Postman
+Should accept POST requests
+```
 
-**Check 1:** Check browser console
+### Webhook receiving but not processing?
+
+**✅ Check your endpoint code**
 ```
-F12 → Console → Look for errors
+console.log(req.body) to see received data
+Check for errors in your service logs
 ```
 
-**Check 2:** Check Cloudflare logs
+**✅ Check response status**
 ```
-Cloudflare Dashboard → Workers → Logs
+Your endpoint should return 200 OK
+Non-200 responses are logged as failures
 ```
 
 ---
 
-## 📊 Comparison: Old vs New
+## 📊 Best Practices
 
-| Feature | Old System | New System |
-|---------|-----------|------------|
-| Email Services | Built-in (7 services) | External (via webhooks) |
-| Webhook Config | Per-event routing | Universal endpoints |
-| Setup Time | 15-30 minutes | 5 minutes |
-| Code Complexity | 650+ lines | 350 lines |
-| CPU Usage | Higher (email logic in worker) | Lower (external processing) |
-| Flexibility | Limited to supported services | ANY service via webhook |
-| Email Providers | 7 hardcoded | Unlimited via Make.com |
-| Cost | API keys needed | Free tier available |
+### ✅ DO:
+1. **Use HTTPS URLs only** (secure)
+2. **Set secret keys** for sensitive webhooks
+3. **Test before going live** (test button)
+4. **One webhook = One purpose** (easier debugging)
+5. **Return 200 OK quickly** (avoid timeouts)
 
----
-
-## 🗑️ Migration from Old System
-
-### Automatic Migration
-Old config is automatically detected and **ignored**. New system takes priority.
-
-### What Happens to Old Settings?
-- Old `automation_config_v2` is **not used**
-- New `webhooks_config` is used instead
-- No data is lost - old settings remain in DB (inactive)
-
-### Re-enable Old System (Emergency)
-If you need to temporarily revert:
-
-1. **Router.js** - Comment out new webhook routes
-2. **Controllers** - Change imports back to `./automation.js`
-3. **Deploy**
-
-But **NOT recommended** - new system is cleaner and faster!
+### ❌ DON'T:
+1. **Use HTTP** (insecure)
+2. **Share webhook URLs publicly** (security risk)
+3. **Block webhook response** (keep processing fast)
+4. **Forget to handle errors** (graceful failures)
 
 ---
 
-## 🎯 Best Practices
+## 🎯 Common Use Cases
 
-### 1. Use Make.com for Emails
-✅ Clean separation of concerns  
-✅ Easy to modify email templates  
-✅ No code changes needed  
-✅ Free tier sufficient for most  
-
-### 2. Secure Your Webhooks
-✅ Always set a secret key  
-✅ Verify signatures in your endpoint  
-✅ Use HTTPS only  
-
-### 3. Monitor Webhook Logs
-✅ Check Make.com history regularly  
-✅ Set up error alerts  
-✅ Test after any changes  
-
-### 4. Group Events Logically
+### Use Case 1: Simple Email Notifications
 ```
-Endpoint 1: Admin notifications (all admin events)
-Endpoint 2: Customer emails (all customer.* events)  
-Endpoint 3: Slack alerts (critical events only)
+1 Webhook → Google Apps Script → Gmail
+Events: All admin notifications
+Purpose: Get email on every important event
 ```
 
----
+### Use Case 2: Team Notifications
+```
+1 Webhook → Slack
+Events: Order Received, Tip Received
+Purpose: Team knows about new sales instantly
+```
 
-## 🆘 Support & Resources
+### Use Case 3: Customer Auto-reply
+```
+1 Webhook → Google Script → Customer Email
+Events: Order Confirmed, Order Delivered
+Purpose: Automatic confirmation/delivery emails
+```
 
-### Documentation
-- **Make.com Docs:** https://make.com/en/help
-- **n8n Docs:** https://docs.n8n.io
-- **Zapier Docs:** https://zapier.com/help
-
-### Example Make.com Templates
-Will be added soon - check back!
-
-### Questions?
-Check the webhook logs in Admin Dashboard or Cloudflare Worker logs.
+### Use Case 4: Advanced Integration
+```
+Webhook 1 → Gmail (admin notifications)
+Webhook 2 → Slack (team alerts)
+Webhook 3 → Custom CRM (order sync)
+Webhook 4 → Discord (community updates)
+Each with specific event permissions
+```
 
 ---
 
 ## 📝 Summary
 
-### What You Did
-1. ✅ Removed complex email integrations from worker
-2. ✅ Implemented universal webhook system
-3. ✅ Setup external automation (Make.com)
-4. ✅ Reduced code complexity by 50%
-5. ✅ Increased flexibility infinitely
+### What You Have Now:
+1. ✅ **Flexible webhook system** - add unlimited URLs
+2. ✅ **Event permissions** - each URL chooses events
+3. ✅ **Zero overhead** - only active when configured
+4. ✅ **Parallel execution** - multiple webhooks run together
+5. ✅ **Service agnostic** - works with anything
+6. ✅ **Secure** - HMAC signatures + secret keys
+7. ✅ **Simple UI** - Shopify-style configuration
 
-### Result
-- **Faster** worker response times
-- **Cleaner** codebase
-- **Flexible** email providers (any via Make.com)
-- **Simple** configuration
-- **Free** tier available
+### Benefits:
+- 🚀 **Fast** - no email logic in worker
+- 🔧 **Flexible** - use any service you want
+- 💰 **Free** - use Google Script for free emails
+- 🎯 **Focused** - each webhook has specific job
+- 🛡️ **Secure** - signatures + secrets supported
 
 ---
 
