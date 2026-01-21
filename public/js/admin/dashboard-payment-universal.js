@@ -24,11 +24,13 @@ async function initPaymentTab() {
 // Load payment gateways from API
 async function loadPaymentGateways() {
     try {
-        const response = await fetch('/api/admin/payment-universal/gateways');
+        // Add cache buster to force fresh data
+        const response = await fetch('/api/admin/payment-universal/gateways?_=' + Date.now());
         const data = await response.json();
+        console.log('API Response:', data);
         if (data.success) {
             paymentGateways = data.gateways || [];
-            console.log('Loaded payment gateways:', paymentGateways);
+            console.log('Loaded payment gateways:', paymentGateways.length, paymentGateways);
         } else {
             console.error('Failed to load payment gateways:', data.error);
             paymentGateways = [];
