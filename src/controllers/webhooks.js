@@ -423,4 +423,3 @@ export { notifyBlogComment as notifyNewBlogComment };
 export { notifyForumQuestion as notifyNewForumQuestion };
 export { notifyForumReply as notifyNewForumReply };
 export { notifyChatMessage as notifyNewChatMessage };
-export { notifyOrderDelivered as notifyCustomerOrderDelivered };
