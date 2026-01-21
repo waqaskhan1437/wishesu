@@ -172,6 +172,13 @@ import {
   adminPatchProductRule
 } from './controllers/seo.js';
 
+// Webhooks (New Universal System v3.0)
+import {
+  getWebhooksSettings,
+  saveWebhooksSettings,
+  testWebhook as testWebhookV3
+} from './controllers/webhooks.js';
+
 // Automation
 import {
   getAutomationSettings,
@@ -330,7 +337,22 @@ export async function routeApiRequest(req, env, url, path, method) {
     return adminPatchProductRule(env, req);
   }
 
-  // ----- AUTOMATION -----
+  // ----- WEBHOOKS (New Universal System v3.0) -----
+  if (method === 'GET' && path === '/api/admin/webhooks/settings') {
+    return getWebhooksSettings(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/webhooks/settings') {
+    const body = await req.json().catch(() => ({}));
+    return saveWebhooksSettings(env, body);
+  }
+
+  if (method === 'POST' && path.startsWith('/api/admin/webhooks/test/')) {
+    const endpointId = path.split('/').pop();
+    return testWebhookV3(env, endpointId);
+  }
+
+  // ----- AUTOMATION (Legacy - Deprecated) -----
   if (method === 'GET' && path === '/api/admin/automation/settings') {
     return getAutomationSettings(env);
   }

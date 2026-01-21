@@ -4,7 +4,7 @@
  */
 
 import { json } from '../utils/response.js';
-import { notifyNewBlogComment } from './automation.js';
+import { notifyBlogComment } from './webhooks.js';
 
 /**
  * Get approved comments for a blog post (public)
@@ -117,7 +117,7 @@ export async function addBlogComment(env, body) {
     } catch (e) {}
     
     // Notify admin about new comment (async)
-    notifyNewBlogComment(env, { 
+    notifyBlogComment(env, { 
       blogTitle, 
       name: trimmedName, 
       email: trimmedEmail, 

@@ -5,10 +5,10 @@
 
 import { json, cachedJson } from '../utils/response.js';
 import { 
-  notifyNewForumQuestion, 
-  notifyNewForumReply,
+  notifyForumQuestion, 
+  notifyForumReply,
   notifyCustomerForumReply
-} from './automation.js';
+} from './webhooks.js';
 
 // Cache for schema validation - avoids repeated checks per request
 let forumSchemaValidated = false;
@@ -387,7 +387,7 @@ export async function submitQuestion(env, body) {
     `).bind(trimmedTitle, finalSlug, trimmedContent, trimmedName, trimmedEmail, now, now).run();
 
     // Notify admin about new question (async)
-    notifyNewForumQuestion(env, { 
+    notifyForumQuestion(env, { 
       title: trimmedTitle, 
       name: trimmedName, 
       email: trimmedEmail, 
@@ -490,7 +490,7 @@ export async function submitReply(env, body) {
     } catch (e) {}
     
     // Notify admin about new reply (async)
-    notifyNewForumReply(env, { 
+    notifyForumReply(env, { 
       questionTitle, 
       name: trimmedName, 
       email: trimmedEmail, 

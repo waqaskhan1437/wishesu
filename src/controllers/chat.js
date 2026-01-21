@@ -6,7 +6,7 @@ import { json } from '../utils/response.js';
 import { escapeHtml, normalizeQuickAction } from '../utils/formatting.js';
 import { enforceUserRateLimit } from '../utils/validation.js';
 import { getLatestOrderForEmail } from '../utils/order-helpers.js';
-import { notifyNewChatMessage, notifyCustomerChatReply } from './automation.js';
+import { notifyChatMessage, notifyCustomerChatReply } from './webhooks.js';
 
 /**
  * Start a new chat session or reuse existing one
@@ -191,7 +191,7 @@ export async function sendMessage(env, body, reqUrl) {
 
   // Notify admin about customer message (async)
   if (role === 'user') {
-    notifyNewChatMessage(env, { 
+    notifyChatMessage(env, { 
       name: sessionName, 
       email: sessionEmail, 
       content: trimmed 

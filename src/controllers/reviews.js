@@ -5,7 +5,7 @@
 
 import { json, cachedJson } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
-import { notifyNewReview } from './automation.js';
+import { notifyReviewSubmitted } from './webhooks.js';
 
 // Review limits
 const REVIEW_LIMITS = {
@@ -135,7 +135,7 @@ export async function addReview(env, body) {
   } catch (e) {}
   
   // Notify admin about new review (async)
-  notifyNewReview(env, { productTitle, rating, authorName, comment }).catch(() => {});
+  notifyReviewSubmitted(env, { productTitle, rating, authorName, comment }).catch(() => {});
   
   return json({ success: true });
 }

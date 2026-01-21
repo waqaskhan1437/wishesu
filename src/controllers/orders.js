@@ -5,12 +5,14 @@
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
 import { getGoogleScriptUrl } from '../config/secrets.js';
-import { 
-  notifyNewOrder, 
-  notifyNewTip, 
+
+// Webhooks (New Universal System)
+import {
+  notifyOrderReceived,
+  notifyTipReceived,
   notifyCustomerOrderConfirmed,
-  notifyCustomerOrderDelivered 
-} from './automation.js';
+  notifyCustomerOrderDelivered
+} from './webhooks.js';
 
 // Re-export from shared utility for backwards compatibility
 export { getLatestOrderForEmail } from '../utils/order-helpers.js';
@@ -319,8 +321,8 @@ export async function createOrder(env, body) {
   // Send notifications (async, don't wait)
   const deliveryTime = deliveryMinutes < 1440 ? `${Math.round(deliveryMinutes / 60)} hour(s)` : `${Math.round(deliveryMinutes / 1440)} day(s)`;
 
-  // Send notifications via Advanced Automation
-  notifyNewOrder(env, { orderId, email, amount, productTitle }).catch(() => {});
+  // Send notifications via Universal Webhooks
+  notifyOrderReceived(env, { orderId, email, amount, productTitle }).catch(() => {});
   notifyCustomerOrderConfirmed(env, { orderId, email, amount, productTitle, deliveryTime }).catch(() => {});
 
   // FIXED: Send Google Script webhook for new order (for email notifications)
@@ -659,7 +661,7 @@ export async function markTipPaid(env, body) {
   } catch (e) {}
   
   // Notify admin about tip (async)
-  notifyNewTip(env, { orderId, amount: Number(amount) || 0, email }).catch(() => {});
+  notifyTipReceived(env, { orderId, amount: Number(amount) || 0, email }).catch(() => {});
   
   return json({ success: true });
 }
