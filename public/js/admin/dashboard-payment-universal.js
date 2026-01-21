@@ -44,13 +44,26 @@ function renderPaymentGateways() {
     const container = document.getElementById('main-panel');
     if (!container) return;
 
+    // Check if Whop gateway exists
+    const hasWhop = paymentGateways.some(g => g.gateway_type === 'whop');
+
     container.innerHTML = `
         <div class="payment-management">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                 <h2>💳 Universal Payment Gateway Manager</h2>
-                <button class="btn btn-primary" onclick="showAddGatewayModal()">+ Add Payment Gateway</button>
+                <div style="display: flex; gap: 10px;">
+                    ${!hasWhop ? `<button class="btn" onclick="migrateWhopSettings()" style="background: #f59e0b;">🔄 Setup Whop</button>` : ''}
+                    <button class="btn btn-primary" onclick="showAddGatewayModal()">+ Add Payment Gateway</button>
+                </div>
             </div>
-            
+
+            ${!hasWhop ? `
+            <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                <strong style="color: #92400e;">💡 Tip:</strong>
+                <span style="color: #78350f;">Click "Setup Whop" to automatically create Whop gateway from your existing settings, or use "Add Payment Gateway" to add manually.</span>
+            </div>
+            ` : ''}
+
             <div class="table-container">
                 <table>
                     <thead>
@@ -69,6 +82,28 @@ function renderPaymentGateways() {
             </div>
         </div>
     `;
+}
+
+// Migrate Whop settings from legacy to payment_gateways
+async function migrateWhopSettings() {
+    try {
+        const response = await fetch('/api/admin/payment/migrate-whop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            showMessage('✅ ' + result.message, 'success');
+            // Reload gateways
+            await loadPaymentGateways();
+            renderPaymentGateways();
+        } else {
+            showMessage('❌ ' + (result.error || 'Migration failed'), 'error');
+        }
+    } catch (error) {
+        showMessage('❌ Error: ' + error.message, 'error');
+    }
 }
 
 // Render individual payment gateway rows

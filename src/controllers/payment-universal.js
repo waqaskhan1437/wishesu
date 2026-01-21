@@ -69,7 +69,9 @@ async function ensureTable(env) {
 
 /**
  * Auto-migrate legacy Whop settings from 'settings' table to payment_gateways
- * This runs once and creates a Whop gateway if legacy settings exist
+ * Creates Whop gateway if:
+ * 1. Legacy settings exist in database, OR
+ * 2. WHOP_API_KEY env variable is set
  */
 async function migrateLegacyWhopSettings(env) {
   try {
@@ -94,26 +96,28 @@ async function migrateLegacyWhopSettings(env) {
         legacySettings = JSON.parse(settingsRow.value);
       } catch (e) {
         console.log('Failed to parse legacy Whop settings:', e);
-        return;
       }
     }
 
-    // Check if we have any legacy settings or env variables to migrate
+    // Get values from legacy settings
     const productId = legacySettings.default_product_id || legacySettings.product_id || '';
-    const apiKey = legacySettings.api_key || env.WHOP_API_KEY || '';
     const webhookSecret = legacySettings.webhook_secret || env.WHOP_WEBHOOK_SECRET || '';
     const theme = legacySettings.theme || 'light';
 
-    // Only migrate if we have at least product_id or API key
-    if (!productId && !apiKey) {
-      console.log('No legacy Whop settings to migrate');
+    // Check if WHOP_API_KEY env is set OR we have legacy settings
+    const hasEnvApiKey = !!env.WHOP_API_KEY;
+    const hasLegacySettings = !!settingsRow;
+
+    // Always create Whop gateway if env API key exists OR legacy settings exist
+    if (!hasEnvApiKey && !hasLegacySettings && !productId) {
+      console.log('No Whop configuration found (no env.WHOP_API_KEY, no legacy settings)');
       return;
     }
 
     // Get origin for webhook URL
     const webhookUrl = '/api/whop/webhook';
 
-    // Create Whop gateway from legacy settings
+    // Create Whop gateway
     await env.DB.prepare(`
       INSERT INTO payment_gateways
       (name, gateway_type, webhook_url, webhook_secret, is_enabled, whop_product_id, whop_api_key, whop_theme)
@@ -125,18 +129,82 @@ async function migrateLegacyWhopSettings(env) {
       webhookSecret,
       1, // enabled
       productId,
-      '', // Don't store API key in DB - use env variable
+      '', // Don't store API key in DB - use env variable WHOP_API_KEY
       theme
     ).run();
 
-    console.log('✅ Legacy Whop settings migrated to payment_gateways');
-    console.log('   Product ID:', productId || '(not set)');
-    console.log('   API Key: Using env.WHOP_API_KEY');
+    console.log('✅ Whop gateway created in payment_gateways');
+    console.log('   Product ID:', productId || '(not set - please configure in Payment tab)');
+    console.log('   API Key: Using env.WHOP_API_KEY =', hasEnvApiKey ? 'SET' : 'NOT SET');
 
     // Clear cache
     gatewaysCache = null;
   } catch (e) {
     console.error('Failed to migrate legacy Whop settings:', e);
+  }
+}
+
+/**
+ * Force run migration (admin API)
+ */
+export async function forceMigrateWhop(env) {
+  try {
+    await ensureTable(env);
+
+    // Check if Whop gateway already exists
+    const existingWhop = await env.DB.prepare(
+      'SELECT id FROM payment_gateways WHERE gateway_type = ? LIMIT 1'
+    ).bind('whop').first();
+
+    if (existingWhop) {
+      return json({
+        success: true,
+        message: 'Whop gateway already exists',
+        gateway_id: existingWhop.id
+      });
+    }
+
+    // Force create Whop gateway
+    const settingsRow = await env.DB.prepare(
+      'SELECT value FROM settings WHERE key = ?'
+    ).bind('whop').first();
+
+    let legacySettings = {};
+    if (settingsRow && settingsRow.value) {
+      try {
+        legacySettings = JSON.parse(settingsRow.value);
+      } catch (e) {}
+    }
+
+    const productId = legacySettings.default_product_id || legacySettings.product_id || '';
+    const webhookSecret = legacySettings.webhook_secret || env.WHOP_WEBHOOK_SECRET || '';
+    const theme = legacySettings.theme || 'light';
+
+    await env.DB.prepare(`
+      INSERT INTO payment_gateways
+      (name, gateway_type, webhook_url, webhook_secret, is_enabled, whop_product_id, whop_api_key, whop_theme)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      'Whop',
+      'whop',
+      '/api/whop/webhook',
+      webhookSecret,
+      1,
+      productId,
+      '',
+      theme
+    ).run();
+
+    gatewaysCache = null;
+
+    return json({
+      success: true,
+      message: 'Whop gateway created successfully',
+      product_id: productId || '(not set)',
+      api_key_status: env.WHOP_API_KEY ? 'SET in env' : 'NOT SET'
+    });
+  } catch (e) {
+    return json({ error: e.message }, 500);
   }
 }
 
