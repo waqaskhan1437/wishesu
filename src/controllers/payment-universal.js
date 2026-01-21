@@ -943,232 +943,33 @@ export async function handleUniversalPaymentAPI(env) {
  * Handle adding a new payment gateway
  */
 export async function handleAddPaymentGateway(env, body) {
-  try {
-    const { name, gateway_type, webhook_url, secret, custom_code, enabled, config } = body;
-    
-    if (!name || !webhook_url) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Name and webhook URL are required' 
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' } 
-      });
-    }
-    
-    // Ensure table exists
-    await ensurePaymentGatewaysTable(env);
-    
-    // Insert new gateway
-    const result = await env.DB.prepare(`
-      INSERT INTO payment_gateways (
-        name, 
-        gateway_type, 
-        webhook_url, 
-        secret, 
-        custom_code, 
-        enabled, 
-        config,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `).bind(
-      name,
-      gateway_type || 'custom',
-      webhook_url,
-      secret || '',
-      custom_code || '',
-      enabled !== false, // Default to true if not specified
-      JSON.stringify(config || {})
-    ).run();
-    
-    return new Response(JSON.stringify({ 
-      success: true, 
-      id: result.meta.last_row_id,
-      message: 'Payment gateway added successfully'
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (error) {
-    console.error('Error adding payment gateway:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error.message 
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' } 
-    });
-  }
+  // Use the unified addPaymentGatewayApi function
+  return addPaymentGatewayApi(env, body);
 }
 
 /**
  * Handle getting all payment gateways
  */
 export async function handleGetPaymentGateways(env) {
-  try {
-    // Ensure table exists
-    await ensurePaymentGatewaysTable(env);
-    
-    // Get all gateways (excluding sensitive secret data)
-    const gateways = await env.DB.prepare(`
-      SELECT 
-        id, 
-        name, 
-        gateway_type, 
-        webhook_url, 
-        custom_code, 
-        enabled, 
-        config, 
-        created_at,
-        updated_at
-      FROM payment_gateways 
-      ORDER BY created_at DESC
-    `).all();
-    
-    // Remove secret from response for security
-    const gatewaysWithoutSecret = (gateways.results || []).map(gateway => ({
-      ...gateway,
-      has_secret: !!(gateway.secret && gateway.secret.trim()),
-      secret: undefined // Don't return actual secret
-    }));
-    
-    return new Response(JSON.stringify({ 
-      success: true, 
-      gateways: gatewaysWithoutSecret
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (error) {
-    console.error('Error getting payment gateways:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error.message 
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' } 
-    });
-  }
+  // Use the unified getPaymentGatewaysApi function
+  return getPaymentGatewaysApi(env);
 }
 
 /**
  * Handle updating a payment gateway
  */
 export async function handleUpdatePaymentGateway(env, body) {
-  try {
-    const { id, name, gateway_type, webhook_url, secret, custom_code, enabled, config } = body;
-    
-    if (!id || !name || !webhook_url) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'ID, name, and webhook URL are required' 
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' } 
-      });
-    }
-    
-    // Ensure table exists
-    await ensurePaymentGatewaysTable(env);
-    
-    // Check if gateway exists
-    const existing = await env.DB.prepare(
-      'SELECT id FROM payment_gateways WHERE id = ?'
-    ).bind(id).first();
-    
-    if (!existing) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Payment gateway not found' 
-      }), { 
-        status: 404,
-        headers: { 'Content-Type': 'application/json' } 
-      });
-    }
-    
-    // Update gateway (preserve existing secret if not provided)
-    let updateQuery, params;
-    if (secret !== undefined && secret !== null) {
-      // Include secret in update
-      updateQuery = `
-        UPDATE payment_gateways 
-        SET name = ?, gateway_type = ?, webhook_url = ?, secret = ?, 
-            custom_code = ?, enabled = ?, config = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `;
-      params = [
-        name, gateway_type || 'custom', webhook_url, secret,
-        custom_code || '', enabled !== false, JSON.stringify(config || {}), id
-      ];
-    } else {
-      // Don't update secret (keep existing)
-      updateQuery = `
-        UPDATE payment_gateways 
-        SET name = ?, gateway_type = ?, webhook_url = ?, 
-            custom_code = ?, enabled = ?, config = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `;
-      params = [
-        name, gateway_type || 'custom', webhook_url,
-        custom_code || '', enabled !== false, JSON.stringify(config || {}), id
-      ];
-    }
-    
-    await env.DB.prepare(updateQuery).bind(...params).run();
-    
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Payment gateway updated successfully'
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (error) {
-    console.error('Error updating payment gateway:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error.message 
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' } 
-    });
-  }
+  // Use the unified updatePaymentGatewayApi function
+  const id = body.id;
+  return updatePaymentGatewayApi(env, id, body);
 }
 
 /**
  * Handle deleting a payment gateway
  */
 export async function handleDeletePaymentGateway(env, id) {
-  try {
-    if (!id) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'ID is required' 
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' } 
-      });
-    }
-    
-    // Ensure table exists
-    await ensurePaymentGatewaysTable(env);
-    
-    // Delete gateway
-    await env.DB.prepare('DELETE FROM payment_gateways WHERE id = ?').bind(id).run();
-    
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Payment gateway deleted successfully'
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (error) {
-    console.error('Error deleting payment gateway:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error.message 
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' } 
-    });
-  }
+  // Use the unified deletePaymentGatewayApi function
+  return deletePaymentGatewayApi(env, id);
 }
 
 /**
