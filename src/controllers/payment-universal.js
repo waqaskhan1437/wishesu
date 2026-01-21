@@ -209,6 +209,35 @@ export async function forceMigrateWhop(env) {
 }
 
 /**
+ * Debug API: Check payment_gateways table structure and data
+ */
+export async function debugPaymentGateways(env) {
+  try {
+    // Get table info
+    const tableInfo = await env.DB.prepare("PRAGMA table_info(payment_gateways)").all();
+
+    // Get all rows raw
+    const allRows = await env.DB.prepare("SELECT * FROM payment_gateways").all();
+
+    // Count
+    const count = await env.DB.prepare("SELECT COUNT(*) as cnt FROM payment_gateways").first();
+
+    return json({
+      success: true,
+      table_columns: tableInfo.results || [],
+      row_count: count?.cnt || 0,
+      raw_data: allRows.results || []
+    });
+  } catch (e) {
+    return json({
+      success: false,
+      error: e.message,
+      table_exists: false
+    });
+  }
+}
+
+/**
  * Get all payment gateways with cache
  */
 async function getPaymentGateways(env) {
@@ -220,12 +249,31 @@ async function getPaymentGateways(env) {
   await ensureTable(env);
 
   try {
-    const result = await env.DB.prepare('SELECT * FROM payment_gateways ORDER BY created_at DESC').all();
+    // Explicitly select all columns to ensure compatibility
+    const result = await env.DB.prepare(`
+      SELECT
+        id, name, gateway_type, webhook_url, webhook_secret,
+        custom_code, is_enabled, whop_product_id, whop_api_key,
+        whop_theme, created_at, updated_at
+      FROM payment_gateways
+      ORDER BY created_at DESC
+    `).all();
+
     gatewaysCache = result.results || [];
     cacheTime = now;
+    console.log('Fetched gateways count:', gatewaysCache.length);
     return gatewaysCache;
   } catch (e) {
-    return DEFAULT_GATEWAYS;
+    console.error('Error fetching payment_gateways:', e);
+    // Try simpler query as fallback
+    try {
+      const result = await env.DB.prepare('SELECT * FROM payment_gateways').all();
+      gatewaysCache = result.results || [];
+      return gatewaysCache;
+    } catch (e2) {
+      console.error('Fallback query also failed:', e2);
+      return DEFAULT_GATEWAYS;
+    }
   }
 }
 
@@ -234,7 +282,13 @@ async function getPaymentGateways(env) {
  */
 export async function getPaymentGatewaysApi(env) {
   try {
+    // Force clear cache to ensure fresh data
+    gatewaysCache = null;
+
     const gateways = await getPaymentGateways(env);
+
+    console.log('Raw gateways from DB:', JSON.stringify(gateways));
+
     // Mask sensitive data
     const safeGateways = gateways.map(gw => ({
       id: gw.id,
@@ -251,8 +305,12 @@ export async function getPaymentGatewaysApi(env) {
       whop_api_key: gw.whop_api_key ? '••••••••' : '',
       whop_theme: gw.whop_theme || 'light'
     }));
+
+    console.log('Returning gateways:', safeGateways.length);
+
     return json({ success: true, gateways: safeGateways });
   } catch (e) {
+    console.error('getPaymentGatewaysApi error:', e);
     return json({ error: e.message }, 500);
   }
 }

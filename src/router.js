@@ -91,7 +91,8 @@ import {
   handleDeletePaymentGateway,
   handleUpdatePaymentGateway,
   getWhopCheckoutSettings,
-  forceMigrateWhop
+  forceMigrateWhop,
+  debugPaymentGateways
 } from './controllers/payment-universal.js';
 
 // Pages
@@ -724,6 +725,11 @@ export async function routeApiRequest(req, env, url, path, method) {
   // Admin API: Force migrate Whop settings to payment_gateways
   if (method === 'POST' && path === '/api/admin/payment/migrate-whop') {
     return forceMigrateWhop(env);
+  }
+
+  // Debug API: Check payment_gateways table
+  if (method === 'GET' && path === '/api/admin/payment/debug') {
+    return debugPaymentGateways(env);
   }
 
   // ----- ORDERS -----
