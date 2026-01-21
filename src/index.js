@@ -1263,10 +1263,32 @@ export default {
     }
     const method = req.method;
 
-    // COLD START FIX: Start DB initialization early without blocking
-    // This runs in background while we process the request
+    // COLD START FIX: Start DB initialization early and WAIT for critical paths
+    // For API routes and dynamic pages, we need the DB ready before processing
+    const requiresDB = path.startsWith('/api/') || 
+                       path.startsWith('/blog/') || 
+                       path.startsWith('/forum/') ||
+                       path.startsWith('/product-') ||
+                       path.startsWith('/admin/') ||
+                       path === '/' ||
+                       path === '/index.html';
+    
     if (env.DB) {
-      warmupDB(env, ctx);
+      if (requiresDB) {
+        // Wait for DB to be ready for critical paths (with timeout protection)
+        try {
+          await Promise.race([
+            initDB(env),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('DB init timeout')), 8000))
+          ]);
+        } catch (e) {
+          console.warn('DB init delayed:', e.message);
+          // Continue anyway - the request handler will retry if needed
+        }
+      } else {
+        // For static assets, warm up in background without blocking
+        warmupDB(env, ctx);
+      }
     }
 
 // Route flags (computed once per request)
@@ -1399,12 +1421,14 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
 
     // HEALTH CHECK ENDPOINT - For external warming services (UptimeRobot, cron-job.org)
     // This endpoint warms up DB and returns status
+    // IMPROVED: Always initialize DB on health checks to ensure it's ready
     if (path === '/api/health' || path === '/_health') {
       const startTime = Date.now();
       let dbStatus = 'not_configured';
 
       if (env.DB) {
         try {
+          // Force DB initialization on every health check
           await initDB(env);
           await env.DB.prepare('SELECT 1 as health').first();
           dbStatus = 'healthy';
@@ -2113,7 +2137,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
   },
 
   // Scheduled handler for cron jobs
-  // WARMING: This runs every 5 minutes (configure in wrangler.toml)
+  // WARMING: This runs every 3 minutes (configure in wrangler.toml)
   // Keeps DB connection warm and prevents cold start issues
   async scheduled(event, env, ctx) {
     setVersion(env.VERSION);
@@ -2124,12 +2148,16 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         // WARMUP: Initialize DB tables if needed
         await initDB(env);
 
-        // WARMUP: Simple query to keep D1 connection alive
-        await env.DB.prepare('SELECT 1 as warm').first();
-        console.log('DB connection warmed successfully');
+        // WARMUP: Multiple queries to ensure full connection warmth
+        await Promise.all([
+          env.DB.prepare('SELECT 1 as warm').first(),
+          env.DB.prepare('SELECT COUNT(*) as count FROM products WHERE status = ?').bind('active').first(),
+          env.DB.prepare('SELECT COUNT(*) as count FROM orders').first()
+        ]);
+        console.log('DB connection warmed successfully with multiple queries');
 
         // Cleanup expired Whop checkout sessions (daily cron only)
-        // The 5-minute cron is intended for warming; cleanup is heavier and can increase subrequests/wall time.
+        // The 3-minute cron is intended for warming; cleanup is heavier and can increase subrequests/wall time.
         if (event.cron === '0 2 * * *') {
           const result = await cleanupExpired(env);
           try {

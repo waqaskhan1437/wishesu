@@ -18,7 +18,8 @@ let initPromise = null;
 let initStartTime = 0;
 
 // Maximum time to wait for DB initialization (prevents hanging)
-const DB_INIT_TIMEOUT_MS = 5000;
+// Increased timeout for better cold start handling
+const DB_INIT_TIMEOUT_MS = 10000;
 
 /**
  * Initialize database schema - creates all required tables
