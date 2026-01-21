@@ -5,6 +5,9 @@
 
 (function() {
   'use strict';
+
+  // Debug: confirm that the latest automation module loaded (helps diagnose caching)
+  console.log('[AdvAutomation] Loaded automation-advanced.js v23');
   
   let config = null;
   

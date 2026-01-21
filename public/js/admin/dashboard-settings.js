@@ -3,6 +3,8 @@
  */
 
 (function(AD) {
+  // Debug: confirm latest settings module loaded (helps diagnose caching)
+  console.log('[DashboardSettings] Loaded dashboard-settings.js v23');
   // Helper to download JSON
   function downloadJSON(data, filename) {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
