@@ -161,16 +161,13 @@ import {
   saveSiteComponents
 } from './controllers/admin.js';
 
-// SEO (admin controls + robots/sitemap)
+// SEO (Minimal 2025 - Google Requirements Only)
 import {
-  adminGetSeoSettings,
-  adminSaveSeoSettings,
-  adminListPageRules,
-  adminUpsertPageRules,
-  adminDeletePageRule,
-  adminListProductsWithRules,
-  adminPatchProductRule
-} from './controllers/seo.js';
+  getMinimalSEOSettings,
+  saveMinimalSEOSettings,
+  buildMinimalRobotsTxt,
+  buildMinimalSitemapXml
+} from './controllers/seo-minimal.js';
 
 // Webhooks (New Universal System v3.0)
 import {
@@ -297,33 +294,14 @@ export async function routeApiRequest(req, env, url, path, method) {
     return getSessions(env);
   }
 
-  // ----- ADMIN SEO APIs -----
-  if (method === 'GET' && path === '/api/admin/seo/settings') {
-    return adminGetSeoSettings(env, req);
+  // ----- MINIMAL SEO APIs (2025 - Google Standards) -----
+  if (method === 'GET' && path === '/api/admin/seo/minimal') {
+    return getMinimalSEOSettings(env);
   }
 
-  if (method === 'POST' && path === '/api/admin/seo/settings') {
-    return adminSaveSeoSettings(env, req);
-  }
-
-  if (method === 'GET' && path === '/api/admin/seo/pages') {
-    return adminListPageRules(env);
-  }
-
-  if (method === 'POST' && path === '/api/admin/seo/pages') {
-    return adminUpsertPageRules(env, req);
-  }
-
-  if (method === 'DELETE' && path === '/api/admin/seo/pages') {
-    return adminDeletePageRule(env, req);
-  }
-
-  if (method === 'GET' && path === '/api/admin/seo/products') {
-    return adminListProductsWithRules(env, req);
-  }
-
-  if (method === 'POST' && path === '/api/admin/seo/products') {
-    return adminPatchProductRule(env, req);
+  if (method === 'POST' && path === '/api/admin/seo/minimal') {
+    const body = await req.json().catch(() => ({}));
+    return saveMinimalSEOSettings(env, body);
   }
 
   // ----- WEBHOOKS (New Universal System v3.0) -----

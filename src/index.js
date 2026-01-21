@@ -14,7 +14,7 @@ import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
 import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
-import { buildRobotsTxt, buildSitemapXml, getSeoForRequest, applySeoToHtml } from './controllers/seo.js';
+import { buildMinimalRobotsTxt, buildMinimalSitemapXml } from './controllers/seo-minimal.js';
 
 
 // =========================
@@ -1451,11 +1451,11 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       });
     }
 
-    // Dynamic robots.txt + sitemap.xml (SEO settings controlled from Admin)
+    // Dynamic robots.txt + sitemap.xml (Minimal SEO 2025 - Google Standards)
     if ((method === 'GET' || method === 'HEAD')) {
       if (path === '/robots.txt') {
         if (env.DB) await initDB(env);
-        const txt = await buildRobotsTxt(env, req);
+        const txt = await buildMinimalRobotsTxt(env, req);
         return new Response(txt, {
           status: 200,
           headers: {
@@ -1465,13 +1465,11 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         });
       }
 
-      if (path === '/sitemap.xml' || /^\/sitemap-(\d+)\.xml$/.test(path)) {
+      if (path === '/sitemap.xml') {
         if (env.DB) await initDB(env);
-        const m = path.match(/^\/sitemap-(\d+)\.xml$/);
-        const part = m ? m[1] : null;
-        const sm = await buildSitemapXml(env, req, part);
+        const sm = await buildMinimalSitemapXml(env, req);
         return new Response(sm.body, {
-          status: sm.status || 200,
+          status: 200,
           headers: {
             'Content-Type': (sm.contentType || 'application/xml') + '; charset=utf-8',
             'Cache-Control': 'public, max-age=300'
