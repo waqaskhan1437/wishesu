@@ -15,6 +15,7 @@ import { cleanupExpired } from './controllers/whop.js';
 import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildMinimalRobotsTxt, buildMinimalSitemapXml } from './controllers/seo-minimal.js';
+import { getNoindexMetaTags } from './controllers/noindex.js';
 
 
 // =========================
@@ -2053,6 +2054,12 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 const seo = await getSeoForRequest(env, req, schemaProduct ? { product: schemaProduct } : { path });
                 html = applySeoToHtml(html, seo.robots, seo.canonical);
                 headers.set('X-Robots-Tag', seo.robots);
+                
+                // Add noindex tags for hidden pages (user-controlled hiding from search)
+                const noindexTags = await getNoindexMetaTags(env, path);
+                if (noindexTags) {
+                  html = html.replace('</head>', `\n    ${noindexTags}\n  </head>`);
+                }
               } catch (e) {
                 // ignore SEO injection errors
               }

@@ -156,6 +156,9 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'seo':
         if (AD.loadSEO) await AD.loadSEO(panel);
         break;
+      case 'noindex':
+        if (AD.loadNoindex) await AD.loadNoindex(panel);
+        break;
       case 'pages':
         if (AD.loadPages) await AD.loadPages(panel);
         break;

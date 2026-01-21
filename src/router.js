@@ -169,6 +169,13 @@ import {
   buildMinimalSitemapXml
 } from './controllers/seo-minimal.js';
 
+// Noindex (Hide pages from search results)
+import {
+  getNoindexList,
+  addNoindexUrl,
+  removeNoindexUrl
+} from './controllers/noindex.js';
+
 // Webhooks (New Universal System v3.0)
 import {
   getWebhooksSettings,
@@ -302,6 +309,21 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/admin/seo/minimal') {
     const body = await req.json().catch(() => ({}));
     return saveMinimalSEOSettings(env, body);
+  }
+
+  // ----- NOINDEX PAGES (Hide from search results) -----
+  if (method === 'GET' && path === '/api/admin/noindex/list') {
+    return getNoindexList(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/noindex/add') {
+    const body = await req.json().catch(() => ({}));
+    return addNoindexUrl(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/admin/noindex/remove') {
+    const body = await req.json().catch(() => ({}));
+    return removeNoindexUrl(env, body);
   }
 
   // ----- WEBHOOKS (New Universal System v3.0) -----
