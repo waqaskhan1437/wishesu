@@ -266,11 +266,12 @@ export async function handleUniversalWebhook(env, payload, headers) {
     }), {
       headers: { 'Content-Type': 'application/json' }
     });
-
-    return json({ success: true, message: 'Webhook processed successfully' });
   } catch (e) {
-    console.error('Webhook processing error:', e);
-    return json({ error: 'Webhook processing failed' }, 500);
+    console.error('Universal webhook error:', e);
+    return new Response(JSON.stringify({ error: e.message }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
@@ -920,31 +921,22 @@ export async function handlePaymentTab(env) {
     headers: { 'Content-Type': 'text/html' }
   });
 }
-  } catch (error) {
-    console.error("Universal webhook error:", error);
-    return new Response(JSON.stringify({ error: error.message }), { 
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
-  }
-}
-
 
 /**
  * Helper function to identify if payload is from PayPal
  */
 function isPayPalWebhook(payload, headers) {
   // Check for PayPal-specific indicators
-  const contentType = (headers.get("content-type") || "").toLowerCase();
-  const webhookId = headers.get("paypal-transmission-id") || headers.get("x-paypal-transmission-id");
+  const contentType = (headers.get('content-type') || '').toLowerCase();
+  const webhookId = headers.get('paypal-transmission-id') || headers.get('x-paypal-transmission-id');
   
   return (
-    contentType.includes("paypal") ||
+    contentType.includes('paypal') ||
     webhookId ||
     (payload.resource && payload.event_type) ||
     (payload.id && payload.event_type && payload.resource) ||
     (payload.resource?.billing_agreement_id) ||
-    (payload.event_type && payload.event_type.includes("PAYPAL"))
+    (payload.event_type && payload.event_type.includes('PAYPAL'))
   );
 }
 
@@ -953,8 +945,8 @@ function isPayPalWebhook(payload, headers) {
  */
 function isWhopWebhook(payload, headers) {
   // Check for Whop-specific indicators
-  const whopSignature = headers.get("whop-signature") || headers.get("x-whop-signature");
-  const whopWebhookId = headers.get("whop-webhook-id");
+  const whopSignature = headers.get('whop-signature') || headers.get('x-whop-signature');
+  const whopWebhookId = headers.get('whop-webhook-id');
   
   return (
     whopSignature ||
@@ -962,7 +954,7 @@ function isWhopWebhook(payload, headers) {
     (payload.checkout_id) ||
     (payload.subscription_id) ||
     (payload.customer_id && payload.product_id) ||
-    (payload.type && (payload.type.includes("whop") || payload.type.includes("checkout")))
+    (payload.type && (payload.type.includes('whop') || payload.type.includes('checkout')))
   );
 }
 
