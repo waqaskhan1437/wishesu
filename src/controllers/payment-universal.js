@@ -144,98 +144,6 @@ async function migrateLegacyWhopSettings(env) {
   }
 }
 
-/**
- * Force run migration (admin API)
- */
-export async function forceMigrateWhop(env) {
-  try {
-    await ensureTable(env);
-
-    // Check if Whop gateway already exists
-    const existingWhop = await env.DB.prepare(
-      'SELECT id FROM payment_gateways WHERE gateway_type = ? LIMIT 1'
-    ).bind('whop').first();
-
-    if (existingWhop) {
-      return json({
-        success: true,
-        message: 'Whop gateway already exists',
-        gateway_id: existingWhop.id
-      });
-    }
-
-    // Force create Whop gateway
-    const settingsRow = await env.DB.prepare(
-      'SELECT value FROM settings WHERE key = ?'
-    ).bind('whop').first();
-
-    let legacySettings = {};
-    if (settingsRow && settingsRow.value) {
-      try {
-        legacySettings = JSON.parse(settingsRow.value);
-      } catch (e) {}
-    }
-
-    const productId = legacySettings.default_product_id || legacySettings.product_id || '';
-    const webhookSecret = legacySettings.webhook_secret || env.WHOP_WEBHOOK_SECRET || '';
-    const theme = legacySettings.theme || 'light';
-
-    await env.DB.prepare(`
-      INSERT INTO payment_gateways
-      (name, gateway_type, webhook_url, webhook_secret, is_enabled, whop_product_id, whop_api_key, whop_theme)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      'Whop',
-      'whop',
-      '/api/whop/webhook',
-      webhookSecret,
-      1,
-      productId,
-      '',
-      theme
-    ).run();
-
-    gatewaysCache = null;
-
-    return json({
-      success: true,
-      message: 'Whop gateway created successfully',
-      product_id: productId || '(not set)',
-      api_key_status: env.WHOP_API_KEY ? 'SET in env' : 'NOT SET'
-    });
-  } catch (e) {
-    return json({ error: e.message }, 500);
-  }
-}
-
-/**
- * Debug API: Check payment_gateways table structure and data
- */
-export async function debugPaymentGateways(env) {
-  try {
-    // Get table info
-    const tableInfo = await env.DB.prepare("PRAGMA table_info(payment_gateways)").all();
-
-    // Get all rows raw
-    const allRows = await env.DB.prepare("SELECT * FROM payment_gateways").all();
-
-    // Count
-    const count = await env.DB.prepare("SELECT COUNT(*) as cnt FROM payment_gateways").first();
-
-    return json({
-      success: true,
-      table_columns: tableInfo.results || [],
-      row_count: count?.cnt || 0,
-      raw_data: allRows.results || []
-    });
-  } catch (e) {
-    return json({
-      success: false,
-      error: e.message,
-      table_exists: false
-    });
-  }
-}
 
 /**
  * Get all payment gateways with cache
@@ -261,10 +169,8 @@ async function getPaymentGateways(env) {
 
     gatewaysCache = result.results || [];
     cacheTime = now;
-    console.log('Fetched gateways count:', gatewaysCache.length);
     return gatewaysCache;
   } catch (e) {
-    console.error('Error fetching payment_gateways:', e);
     // Try simpler query as fallback
     try {
       const result = await env.DB.prepare('SELECT * FROM payment_gateways').all();
@@ -287,8 +193,6 @@ export async function getPaymentGatewaysApi(env) {
 
     const gateways = await getPaymentGateways(env);
 
-    console.log('Raw gateways from DB:', JSON.stringify(gateways));
-
     // Mask sensitive data
     const safeGateways = gateways.map(gw => ({
       id: gw.id,
@@ -300,17 +204,13 @@ export async function getPaymentGatewaysApi(env) {
       enabled: gw.is_enabled === 1,
       created_at: gw.created_at,
       updated_at: gw.updated_at,
-      // Whop-specific fields
       whop_product_id: gw.whop_product_id || '',
       whop_api_key: gw.whop_api_key ? '••••••••' : '',
       whop_theme: gw.whop_theme || 'light'
     }));
 
-    console.log('Returning gateways:', safeGateways.length);
-
     return json({ success: true, gateways: safeGateways });
   } catch (e) {
-    console.error('getPaymentGatewaysApi error:', e);
     return json({ error: e.message }, 500);
   }
 }
