@@ -1280,7 +1280,7 @@ export default {
         try {
           await Promise.race([
             initDB(env),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('DB init timeout')), 8000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('DB init timeout')), 4000))
           ]);
         } catch (e) {
           console.warn('DB init delayed:', e.message);
@@ -2154,10 +2154,14 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         await initDB(env);
 
         // WARMUP: Multiple queries to ensure full connection warmth
+        // Added more tables for comprehensive warming
         await Promise.all([
           env.DB.prepare('SELECT 1 as warm').first(),
           env.DB.prepare('SELECT COUNT(*) as count FROM products WHERE status = ?').bind('active').first(),
-          env.DB.prepare('SELECT COUNT(*) as count FROM orders').first()
+          env.DB.prepare('SELECT COUNT(*) as count FROM orders').first(),
+          env.DB.prepare('SELECT COUNT(*) as count FROM reviews').first(),
+          env.DB.prepare('SELECT COUNT(*) as count FROM blogs WHERE status = ?').bind('published').first().catch(() => null),
+          env.DB.prepare('SELECT COUNT(*) as count FROM forum_questions').first().catch(() => null)
         ]);
         console.log('DB connection warmed successfully with multiple queries');
 

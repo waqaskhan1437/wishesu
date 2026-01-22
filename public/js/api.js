@@ -16,15 +16,44 @@ const API_BASE = '';
  * @returns {Promise<any>} Parsed JSON
  */
 async function apiFetch(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
-  });
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Request failed: ${res.status} ${error}`);
+  const maxRetries = 3;
+  let lastError;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+      
+      // Handle cold start (503) - retry with backoff
+      if (res.status === 503 && attempt < maxRetries - 1) {
+        console.log(`Cold start detected (503), retrying in ${Math.pow(2, attempt)}s...`);
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        continue;
+      }
+      
+      if (!res.ok) {
+        const error = await res.text();
+        throw new Error(`Request failed: ${res.status} ${error}`);
+      }
+      
+      return res.json();
+      
+    } catch (error) {
+      lastError = error;
+      console.error(`API fetch attempt ${attempt + 1} failed:`, error.message);
+      
+      // Retry on network errors (connection reset)
+      if (attempt < maxRetries - 1) {
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`Retrying in ${delay / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
   }
-  return res.json();
+  
+  throw lastError || new Error('All retry attempts failed');
 }
 
 /**
