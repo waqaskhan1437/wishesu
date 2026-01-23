@@ -191,6 +191,10 @@
         if (action === 'details') {
           await showDetails(panel, id);
         }
+
+        if (action === 'test') {
+          await testApiKey(panel, id);
+        }
       } catch (err) {
         showAlert(panel, err.message || 'Action failed');
       }
@@ -361,6 +365,7 @@
             <td>
               <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <button class="btn btn-primary" data-action="details" data-id="${k.id}">Details</button>
+                <button class="btn" style="background:#8b5cf6;color:white;" data-action="test" data-id="${k.id}">Test Key</button>
                 <button class="btn" style="background:#6b7280;color:white;" data-action="edit" data-id="${k.id}">Edit</button>
                 <button class="btn" style="background:${k.isActive ? '#f59e0b' : '#16a34a'};color:white;"
                   data-action="toggle" data-id="${k.id}" data-active="${k.isActive ? 'true' : 'false'}">
@@ -373,6 +378,28 @@
         `;
       })
       .join('');
+  }
+
+  async function testApiKey(panel, id) {
+    const btn = panel.querySelector(`button[data-action="test"][data-id="${id}"]`);
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ Testing...';
+    btn.disabled = true;
+
+    try {
+      // We use the admin products list as a test endpoint
+      const resp = await apiJson('/api/admin/products/list');
+      if (resp && Array.isArray(resp.products)) {
+        alert('✅ API Key Test Successful!\n\nServer responded correctly and key is valid.');
+      } else {
+        alert('⚠️ API Key Test: Server responded but data format was unexpected.');
+      }
+    } catch (err) {
+      alert('❌ API Key Test Failed!\n\nError: ' + err.message);
+    } finally {
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
   }
 
   async function showDetails(panel, id) {
