@@ -390,10 +390,12 @@
               product_id: checkoutData.productId,
               amount: checkoutData.amount,
               email: checkoutData.email || '',
+              couponCode: checkoutData.coupon?.code || '',
               deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
               metadata: {
                 addons: checkoutData.addons || [],
-                deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60
+                deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
+                couponCode: checkoutData.coupon?.code || ''
               }
             })
           });
@@ -511,10 +513,12 @@
         product_id: checkoutData.productId,
         amount: checkoutData.amount,
         email: checkoutData.email || '',
+        couponCode: checkoutData.coupon?.code || '',
         deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
         metadata: {
           addons: checkoutData.addons || [],
-          deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60
+          deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
+          couponCode: checkoutData.coupon?.code || ''
         }
       })
     });

@@ -309,6 +309,8 @@
   // Direct Whop checkout (fallback)
   async function processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes, restoreButtons) {
     try {
+      const appliedCoupon = typeof window.getAppliedCoupon === 'function' ? window.getAppliedCoupon() : null;
+      
       const response = await fetch('/api/whop/create-plan-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -316,9 +318,11 @@
           product_id: window.productData.id,
           amount: window.currentTotal,
           email: email,
+          couponCode: appliedCoupon?.code || '',
           metadata: { 
             addons: selectedAddons,
-            deliveryTimeMinutes: deliveryTimeMinutes || 60
+            deliveryTimeMinutes: deliveryTimeMinutes || 60,
+            couponCode: appliedCoupon?.code || ''
           }
         })
       });

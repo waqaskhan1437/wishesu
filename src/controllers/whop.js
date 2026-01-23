@@ -40,16 +40,24 @@ function calculateAddonPrice(productAddonsJson, selectedAddons) {
     // Calculate price for each selected addon
     selectedAddons.forEach(selected => {
       const fieldName = (selected.field || '').toLowerCase().trim();
-      // Try to find addon definition by field name or ID
-      const addonDef = addonMap[fieldName] || addonMap[fieldName.replace(/[^a-z0-9]+/g, '-')];
+      const fieldId = fieldName.replace(/[^a-z0-9]+/g, '-');
+      
+      // Try to find addon definition by field name, ID, or normalized ID
+      const addonDef = addonMap[fieldName] || addonMap[fieldId] || 
+                       Object.values(addonMap).find(a => 
+                         (a.id && a.id.toLowerCase() === fieldId) || 
+                         (a.field && a.field.toLowerCase() === fieldName)
+                       );
 
       if (addonDef && addonDef.options && Array.isArray(addonDef.options)) {
         // Find the matching option by label/value
         const selectedValue = (selected.value || '').trim().toLowerCase();
-        const option = addonDef.options.find(opt =>
-          (opt.label || '').toLowerCase().trim() === selectedValue ||
-          (opt.value || '').toLowerCase().trim() === selectedValue
-        );
+        const option = addonDef.options.find(opt => {
+          const optLabel = (opt.label || '').toLowerCase().trim();
+          const optValue = (opt.value || '').toLowerCase().trim();
+          return optLabel === selectedValue || optValue === selectedValue || 
+                 optLabel.replace(/[^a-z0-9]+/g, '-') === selectedValue.replace(/[^a-z0-9]+/g, '-');
+        });
 
         if (option && option.price) {
           totalAddonPrice += Number(option.price) || 0;
