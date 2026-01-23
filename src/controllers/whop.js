@@ -31,19 +31,21 @@ function calculateAddonPrice(productAddonsJson, selectedAddons) {
     // Create a lookup map for addon fields and their options
     const addonMap = {};
     addonConfig.forEach(addon => {
-      if (addon.field) {
-        addonMap[addon.field.toLowerCase().trim()] = addon;
-      }
+      // Map by field name, label, and ID for maximum compatibility
+      if (addon.field) addonMap[addon.field.toLowerCase().trim()] = addon;
+      if (addon.label) addonMap[addon.label.toLowerCase().trim()] = addon;
+      if (addon.id) addonMap[addon.id.toLowerCase().trim()] = addon;
     });
 
     // Calculate price for each selected addon
     selectedAddons.forEach(selected => {
       const fieldName = (selected.field || '').toLowerCase().trim();
-      const addonDef = addonMap[fieldName];
+      // Try to find addon definition by field name or ID
+      const addonDef = addonMap[fieldName] || addonMap[fieldName.replace(/[^a-z0-9]+/g, '-')];
 
       if (addonDef && addonDef.options && Array.isArray(addonDef.options)) {
         // Find the matching option by label/value
-        const selectedValue = (selected.value || '').trim();
+        const selectedValue = (selected.value || '').trim().toLowerCase();
         const option = addonDef.options.find(opt =>
           (opt.label || '').toLowerCase().trim() === selectedValue ||
           (opt.value || '').toLowerCase().trim() === selectedValue
