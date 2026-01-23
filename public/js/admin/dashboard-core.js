@@ -153,6 +153,9 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'api-keys':
         if (AD.loadApiKeys) await AD.loadApiKeys(panel);
         break;
+      case 'coupons':
+        if (AD.loadCoupons) await AD.loadCoupons(panel);
+        break;
       case 'seo':
         if (AD.loadSEO) await AD.loadSEO(panel);
         break;
