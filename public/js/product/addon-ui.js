@@ -137,7 +137,7 @@ const CHAR_LIMITS = {
 
         const inp = document.createElement('input');
         inp.type = isRadio ? 'radio' : 'checkbox';
-        inp.name = field.id + (isRadio ? '' : '[]');
+        inp.name = field.id;
         inp.value = opt.label;
         inp.className = isRadio ? 'addon-radio' : 'addon-checkbox';
         if (opt.default) inp.checked = true;

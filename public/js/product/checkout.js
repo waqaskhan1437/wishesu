@@ -194,12 +194,28 @@
 
     if (formEl) {
       const formData = new FormData(formEl);
+      const groupedAddons = {};
+      
       for (const pair of formData.entries()) {
         const key = pair[0];
         const val = pair[1];
         if (val instanceof File) continue;
-        if (val) selectedAddons.push({ field: key, value: val });
+        if (!val) continue;
+        
+        if (groupedAddons[key]) {
+          groupedAddons[key].push(val);
+        } else {
+          groupedAddons[key] = [val];
+        }
       }
+      
+      // Convert grouped addons to the format expected by backend
+      Object.keys(groupedAddons).forEach(key => {
+        selectedAddons.push({
+          field: key,
+          value: groupedAddons[key].join(', ')
+        });
+      });
     }
 
     // Get uploaded files from instant-upload.js

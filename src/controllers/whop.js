@@ -50,18 +50,24 @@ function calculateAddonPrice(productAddonsJson, selectedAddons) {
                        );
 
       if (addonDef && addonDef.options && Array.isArray(addonDef.options)) {
-        // Find the matching option by label/value
-        const selectedValue = (selected.value || '').trim().toLowerCase();
-        const option = addonDef.options.find(opt => {
-          const optLabel = (opt.label || '').toLowerCase().trim();
-          const optValue = (opt.value || '').toLowerCase().trim();
-          return optLabel === selectedValue || optValue === selectedValue || 
-                 optLabel.replace(/[^a-z0-9]+/g, '-') === selectedValue.replace(/[^a-z0-9]+/g, '-');
-        });
+        // Support multiple values (for checkboxes)
+        const rawValue = (selected.value || '').trim();
+        const selectedValues = rawValue.includes(',') 
+          ? rawValue.split(',').map(v => v.trim().toLowerCase())
+          : [rawValue.toLowerCase()];
 
-        if (option && option.price) {
-          totalAddonPrice += Number(option.price) || 0;
-        }
+        selectedValues.forEach(val => {
+          const option = addonDef.options.find(opt => {
+            const optLabel = (opt.label || '').toLowerCase().trim();
+            const optValue = (opt.value || '').toLowerCase().trim();
+            return optLabel === val || optValue === val || 
+                   optLabel.replace(/[^a-z0-9]+/g, '-') === val.replace(/[^a-z0-9]+/g, '-');
+          });
+
+          if (option && option.price) {
+            totalAddonPrice += Number(option.price) || 0;
+          }
+        });
       }
     });
   } catch (e) {
