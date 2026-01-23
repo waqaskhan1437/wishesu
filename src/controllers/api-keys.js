@@ -435,3 +435,13 @@ export async function getApiKeyAnalytics(env, id) {
     return json({ error: err.message }, 500);
   }
 }
+
+// API: Ping/Test endpoint for API keys
+export async function pingApiKey(env) {
+  return json({
+    success: true,
+    message: 'API Key is valid and server is responding.',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
+}

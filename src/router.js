@@ -229,7 +229,8 @@ import {
   updateApiKey,
   deleteApiKey,
   getPermissionsList,
-  getApiKeyAnalytics
+  getApiKeyAnalytics,
+  pingApiKey
 } from './controllers/api-keys.js';
 
 // API Auth middleware
@@ -1809,6 +1810,9 @@ export async function routeApiRequest(req, env, url, path, method) {
   // Get available permissions
   if (method === 'GET' && path === '/api/admin/api-keys/permissions') {
     return getPermissionsList();
+  }
+  if (method === 'GET' && path === '/api/admin/api-keys/ping') {
+    return pingApiKey(env);
   }
 
   // Create new API key

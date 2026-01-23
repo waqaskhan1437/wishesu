@@ -387,12 +387,12 @@
     btn.disabled = true;
 
     try {
-      // We use the admin products list as a test endpoint
-      const resp = await apiJson('/api/admin/products/list');
-      if (resp && Array.isArray(resp.products)) {
-        alert('✅ API Key Test Successful!\n\nServer responded correctly and key is valid.');
+      // Use the dedicated ping endpoint
+      const resp = await apiJson('/api/admin/api-keys/ping');
+      if (resp && resp.success) {
+        alert('✅ API Key Test Successful!\n\nServer responded: ' + resp.message);
       } else {
-        alert('⚠️ API Key Test: Server responded but data format was unexpected.');
+        alert('⚠️ API Key Test: Server responded but success was false.');
       }
     } catch (err) {
       alert('❌ API Key Test Failed!\n\nError: ' + err.message);
