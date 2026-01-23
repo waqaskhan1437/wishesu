@@ -102,6 +102,26 @@
             </div>
           </div>
           
+          <!-- Your Webhook URLs -->
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin-top:24px;margin-bottom:24px;">
+            <h4 style="margin:0 0 12px;color:#166534;font-size:15px;">🔗 Your Server Webhook URLs</h4>
+            <p style="margin:0 0 12px;font-size:13px;color:#15803d;">Copy these links to your external services (Whop, Gumroad, etc.)</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="background:white;padding:10px;border-radius:8px;border:1px solid #dcfce7;">
+                <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:4px;">Whop Webhook</div>
+                <code style="font-size:12px;color:#111827;word-break:break-all;">${window.location.origin}/api/whop/webhook</code>
+              </div>
+              <div style="background:white;padding:10px;border-radius:8px;border:1px solid #dcfce7;">
+                <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:4px;">PayPal Webhook</div>
+                <code style="font-size:12px;color:#111827;word-break:break-all;">${window.location.origin}/api/paypal/webhook</code>
+              </div>
+              <div style="background:white;padding:10px;border-radius:8px;border:1px solid #dcfce7;">
+                <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;margin-bottom:4px;">Universal (Gumroad/Stripe/etc)</div>
+                <code style="font-size:12px;color:#111827;word-break:break-all;">${window.location.origin}/api/payment/universal/webhook</code>
+              </div>
+            </div>
+          </div>
+
           <!-- Quick Setup Guide -->
           <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:20px;margin-top:24px;">
             <h4 style="margin:0 0 12px;color:#1e40af;font-size:15px;">📘 Quick Setup Guide</h4>
