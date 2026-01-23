@@ -1,6 +1,7 @@
 /**
  * Simple Webhook Management UI v3.0
  * Clean, Fast, Universal
+ * Modified to render in main panel instead of modal
  */
 
 (function() {
@@ -61,91 +62,82 @@
     }
   }
   
-  function openModal() {
-    loadConfig().then(() => renderModal());
-  }
+  // New function to load into main panel
+  window.loadWebhooks = async function(panel) {
+    panel.innerHTML = '<div style="padding:20px;text-align:center;">⏳ Loading Webhook Settings...</div>';
+    await loadConfig();
+    renderInPanel(panel);
+  };
   
-  function closeModal() {
-    const modal = document.getElementById('webhook-modal');
-    if (modal) modal.remove();
-  }
-  
-  function renderModal() {
-    const existingModal = document.getElementById('webhook-modal');
-    if (existingModal) existingModal.remove();
-    
+  function renderInPanel(panel) {
     const html = `
-      <div id="webhook-modal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;">
-        <div style="background:white;border-radius:16px;max-width:900px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;">
-          <!-- Header -->
-          <div style="padding:24px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
-            <div>
-              <h2 style="margin:0;font-size:20px;color:#1f2937;">⚡ Universal Webhooks</h2>
-              <p style="margin:4px 0 0;font-size:14px;color:#6b7280;">Connect to Make.com, n8n, Zapier, or any webhook service</p>
-            </div>
-            <button onclick="closeWebhookModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#9ca3af;padding:0;width:32px;height:32px;">&times;</button>
+      <div style="background:white;border-radius:16px;width:100%;display:flex;flex-direction:column;box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+        <!-- Header -->
+        <div style="padding:24px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <h2 style="margin:0;font-size:20px;color:#1f2937;">⚡ Universal Webhooks</h2>
+            <p style="margin:4px 0 0;font-size:14px;color:#6b7280;">Connect to Make.com, n8n, Zapier, or any webhook service</p>
           </div>
-          
-          <!-- Master Toggle -->
-          <div style="padding:20px 24px;background:#f9fafb;border-bottom:1px solid #e5e7eb;">
-            <label style="display:flex;align-items:center;cursor:pointer;font-weight:500;">
-              <input type="checkbox" id="master-enabled" ${config.enabled ? 'checked' : ''} onchange="toggleWebhooks(this.checked)" style="width:20px;height:20px;margin-right:12px;cursor:pointer;">
-              <span style="color:#1f2937;">Enable Webhooks System</span>
-            </label>
-            ${config.enabled ? '<p style="margin:8px 0 0 32px;font-size:13px;color:#059669;">✓ Webhooks are active</p>' : '<p style="margin:8px 0 0 32px;font-size:13px;color:#9ca3af;">Webhooks are disabled</p>'}
-          </div>
-          
-          <!-- Content -->
-          <div style="flex:1;overflow-y:auto;padding:24px;">
-            <!-- Endpoints Section -->
-            <div style="margin-bottom:32px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-                <h3 style="margin:0;font-size:16px;color:#1f2937;">Webhook Endpoints</h3>
-                <button onclick="addWebhookEndpoint()" style="background:#667eea;color:white;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;">+ Add Endpoint</button>
-              </div>
-              <div id="endpoints-container">
-                ${renderEndpoints()}
-              </div>
+        </div>
+        
+        <!-- Master Toggle -->
+        <div style="padding:20px 24px;background:#f9fafb;border-bottom:1px solid #e5e7eb;">
+          <label style="display:flex;align-items:center;cursor:pointer;font-weight:500;">
+            <input type="checkbox" id="master-enabled" ${config.enabled ? 'checked' : ''} onchange="toggleWebhooks(this.checked)" style="width:20px;height:20px;margin-right:12px;cursor:pointer;">
+            <span style="color:#1f2937;">Enable Webhooks System</span>
+          </label>
+          ${config.enabled ? '<p style="margin:8px 0 0 32px;font-size:13px;color:#059669;">✓ Webhooks are active</p>' : '<p style="margin:8px 0 0 32px;font-size:13px;color:#9ca3af;">Webhooks are disabled</p>'}
+        </div>
+        
+        <!-- Content -->
+        <div style="padding:24px;">
+          <!-- Endpoints Section -->
+          <div style="margin-bottom:32px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <h3 style="margin:0;font-size:16px;color:#1f2937;">Webhook Endpoints</h3>
+              <button onclick="addWebhookEndpoint()" style="background:#667eea;color:white;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;">+ Add Endpoint</button>
             </div>
-            
-            <!-- Quick Setup Guide -->
-            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:20px;margin-top:24px;">
-              <h4 style="margin:0 0 12px;color:#1e40af;font-size:15px;">📘 Quick Setup Guide</h4>
-              <ol style="margin:0;padding-left:20px;color:#1e3a8a;font-size:14px;line-height:1.8;">
-                <li><strong>Make.com</strong>: Create scenario → Add "Webhook" trigger → Copy URL → Paste above</li>
-                <li><strong>n8n</strong>: Add "Webhook" node → Copy Production URL → Paste above</li>
-                <li><strong>Zapier</strong>: Create Zap → Choose "Webhooks by Zapier" → Copy URL → Paste above</li>
-                <li>Select which events to listen to (order, review, chat, etc.)</li>
-                <li>Test webhook to verify connection</li>
-              </ol>
-              <p style="margin:12px 0 0;font-size:13px;color:#3730a3;"><strong>Email Setup:</strong> Use Make.com's "Email" module to send notifications via any email provider (Gmail, SendGrid, etc.)</p>
-            </div>
-            
-            <!-- Event Types Reference -->
-            <div style="margin-top:24px;">
-              <h4 style="margin:0 0 12px;font-size:15px;color:#1f2937;">📋 Available Events</h4>
-              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
-                ${Object.entries(EVENT_TYPES).map(([key, info]) => `
-                  <div style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid #e5e7eb;">
-                    <div style="font-weight:600;color:#1f2937;font-size:13px;">${info.icon} ${info.label}</div>
-                    <div style="font-size:12px;color:#6b7280;margin-top:2px;">${info.desc}</div>
-                    <div style="font-size:11px;color:#9ca3af;margin-top:4px;">Event: <code style="background:#e5e7eb;padding:2px 4px;border-radius:3px;font-size:10px;">${key}</code></div>
-                  </div>
-                `).join('')}
-              </div>
+            <div id="endpoints-container">
+              ${renderEndpoints()}
             </div>
           </div>
           
-          <!-- Footer -->
-          <div style="padding:20px 24px;border-top:1px solid #e5e7eb;display:flex;gap:12px;justify-content:flex-end;">
-            <button onclick="closeWebhookModal()" style="background:#f3f4f6;color:#374151;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:500;">Cancel</button>
-            <button onclick="saveWebhookConfig()" style="background:#10b981;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:500;">Save Changes</button>
+          <!-- Quick Setup Guide -->
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:20px;margin-top:24px;">
+            <h4 style="margin:0 0 12px;color:#1e40af;font-size:15px;">📘 Quick Setup Guide</h4>
+            <ol style="margin:0;padding-left:20px;color:#1e3a8a;font-size:14px;line-height:1.8;">
+              <li><strong>Make.com</strong>: Create scenario → Add "Webhook" trigger → Copy URL → Paste above</li>
+              <li><strong>n8n</strong>: Add "Webhook" node → Copy Production URL → Paste above</li>
+              <li><strong>Zapier</strong>: Create Zap → Choose "Webhooks by Zapier" → Copy URL → Paste above</li>
+              <li>Select which events to listen to (order, review, chat, etc.)</li>
+              <li>Test webhook to verify connection</li>
+            </ol>
+            <p style="margin:12px 0 0;font-size:13px;color:#3730a3;"><strong>Email Setup:</strong> Use Make.com's "Email" module to send notifications via any email provider (Gmail, SendGrid, etc.)</p>
           </div>
+          
+          <!-- Event Types Reference -->
+          <div style="margin-top:24px;">
+            <h4 style="margin:0 0 12px;font-size:15px;color:#1f2937;">📋 Available Events</h4>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+              ${Object.entries(EVENT_TYPES).map(([key, info]) => `
+                <div style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid #e5e7eb;">
+                  <div style="font-weight:600;color:#1f2937;font-size:13px;">${info.icon} ${info.label}</div>
+                  <div style="font-size:12px;color:#6b7280;margin-top:2px;">${info.desc}</div>
+                  <div style="font-size:11px;color:#9ca3af;margin-top:4px;">Event: <code style="background:#e5e7eb;padding:2px 4px;border-radius:3px;font-size:10px;">${key}</code></div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="padding:20px 24px;border-top:1px solid #e5e7eb;display:flex;gap:12px;justify-content:flex-end;">
+          <button onclick="saveWebhookConfig()" style="background:#10b981;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:500;">Save Changes</button>
         </div>
       </div>
     `;
     
-    document.body.insertAdjacentHTML('beforeend', html);
+    panel.innerHTML = html;
   }
   
   function renderEndpoints() {
@@ -205,9 +197,6 @@
     const container = document.getElementById('endpoints-container');
     if (container) container.innerHTML = renderEndpoints();
   }
-  
-  window.openWebhookModal = openModal;
-  window.closeWebhookModal = closeModal;
   
   window.toggleWebhooks = function(enabled) {
     config.enabled = enabled;
@@ -290,7 +279,8 @@
     
     if (success) {
       alert('✅ Webhook settings saved successfully!');
-      closeModal();
+      // No need to close modal anymore, just refresh the view
+      window.loadWebhooks(document.getElementById('main-panel'));
     } else {
       alert('❌ Failed to save settings. Please try again.');
     }

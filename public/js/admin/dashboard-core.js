@@ -171,6 +171,9 @@ window.AdminDashboard = window.AdminDashboard || {};
       case 'payment':
         if (window.initPaymentTab) await window.initPaymentTab();
         break;
+      case 'webhooks':
+        if (window.loadWebhooks) await window.loadWebhooks(panel);
+        break;
     }
   };
 
