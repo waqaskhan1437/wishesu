@@ -30,10 +30,10 @@ body {
 
 /* Main Layout */
 main { 
-  max-width: 1200px; 
+  max-width: 1100px; 
   margin: 0 auto; 
-  /* 5% Padding as requested for better spacing */
-  padding: 0 5% 4rem; 
+  /* 8% Padding for more compact, centered look */
+  padding: 0 8% 4rem; 
 }
 .breadcrumb { margin-bottom: 1.5rem; }
 .breadcrumb a { text-decoration: none; color: var(--text-muted); font-size: 0.9rem; font-weight: 500; }
@@ -44,8 +44,8 @@ main {
 /* Top Row: Media (Left) + Info (Right) - Fixed min-height to prevent CLS */
 .product-main-row {
   display: grid;
-  grid-template-columns: 55% 45%;
-  gap: 2.5rem;
+  grid-template-columns: 54% 46%;
+  gap: 2rem;
   align-items: start;
   min-height: 500px; /* Reserve space */
 }
