@@ -12,6 +12,11 @@ import { CORS } from '../config/cors.js';
 const MAX_TABLES = 200; // safety
 const MAX_ROWS_PER_TABLE = 200000; // safety
 
+function safeIdent(name) {
+  // Safely quote SQLite identifiers (table/column names)
+  return '"' + String(name).replace(/"/g, '""') + '"';
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -69,14 +74,14 @@ async function listTables(env) {
 }
 
 async function getTableColumns(env, table) {
-  const info = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
+  const info = await env.DB.prepare(`PRAGMA table_info(${safeIdent(table)})`).all();
   const cols = (info?.results || []).map(r => r.name);
   return cols;
 }
 
 async function exportTable(env, table) {
   // Note: using SELECT * is okay here; D1 returns array of objects
-  const rowsRes = await env.DB.prepare(`SELECT * FROM ${table}`).all();
+  const rowsRes = await env.DB.prepare(`SELECT * FROM ${safeIdent(table)}`).all();
   const rows = rowsRes?.results || [];
   if (rows.length > MAX_ROWS_PER_TABLE) {
     throw new Error(`Table ${table} too large (${rows.length} rows). Increase limits or implement chunking.`);
@@ -196,7 +201,7 @@ async function wipeAllTables(env, keepTables = new Set(['backups'])) {
   for (const t of tableNames) {
     if (keepTables.has(t)) continue;
     // don't delete internal
-    await env.DB.prepare(`DELETE FROM ${t}`).run();
+    await env.DB.prepare(`DELETE FROM ${safeIdent(t)}`).run();
   }
 }
 

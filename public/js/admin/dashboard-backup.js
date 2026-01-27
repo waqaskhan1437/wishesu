@@ -26,8 +26,13 @@
       headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) },
       ...opts
     });
-    if (!res.ok) throw new Error('Request failed');
-    return res.json();
+    let data;
+    try { data = await res.json(); } catch { data = null; }
+    if (!res.ok) {
+      const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `Request failed (${res.status})`;
+      throw new Error(msg);
+    }
+    return data;
   }
 
   async function loadBackup(panel) {
@@ -243,7 +248,45 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  // Export
+  
+  async function importBackup() {
+    const input = document.getElementById('backup-import-file');
+    const statusEl = document.getElementById('backup-import-status');
+    if (!input || !input.files || !input.files[0]) {
+      if (statusEl) statusEl.textContent = 'Please choose a backup JSON file first.';
+      toast('❌ Please choose a backup file', false);
+      return;
+    }
+    const file = input.files[0];
+    try {
+      if (statusEl) statusEl.textContent = 'Reading backup file...';
+      const text = await file.text();
+      // Basic validation
+      const obj = JSON.parse(text);
+      if (!obj || obj.kind !== 'wishesu_full_backup') {
+        toast('❌ Invalid backup file', false);
+        if (statusEl) statusEl.textContent = 'Invalid backup format.';
+        return;
+      }
+      const ok = confirm('This will RESET your database and restore from this backup. Continue?');
+      if (!ok) return;
+
+      if (statusEl) statusEl.textContent = 'Uploading & restoring...';
+      await jfetch('/api/admin/backup/import', {
+        method: 'POST',
+        body: JSON.stringify({ backupJson: text })
+      });
+      toast('✅ Backup imported & restored', true);
+      if (statusEl) statusEl.textContent = 'Restore complete. Reloading...';
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      const msg = e?.message || 'Import failed';
+      toast('❌ ' + msg, false);
+      if (statusEl) statusEl.textContent = msg;
+    }
+  }
+
+// Export
   AD.loadBackup = loadBackup;
   AD.createBackup = createBackup;
   AD.restoreBackup = restoreBackup;
