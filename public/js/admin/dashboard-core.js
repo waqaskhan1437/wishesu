@@ -4,6 +4,8 @@
  */
 
 window.AdminDashboard = window.AdminDashboard || {};
+// Backward-compatible alias (some inline handlers expect `AD`)
+window.AD = window.AdminDashboard;
 
 (function(AD) {
   // Shared state
