@@ -2,8 +2,8 @@
  * Backup Controller - Full Site Backup (Media Links Only)
  * - Exports ALL D1 tables (including settings/api keys)
  * - Does NOT include media files; only extracts and stores media links/keys
- * - Stores backup JSON inside D1 `backups` table for download/restore
- * - Designed for Cloudflare Workers + D1
+ * - Stores backup JSON in R2 (env.R2_BUCKET) and keeps metadata in D1 `backups` table
+ * - Designed for Cloudflare Workers + D1 + R2
  */
 
 import { json } from '../utils/response.js';
@@ -11,6 +11,7 @@ import { CORS } from '../config/cors.js';
 
 const MAX_TABLES = 200; // safety
 const MAX_ROWS_PER_TABLE = 200000; // safety
+const BACKUP_PREFIX = 'backups/';
 
 function safeIdent(name) {
   // Safely quote SQLite identifiers (table/column names)
@@ -65,26 +66,38 @@ function extractLinksFromValue(val) {
   return links;
 }
 
+async function ensureBackupsTable(env) {
+  await env.DB
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS backups (
+        id TEXT PRIMARY KEY,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        size INTEGER DEFAULT 0,
+        media_count INTEGER DEFAULT 0,
+        r2_key TEXT
+      )`
+    )
+    .run();
+}
+
 async function listTables(env) {
-  const res = await env.DB.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-  ).all();
-  const names = (res?.results || []).map(r => r.name).filter(n => !isInternalTable(n));
+  const res = await env.DB
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    .all();
+  const names = (res?.results || []).map((r) => r.name).filter((n) => !isInternalTable(n));
   return names.slice(0, MAX_TABLES);
 }
 
 async function getTableColumns(env, table) {
   const info = await env.DB.prepare(`PRAGMA table_info(${safeIdent(table)})`).all();
-  const cols = (info?.results || []).map(r => r.name);
-  return cols;
+  return (info?.results || []).map((r) => r.name);
 }
 
 async function exportTable(env, table) {
-  // Note: using SELECT * is okay here; D1 returns array of objects
   const rowsRes = await env.DB.prepare(`SELECT * FROM ${safeIdent(table)}`).all();
   const rows = rowsRes?.results || [];
   if (rows.length > MAX_ROWS_PER_TABLE) {
-    throw new Error(`Table ${table} too large (${rows.length} rows). Increase limits or implement chunking.`);
+    throw new Error(`Table ${table} too large (${rows.length} rows).`);
   }
   const columns = await getTableColumns(env, table);
   return { columns, rows };
@@ -119,7 +132,7 @@ export async function generateBackupData(env) {
 
   const data = {
     kind: 'wishesu_full_backup',
-    version: 1,
+    version: 2,
     created_at,
     notes: 'Media files are NOT included. Only media links/keys are captured.',
     tables,
@@ -130,18 +143,20 @@ export async function generateBackupData(env) {
   return {
     data,
     jsonStr,
-    size: jsonStr.length,
-    media_count: data.media_links.length
+    size: new TextEncoder().encode(jsonStr).byteLength,
+    media_count: data.media_links.length,
   };
 }
 
 /**
- * Get backup history (stored backups)
+ * Get backup history (stored backups metadata)
  */
 export async function getBackupHistory(env) {
   try {
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS backups (id TEXT PRIMARY KEY, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, size INTEGER DEFAULT 0, media_count INTEGER DEFAULT 0, data TEXT)').run();
-    const res = await env.DB.prepare('SELECT id, created_at as timestamp, size, media_count FROM backups ORDER BY created_at DESC LIMIT 30').all();
+    await ensureBackupsTable(env);
+    const res = await env.DB
+      .prepare('SELECT id, created_at as timestamp, size, media_count FROM backups ORDER BY created_at DESC LIMIT 30')
+      .all();
     return json({ ok: true, backups: res?.results || [] });
   } catch (e) {
     return json({ ok: false, error: e?.message || String(e) }, 500);
@@ -149,17 +164,28 @@ export async function getBackupHistory(env) {
 }
 
 /**
- * Create a backup and store it in D1, returns backup id
+ * Create a backup, store JSON in R2 and metadata in D1
  */
 export async function createBackup(env) {
   try {
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS backups (id TEXT PRIMARY KEY, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, size INTEGER DEFAULT 0, media_count INTEGER DEFAULT 0, data TEXT)').run();
+    await ensureBackupsTable(env);
+
+    if (!env.R2_BUCKET) {
+      throw new Error('R2 binding missing (env.R2_BUCKET). Add an R2 bucket binding for backups.');
+    }
 
     const { jsonStr, size, media_count } = await generateBackupData(env);
     const id = 'backup-' + Date.now();
+    const r2_key = `${BACKUP_PREFIX}${id}.json`;
 
-    await env.DB.prepare('INSERT INTO backups (id, created_at, size, media_count, data) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, nowIso(), size, media_count, jsonStr)
+    // Put into R2 (avoid D1 size limits)
+    await env.R2_BUCKET.put(r2_key, jsonStr, {
+      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    });
+
+    await env.DB
+      .prepare('INSERT INTO backups (id, created_at, size, media_count, r2_key) VALUES (?, ?, ?, ?, ?)')
+      .bind(id, nowIso(), size, media_count, r2_key)
       .run();
 
     return json({ ok: true, id, size, media_count });
@@ -169,17 +195,28 @@ export async function createBackup(env) {
 }
 
 /**
- * Download backup JSON by id
+ * Download backup JSON by id (from R2)
  */
 export async function downloadBackup(env, backupId) {
   try {
-    const res = await env.DB.prepare('SELECT id, created_at, data, size FROM backups WHERE id = ?').bind(backupId).first();
-    if (!res) {
+    await ensureBackupsTable(env);
+
+    if (!env.R2_BUCKET) {
+      return json({ ok: false, error: 'R2 binding missing (env.R2_BUCKET).' }, 500);
+    }
+
+    const row = await env.DB.prepare('SELECT id, r2_key FROM backups WHERE id = ?').bind(backupId).first();
+    if (!row || !row.r2_key) {
       return json({ ok: false, error: 'Backup not found' }, 404);
     }
 
-    const filename = `${res.id}.json`;
-    const body = res.data || '{}';
+    const obj = await env.R2_BUCKET.get(row.r2_key);
+    if (!obj) {
+      return json({ ok: false, error: 'Backup file missing in storage' }, 404);
+    }
+
+    const body = await obj.text();
+    const filename = `${row.id}.json`;
 
     return new Response(body, {
       status: 200,
@@ -188,8 +225,8 @@ export async function downloadBackup(env, backupId) {
         'Content-Type': 'application/json; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': String(new TextEncoder().encode(body).byteLength),
-        'Cache-Control': 'no-store'
-      }
+        'Cache-Control': 'no-store',
+      },
     });
   } catch (e) {
     return json({ ok: false, error: e?.message || String(e) }, 500);
@@ -200,7 +237,6 @@ async function wipeAllTables(env, keepTables = new Set(['backups'])) {
   const tableNames = await listTables(env);
   for (const t of tableNames) {
     if (keepTables.has(t)) continue;
-    // don't delete internal
     await env.DB.prepare(`DELETE FROM ${safeIdent(t)}`).run();
   }
 }
@@ -208,14 +244,14 @@ async function wipeAllTables(env, keepTables = new Set(['backups'])) {
 async function insertRows(env, table, columns, rows) {
   if (!rows || rows.length === 0) return;
 
-  const colList = columns.map(c => `"${c}"`).join(', ');
+  const safeTable = safeIdent(table);
+  const colList = columns.map((c) => safeIdent(c)).join(', ');
   const placeholders = columns.map(() => '?').join(', ');
-  const stmt = env.DB.prepare(`INSERT INTO ${table} (${colList}) VALUES (${placeholders})`);
+  const stmt = env.DB.prepare(`INSERT INTO ${safeTable} (${colList}) VALUES (${placeholders})`);
 
-  // D1 supports batching
   const batch = [];
   for (const row of rows) {
-    const vals = columns.map(c => row[c]);
+    const vals = columns.map((c) => row[c]);
     batch.push(stmt.bind(...vals));
     if (batch.length >= 100) {
       await env.DB.batch(batch.splice(0, batch.length));
@@ -227,19 +263,27 @@ async function insertRows(env, table, columns, rows) {
 /**
  * Restore a backup:
  * body can contain:
- * - { backupId: "backup-..." } OR
- * - { backupJson: "{...}" } (string) OR
+ * - { backupId: "backup-..." }  (preferred)
+ * - { backupJson: "{...}" } (string)
  * - { backup: {...} } (object)
  * It will RESET all tables and then re-import exactly.
  */
 export async function restoreBackup(env, body = {}) {
   try {
+    await ensureBackupsTable(env);
+
     let backupObj = null;
 
     if (body.backupId) {
-      const row = await env.DB.prepare('SELECT data FROM backups WHERE id = ?').bind(body.backupId).first();
-      if (!row) return json({ ok: false, error: 'Backup not found' }, 404);
-      backupObj = JSON.parse(row.data || '{}');
+      if (!env.R2_BUCKET) return json({ ok: false, error: 'R2 binding missing (env.R2_BUCKET).' }, 500);
+
+      const row = await env.DB.prepare('SELECT r2_key FROM backups WHERE id = ?').bind(body.backupId).first();
+      if (!row || !row.r2_key) return json({ ok: false, error: 'Backup not found' }, 404);
+
+      const obj = await env.R2_BUCKET.get(row.r2_key);
+      if (!obj) return json({ ok: false, error: 'Backup file missing in storage' }, 404);
+
+      backupObj = JSON.parse(await obj.text());
     } else if (typeof body.backupJson === 'string') {
       backupObj = JSON.parse(body.backupJson);
     } else if (body.backup && typeof body.backup === 'object') {
@@ -252,10 +296,8 @@ export async function restoreBackup(env, body = {}) {
       return json({ ok: false, error: 'Invalid backup format' }, 400);
     }
 
-    // wipe
     await wipeAllTables(env, new Set(['backups']));
 
-    // re-import
     for (const [table, payload] of Object.entries(backupObj.tables)) {
       if (table === 'backups') continue;
       const columns = payload.columns || (payload.rows && payload.rows[0] ? Object.keys(payload.rows[0]) : []);
@@ -270,9 +312,7 @@ export async function restoreBackup(env, body = {}) {
   }
 }
 
-/**
- * Import endpoint convenience: same as restoreBackup but expects raw JSON string
- */
+/** Import endpoint convenience */
 export async function importBackup(env, body = {}) {
   return restoreBackup(env, body);
 }
@@ -281,7 +321,9 @@ export async function importBackup(env, body = {}) {
  * Send email via MailChannels (optional, used by scheduled cron)
  */
 export async function sendBackupEmail(env, subject, text, attachmentName, attachmentText) {
-  if (!env.BACKUP_EMAIL_TO || !env.BACKUP_EMAIL_FROM) return { ok: false, skipped: true, reason: 'Email env vars not configured' };
+  if (!env.BACKUP_EMAIL_TO || !env.BACKUP_EMAIL_FROM) {
+    return { ok: false, skipped: true, reason: 'Email env vars not configured' };
+  }
 
   const payload = {
     personalizations: [{ to: [{ email: env.BACKUP_EMAIL_TO }] }],
@@ -299,9 +341,8 @@ export async function sendBackupEmail(env, subject, text, attachmentName, attach
   const resp = await fetch('https://api.mailchannels.net/tx/v1/send', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 
-  const ok = resp.ok;
-  return { ok, status: resp.status, body: ok ? null : await resp.text().catch(() => null) };
+  return { ok: resp.ok, status: resp.status, body: resp.ok ? null : await resp.text().catch(() => null) };
 }

@@ -207,7 +207,7 @@
       toast('✅ Backup created successfully!', true);
       await loadBackupHistory();
     } catch (e) {
-      toast('❌ Failed to create backup', false);
+      toast('❌ ' + (e && e.message ? e.message : 'Failed to create backup'), false);
     } finally {
       progressDiv.style.display = 'none';
     }
