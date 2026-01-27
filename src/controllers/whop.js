@@ -5,143 +5,22 @@
 import { json } from '../utils/response.js';
 import { getWhopApiKey } from '../config/secrets.js';
 import { fetchWithTimeout } from '../utils/fetch-timeout.js';
+import { calculateAddonPrice, calculateServerSidePrice } from '../utils/pricing.js';
+import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-creation.js';
 
 // API timeout constants
 const WHOP_API_TIMEOUT = 10000; // 10 seconds
-
-/**
- * Calculate addon prices from product's addon configuration
- * Returns total addon price based on selected values
- */
-function calculateAddonPrice(productAddonsJson, selectedAddons) {
-  if (!productAddonsJson || !selectedAddons || !Array.isArray(selectedAddons)) {
-    return 0;
-  }
-
-  let totalAddonPrice = 0;
-
-  try {
-    // Parse product addon configuration
-    const addonConfig = typeof productAddonsJson === 'string'
-      ? JSON.parse(productAddonsJson)
-      : productAddonsJson;
-
-    if (!Array.isArray(addonConfig)) return 0;
-
-    // Create a lookup map for addon fields and their options
-    const addonMap = {};
-    addonConfig.forEach(addon => {
-      // Map by field name, label, and ID for maximum compatibility
-      if (addon.field) addonMap[addon.field.toLowerCase().trim()] = addon;
-      if (addon.label) addonMap[addon.label.toLowerCase().trim()] = addon;
-      if (addon.id) addonMap[addon.id.toLowerCase().trim()] = addon;
-    });
-
-    // Calculate price for each selected addon
-    selectedAddons.forEach(selected => {
-      const fieldName = (selected.field || '').toLowerCase().trim();
-      const fieldId = fieldName.replace(/[^a-z0-9]+/g, '-');
-      
-      // Try to find addon definition by field name, ID, or normalized ID
-      const addonDef = addonMap[fieldName] || addonMap[fieldId] || 
-                       Object.values(addonMap).find(a => 
-                         (a.id && a.id.toLowerCase() === fieldId) || 
-                         (a.field && a.field.toLowerCase() === fieldName)
-                       );
-
-      if (addonDef && addonDef.options && Array.isArray(addonDef.options)) {
-        // Support multiple values (for checkboxes)
-        const rawValue = (selected.value || '').trim();
-        const selectedValues = rawValue.includes(',') 
-          ? rawValue.split(',').map(v => v.trim().toLowerCase())
-          : [rawValue.toLowerCase()];
-
-        selectedValues.forEach(val => {
-          const option = addonDef.options.find(opt => {
-            const optLabel = (opt.label || '').toLowerCase().trim();
-            const optValue = (opt.value || '').toLowerCase().trim();
-            return optLabel === val || optValue === val || 
-                   optLabel.replace(/[^a-z0-9]+/g, '-') === val.replace(/[^a-z0-9]+/g, '-');
-          });
-
-          if (option && option.price) {
-            totalAddonPrice += Number(option.price) || 0;
-          }
-        });
-      }
-    });
-  } catch (e) {
-    console.error('Failed to calculate addon price:', e);
-  }
-
-  return totalAddonPrice;
-}
-
-/**
- * Calculate final price server-side from product and addons
- * SECURITY: This prevents price manipulation from client side
- */
-async function calculateServerSidePrice(env, productId, selectedAddons, couponCode) {
-  // Get product from database
-  const product = await env.DB.prepare(
-    'SELECT normal_price, sale_price, addons_json FROM products WHERE id = ?'
-  ).bind(Number(productId)).first();
-
-  if (!product) {
-    throw new Error('Product not found');
-  }
-
-  // Calculate base price
-  const basePrice = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
-    ? Number(product.sale_price)
-    : Number(product.normal_price);
-
-  if (isNaN(basePrice) || basePrice < 0) {
-    throw new Error('Invalid product price');
-  }
-
-  // Calculate addon prices from product configuration
-  const addonPrice = calculateAddonPrice(product.addons_json, selectedAddons);
-
-  let finalPrice = basePrice + addonPrice;
-
-  // Apply coupon if provided
-  if (couponCode) {
-    try {
-      const coupon = await env.DB.prepare(
-        'SELECT discount_type, discount_value, min_order_amount FROM coupons WHERE code = ? AND status = ?'
-      ).bind(couponCode.toUpperCase(), 'active').first();
-
-      if (coupon) {
-        const minAmount = Number(coupon.min_order_amount) || 0;
-        if (finalPrice >= minAmount) {
-          if (coupon.discount_type === 'percentage') {
-            const discount = (finalPrice * Number(coupon.discount_value)) / 100;
-            finalPrice = Math.max(0, finalPrice - discount);
-          } else if (coupon.discount_type === 'fixed') {
-            finalPrice = Math.max(0, finalPrice - Number(coupon.discount_value));
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Coupon validation failed:', e);
-    }
-  }
-
-  // Round to 2 decimal places
-  return Math.round(finalPrice * 100) / 100;
-}
 
 /**
  * Create checkout session using existing plan
  */
 export async function createCheckout(env, body, origin) {
   const { product_id } = body;
-  
+
   if (!product_id) {
     return json({ error: 'Product ID required' }, 400);
   }
-  
+
   // Get product details
   const product = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(Number(product_id)).first();
   if (!product) {
@@ -169,24 +48,24 @@ export async function createCheckout(env, body, origin) {
   }
 
   planId = planId.trim();
-  
+
   // If it's a link, extract the plan ID
   if (planId.startsWith('http')) {
     const planMatch = planId.match(/plan_[a-zA-Z0-9]+/);
     if (planMatch) {
       planId = planMatch[0];
     } else {
-      return json({ 
-        error: 'Could not extract Plan ID from link. Please use: https://whop.com/checkout/plan_XXXXX or just plan_XXXXX' 
+      return json({
+        error: 'Could not extract Plan ID from link. Please use: https://whop.com/checkout/plan_XXXXX or just plan_XXXXX'
       }, 400);
     }
   }
-  
+
   // Validate Plan ID format
   if (!planId.startsWith('plan_')) {
     return json({ error: 'Invalid Whop Plan ID format. Should start with plan_' }, 400);
   }
-  
+
   // Get Whop API key
   const apiKey = await getWhopApiKey(env);
   if (!apiKey) {
@@ -215,23 +94,23 @@ export async function createCheckout(env, body, origin) {
         }
       })
     }, WHOP_API_TIMEOUT);
-    
+
     if (!whopResponse.ok) {
       const errorText = await whopResponse.text();
       console.error('Whop API error:', errorText);
-      
+
       try {
         const errorData = JSON.parse(errorText);
-        return json({ 
-          error: errorData.message || errorData.error || 'Failed to create checkout' 
+        return json({
+          error: errorData.message || errorData.error || 'Failed to create checkout'
         }, whopResponse.status);
       } catch (e) {
         return json({ error: 'Failed to create checkout session' }, whopResponse.status);
       }
     }
-    
+
     const checkoutData = await whopResponse.json();
-    
+
     // Store checkout for cleanup tracking
     try {
       await env.DB.prepare(`
@@ -241,7 +120,7 @@ export async function createCheckout(env, body, origin) {
     } catch (e) {
       console.log('Checkout tracking skipped:', e.message);
     }
-    
+
     return json({
       success: true,
       checkout_id: checkoutData.id,
@@ -273,12 +152,7 @@ export async function createPlanCheckout(env, body, origin) {
   let deliveryTimeMinutes = bodyDeliveryTime || metadata?.deliveryTimeMinutes;
   if (!deliveryTimeMinutes) {
     // Calculate from product settings
-    if (product.instant_delivery) {
-      deliveryTimeMinutes = 60; // 60 minutes for instant
-    } else {
-      const days = parseInt(product.normal_delivery_text) || 1;
-      deliveryTimeMinutes = days * 24 * 60; // Convert days to minutes
-    }
+    deliveryTimeMinutes = calculateDeliveryMinutes(product);
   }
   deliveryTimeMinutes = Number(deliveryTimeMinutes) || 60;
   console.log('📦 Delivery time calculated:', deliveryTimeMinutes, 'minutes');
@@ -404,7 +278,7 @@ export async function createPlanCheckout(env, body, origin) {
       try {
         const j = JSON.parse(errorText);
         msg = j.message || j.error || msg;
-      } catch (_) {}
+      } catch (_) { }
       return json({ error: msg }, planResp.status);
     }
 
@@ -669,16 +543,8 @@ export async function handleWebhook(env, webhookData) {
             try {
               const product = await env.DB.prepare('SELECT instant_delivery, normal_delivery_text FROM products WHERE id = ?')
                 .bind(Number(metadata.product_id)).first();
-              if (product) {
-                if (product.instant_delivery) {
-                  deliveryTimeMinutes = 60; // 60 minutes for instant
-                } else {
-                  const days = parseInt(product.normal_delivery_text) || 1;
-                  deliveryTimeMinutes = days * 24 * 60; // Convert days to minutes
-                }
-              } else {
-                deliveryTimeMinutes = 60; // Default fallback
-              }
+
+              deliveryTimeMinutes = calculateDeliveryMinutes(product);
             } catch (e) {
               console.log('Could not get product delivery time:', e);
               deliveryTimeMinutes = 60;
@@ -696,18 +562,22 @@ export async function handleWebhook(env, webhookData) {
           const orderAmount = metadata.amount || 0;
 
           // Build encrypted_data with addons and other details
-          const encryptedData = JSON.stringify({
+          const encryptedData = {
             email: customerEmail,
             amount: orderAmount,
             productId: metadata.product_id,
             addons: metadata.addons || [],
             whop_membership_id: membershipId || null,
             whop_checkout_id: checkoutSessionId || null
-          });
+          };
 
-          await env.DB.prepare(
-            'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes, created_at) VALUES (?, ?, ?, ?, ?, datetime("now"))'
-          ).bind(orderId, Number(metadata.product_id), encryptedData, 'completed', deliveryTimeMinutes).run();
+          await createOrderRecord(env, {
+            orderId,
+            productId: metadata.product_id,
+            status: 'completed',
+            deliveryMinutes: deliveryTimeMinutes,
+            encryptedData
+          });
 
           console.log('Order created via webhook:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes', 'Amount:', orderAmount);
         } catch (e) {

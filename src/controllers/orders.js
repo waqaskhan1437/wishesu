@@ -5,6 +5,8 @@
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
 import { getGoogleScriptUrl } from '../config/secrets.js';
+import { calculateAddonPrice, calculateServerSidePrice } from '../utils/pricing.js';
+import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-creation.js';
 
 // Webhooks (New Universal System)
 import {
@@ -53,113 +55,6 @@ function validateAddons(addons) {
 }
 
 /**
- * Calculate addon prices from product's addon configuration
- * Returns total addon price based on selected values
- */
-function calculateAddonPrice(productAddonsJson, selectedAddons) {
-  if (!productAddonsJson || !selectedAddons || !Array.isArray(selectedAddons)) {
-    return 0;
-  }
-
-  let totalAddonPrice = 0;
-
-  try {
-    // Parse product addon configuration
-    const addonConfig = typeof productAddonsJson === 'string'
-      ? JSON.parse(productAddonsJson)
-      : productAddonsJson;
-
-    if (!Array.isArray(addonConfig)) return 0;
-
-    // Create a lookup map for addon fields and their options
-    const addonMap = {};
-    addonConfig.forEach(addon => {
-      if (addon.field) {
-        addonMap[addon.field.toLowerCase().trim()] = addon;
-      }
-    });
-
-    // Calculate price for each selected addon
-    selectedAddons.forEach(selected => {
-      const fieldName = (selected.field || '').toLowerCase().trim();
-      const addonDef = addonMap[fieldName];
-
-      if (addonDef && addonDef.options && Array.isArray(addonDef.options)) {
-        // Find the matching option by label/value
-        const selectedValue = (selected.value || '').trim();
-        const option = addonDef.options.find(opt =>
-          (opt.label || '').toLowerCase().trim() === selectedValue ||
-          (opt.value || '').toLowerCase().trim() === selectedValue
-        );
-
-        if (option && option.price) {
-          totalAddonPrice += Number(option.price) || 0;
-        }
-      }
-    });
-  } catch (e) {
-    console.error('Failed to calculate addon price:', e);
-  }
-
-  return totalAddonPrice;
-}
-
-/**
- * Calculate final price server-side from product and addons
- * SECURITY: This prevents price manipulation from client side
- */
-async function calculateServerSidePrice(env, productId, selectedAddons, couponCode) {
-  // Get product from database
-  const product = await env.DB.prepare(
-    'SELECT normal_price, sale_price, addons_json FROM products WHERE id = ?'
-  ).bind(Number(productId)).first();
-
-  if (!product) {
-    throw new Error('Product not found');
-  }
-
-  // Calculate base price
-  const basePrice = (product.sale_price !== null && product.sale_price !== undefined && product.sale_price !== '')
-    ? Number(product.sale_price)
-    : Number(product.normal_price);
-
-  if (isNaN(basePrice) || basePrice < 0) {
-    throw new Error('Invalid product price');
-  }
-
-  // Calculate addon prices from product configuration
-  const addonPrice = calculateAddonPrice(product.addons_json, selectedAddons);
-
-  let finalPrice = basePrice + addonPrice;
-
-  // Apply coupon if provided
-  if (couponCode) {
-    try {
-      const coupon = await env.DB.prepare(
-        'SELECT discount_type, discount_value, min_order_amount FROM coupons WHERE code = ? AND status = ?'
-      ).bind(couponCode.toUpperCase(), 'active').first();
-
-      if (coupon) {
-        const minAmount = Number(coupon.min_order_amount) || 0;
-        if (finalPrice >= minAmount) {
-          if (coupon.discount_type === 'percentage') {
-            const discount = (finalPrice * Number(coupon.discount_value)) / 100;
-            finalPrice = Math.max(0, finalPrice - discount);
-          } else if (coupon.discount_type === 'fixed') {
-            finalPrice = Math.max(0, finalPrice - Number(coupon.discount_value));
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Coupon validation failed:', e);
-    }
-  }
-
-  // Round to 2 decimal places
-  return Math.round(finalPrice * 100) / 100;
-}
-
-/**
  * Validate email
  */
 function validateEmail(email) {
@@ -194,7 +89,7 @@ export async function getOrders(env) {
         amount = d.amount;
         addons = d.addons || [];
       }
-    } catch(e) {
+    } catch (e) {
       console.error('Failed to parse order encrypted_data for order:', row.order_id, e.message);
     }
 
@@ -219,20 +114,6 @@ export async function getOrders(env) {
  * Create order (from checkout)
  */
 /**
- * Compute delivery time in minutes from product settings.
- * - instant_delivery => 60 minutes
- * - normal_delivery_text => days (default 1 day)
- */
-function computeProductDeliveryMinutes(product) {
-  if (!product) return 60;
-  const instant = product.instant_delivery === 1 || product.instant_delivery === true;
-  if (instant) return 60;
-  const days = parseInt(product.normal_delivery_text, 10);
-  const safeDays = Number.isFinite(days) && days > 0 ? days : 1;
-  return safeDays * 24 * 60;
-}
-
-/**
  * Fix/normalize delivery_time_minutes coming from older buggy orders.
  * We only auto-correct common "default" values (60/1440) when the product says otherwise.
  */
@@ -243,7 +124,7 @@ function getEffectiveDeliveryMinutes(orderRow, productRow) {
     !!productRow &&
     (productRow.instant_delivery !== undefined || productRow.normal_delivery_text !== undefined);
 
-  const productMinutes = hasProduct ? computeProductDeliveryMinutes(productRow) : null;
+  const productMinutes = hasProduct ? calculateDeliveryMinutes(productRow) : null;
 
   if (!stored || !Number.isFinite(stored) || stored <= 0) {
     return hasProduct ? productMinutes : 60;
@@ -290,7 +171,7 @@ export async function createOrder(env, body) {
       productTitle = product.title || '';
       // Always use product's delivery settings (each product can be different).
       // This also protects us from buggy clients sending a wrong default like 1440.
-      deliveryMinutes = computeProductDeliveryMinutes(product);
+      deliveryMinutes = calculateDeliveryMinutes(product);
     }
   } catch (e) {
     console.log('Could not get product details:', e);
@@ -303,27 +184,29 @@ export async function createOrder(env, body) {
 
   const orderId = body.orderId || crypto.randomUUID().split('-')[0].toUpperCase();
   // Store whop_checkout_id if provided (for idempotency check in webhook)
-  const data = JSON.stringify({
+  const data = {
     email: email,
     amount: amount,
     productId: body.productId,
     addons: addons,
     whop_checkout_id: body.checkoutSessionId || null,
     source: 'frontend'
+  };
+
+  await createOrderRecord(env, {
+    orderId,
+    productId: body.productId,
+    status: 'PAID',
+    deliveryMinutes,
+    encryptedData: data
   });
-
-  await env.DB.prepare(
-    'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
-  ).bind(orderId, Number(body.productId), data, 'PAID', deliveryMinutes).run();
-
-  console.log('📦 Order created:', orderId, 'Delivery:', deliveryMinutes, 'minutes', 'Amount:', amount);
 
   // Send notifications (async, don't wait)
   const deliveryTime = deliveryMinutes < 1440 ? `${Math.round(deliveryMinutes / 60)} hour(s)` : `${Math.round(deliveryMinutes / 1440)} day(s)`;
 
   // Send notifications via Universal Webhooks
-  notifyOrderReceived(env, { orderId, email, amount, productTitle }).catch(() => {});
-  notifyCustomerOrderConfirmed(env, { orderId, email, amount, productTitle, deliveryTime }).catch(() => {});
+  notifyOrderReceived(env, { orderId, email, amount, productTitle }).catch(() => { });
+  notifyCustomerOrderConfirmed(env, { orderId, email, amount, productTitle, deliveryTime }).catch(() => { });
 
   // FIXED: Send Google Script webhook for new order (for email notifications)
   try {
@@ -362,15 +245,15 @@ export async function createManualOrder(env, body) {
   if (!body.productId || !body.email) {
     return json({ error: 'productId and email required' }, 400);
   }
-  
+
   // Validate inputs
   const email = validateEmail(body.email);
   if (!email) {
     return json({ error: 'Invalid email format' }, 400);
   }
-  
+
   const orderId = 'MO' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 6).toUpperCase();
-  
+
   // Validate addons or notes
   let addons = [];
   if (body.addons) {
@@ -379,14 +262,14 @@ export async function createManualOrder(env, body) {
     const notes = String(body.notes).trim().substring(0, ADDON_LIMITS.value);
     addons = [{ field: 'Admin Notes', value: notes }];
   }
-  
+
   const encryptedData = JSON.stringify({
     email: email,
     amount: parseFloat(body.amount) || 0,
     addons: addons,
     manualOrder: true
   });
-  
+
   await env.DB.prepare(
     'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
   ).bind(
@@ -396,7 +279,7 @@ export async function createManualOrder(env, body) {
     body.status || 'paid',
     Number(body.deliveryTime) || 60
   ).run();
-  
+
   return json({ success: true, orderId });
 }
 
@@ -424,16 +307,16 @@ export async function getBuyerOrder(env, orderId) {
       email = d.email || '';
       amount = d.amount;
     }
-  } catch(e) {
+  } catch (e) {
     console.error('Failed to parse order encrypted_data for buyer order:', orderId, e.message);
   }
 
   // Convert SQLite datetime to ISO 8601 format
-  const orderData = { 
-    ...row, 
-    addons, 
-    email, 
-    amount, 
+  const orderData = {
+    ...row,
+    addons,
+    email,
+    amount,
     has_review: hasReview,
     tip_paid: !!row.tip_paid,
     tip_amount: row.tip_amount || 0
@@ -442,16 +325,16 @@ export async function getBuyerOrder(env, orderId) {
     orderData.created_at = toISO8601(orderData.created_at);
   }
 
-if (orderData.delivered_at && typeof orderData.delivered_at === 'string') {
-  orderData.delivered_at = toISO8601(orderData.delivered_at);
-}
+  if (orderData.delivered_at && typeof orderData.delivered_at === 'string') {
+    orderData.delivered_at = toISO8601(orderData.delivered_at);
+  }
 
-// Normalize delivery time (fix older buggy orders that used a wrong default)
-const productRow = {
-  instant_delivery: orderData.product_instant_delivery,
-  normal_delivery_text: orderData.product_normal_delivery_text
-};
-orderData.delivery_time_minutes = getEffectiveDeliveryMinutes(orderData, productRow);
+  // Normalize delivery time (fix older buggy orders that used a wrong default)
+  const productRow = {
+    instant_delivery: orderData.product_instant_delivery,
+    normal_delivery_text: orderData.product_normal_delivery_text
+  };
+  orderData.delivery_time_minutes = getEffectiveDeliveryMinutes(orderData, productRow);
 
   return json({ order: orderData });
 }
@@ -481,12 +364,12 @@ export async function deleteOrder(env, id) {
  */
 export async function updateOrder(env, body) {
   const orderId = body.orderId;
-  
+
   if (!orderId) return json({ error: 'orderId required' }, 400);
-  
+
   const updates = [];
   const values = [];
-  
+
   if (body.status !== undefined) {
     updates.push('status = ?');
     values.push(body.status);
@@ -495,11 +378,11 @@ export async function updateOrder(env, body) {
     updates.push('delivery_time_minutes = ?');
     values.push(Number(body.delivery_time_minutes));
   }
-  
+
   if (updates.length === 0) {
     return json({ error: 'No fields to update' }, 400);
   }
-  
+
   values.push(orderId);
   await env.DB.prepare(`UPDATE orders SET ${updates.join(', ')} WHERE order_id = ?`).bind(...values).run();
   return json({ success: true });
@@ -528,7 +411,7 @@ export async function deliverOrder(env, body) {
   await env.DB.prepare(
     'UPDATE orders SET delivered_video_url=?, delivered_thumbnail_url=?, status=?, delivered_at=CURRENT_TIMESTAMP, delivered_video_metadata=? WHERE order_id=?'
   ).bind(body.videoUrl, body.thumbnailUrl || null, 'delivered', deliveredVideoMetadata, body.orderId).run();
-  
+
   // Get customer email for notification
   let customerEmail = '';
   try {
@@ -536,15 +419,15 @@ export async function deliverOrder(env, body) {
       const decrypted = JSON.parse(orderResult.encrypted_data);
       customerEmail = decrypted.email || '';
     }
-  } catch (e) {}
-  
+  } catch (e) { }
+
   // Send customer delivery notification (async)
   notifyCustomerOrderDelivered(env, {
     orderId: body.orderId,
     email: customerEmail,
     productTitle: orderResult?.product_title || 'Your Order'
-  }).catch(() => {});
-  
+  }).catch(() => { });
+
   // Trigger email webhook if configured (legacy support)
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
@@ -567,7 +450,7 @@ export async function deliverOrder(env, body) {
   } catch (err) {
     console.error('Error triggering delivery webhook:', err);
   }
-  
+
   return json({ success: true });
 }
 
@@ -576,16 +459,16 @@ export async function deliverOrder(env, body) {
  */
 export async function requestRevision(env, body) {
   if (!body.orderId) return json({ error: 'orderId required' }, 400);
-  
+
   // Get order data before updating
   const orderResult = await env.DB.prepare(
     'SELECT orders.*, products.title as product_title FROM orders LEFT JOIN products ON orders.product_id = products.id WHERE orders.order_id = ?'
   ).bind(body.orderId).first();
-  
+
   await env.DB.prepare(
     'UPDATE orders SET revision_requested=1, revision_count=revision_count+1, status=? WHERE order_id=?'
   ).bind('revision', body.orderId).run();
-  
+
   // Trigger revision notification webhook if configured
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
@@ -597,7 +480,7 @@ export async function requestRevision(env, body) {
       } catch (e) {
         console.warn('Could not decrypt order data for email');
       }
-      
+
       await fetch(googleScriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -617,7 +500,7 @@ export async function requestRevision(env, body) {
   } catch (err) {
     console.error('Error triggering revision webhook:', err);
   }
-  
+
   return json({ success: true });
 }
 
@@ -645,11 +528,11 @@ export async function updateArchiveLink(env, body) {
 export async function markTipPaid(env, body) {
   const { orderId, amount } = body;
   if (!orderId) return json({ error: 'orderId required' }, 400);
-  
+
   await env.DB.prepare(
     'UPDATE orders SET tip_paid = 1, tip_amount = ? WHERE order_id = ?'
   ).bind(Number(amount) || 0, orderId).run();
-  
+
   // Get customer email for notification
   let email = '';
   try {
@@ -658,10 +541,10 @@ export async function markTipPaid(env, body) {
       const data = JSON.parse(order.encrypted_data);
       email = data.email || '';
     }
-  } catch (e) {}
-  
+  } catch (e) { }
+
   // Notify admin about tip (async)
-  notifyTipReceived(env, { orderId, amount: Number(amount) || 0, email }).catch(() => {});
-  
+  notifyTipReceived(env, { orderId, amount: Number(amount) || 0, email }).catch(() => { });
+
   return json({ success: true });
 }
