@@ -167,6 +167,9 @@ window.AD = window.AdminDashboard;
       case 'analytics':
         if (AD.loadAnalytics) await AD.loadAnalytics(panel);
         break;
+    case 'emails':
+      if (AD.loadEmails) await AD.loadEmails(panel);
+      break;
       case 'backup':
         if (AD.loadBackup) await AD.loadBackup(panel);
         break;

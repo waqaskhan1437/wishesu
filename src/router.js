@@ -186,6 +186,13 @@ import {
   saveAnalyticsSettings
 } from './controllers/analytics.js';
 
+// Email & Leads
+import {
+  getEmailTemplatesApi,
+  saveEmailTemplateApi,
+  addLeadApi
+} from './controllers/email.js';
+
 // Noindex (Hide pages from search results)
 import {
   getNoindexList,
@@ -355,6 +362,23 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/admin/analytics') {
     const body = await req.json().catch(() => ({}));
     return saveAnalyticsSettings(env, body);
+  }
+
+  // ----- EMAIL TEMPLATES (Transactional & Marketing) -----
+  // Admin can fetch and save email templates. Templates are keyed by type.
+  if (method === 'GET' && path === '/api/admin/email-templates') {
+    return getEmailTemplatesApi(env, req);
+  }
+  if (method === 'POST' && path === '/api/admin/email-templates') {
+    const body = await req.json().catch(() => ({}));
+    return saveEmailTemplateApi(env, body);
+  }
+
+  // ----- LEAD CAPTURE (Abandoned Checkout, Forms) -----
+  // Public endpoint to capture leads (email/name) when users start checkout or submit a form.
+  if (method === 'POST' && path === '/api/lead') {
+    const body = await req.json().catch(() => ({}));
+    return addLeadApi(env, body);
   }
 
   // ----- NOINDEX PAGES (Hide from search results) -----

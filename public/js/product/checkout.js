@@ -35,6 +35,8 @@
       const val = (emailInput.value || '').trim();
       if (val && val.includes('@')) {
         syncEmailToWhop(val);
+        // Capture lead: send email to server once when valid email is provided
+        sendLeadIfNeeded(val);
       } else {
         syncEmailToWhop('');
       }
@@ -43,6 +45,22 @@
     emailInput.addEventListener('input', handleEmailUpdate);
     emailInput.addEventListener('change', handleEmailUpdate);
     handleEmailUpdate();
+  }
+
+  // Lead capture state: ensure we only send once per page load
+  let leadSent = false;
+  async function sendLeadIfNeeded(email) {
+    if (leadSent || !email || !email.includes('@')) return;
+    leadSent = true;
+    try {
+      await fetch('/api/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, source: 'checkout' })
+      });
+    } catch (_) {
+      // Ignore errors silently; lead capture failure should not block checkout
+    }
   }
 
   // Add spinner CSS once

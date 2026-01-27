@@ -52,10 +52,14 @@
 
   window.addEventListener('storage', (e) => {
     if (e.key === LS_POLL_LEADER && isOpen) {
-      // if another tab became leader, stop polling here
+      // if another tab became leader, stop any polling state
       const leader = getLeader();
       if (leader && leader.id !== TAB_ID) stopPolling();
-      if ((!leader || !isLeaderFresh(leader)) && !document.hidden) startPolling();
+      // When leadership changes or expires, perform a single sync instead of starting an interval
+      if ((!leader || !isLeaderFresh(leader)) && !document.hidden) {
+        stopPolling();
+        syncNow();
+      }
     }
   });
 
@@ -65,7 +69,8 @@
       releaseLeader();
       releaseLeader();
     } else if (isOpen) {
-      startPolling();
+      // When returning to the page, perform a single sync. Do not start polling.
+      stopPolling();
       syncNow();
     }
   });
@@ -298,7 +303,8 @@
     panel.style.display = isOpen ? 'block' : 'none';
     if (isOpen) {
       ensureSession().then(() => {
-        startPolling();
+        // When opening chat, perform a one‑time sync and UI update. Do not start continuous polling.
+        stopPolling();
         syncNow();
         applyCooldownUI();
       }).catch(() => {});
@@ -588,33 +594,23 @@
     }
   }
 
+  // Modified polling: perform a single sync only when needed, avoiding recurring intervals.
   function startPolling() {
     if (pollTimer) return;
     if (document.hidden) return;
-
-    // Only one tab should poll to save requests
+    // Only one tab should perform sync to conserve resources
     if (!tryBecomeLeader()) return;
-
-    pollTimer = window.setInterval(async () => {
-      if (!isOpen) return;
-      if (document.hidden) {
-        stopPolling();
-        return;
-      }
-
-      // keep leadership alive; if we lost it, stop
-      if (!heartbeatLeader()) {
-        stopPolling();
-        return;
-      }
-
-      await syncNow();
-    }, POLL_MS);
+    pollTimer = true;
+    // Immediately sync messages once
+    syncNow();
   }
 
   function stopPolling() {
     if (!pollTimer) return;
-    clearInterval(pollTimer);
+    // If pollTimer is a number, it represents an interval ID; otherwise it's a boolean flag
+    if (typeof pollTimer === 'number') {
+      clearInterval(pollTimer);
+    }
     pollTimer = null;
   }
 

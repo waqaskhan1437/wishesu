@@ -91,14 +91,20 @@
       pollTimer = null;
     }
 
+    // Disable background polling to reduce unnecessary requests. Instead of
+    // repeatedly hitting the server every few seconds, perform a single
+    // sync when an event occurs (e.g. opening the chat, switching tabs).
     function startPolling() {
+      // Only run a single sync of messages and sessions. Avoid creating
+      // a recurring interval so that the UI remains responsive without
+      // spamming the server.
       if (pollTimer) return;
-      pollTimer = setInterval(async () => {
-        if (document.hidden) return;
-        if (!active?.id) return;
-        await syncMessages(false);
-        await refreshSessions(false);
-      }, POLL_MS);
+      pollTimer = true;
+      // When called, perform one-time refresh if active session exists
+      if (!document.hidden && active?.id) {
+        syncMessages(false);
+        refreshSessions(false);
+      }
     }
 
     function setActiveSession(sess) {
@@ -111,7 +117,10 @@
       deleteBtn.style.display = 'inline-block';
       updateBlockedUI(!!sess.blocked);
       renderSessionsList();
+      // Immediately fetch messages and sessions once when a session is selected
       syncMessages(true);
+      refreshSessions(true);
+      // Do not schedule repeated polling; a single call is sufficient
       startPolling();
     }
 

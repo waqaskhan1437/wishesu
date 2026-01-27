@@ -15,8 +15,9 @@ import { cleanupExpired } from './controllers/whop.js';
 import { generateBackupData, sendBackupEmail, createBackup as createBackupApi } from './controllers/backup.js';
 import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
-import { buildMinimalRobotsTxt, buildMinimalSitemapXml } from './controllers/seo-minimal.js';
-import { getNoindexMetaTags } from './controllers/noindex.js';
+import { buildMinimalRobotsTxt, buildMinimalSitemapXml, getMinimalSEOSettings } from './controllers/seo-minimal.js';
+import { getNoindexMetaTags, shouldNoindexUrl } from './controllers/noindex.js';
+import { canonicalProductPath } from './utils/formatting.js';
 
 // Inject analytics & verification meta tags (Google Analytics, Facebook Pixel, site verification)
 import { injectAnalyticsAndMeta } from './controllers/analytics.js';
@@ -83,6 +84,103 @@ async function isAdminAuthed(req, env) {
 
   const expected = await hmacSha256(secret, tsStr);
   return expected === sig;
+}
+
+// -------------------------------
+// SEO helper functions
+// -------------------------------
+/**
+ * Determine robots and canonical values for a given request.
+ * - If a URL is marked as noindex via noindex patterns, robots is set to 'noindex, nofollow'.
+ * - Otherwise defaults to 'index, follow'.
+ * - Canonical URL is built from the base site URL (from seo_minimal settings or request origin)
+ *   and the requested path, unless a product object is provided, in which case the canonical
+ *   product path is used. Products may override canonical via `seo_canonical`.
+ * @param {Object} env Cloudflare environment bindings
+ * @param {Request} req Incoming request
+ * @param {Object} opts Additional context: { path?: string, product?: Object }
+ * @returns {Promise<{robots: string, canonical: string}>}
+ */
+async function getSeoForRequest(env, req, opts = {}) {
+  const url = new URL(req.url);
+  // Determine pathname from opts.path or request
+  const pathname = opts.path || url.pathname || '/';
+
+  // Default robots directive
+  let robots = 'index, follow';
+  // Check noindex patterns
+  try {
+    if (await shouldNoindexUrl(env, pathname)) {
+      robots = 'noindex, nofollow';
+    }
+  } catch (e) {
+    // ignore errors and fall back to default
+  }
+
+  // Get site URL from seo_minimal settings; fallback to request origin
+  let baseUrl = url.origin;
+  try {
+    const res = await getMinimalSEOSettings(env);
+    if (res && res.settings && res.settings.site_url) {
+      baseUrl = res.settings.site_url;
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Build canonical
+  let canonical = '';
+  if (opts.product) {
+    // Use product's canonical if provided, else construct via canonicalProductPath
+    const product = opts.product;
+    if (product.seo_canonical && String(product.seo_canonical).trim()) {
+      canonical = String(product.seo_canonical).trim();
+    } else {
+      try {
+        canonical = baseUrl + canonicalProductPath(product);
+      } catch (e) {
+        canonical = baseUrl + pathname;
+      }
+    }
+  } else {
+    canonical = baseUrl + pathname;
+  }
+
+  return { robots, canonical };
+}
+
+/**
+ * Inject or update robots and canonical tags in an HTML string.
+ * If a meta robots tag or canonical link already exists, it will be replaced.
+ * Otherwise they will be appended before the closing </head> tag.
+ * @param {string} html Original HTML
+ * @param {string} robots Robots directive (e.g. 'index, follow' or 'noindex, nofollow')
+ * @param {string} canonical Canonical URL to set, optional
+ * @returns {string} Modified HTML with SEO tags injected
+ */
+function applySeoToHtml(html, robots, canonical) {
+  if (!html) return html;
+  // Inject robots meta tag
+  if (robots) {
+    const robotsRegex = /<meta\s+name=["']robots["'][^>]*>/i;
+    const robotsTag = `<meta name="robots" content="${robots}">`;
+    if (robotsRegex.test(html)) {
+      html = html.replace(robotsRegex, robotsTag);
+    } else {
+      html = html.replace(/<\/head>/i, `${robotsTag}\n</head>`);
+    }
+  }
+  // Inject canonical link
+  if (canonical) {
+    const canonicalRegex = /<link\s+rel=["']canonical["'][^>]*>/i;
+    const canonicalTag = `<link rel="canonical" href="${canonical}">`;
+    if (canonicalRegex.test(html)) {
+      html = html.replace(canonicalRegex, canonicalTag);
+    } else {
+      html = html.replace(/<\/head>/i, `${canonicalTag}\n</head>`);
+    }
+  }
+  return html;
 }
 
 // Blog post HTML template generator
@@ -2031,13 +2129,20 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                   }
                   
                   // Inject SEO meta tags
-                  const safeTitle = (product.title || '').replace(/"/g, '&quot;');
-                  const safeDesc = (product.description || '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+                  // Prefer SEO-specific fields when provided; fall back to generic title/description
+                  const safeTitle = (product.seo_title || product.title || '').replace(/"/g, '&quot;');
+                  const safeDesc = (product.seo_description || product.description || '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+                  const safeKeywords = (product.seo_keywords || '').replace(/"/g, '&quot;');
+                  // Title tag
                   html = html.replace('<title>Loading Product... | WishVideo</title>', `<title>${safeTitle} | WishVideo</title>`);
+                  // Open Graph title/description and image
                   html = html.replace('<meta property="og:title" content="Loading...">', `<meta property="og:title" content="${safeTitle}">`);
                   html = html.replace('<meta property="og:description" content="">', `<meta property="og:description" content="${safeDesc}">`);
                   html = html.replace('<meta property="og:image" content="">', `<meta property="og:image" content="${product.thumbnail_url || ''}">`);
+                  // Description tag
                   html = html.replace('<meta name="description" content="Custom personalized video greetings from Africa.">', `<meta name="description" content="${safeDesc}">`);
+                  // Keywords tag (if provided, override default keywords)
+                  html = html.replace('<meta name="keywords" content="video, greeting, birthday, wish, africa">', `<meta name="keywords" content="${safeKeywords}">`);
                 }
               }
             }
