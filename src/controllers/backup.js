@@ -87,7 +87,7 @@ async function ensureBackupsTable(env) {
     .run();
 }
 
-async async function listTables(env) {
+async function listTables(env) {
   // Only user tables (skip sqlite_ and Cloudflare internal)
   const res = await env.DB
     .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name")
