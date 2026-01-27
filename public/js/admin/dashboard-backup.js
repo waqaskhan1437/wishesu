@@ -291,5 +291,6 @@
   AD.createBackup = createBackup;
   AD.restoreBackup = restoreBackup;
   AD.downloadBackup = downloadBackup;
+  AD.importBackup = importBackup;
 
 })(window.AdminDashboard);

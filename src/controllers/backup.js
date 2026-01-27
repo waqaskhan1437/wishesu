@@ -178,8 +178,10 @@ export async function createBackup(env) {
   try {
     await ensureBackupsTable(env);
 
-    if (!env.R2_BUCKET) {
-      throw new Error('R2 binding missing (env.R2_BUCKET). Add an R2 bucket binding for backups.');
+    const BUCKET = getBackupBucket(env);
+
+    if (!BUCKET) {
+      throw new Error('R2 bucket binding missing (R2_BUCKET or PRODUCT_MEDIA).');
     }
 
     const { jsonStr, size, media_count } = await generateBackupData(env);
@@ -285,7 +287,8 @@ export async function restoreBackup(env, body = {}) {
     let backupObj = null;
 
     if (body.backupId) {
-      if (!env.R2_BUCKET) return json({ ok: false, error: 'R2 binding missing (env.R2_BUCKET).' }, 500);
+      const BUCKET = getBackupBucket(env);
+      if (!BUCKET) return json({ ok: false, error: 'R2 bucket binding missing (R2_BUCKET or PRODUCT_MEDIA).' }, 500);
 
       const row = await env.DB.prepare('SELECT r2_key FROM backups WHERE id = ?').bind(body.backupId).first();
       if (!row || !row.r2_key) return json({ ok: false, error: 'Backup not found' }, 404);
