@@ -551,18 +551,31 @@
         body: JSON.stringify({ sessionId, role: 'user', content: msg })
       });
 
+      // Parse JSON response to get messageId so we can update lastId
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         alert(data.error || 'Failed to send');
         return;
       }
 
+      // Append the user's message immediately for a responsive UI
       appendMessage('user', msg, new Date().toISOString());
+      // If the server returned a messageId, update the lastId so we don't
+      // re‑append the same message when syncing. This prevents duplicate messages.
+      if (data && data.messageId) {
+        const idNum = Number(data.messageId);
+        if (!isNaN(idNum)) {
+          lastId = Math.max(lastId, idNum);
+        }
+      }
 
       input.value = '';
       updateCounter();
 
+      // Start cooldown timer after sending
       startCooldown(); // 10-second delay after sending
+
+      // Perform a sync to fetch any new messages from the server (e.g. admin replies)
       await syncNow();
     } finally {
       isSending = false;

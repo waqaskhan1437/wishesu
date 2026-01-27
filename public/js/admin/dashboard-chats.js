@@ -324,16 +324,27 @@
       sendBtn.disabled = true;
 
       try {
-        await AD.apiFetch('/api/chat/send', {
+        // Send the admin message and capture the returned messageId
+        const resp = await AD.apiFetch('/api/chat/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId: active.id, role: 'admin', content: text })
         });
 
+        // Immediately show the message in the UI for responsiveness
         appendMessage({ role: 'admin', content: text, created_at: new Date().toISOString() });
+        // If the server returns messageId, update lastId to avoid duplicate on sync
+        if (resp && typeof resp.messageId !== 'undefined') {
+          const idNum = Number(resp.messageId);
+          if (!isNaN(idNum)) {
+            lastId = Math.max(lastId, idNum);
+          }
+        }
+
         inputEl.value = '';
         counterEl.textContent = '0/500';
 
+        // Sync to fetch any new messages (customer replies) after this ID
         await syncMessages(false);
         await refreshSessions(false);
       } catch (e) {
