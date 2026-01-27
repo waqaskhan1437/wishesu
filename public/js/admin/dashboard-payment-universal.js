@@ -11,14 +11,30 @@
 
 // Payment gateways management
 let paymentGateways = [];
+let standardSettings = {}; // Store standard settings (PayPal/Stripe)
 let currentEditingGateway = null;
 
 // Initialize payment tab
 async function initPaymentTab() {
     console.log('Initializing Payment Gateway Management...');
     await loadPaymentGateways();
+    // Load standard settings as well
+    await loadStandardSettings();
+
     renderPaymentGateways();
     setupPaymentEventListeners();
+}
+
+// Load standard settings from API
+async function loadStandardSettings() {
+    try {
+        const response = await fetch('/api/admin/settings/clean');
+        const data = await response.json();
+        standardSettings = data.settings || {};
+    } catch (error) {
+        console.error('Failed to load standard settings:', error);
+        standardSettings = {};
+    }
 }
 
 // Load payment gateways from API
@@ -48,6 +64,74 @@ function renderPaymentGateways() {
                 <button class="btn btn-primary" onclick="showAddGatewayModal()">+ Add Gateway</button>
             </div>
 
+            <!-- Standard Integrations Section -->
+            <div class="standard-integrations" style="background: white; border-radius: 12px; padding: 25px; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h3 style="margin: 0 0 5px; font-size: 18px; color: #1f2937;">Standard Integrations</h3>
+                        <p style="margin: 0; font-size: 14px; color: #6b7280;">Manage built-in payment providers (PayPal & Stripe)</p>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px;">
+                    <!-- PayPal Card -->
+                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; background: #f9fafb;">
+                        <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg" alt="PayPal" style="height: 24px; margin-right: 10px;">
+                            <label class="switch" style="margin-left: auto; display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="std-enable-paypal" ${standardSettings.enable_paypal ? 'checked' : ''} style="margin-right: 8px;">
+                                <span style="font-size: 14px; font-weight: 600;">Enable</span>
+                            </label>
+                        </div>
+                        
+                        <div id="std-paypal-fields" style="display: ${standardSettings.enable_paypal ? 'block' : 'none'};">
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; color: #374151;">Client ID</label>
+                                <input type="text" id="std-paypal-client-id" value="${escapeHtml(standardSettings.paypal_client_id || '')}" 
+                                    style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                            </div>
+                            <div class="form-group">
+                                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; color: #374151;">Secret Key</label>
+                                <input type="password" id="std-paypal-secret" value="${escapeHtml(standardSettings.paypal_secret || '')}" 
+                                    style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stripe Card -->
+                    <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; background: #f9fafb;">
+                         <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" alt="Stripe" style="height: 24px; margin-right: 10px;">
+                            <label class="switch" style="margin-left: auto; display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="std-enable-stripe" ${standardSettings.enable_stripe ? 'checked' : ''} style="margin-right: 8px;">
+                                <span style="font-size: 14px; font-weight: 600;">Enable</span>
+                            </label>
+                        </div>
+
+                        <div id="std-stripe-fields" style="display: ${standardSettings.enable_stripe ? 'block' : 'none'};">
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; color: #374151;">Publishable Key</label>
+                                <input type="text" id="std-stripe-pub-key" value="${escapeHtml(standardSettings.stripe_pub_key || '')}" 
+                                    style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                            </div>
+                            <div class="form-group">
+                                <label style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; color: #374151;">Secret Key</label>
+                                <input type="password" id="std-stripe-secret-key" value="${escapeHtml(standardSettings.stripe_secret_key || '')}" 
+                                    style="width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; text-align: right;">
+                     <button class="btn btn-primary" onclick="saveStandardSettings()" 
+                        style="background: #000; color: white; padding: 8px 20px; border-radius: 6px; border: none; font-weight: 500; cursor: pointer;">
+                        Save Standard Settings
+                    </button>
+                </div>
+            </div>
+
+            <h3 style="margin: 0 0 15px; font-size: 18px; color: #1f2937;">Custom Gateways</h3>
             <div class="table-container">
                 <table>
                     <thead>
@@ -66,6 +150,61 @@ function renderPaymentGateways() {
             </div>
         </div>
     `;
+
+    // Add toggle listeners for standard settings
+    const paypalToggle = document.getElementById('std-enable-paypal');
+    const paypalFields = document.getElementById('std-paypal-fields');
+    if (paypalToggle && paypalFields) {
+        paypalToggle.addEventListener('change', () => {
+            paypalFields.style.display = paypalToggle.checked ? 'block' : 'none';
+        });
+    }
+
+    const stripeToggle = document.getElementById('std-enable-stripe');
+    const stripeFields = document.getElementById('std-stripe-fields');
+    if (stripeToggle && stripeFields) {
+        stripeToggle.addEventListener('change', () => {
+            stripeFields.style.display = stripeToggle.checked ? 'block' : 'none';
+        });
+    }
+}
+
+// Save standard settings (PayPal/Stripe)
+async function saveStandardSettings() {
+    const btn = document.querySelector('button[onclick="saveStandardSettings()"]');
+    const originalText = btn ? btn.textContent : 'Save Standard Settings';
+    if (btn) btn.textContent = 'Saving...';
+
+    // Merge new values with existing standard settings to preserve other keys (like site_title)
+    const newSettings = {
+        ...standardSettings,
+        enable_paypal: document.getElementById('std-enable-paypal').checked,
+        paypal_client_id: document.getElementById('std-paypal-client-id').value.trim(),
+        paypal_secret: document.getElementById('std-paypal-secret').value.trim(),
+        enable_stripe: document.getElementById('std-enable-stripe').checked,
+        stripe_pub_key: document.getElementById('std-stripe-pub-key').value.trim(),
+        stripe_secret_key: document.getElementById('std-stripe-secret-key').value.trim(),
+    };
+
+    try {
+        const response = await fetch('/api/admin/settings/clean', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSettings)
+        });
+
+        const result = await response.json();
+        if (response.ok && result.success) {
+            standardSettings = newSettings; // Update local cache
+            showMessage('Standard settings saved successfully!', 'success');
+        } else {
+            showMessage(result.error || 'Failed to save settings', 'error');
+        }
+    } catch (error) {
+        showMessage('Error saving settings: ' + error.message, 'error');
+    } finally {
+        if (btn) btn.textContent = originalText;
+    }
 }
 
 // Render individual payment gateway rows
@@ -73,7 +212,7 @@ function renderPaymentGatewayRows() {
     if (!paymentGateways || paymentGateways.length === 0) {
         return '<tr><td colspan="5" style="text-align: center; padding: 20px;">No payment gateways configured yet</td></tr>';
     }
-    
+
     return paymentGateways.map(gateway => `
         <tr>
             <td>
@@ -115,7 +254,7 @@ function showAddGatewayModal() {
 function editGateway(gatewayId) {
     const gateway = paymentGateways.find(g => g.id === gatewayId);
     if (!gateway) return;
-    
+
     currentEditingGateway = gateway;
     showModal('Edit Payment Gateway', createGatewayFormHTML(gateway));
 }
@@ -292,7 +431,7 @@ async function saveGateway() {
                 whop_theme: whopTheme
             })
         });
-        
+
         const result = await response.json();
         if (result.success) {
             closeModal();
@@ -350,7 +489,7 @@ async function updateGateway() {
                 whop_theme: whopTheme
             })
         });
-        
+
         const result = await response.json();
         if (result.success) {
             closeModal();
@@ -370,12 +509,12 @@ async function deleteGateway(gatewayId) {
     if (!confirm('Are you sure you want to delete this payment gateway?')) {
         return;
     }
-    
+
     try {
         const response = await fetch(`/api/admin/payment-universal/gateways?id=${gatewayId}`, {
             method: 'DELETE'
         });
-        
+
         const result = await response.json();
         if (result.success) {
             await loadPaymentGateways();
@@ -394,7 +533,7 @@ function showModal(title, content) {
     // Remove existing modal if any
     const existingModal = document.getElementById('modal-overlay');
     if (existingModal) existingModal.remove();
-    
+
     const modal = document.createElement('div');
     modal.id = 'modal-overlay';
     modal.style.cssText = `
@@ -409,7 +548,7 @@ function showModal(title, content) {
         align-items: center;
         z-index: 1000;
     `;
-    
+
     modal.innerHTML = `
         <div style="
             background: white;
@@ -434,7 +573,7 @@ function showModal(title, content) {
             <div id="modal-content">${content}</div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
 }
 
@@ -456,7 +595,7 @@ function showMessage(message, type = 'info') {
     // Remove existing message if any
     const existingMsg = document.getElementById('message-toast');
     if (existingMsg) existingMsg.remove();
-    
+
     const msgDiv = document.createElement('div');
     msgDiv.id = 'message-toast';
     msgDiv.textContent = message;
@@ -469,13 +608,13 @@ function showMessage(message, type = 'info') {
         color: white;
         z-index: 1001;
         animation: slideIn 0.3s ease-out;
-        ${type === 'success' ? 'background: #10b981;' : 
-          type === 'error' ? 'background: #ef4444;' : 
-          'background: #3b82f6;'}
+        ${type === 'success' ? 'background: #10b981;' :
+            type === 'error' ? 'background: #ef4444;' :
+                'background: #3b82f6;'}
     `;
-    
+
     document.body.appendChild(msgDiv);
-    
+
     // Remove after 5 seconds
     setTimeout(() => {
         if (msgDiv.parentNode) {
