@@ -37,3 +37,9 @@ VERSION = "1.0.0"
 # Every hour:        0 * * * *
 # Every 6 hours:     0 */6 * * *
 # Every day at 2am:  0 2 * * *
+
+
+# Backup Email (optional, for daily 2AM cron)
+# BACKUP_EMAIL_TO = "you@example.com"
+# BACKUP_EMAIL_FROM = "backup@yourdomain.com"
+# BACKUP_EMAIL_NAME = "WishesU Backup"

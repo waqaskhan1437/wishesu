@@ -98,6 +98,8 @@ export async function initDB(env) {
         `),
         // Settings table
         env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`),
+        // Backups table (JSON exports)
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS backups (id TEXT PRIMARY KEY, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, size INTEGER DEFAULT 0, media_count INTEGER DEFAULT 0, data TEXT)`),
         // Pages table
         env.DB.prepare(`
           CREATE TABLE IF NOT EXISTS pages (

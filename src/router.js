@@ -192,7 +192,8 @@ import {
   getBackupHistory,
   createBackup,
   restoreBackup,
-  downloadBackup
+  downloadBackup,
+  importBackup
 } from './controllers/backup.js';
 
 // Clean Settings (Essential Only)
@@ -379,7 +380,12 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/admin/backup/restore') {
     const body = await req.json().catch(() => ({}));
     return restoreBackup(env, body);
+    if (method === 'POST' && path === '/api/admin/backup/import') {
+    const body = await req.json().catch(() => ({}));
+    return importBackup(env, body);
   }
+
+}
 
   if (method === 'GET' && path.startsWith('/api/admin/backup/download/')) {
     const backupId = path.split('/').pop();

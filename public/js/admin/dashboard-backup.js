@@ -72,6 +72,24 @@
           </div>
         </div>
 
+
+        <!-- Import / Restore Backup -->
+        <div style="background:white;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <h3 style="margin:0 0 20px;font-size:18px;color:#1f2937;">📥 Import / Restore</h3>
+          <p style="margin:0 0 12px;color:#6b7280;line-height:1.5;">
+            Upload a backup JSON to reset database and restore everything. Media files are not included (links only).
+          </p>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <input id="backup-import-file" type="file" accept=".json,application/json"
+              style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;min-width:260px;" />
+            <button onclick="AD.importBackup()" 
+              style="padding:12px 22px;background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;border-radius:12px;cursor:pointer;font-size:15px;font-weight:600;">
+              Import & Restore
+            </button>
+          </div>
+          <div id="backup-import-status" style="margin-top:12px;color:#6b7280;font-size:13px;"></div>
+        </div>
+
         <!-- Backup History -->
         <div style="background:white;border-radius:16px;padding:25px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
           <div style="display:flex;justify-content:space-between;align-items-center;margin-bottom:20px;">
