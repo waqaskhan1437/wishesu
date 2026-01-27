@@ -4,6 +4,7 @@
  */
 
 import { json } from '../utils/response.js';
+import { CORS } from '../config/cors.js';
 
 // Simple backup cache
 let backupCache = null;
@@ -113,7 +114,7 @@ export async function restoreBackup(env, body) {
 export async function downloadBackup(env, backupId) {
   try {
     if (!backupId) {
-      return new Response('Backup ID required', { status: 400 });
+      return new Response('Backup ID required', { status: 400, headers: { ...CORS } });
     }
 
     // In a real implementation, this would:
@@ -136,13 +137,15 @@ export async function downloadBackup(env, backupId) {
 
     return new Response(backupContent, {
       headers: {
+        ...CORS,
         'Content-Type': 'application/json',
         'Content-Disposition': `attachment; filename="backup-${backupId}.json"`,
-        'Content-Length': String(backupContent.length)
+        // Content-Length should be bytes, not JS string length
+        'Content-Length': String(new TextEncoder().encode(backupContent).length)
       }
     });
   } catch (e) {
     console.error('Download backup error:', e);
-    return new Response('Backup not found', { status: 404 });
+    return new Response('Backup not found', { status: 404, headers: { ...CORS } });
   }
 }
