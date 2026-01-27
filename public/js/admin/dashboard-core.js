@@ -164,6 +164,9 @@ window.AD = window.AdminDashboard;
       case 'noindex':
         if (AD.loadNoindex) await AD.loadNoindex(panel);
         break;
+      case 'analytics':
+        if (AD.loadAnalytics) await AD.loadAnalytics(panel);
+        break;
       case 'backup':
         if (AD.loadBackup) await AD.loadBackup(panel);
         break;

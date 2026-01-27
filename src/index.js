@@ -18,6 +18,9 @@ import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildMinimalRobotsTxt, buildMinimalSitemapXml } from './controllers/seo-minimal.js';
 import { getNoindexMetaTags } from './controllers/noindex.js';
 
+// Inject analytics & verification meta tags (Google Analytics, Facebook Pixel, site verification)
+import { injectAnalyticsAndMeta } from './controllers/analytics.js';
+
 
 // =========================
 // ADMIN AUTH HELPERS (Module Level - OPTIMIZED)
@@ -1557,7 +1560,11 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               const previousBlogs = prevResult.results || [];
               const comments = commentsResult.results || [];
               const htmlRaw = generateBlogPostHTML(blog, previousBlogs, comments);
-              const html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+              // Inject analytics scripts and verification meta tags
+              try {
+                html = await injectAnalyticsAndMeta(env, html);
+              } catch (e) {}
               
               const resp = new Response(html, {
                 status: 200,
@@ -1646,7 +1653,11 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               };
               
               const htmlRaw = generateForumQuestionHTML(question, replies, sidebar);
-              const html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+              // Inject analytics scripts and verification meta tags
+              try {
+                html = await injectAnalyticsAndMeta(env, html);
+              } catch (e) {}
               
               const resp = new Response(html, {
                 status: 200,
@@ -1749,6 +1760,10 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
                   html = applySeoToHtml(html, seo.robots, seo.canonical);
                 } catch (e) {}
+                // Inject analytics and verification tags on dynamic pages
+                try {
+                  html = await injectAnalyticsAndMeta(env, html);
+                } catch (_) {}
                 return new Response(html, {
                   status: 200,
                   headers: {
@@ -1784,6 +1799,10 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
                   html = applySeoToHtml(html, seo.robots, seo.canonical);
                 } catch (e) {}
+                // Inject analytics and verification tags on dynamic pages
+                try {
+                  html = await injectAnalyticsAndMeta(env, html);
+                } catch (_) {}
                 
                 return new Response(html, {
                   status: 200,
@@ -2061,6 +2080,10 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 if (noindexTags) {
                   html = html.replace('</head>', `\n    ${noindexTags}\n  </head>`);
                 }
+                // Inject analytics and verification tags after SEO and noindex
+                try {
+                  html = await injectAnalyticsAndMeta(env, html);
+                } catch (_) {}
               } catch (e) {
                 // ignore SEO injection errors
               }

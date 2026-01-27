@@ -180,6 +180,12 @@ import {
   buildMinimalSitemapXml
 } from './controllers/seo-minimal.js';
 
+// Analytics & Site Verification
+import {
+  getAnalyticsSettingsApi,
+  saveAnalyticsSettings
+} from './controllers/analytics.js';
+
 // Noindex (Hide pages from search results)
 import {
   getNoindexList,
@@ -337,6 +343,18 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/admin/seo/minimal') {
     const body = await req.json().catch(() => ({}));
     return saveMinimalSEOSettings(env, body);
+  }
+
+  // ----- ANALYTICS SETTINGS (Search + Social Tracking) -----
+  // Allow admin to get and save third‑party analytics IDs (GA4, Facebook Pixel)
+  // and search engine verification codes. Settings are stored in a dedicated
+  // table and injected automatically into rendered HTML on the frontend.
+  if (method === 'GET' && path === '/api/admin/analytics') {
+    return getAnalyticsSettingsApi(env);
+  }
+  if (method === 'POST' && path === '/api/admin/analytics') {
+    const body = await req.json().catch(() => ({}));
+    return saveAnalyticsSettings(env, body);
   }
 
   // ----- NOINDEX PAGES (Hide from search results) -----
