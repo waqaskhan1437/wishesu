@@ -22,10 +22,14 @@ binding = "ASSETS"
 # routes, separate patterns for `/admin/login*` and `/admin/logout*`
 # are unnecessary and would be considered redundant by Wrangler.
 run_worker_first = [
-  "/api/*",    # All API routes
-  "/blog/*",   # Dynamic blog post pages
-  "/forum/*",  # Dynamic forum pages
-  "/admin/*"   # Catch-all for all admin routes (includes login/logout)
+  "/api/*",          # All API routes
+  "/blog/*",         # Dynamic blog post pages
+  "/forum/*",        # Dynamic forum pages
+  "/admin/*",        # Catch-all for all admin routes
+  "/product*",       # Product pages and product grid
+  "/download/*",     # Secure downloads
+  "/robots.txt",     # Dynamic robots.txt
+  "/sitemap.xml"     # Dynamic sitemap.xml
 ]
 
 # Serve the nearest 404.html for unknown paths that don't match a static

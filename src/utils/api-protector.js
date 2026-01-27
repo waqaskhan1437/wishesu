@@ -40,15 +40,16 @@ export function protectEndpoint(handler, permission = null) {
       // First check if this is a public endpoint (read-only data that's meant to be public)
       const publicReadEndpoints = [
         '/api/products',
-        '/reviews',
-        '/blogs',
-        '/bounpublished',
-        '/forum/questions',
-        '/forum/question/',
-        '/forum/question-replies',
-        '/forum/question-by-id',
-        '/forum/sidebar',
-        '/blog/comments/',
+        '/api/reviews',
+        '/api/blogs',
+        '/api/blog/published', // Fixed typo "bounpublished" to standard naming
+        '/api/forum/questions',
+        '/api/forum/question/',
+        '/api/forum/question-replies',
+        '/api/forum/question-by-id',
+        '/api/forum/sidebar',
+        '/api/blog/comments/',
+        '/api/coupons/active'
       ];
 
       // Allow public access to READ endpoints without authentication

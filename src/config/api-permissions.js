@@ -255,7 +255,11 @@ export function isPublicReadEndpoint(path, method) {
     path.startsWith('/api/blog/published/') ||
     path.startsWith('/api/blog/previous/') ||
     path === '/api/blog/comments' ||
+    path.startsWith('/api/blog/comments/') ||
     path === '/api/forum/published' ||
+    path === '/api/forum/questions' ||
+    path === '/api/forum/question-replies' ||
+    path === '/api/forum/question-by-id' ||
     path.startsWith('/api/forum/question/') ||
     path === '/api/forum/sidebar' ||
     path === '/api/coupons/active' ||
