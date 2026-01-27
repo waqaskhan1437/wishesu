@@ -23,9 +23,15 @@
   <link rel="preconnect" href="https://cdn.plyr.io" crossorigin>
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
   <link rel="preconnect" href="https://archive.org" crossorigin>
+
+  <!-- Preconnect to Whop checkout CDN for faster checkout script loading -->
+  <link rel="preconnect" href="https://js.whop.com" crossorigin>
   
   <!-- DNS prefetch for additional resources -->
   <link rel="dns-prefetch" href="https://ia800906.us.archive.org">
+
+  <!-- Prefetch Whop domain to establish DNS resolution early -->
+  <link rel="dns-prefetch" href="https://js.whop.com">
 
   <!-- Critical CSS inlined for FCP/LCP optimization -->
   <style>

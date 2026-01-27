@@ -402,21 +402,22 @@
 
   window.whopCheckout = openCheckout;
 
-  // OPTIMIZATION: Preload Whop script after page load to make checkout faster
-  // Use requestIdleCallback if available, otherwise setTimeout
+  // OPTIMIZATION: Preload Whop script as soon as possible to make checkout faster
+  // Use requestIdleCallback if available; fallback to a short timeout
   const preload = () => {
-    // Check if we are on a product page or specific page where checkout is likely
-    // Or just preload everywhere since it's a critical conversion action
     if (window.requestIdleCallback) {
       window.requestIdleCallback(() => loadWhopScript().catch(() => {}));
     } else {
-      setTimeout(() => loadWhopScript().catch(() => {}), 3000);
+      // Schedule soon after the page becomes interactive; 500ms delay balances
+      // not blocking critical rendering while avoiding long wait times
+      setTimeout(() => loadWhopScript().catch(() => {}), 500);
     }
   };
 
-  if (document.readyState === 'complete') {
+  // Trigger preload once DOM is interactive or complete
+  if (document.readyState === 'interactive' || document.readyState === 'complete') {
     preload();
   } else {
-    window.addEventListener('load', preload);
+    document.addEventListener('DOMContentLoaded', preload);
   }
 })();
