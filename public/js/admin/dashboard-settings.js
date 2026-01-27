@@ -3,9 +3,9 @@
  * Based on research: minimal, focused, user-friendly
  */
 
-(function(AD) {
-  
-  function toast(msg, ok=true) {
+(function (AD) {
+
+  function toast(msg, ok = true) {
     const el = document.getElementById('settings-toast');
     if (!el) return;
     el.textContent = msg;
@@ -14,9 +14,9 @@
     setTimeout(() => el.style.display = 'none', 3000);
   }
 
-  async function jfetch(url, opts={}) {
+  async function jfetch(url, opts = {}) {
     const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) },
+      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
       ...opts
     });
     if (!res.ok) throw new Error('Request failed');
@@ -65,51 +65,7 @@
         </div>
 
         <!-- Payment Settings Card -->
-        <div style="background:white;border-radius:16px;padding:25px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <h3 style="margin:0 0 20px;font-size:18px;color:#1f2937;">💳 Payment Settings</h3>
-          
-          <div style="display:grid;gap:20px;">
-            <div>
-              <label style="display:flex;align-items:center;cursor:pointer;margin-bottom:15px;">
-                <input id="enable-paypal" type="checkbox" style="width:20px;height:20px;margin-right:12px;cursor:pointer;">
-                <span style="font-weight:600;color:#374151;">Enable PayPal</span>
-              </label>
-              
-              <div id="paypal-settings" style="display:none;padding-left:32px;">
-                <div style="margin-bottom:15px;">
-                  <label style="display:block;margin-bottom:8px;font-size:14px;color:#374151;">PayPal Client ID</label>
-                  <input id="paypal-client-id" type="text" placeholder="AQ..."
-                    style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
-                </div>
-                <div>
-                  <label style="display:block;margin-bottom:8px;font-size:14px;color:#374151;">PayPal Secret</label>
-                  <input id="paypal-secret" type="password" placeholder="••••••••"
-                    style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label style="display:flex;align-items:center;cursor:pointer;margin-bottom:15px;">
-                <input id="enable-stripe" type="checkbox" style="width:20px;height:20px;margin-right:12px;cursor:pointer;">
-                <span style="font-weight:600;color:#374151;">Enable Stripe</span>
-              </label>
-              
-              <div id="stripe-settings" style="display:none;padding-left:32px;">
-                <div style="margin-bottom:15px;">
-                  <label style="display:block;margin-bottom:8px;font-size:14px;color:#374151;">Stripe Publishable Key</label>
-                  <input id="stripe-pub-key" type="text" placeholder="pk_test_..."
-                    style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
-                </div>
-                <div>
-                  <label style="display:block;margin-bottom:8px;font-size:14px;color:#374151;">Stripe Secret Key</label>
-                  <input id="stripe-secret-key" type="password" placeholder="sk_test_..."
-                    style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+<!-- Payment Settings Removed - Managed in Payment Tab -->
 
         <!-- Security Card -->
         <div style="background:white;border-radius:16px;padding:25px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
@@ -155,42 +111,20 @@
     descField.addEventListener('input', updateCount);
     updateCount();
 
-    // Toggle payment settings
-    const paypalToggle = panel.querySelector('#enable-paypal');
-    const paypalSettings = panel.querySelector('#paypal-settings');
-    const stripeToggle = panel.querySelector('#enable-stripe');
-    const stripeSettings = panel.querySelector('#stripe-settings');
-
-    paypalToggle.addEventListener('change', () => {
-      paypalSettings.style.display = paypalToggle.checked ? 'block' : 'none';
-    });
-
-    stripeToggle.addEventListener('change', () => {
-      stripeSettings.style.display = stripeToggle.checked ? 'block' : 'none';
-    });
-
     // Load current settings
     try {
       const data = await jfetch('/api/admin/settings/clean');
       const s = data.settings || {};
-      
+
       panel.querySelector('#site-title').value = s.site_title || '';
       panel.querySelector('#site-description').value = s.site_description || '';
       panel.querySelector('#admin-email').value = s.admin_email || '';
-      panel.querySelector('#enable-paypal').checked = s.enable_paypal || false;
-      panel.querySelector('#enable-stripe').checked = s.enable_stripe || false;
-      panel.querySelector('#paypal-client-id').value = s.paypal_client_id || '';
-      panel.querySelector('#paypal-secret').value = s.paypal_secret || '';
-      panel.querySelector('#stripe-pub-key').value = s.stripe_pub_key || '';
-      panel.querySelector('#stripe-secret-key').value = s.stripe_secret_key || '';
       panel.querySelector('#enable-rate-limit').checked = s.enable_rate_limit !== false; // Default true
       panel.querySelector('#rate-limit').value = s.rate_limit || 10;
 
-      // Trigger visibility
-      paypalToggle.dispatchEvent(new Event('change'));
-      stripeToggle.dispatchEvent(new Event('change'));
-      
+      updateCount();
       toast('✅ Settings loaded', true);
+    } catch (e) {
     } catch (e) {
       toast('❌ Failed to load settings', false);
     }
@@ -198,17 +132,12 @@
 
   async function saveCleanSettings() {
     const panel = document.getElementById('main-panel');
-    
+
     const settings = {
       site_title: panel.querySelector('#site-title').value.trim(),
       site_description: panel.querySelector('#site-description').value.trim(),
       admin_email: panel.querySelector('#admin-email').value.trim(),
-      enable_paypal: panel.querySelector('#enable-paypal').checked,
-      enable_stripe: panel.querySelector('#enable-stripe').checked,
-      paypal_client_id: panel.querySelector('#paypal-client-id').value.trim(),
-      paypal_secret: panel.querySelector('#paypal-secret').value.trim(),
-      stripe_pub_key: panel.querySelector('#stripe-pub-key').value.trim(),
-      stripe_secret_key: panel.querySelector('#stripe-secret-key').value.trim(),
+      // Payment settings removed - managed in Payment Tab
       enable_rate_limit: panel.querySelector('#enable-rate-limit').checked,
       rate_limit: parseInt(panel.querySelector('#rate-limit').value) || 10
     };
