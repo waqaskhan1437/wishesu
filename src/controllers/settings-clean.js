@@ -47,8 +47,112 @@ async function ensureTable(env) {
         rate_limit INTEGER DEFAULT 10
       )
     `).run();
+
+    // Add missing columns for older schemas
+    const columns = [
+      ['site_title', "TEXT DEFAULT ''"],
+      ['site_description', "TEXT DEFAULT ''"],
+      ['admin_email', "TEXT DEFAULT ''"],
+      ['enable_paypal', 'INTEGER DEFAULT 0'],
+      ['enable_stripe', 'INTEGER DEFAULT 0'],
+      ['paypal_client_id', "TEXT DEFAULT ''"],
+      ['paypal_secret', "TEXT DEFAULT ''"],
+      ['stripe_pub_key', "TEXT DEFAULT ''"],
+      ['stripe_secret_key', "TEXT DEFAULT ''"],
+      ['enable_rate_limit', 'INTEGER DEFAULT 1'],
+      ['rate_limit', 'INTEGER DEFAULT 10']
+    ];
+    for (const [col, def] of columns) {
+      try {
+        await env.DB.prepare(`ALTER TABLE clean_settings ADD COLUMN ${col} ${def}`).run();
+      } catch (e) {
+        // Column already exists, ignore
+      }
+    }
   } catch (e) {
     console.error('Settings table error:', e);
+  }
+}
+
+async function upsertCleanSettings(env, settings) {
+  await env.DB.prepare(`
+      INSERT OR REPLACE INTO clean_settings (
+        id, site_title, site_description, admin_email, enable_paypal, enable_stripe,
+        paypal_client_id, paypal_secret, stripe_pub_key, stripe_secret_key,
+        enable_rate_limit, rate_limit
+      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+    settings.site_title,
+    settings.site_description,
+    settings.admin_email,
+    settings.enable_paypal,
+    settings.enable_stripe,
+    settings.paypal_client_id,
+    settings.paypal_secret,
+    settings.stripe_pub_key,
+    settings.stripe_secret_key,
+    settings.enable_rate_limit,
+    settings.rate_limit
+  ).run();
+}
+
+async function migrateLegacyPayPalToClean(env, settings) {
+  let legacy = null;
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('paypal').first();
+    if (row?.value) {
+      legacy = JSON.parse(row.value);
+    }
+  } catch (e) {
+    return settings;
+  }
+
+  const cleanHasPayPal = !!(settings.paypal_client_id || settings.paypal_secret);
+  const legacyHasPayPal = !!(legacy && (legacy.client_id || legacy.secret));
+
+  if (cleanHasPayPal || !legacyHasPayPal) {
+    return settings;
+  }
+
+  const legacyEnabled = typeof legacy.enabled === 'boolean'
+    ? legacy.enabled
+    : !!(legacy.client_id || legacy.secret);
+
+  const migrated = {
+    ...settings,
+    enable_paypal: legacyEnabled ? 1 : 0,
+    paypal_client_id: legacy.client_id || '',
+    paypal_secret: legacy.secret || ''
+  };
+
+  try {
+    await upsertCleanSettings(env, migrated);
+  } catch (e) {
+    console.error('Failed to migrate legacy PayPal settings:', e);
+    return settings;
+  }
+
+  return migrated;
+}
+
+async function syncPayPalToLegacySettings(env, settings) {
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('paypal').first();
+    const legacy = row?.value ? JSON.parse(row.value) : {};
+
+    const merged = {
+      ...legacy,
+      client_id: settings.paypal_client_id || '',
+      secret: settings.paypal_secret || '',
+      enabled: !!settings.enable_paypal,
+      mode: legacy.mode || 'sandbox'
+    };
+
+    await env.DB.prepare(
+      'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
+    ).bind('paypal', JSON.stringify(merged)).run();
+  } catch (e) {
+    console.error('Failed to sync PayPal settings to legacy table:', e);
   }
 }
 
@@ -65,7 +169,9 @@ export async function getCleanSettings(env) {
 
   try {
     const row = await env.DB.prepare('SELECT * FROM clean_settings WHERE id = 1').first();
-    settingsCache = { ...DEFAULT_SETTINGS, ...(row || {}) };
+    let settings = { ...DEFAULT_SETTINGS, ...(row || {}) };
+    settings = await migrateLegacyPayPalToClean(env, settings);
+    settingsCache = settings;
     cacheTime = now;
     return settingsCache;
   } catch (e) {
@@ -122,25 +228,8 @@ export async function saveCleanSettingsApi(env, body) {
       settings.stripe_secret_key = current.stripe_secret_key;
     }
 
-    await env.DB.prepare(`
-      INSERT OR REPLACE INTO clean_settings (
-        id, site_title, site_description, admin_email, enable_paypal, enable_stripe,
-        paypal_client_id, paypal_secret, stripe_pub_key, stripe_secret_key,
-        enable_rate_limit, rate_limit
-      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      settings.site_title,
-      settings.site_description,
-      settings.admin_email,
-      settings.enable_paypal,
-      settings.enable_stripe,
-      settings.paypal_client_id,
-      settings.paypal_secret,
-      settings.stripe_pub_key,
-      settings.stripe_secret_key,
-      settings.enable_rate_limit,
-      settings.rate_limit
-    ).run();
+    await upsertCleanSettings(env, settings);
+    await syncPayPalToLegacySettings(env, settings);
 
     settingsCache = null; // Clear cache
 
