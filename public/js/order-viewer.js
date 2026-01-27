@@ -382,7 +382,9 @@
 
             const player = window.UniversalVideoPlayer || window.UniversalPlayer;
             if (player) {
-                player.render(playerContainer.id, order.delivered_video_url, videoMetadata);
+                // Merge allowDownload with existing metadata
+                const renderMetadata = { ...videoMetadata, allowDownload: true };
+                player.render(playerContainer.id, order.delivered_video_url, renderMetadata);
             }
         }
 

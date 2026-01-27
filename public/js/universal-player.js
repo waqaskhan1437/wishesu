@@ -132,7 +132,7 @@
   // Creates a thumbnail overlay with play button for iframe-based videos
   function createThumbnailOverlay(container, posterUrl, onPlay) {
     if (!posterUrl) return null;
-    
+
     const overlay = document.createElement('div');
     overlay.className = 'video-thumbnail-overlay';
     overlay.style.cssText = `
@@ -149,7 +149,7 @@
       justify-content: center;
       border-radius: 12px;
     `;
-    
+
     const playBtn = document.createElement('div');
     playBtn.className = 'video-play-btn';
     playBtn.style.cssText = `
@@ -167,24 +167,24 @@
         <path d="M8 5v14l11-7z"/>
       </svg>
     `;
-    
+
     overlay.appendChild(playBtn);
-    
+
     overlay.addEventListener('mouseenter', () => {
       playBtn.style.transform = 'scale(1.1)';
       playBtn.style.background = 'rgba(102, 126, 234, 0.9)';
     });
-    
+
     overlay.addEventListener('mouseleave', () => {
       playBtn.style.transform = 'scale(1)';
       playBtn.style.background = 'rgba(0, 0, 0, 0.7)';
     });
-    
+
     overlay.addEventListener('click', () => {
       overlay.style.display = 'none';
       if (typeof onPlay === 'function') onPlay();
     });
-    
+
     return overlay;
   }
 
@@ -319,7 +319,7 @@
 
       const token = Math.random().toString(36).slice(2);
       container.dataset.universalPlayerToken = token;
-      
+
       // Ensure container has relative positioning for overlay
       container.style.position = 'relative';
 
@@ -333,7 +333,7 @@
         container.innerHTML = '';
         container.appendChild(el);
       };
-      
+
       // Helper to add thumbnail overlay for iframe-based videos
       const addThumbnailOverlay = (iframeHtml, autoplayIframeHtml) => {
         // --- ADDED AUTOPLAY CHECK ---
@@ -382,7 +382,7 @@
             rel: '0',
             modestbranding: '1'
           });
-          
+
           const autoplayParams = new URLSearchParams({
             rel: '0',
             modestbranding: '1',
@@ -398,7 +398,7 @@
               allowfullscreen
               referrerpolicy="strict-origin-when-cross-origin"
             ></iframe>`;
-          
+
           const autoplayIframeHtml = `<iframe
               width="100%"
               height="100%"
@@ -434,7 +434,7 @@
               allow="autoplay; fullscreen; picture-in-picture"
               allowfullscreen
             ></iframe>`;
-          
+
           const vimeoAutoplayIframeHtml = `<iframe
               src="https://player.vimeo.com/video/${encodeURIComponent(video.id)}?autoplay=1"
               width="100%"
@@ -450,7 +450,7 @@
 
         case 'bunny-embed': {
           const embedUrl = (video.embedUrl || '').trim() || video.url;
-          
+
           const bunnyIframeHtml = `<iframe
               src="${embedUrl}"
               width="100%"
@@ -459,7 +459,7 @@
               allow="autoplay; fullscreen; picture-in-picture"
               allowfullscreen
             ></iframe>`;
-          
+
           const bunnyAutoplayIframeHtml = `<iframe
               src="${embedUrl}?autoplay=true"
               width="100%"
@@ -504,12 +504,18 @@
             videoEl.setAttribute('playsinline', '');
             videoEl.setAttribute('webkit-playsinline', '');
             videoEl.style.cssText = 'width: 100%; height: 100%; min-height: 200px; background: #000; border-radius: 12px;';
-            
-            // Disable download button but keep other controls
-            videoEl.controlsList = 'nodownload';
+
+            // Disable download button unless explicitly allowed
+            if (video.allowDownload) {
+              videoEl.controlsList = 'noplaybackrate'; // Allow download
+              videoEl.oncontextmenu = null; // Allow context menu
+            } else {
+              videoEl.controlsList = 'nodownload';
+              videoEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
+            }
+
             videoEl.disablePictureInPicture = true;
-            videoEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
-            
+
             // Add poster for direct Archive.org videos if NOT autoplaying
             const posterUrl = video.poster || video.thumbnailUrl || video.thumbnail_url;
             if (posterUrl && !video.autoplay) {
@@ -518,9 +524,9 @@
 
             // CHECK AUTOPLAY FOR DIRECT ARCHIVE
             if (video.autoplay) {
-                videoEl.autoplay = true;
-                // Important: Some browsers block autoplay if not muted, but since this is user-initiated (click), it should work.
-                // We don't force mute unless it fails.
+              videoEl.autoplay = true;
+              // Important: Some browsers block autoplay if not muted, but since this is user-initiated (click), it should work.
+              // We don't force mute unless it fails.
             }
 
             const source = document.createElement('source');
@@ -542,10 +548,10 @@
             };
 
             safeSetElement(videoEl);
-            
+
             // FIXED: Explicitly call play() for Archive direct links to ensure it starts
             if (video.autoplay) {
-                videoEl.play().catch(e => console.warn('Autoplay blocked:', e));
+              videoEl.play().catch(e => console.warn('Autoplay blocked:', e));
             }
             break;
           }
@@ -553,7 +559,7 @@
           // Use embed for non-direct URLs with thumbnail overlay
           const detailsUrl = `https://archive.org/details/${encodeURIComponent(itemId)}`;
           const embedUrl = `https://archive.org/embed/${encodeURIComponent(itemId)}`;
-          
+
           const archiveIframeHtml = `<iframe
               src="${embedUrl}?autostart=false"
               width="100%"
@@ -565,7 +571,7 @@
               <p>Your browser does not support iframes.
               <a href="${detailsUrl}" target="_blank" rel="noopener">View on Archive.org</a></p>
             </iframe>`;
-          
+
           // UPDATED: Added autoplay=1 and autostart=1 plus allow attributes
           const archiveAutoplayIframeHtml = `<iframe
               src="${embedUrl}?autoplay=1&autostart=1"
@@ -616,7 +622,7 @@
           }
 
           const poster = video.poster || video.thumbnailUrl || video.thumbnail_url;
-          
+
           // Function to create and show the video element
           const showVideoPlayer = (autoplay) => {
             const videoEl = document.createElement('video');
@@ -631,11 +637,17 @@
             videoEl.style.minHeight = '200px';
             videoEl.style.borderRadius = '12px';
             videoEl.style.background = '#000';
-            
-            // Disable download button but keep other controls visible
-            videoEl.controlsList = 'nodownload';
+
+            // Disable download button unless explicitly allowed
+            if (video.allowDownload) {
+              videoEl.controlsList = 'noplaybackrate'; // Allow download
+              videoEl.oncontextmenu = null; // Allow context menu
+            } else {
+              videoEl.controlsList = 'nodownload';
+              videoEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
+            }
+
             videoEl.disablePictureInPicture = true;
-            videoEl.oncontextmenu = (e) => { e.preventDefault(); return false; };
 
             if (poster) {
               videoEl.poster = poster;
@@ -643,7 +655,7 @@
 
             // CHECK AUTOPLAY
             if (autoplay) {
-                videoEl.autoplay = true;
+              videoEl.autoplay = true;
             }
 
             for (const s of sources) {
@@ -699,7 +711,7 @@
             });
 
             safeSetElement(videoEl);
-            
+
             // FIXED: Explicitly call play() to ensure it starts
             if (autoplay) {
               videoEl.play().catch(e => console.warn('Autoplay blocked:', e));
