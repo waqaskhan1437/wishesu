@@ -172,17 +172,20 @@
           const videoEl = document.createElement('video');
           videoEl.src = product.video_url;
           videoEl.controls = true;
-          videoEl.autoplay = true;
+          // Only load video metadata until the user initiates playback. According to MDN, setting
+          // preload to 'metadata' defers downloading large video files until needed, saving bandwidth【187715498598355†L270-L279】.
+          videoEl.preload = 'metadata';
+          // Disable autoplay so the video does not start downloading immediately on mobile.
+          videoEl.autoplay = false;
           videoEl.playsInline = true;
           videoEl.setAttribute('playsinline', '');
           videoEl.setAttribute('webkit-playsinline', '');
           videoEl.style.cssText = 'width:100%; height:100%; min-height:200px; border-radius:12px; background:#000;';
           videoEl.controlsList = 'nodownload';
-          
+
           playerContainer.appendChild(videoEl);
           
-          // Try to play
-          videoEl.play().catch(e => console.warn('Autoplay blocked:', e));
+          // Autoplay is disabled; the video will only download and play when the user taps play.
         } else {
           // Desktop - use UniversalVideoPlayer
           if (typeof window.UniversalVideoPlayer !== 'undefined') {

@@ -90,7 +90,8 @@
   <!-- Skip to main content for keyboard users -->
   <a href="#main-content" class="sr-only" style="position:absolute;top:-40px;left:0;background:#4f46e5;color:#fff;padding:8px 16px;z-index:100000;text-decoration:none;font-weight:600;" onfocus="this.style.top='0'" onblur="this.style.top='-40px'">Skip to main content</a>
   
-  <script src="/js/global-components.js"></script>
+  <!-- Load global components (header/footer) without blocking rendering -->
+  <script defer src="/js/global-components.js"></script>
 
   <main id="main-content">
     <nav class="breadcrumb" aria-label="Breadcrumb navigation">

@@ -498,8 +498,12 @@
             // Use HTML5 video player for direct URLs
             const videoEl = document.createElement('video');
             videoEl.controls = true;
-            // FIXED: Set preload to auto if autoplay is on, otherwise none
-            videoEl.preload = video.autoplay ? 'auto' : 'none';
+            /*
+             * Use 'metadata' preload for all direct videos to avoid downloading
+             * large files on initial render. MDN notes that setting preload to
+             * 'metadata' or 'none' defers the download until needed【187715498598355†L270-L279】.
+             */
+            videoEl.preload = 'metadata';
             videoEl.playsInline = true;
             videoEl.setAttribute('playsinline', '');
             videoEl.setAttribute('webkit-playsinline', '');
@@ -623,12 +627,17 @@
 
           const poster = video.poster || video.thumbnailUrl || video.thumbnail_url;
 
-          // Function to create and show the video element
+            // Function to create and show the video element
           const showVideoPlayer = (autoplay) => {
             const videoEl = document.createElement('video');
             videoEl.controls = true;
-            // FIXED: Set preload to auto if autoplay is on, otherwise auto
-            videoEl.preload = autoplay ? 'auto' : 'auto';
+            /*
+             * Always defer large video downloads until needed. MDN recommends
+             * setting preload to 'metadata' or 'none' for videos that might not
+             * be watched immediately【187715498598355†L270-L279】. Here we use 'metadata'
+             * to load only metadata and avoid fetching the entire file during initial render.
+             */
+            videoEl.preload = 'metadata';
             videoEl.playsInline = true;
             videoEl.setAttribute('playsinline', '');
             videoEl.setAttribute('webkit-playsinline', '');

@@ -148,7 +148,7 @@ fetch('${API}/api/products').then(r=>r.json()).then(d=>{
   const c=document.getElementById('shop-products');
   c.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:25px;">'+
     (d.products||[]).map(p=>\`<div style="background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);border:1px solid #e5e7eb">
-      <img src="\${p.thumbnail_url||'https://via.placeholder.com/300x160'}" style="width:100%;height:160px;object-fit:cover">
+      <img loading="lazy" src="\${p.thumbnail_url||'https://via.placeholder.com/300x160'}" style="width:100%;height:160px;object-fit:cover">
       <div style="padding:20px">
         <h3 style="font-size:1em;color:#1f2937;margin-bottom:8px">\${p.title}</h3>
         <div style="font-size:1.2em;font-weight:700;color:#10b981">$\${p.sale_price||p.normal_price}</div>
@@ -182,7 +182,7 @@ fetch('${API}/api/product/${firstProd?.id||1}').then(r=>r.json()).then(d=>{
   const p=d.product;
   document.getElementById('product-card-${firstProd?.id||1}').innerHTML=\`
     <div style="max-width:350px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);border:1px solid #e5e7eb">
-      <img src="\${p.thumbnail_url||'https://via.placeholder.com/350x180'}" style="width:100%;height:180px;object-fit:cover">
+      <img loading="lazy" src="\${p.thumbnail_url||'https://via.placeholder.com/350x180'}" style="width:100%;height:180px;object-fit:cover">
       <div style="padding:20px">
         <h3 style="font-size:1.1em;color:#1f2937;margin-bottom:8px">\${p.title}</h3>
         <div style="font-size:1.3em;font-weight:700;color:#10b981">$\${p.sale_price||p.normal_price}</div>
