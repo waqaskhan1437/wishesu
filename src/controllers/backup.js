@@ -23,7 +23,14 @@ function nowIso() {
 }
 
 function isInternalTable(name) {
-  return name.startsWith('sqlite_');
+  const n = String(name || '');
+  // Skip SQLite internal + Cloudflare system tables
+  return (
+    n.startsWith('sqlite_') ||
+    n.startsWith('_cf_') ||
+    n.includes(':') ||            // e.g. _cf_KV:key
+    n.startsWith('__')            // any other internal tables
+  );
 }
 
 function extractLinksFromValue(val) {
@@ -80,9 +87,10 @@ async function ensureBackupsTable(env) {
     .run();
 }
 
-async function listTables(env) {
+async async function listTables(env) {
+  // Only user tables (skip sqlite_ and Cloudflare internal)
   const res = await env.DB
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name")
     .all();
   const names = (res?.results || []).map((r) => r.name).filter((n) => !isInternalTable(n));
   return names.slice(0, MAX_TABLES);
