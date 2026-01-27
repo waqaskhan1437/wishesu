@@ -179,7 +179,7 @@ export async function createBackup(env) {
     const r2_key = `${BACKUP_PREFIX}${id}.json`;
 
     // Put into R2 (avoid D1 size limits)
-    await env.R2_BUCKET.put(r2_key, jsonStr, {
+    await BUCKET.put(r2_key, jsonStr, {
       httpMetadata: { contentType: 'application/json; charset=utf-8' },
     });
 
@@ -201,8 +201,10 @@ export async function downloadBackup(env, backupId) {
   try {
     await ensureBackupsTable(env);
 
-    if (!env.R2_BUCKET) {
-      return json({ ok: false, error: 'R2 binding missing (env.R2_BUCKET).' }, 500);
+    const BUCKET = getBackupBucket(env);
+
+    if (!BUCKET) {
+      return json({ ok: false, error: 'R2 bucket binding missing (R2_BUCKET/PRODUCT_MEDIA).' }, 500);
     }
 
     const row = await env.DB.prepare('SELECT id, r2_key FROM backups WHERE id = ?').bind(backupId).first();
@@ -210,7 +212,7 @@ export async function downloadBackup(env, backupId) {
       return json({ ok: false, error: 'Backup not found' }, 404);
     }
 
-    const obj = await env.R2_BUCKET.get(row.r2_key);
+    const obj = await BUCKET.get(row.r2_key);
     if (!obj) {
       return json({ ok: false, error: 'Backup file missing in storage' }, 404);
     }
@@ -280,7 +282,7 @@ export async function restoreBackup(env, body = {}) {
       const row = await env.DB.prepare('SELECT r2_key FROM backups WHERE id = ?').bind(body.backupId).first();
       if (!row || !row.r2_key) return json({ ok: false, error: 'Backup not found' }, 404);
 
-      const obj = await env.R2_BUCKET.get(row.r2_key);
+      const obj = await BUCKET.get(row.r2_key);
       if (!obj) return json({ ok: false, error: 'Backup file missing in storage' }, 404);
 
       backupObj = JSON.parse(await obj.text());
@@ -346,3 +348,8 @@ export async function sendBackupEmail(env, subject, text, attachmentName, attach
 
   return { ok: resp.ok, status: resp.status, body: resp.ok ? null : await resp.text().catch(() => null) };
 }
+function getBackupBucket(env) {
+  // Prefer dedicated backup bucket, fallback to PRODUCT_MEDIA if configured
+  return env.R2_BUCKET || env.PRODUCT_MEDIA || null;
+}
+
