@@ -125,7 +125,6 @@
       updateCount();
       toast('✅ Settings loaded', true);
     } catch (e) {
-    } catch (e) {
       toast('❌ Failed to load settings', false);
     }
   }

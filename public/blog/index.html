@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,6 +13,7 @@
       margin: 0;
       padding: 0;
     }
+
     .page-header {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
@@ -19,11 +21,13 @@
       padding: 60px 20px;
       margin-bottom: 40px;
     }
+
     .page-header h1 {
       margin: 0;
       font-size: 2.8rem;
       font-weight: 700;
     }
+
     .page-header p {
       margin: 15px 0 0;
       opacity: 0.9;
@@ -32,28 +36,31 @@
       margin-left: auto;
       margin-right: auto;
     }
+
     .blog-wrapper {
       max-width: 1200px;
       margin: 0 auto;
       padding: 0 20px 60px;
     }
-    
+
     /* Back to home link */
     .back-link {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      color: rgba(255,255,255,0.9);
+      color: rgba(255, 255, 255, 0.9);
       text-decoration: none;
       font-weight: 500;
       margin-bottom: 20px;
       transition: color 0.2s;
     }
+
     .back-link:hover {
       color: white;
     }
   </style>
 </head>
+
 <body>
   <script src="/js/global-components.js"></script>
   <div class="page-header">
@@ -61,18 +68,18 @@
     <h1>📝 Blog</h1>
     <p>Tips, tutorials, and updates from our team</p>
   </div>
-  
+
   <div class="blog-wrapper">
     <div id="blog-archive"></div>
   </div>
-  
+
   <script src="/js/blog-cards.js"></script>
-  <script src="/js/custom-css-loader.js"></script>
+
   <script>
     if (window.BlogCards) {
-      BlogCards.render('blog-archive', { 
+      BlogCards.render('blog-archive', {
         limit: 30,
-        columns: 3, 
+        columns: 3,
         showPagination: true
       });
     } else {
@@ -80,4 +87,5 @@
     }
   </script>
 </body>
+
 </html>

@@ -1,36 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Forum - Community</title>
   <meta name="description" content="Ask questions and get help from our community.">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; line-height: 1.6; }
-    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      line-height: 1.6;
+    }
+
     .forum-header {
       background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       color: white;
       padding: 40px 20px;
       text-align: center;
     }
-    .forum-header h1 { font-size: 2rem; margin-bottom: 8px; }
-    .forum-header p { opacity: 0.9; font-size: 1rem; }
+
+    .forum-header h1 {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    .forum-header p {
+      opacity: 0.9;
+      font-size: 1rem;
+    }
+
     .back-home {
       display: inline-block;
-      color: rgba(255,255,255,0.9);
+      color: rgba(255, 255, 255, 0.9);
       text-decoration: none;
       margin-bottom: 15px;
       font-size: 0.9rem;
     }
-    
+
     .forum-container {
       max-width: 800px;
       margin: 0 auto;
       padding: 20px;
     }
-    
+
     /* Questions List */
     .questions-header {
       display: flex;
@@ -39,7 +58,12 @@
       margin-bottom: 15px;
       padding: 0 5px;
     }
-    .questions-header h2 { font-size: 1.2rem; color: #1f2937; }
+
+    .questions-header h2 {
+      font-size: 1.2rem;
+      color: #1f2937;
+    }
+
     .total-badge {
       background: #10b981;
       color: white;
@@ -48,19 +72,26 @@
       font-size: 0.85rem;
       font-weight: 600;
     }
-    
-    .questions-list { display: flex; flex-direction: column; gap: 12px; }
-    
+
+    .questions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
     /* Question Card */
     .question-card {
       background: white;
       border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
       overflow: hidden;
       transition: all 0.2s;
     }
-    .question-card:hover { box-shadow: 0 4px 15px rgba(0,0,0,0.12); }
-    
+
+    .question-card:hover {
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+    }
+
     .question-header {
       padding: 15px;
       cursor: pointer;
@@ -68,8 +99,11 @@
       gap: 12px;
       align-items: flex-start;
     }
-    .question-header:hover { background: #f9fafb; }
-    
+
+    .question-header:hover {
+      background: #f9fafb;
+    }
+
     .q-avatar {
       width: 40px;
       height: 40px;
@@ -82,7 +116,12 @@
       font-weight: 700;
       flex-shrink: 0;
     }
-    .q-content { flex: 1; min-width: 0; }
+
+    .q-content {
+      flex: 1;
+      min-width: 0;
+    }
+
     .q-title {
       font-weight: 600;
       color: #1f2937;
@@ -90,18 +129,22 @@
       margin-bottom: 4px;
       display: -webkit-box;
       -webkit-line-clamp: 1;
+      line-clamp: 1;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
+
     .q-preview {
       color: #6b7280;
       font-size: 0.9rem;
       display: -webkit-box;
       -webkit-line-clamp: 2;
+      line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
       line-height: 1.4;
     }
+
     .q-meta {
       display: flex;
       gap: 12px;
@@ -109,7 +152,13 @@
       font-size: 0.8rem;
       color: #9ca3af;
     }
-    .q-meta span { display: flex; align-items: center; gap: 4px; }
+
+    .q-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
     .reply-count {
       background: #e0f2fe;
       color: #0369a1;
@@ -117,13 +166,17 @@
       border-radius: 10px;
       font-weight: 600;
     }
+
     .expand-icon {
       color: #9ca3af;
       font-size: 1.2rem;
       transition: transform 0.2s;
     }
-    .question-card.expanded .expand-icon { transform: rotate(180deg); }
-    
+
+    .question-card.expanded .expand-icon {
+      transform: rotate(180deg);
+    }
+
     /* Expanded Content */
     .question-expanded {
       max-height: 0;
@@ -131,10 +184,16 @@
       transition: max-height 0.3s ease;
       border-top: 1px solid #e5e7eb;
     }
+
     .question-card.expanded .question-expanded {
       max-height: 2000px;
     }
-    .expanded-content { padding: 15px; background: #f9fafb; }
+
+    .expanded-content {
+      padding: 15px;
+      background: #f9fafb;
+    }
+
     .full-question {
       background: white;
       padding: 15px;
@@ -144,15 +203,19 @@
       line-height: 1.6;
       white-space: pre-wrap;
     }
-    
+
     /* Replies */
-    .replies-section { margin-top: 15px; }
+    .replies-section {
+      margin-top: 15px;
+    }
+
     .replies-title {
       font-weight: 600;
       color: #1f2937;
       margin-bottom: 10px;
       font-size: 0.95rem;
     }
+
     .reply-item {
       background: white;
       padding: 12px;
@@ -160,17 +223,36 @@
       margin-bottom: 10px;
       border-left: 3px solid #10b981;
     }
+
     .reply-header {
       display: flex;
       justify-content: space-between;
       margin-bottom: 6px;
       font-size: 0.85rem;
     }
-    .reply-name { font-weight: 600; color: #1f2937; }
-    .reply-date { color: #9ca3af; }
-    .reply-content { color: #4b5563; font-size: 0.9rem; line-height: 1.5; }
-    .no-replies { color: #9ca3af; font-size: 0.9rem; text-align: center; padding: 15px; }
-    
+
+    .reply-name {
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .reply-date {
+      color: #9ca3af;
+    }
+
+    .reply-content {
+      color: #4b5563;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .no-replies {
+      color: #9ca3af;
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 15px;
+    }
+
     /* Reply Form */
     .reply-form {
       background: white;
@@ -178,13 +260,20 @@
       border-radius: 8px;
       margin-top: 15px;
     }
-    .reply-form h4 { font-size: 0.95rem; color: #1f2937; margin-bottom: 12px; }
+
+    .reply-form h4 {
+      font-size: 0.95rem;
+      color: #1f2937;
+      margin-bottom: 12px;
+    }
+
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
       margin-bottom: 10px;
     }
+
     .form-group input,
     .form-group textarea {
       width: 100%;
@@ -194,12 +283,18 @@
       font-size: 0.9rem;
       font-family: inherit;
     }
+
     .form-group input:focus,
     .form-group textarea:focus {
       outline: none;
       border-color: #10b981;
     }
-    .form-group textarea { min-height: 80px; resize: vertical; }
+
+    .form-group textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
     .reply-submit {
       width: 100%;
       padding: 10px;
@@ -211,8 +306,16 @@
       cursor: pointer;
       font-size: 0.9rem;
     }
-    .reply-submit:hover { background: #059669; }
-    .reply-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .reply-submit:hover {
+      background: #059669;
+    }
+
+    .reply-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .reply-message {
       padding: 10px;
       border-radius: 6px;
@@ -220,17 +323,28 @@
       font-size: 0.9rem;
       display: none;
     }
-    .reply-message.success { background: #d1fae5; color: #065f46; display: block; }
-    .reply-message.error { background: #fee2e2; color: #991b1b; display: block; }
-    
+
+    .reply-message.success {
+      background: #d1fae5;
+      color: #065f46;
+      display: block;
+    }
+
+    .reply-message.error {
+      background: #fee2e2;
+      color: #991b1b;
+      display: block;
+    }
+
     /* Ask Question Section - Bottom */
     .ask-section {
       background: white;
       border-radius: 10px;
       margin-top: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
       overflow: hidden;
     }
+
     .ask-btn {
       width: 100%;
       padding: 15px;
@@ -246,17 +360,35 @@
       gap: 8px;
       transition: background 0.2s;
     }
-    .ask-btn:hover { background: #f0fdf4; }
-    .ask-btn.active { background: #10b981; color: white; }
-    
+
+    .ask-btn:hover {
+      background: #f0fdf4;
+    }
+
+    .ask-btn.active {
+      background: #10b981;
+      color: white;
+    }
+
     .ask-form {
       max-height: 0;
       overflow: hidden;
       transition: max-height 0.3s ease;
     }
-    .ask-form.open { max-height: 500px; }
-    .ask-form-inner { padding: 20px; border-top: 1px solid #e5e7eb; }
-    .ask-form-inner .form-group { margin-bottom: 12px; }
+
+    .ask-form.open {
+      max-height: 500px;
+    }
+
+    .ask-form-inner {
+      padding: 20px;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .ask-form-inner .form-group {
+      margin-bottom: 12px;
+    }
+
     .ask-form-inner label {
       display: block;
       font-weight: 600;
@@ -264,6 +396,7 @@
       margin-bottom: 5px;
       font-size: 0.9rem;
     }
+
     .ask-submit {
       width: 100%;
       padding: 12px;
@@ -275,8 +408,16 @@
       cursor: pointer;
       font-size: 1rem;
     }
-    .ask-submit:hover { opacity: 0.9; }
-    .ask-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .ask-submit:hover {
+      opacity: 0.9;
+    }
+
+    .ask-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .ask-message {
       padding: 12px;
       border-radius: 6px;
@@ -284,9 +425,19 @@
       font-size: 0.9rem;
       display: none;
     }
-    .ask-message.success { background: #d1fae5; color: #065f46; display: block; }
-    .ask-message.error { background: #fee2e2; color: #991b1b; display: block; }
-    
+
+    .ask-message.success {
+      background: #d1fae5;
+      color: #065f46;
+      display: block;
+    }
+
+    .ask-message.error {
+      background: #fee2e2;
+      color: #991b1b;
+      display: block;
+    }
+
     /* Pagination */
     .pagination {
       display: flex;
@@ -295,6 +446,7 @@
       margin-top: 20px;
       flex-wrap: wrap;
     }
+
     .page-btn {
       padding: 8px 14px;
       border: 1px solid #e5e7eb;
@@ -305,16 +457,31 @@
       color: #374151;
       font-size: 0.9rem;
     }
-    .page-btn:hover:not(:disabled) { border-color: #10b981; color: #10b981; }
-    .page-btn.active { background: #10b981; border-color: #10b981; color: white; }
-    .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    
+
+    .page-btn:hover:not(:disabled) {
+      border-color: #10b981;
+      color: #10b981;
+    }
+
+    .page-btn.active {
+      background: #10b981;
+      border-color: #10b981;
+      color: white;
+    }
+
+    .page-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     /* Loading & Empty */
-    .loading, .no-questions {
+    .loading,
+    .no-questions {
       text-align: center;
       padding: 40px 20px;
       color: #6b7280;
     }
+
     .loading-spinner {
       width: 30px;
       height: 30px;
@@ -324,14 +491,25 @@
       animation: spin 1s linear infinite;
       margin: 0 auto 10px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
     @media (max-width: 600px) {
-      .form-row { grid-template-columns: 1fr; }
-      .q-meta { flex-wrap: wrap; }
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .q-meta {
+        flex-wrap: wrap;
+      }
     }
   </style>
 </head>
+
 <body>
   <script src="/js/global-components.js"></script>
   <div class="forum-header">
@@ -339,14 +517,14 @@
     <h1>💬 Community Forum</h1>
     <p>Ask questions and get help from our community</p>
   </div>
-  
+
   <div class="forum-container">
     <!-- Questions Header -->
     <div class="questions-header">
       <h2>Questions</h2>
       <span class="total-badge" id="total-count">0</span>
     </div>
-    
+
     <!-- Questions List -->
     <div id="questions-container">
       <div class="loading">
@@ -354,10 +532,10 @@
         <p>Loading...</p>
       </div>
     </div>
-    
+
     <!-- Pagination -->
     <div id="pagination" class="pagination"></div>
-    
+
     <!-- Ask Question Section - Bottom -->
     <div class="ask-section">
       <button type="button" class="ask-btn" id="ask-btn">
@@ -379,13 +557,17 @@
             </div>
             <div class="form-group">
               <label>Question Title <small style="color:#6b7280;font-weight:normal">(5-200 chars)</small></label>
-              <input type="text" id="q-title" placeholder="What's your question?" required minlength="5" maxlength="200">
-              <div style="text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px"><span id="title-count">0</span>/200</div>
+              <input type="text" id="q-title" placeholder="What's your question?" required minlength="5"
+                maxlength="200">
+              <div style="text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px"><span
+                  id="title-count">0</span>/200</div>
             </div>
             <div class="form-group">
               <label>Details <small style="color:#6b7280;font-weight:normal">(10-2000 chars)</small></label>
-              <textarea id="q-content" placeholder="Provide more details..." required minlength="10" maxlength="2000"></textarea>
-              <div style="text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px"><span id="content-count">0</span>/2000</div>
+              <textarea id="q-content" placeholder="Provide more details..." required minlength="10"
+                maxlength="2000"></textarea>
+              <div style="text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px"><span
+                  id="content-count">0</span>/2000</div>
             </div>
             <button type="submit" class="ask-submit" id="ask-submit">Submit Question</button>
           </form>
@@ -393,26 +575,26 @@
       </div>
     </div>
   </div>
-  
+
   <script>
     let currentPage = 1;
     const limit = 20;
     let expandedQuestionId = null;
     let questionsCache = {};
-    
+
     // Character counters
-    document.getElementById('q-title').addEventListener('input', function() {
+    document.getElementById('q-title').addEventListener('input', function () {
       document.getElementById('title-count').textContent = this.value.length;
     });
-    document.getElementById('q-content').addEventListener('input', function() {
+    document.getElementById('q-content').addEventListener('input', function () {
       document.getElementById('content-count').textContent = this.value.length;
     });
-    
+
     // Load questions
     loadQuestions();
-    
+
     // Toggle ask form
-    document.getElementById('ask-btn').addEventListener('click', function() {
+    document.getElementById('ask-btn').addEventListener('click', function () {
       const form = document.getElementById('ask-form');
       const btn = this;
       if (form.classList.contains('open')) {
@@ -425,28 +607,28 @@
         btn.innerHTML = '<span>✕</span> Close';
       }
     });
-    
+
     // Submit question
-    document.getElementById('question-form').addEventListener('submit', async function(e) {
+    document.getElementById('question-form').addEventListener('submit', async function (e) {
       e.preventDefault();
       const btn = document.getElementById('ask-submit');
       const msg = document.getElementById('ask-message');
-      
+
       const data = {
         name: document.getElementById('q-name').value.trim(),
         email: document.getElementById('q-email').value.trim(),
         title: document.getElementById('q-title').value.trim(),
         content: document.getElementById('q-content').value.trim()
       };
-      
+
       if (!data.name || !data.email || !data.title || !data.content) {
         showMsg(msg, 'Please fill all fields', 'error');
         return;
       }
-      
+
       btn.disabled = true;
       btn.textContent = 'Submitting...';
-      
+
       try {
         const res = await fetch('/api/forum/submit-question', {
           method: 'POST',
@@ -454,7 +636,7 @@
           body: JSON.stringify(data)
         });
         const result = await res.json();
-        
+
         if (result.success) {
           showMsg(msg, '✅ Question submitted! It will appear after approval.', 'success');
           this.reset();
@@ -469,29 +651,29 @@
       } catch (err) {
         showMsg(msg, 'Error. Try again.', 'error');
       }
-      
+
       btn.disabled = false;
       btn.textContent = 'Submit Question';
     });
-    
+
     async function loadQuestions(page = 1) {
       currentPage = page;
       const container = document.getElementById('questions-container');
-      
+
       try {
         const res = await fetch(`/api/forum/questions?page=${page}&limit=${limit}`);
         const data = await res.json();
-        
+
         if (data.questions && data.questions.length > 0) {
           document.getElementById('total-count').textContent = data.pagination.total;
-          
+
           // Cache questions
           data.questions.forEach(q => questionsCache[q.id] = q);
-          
-          container.innerHTML = '<div class="questions-list">' + 
-            data.questions.map(q => renderQuestionCard(q)).join('') + 
-          '</div>';
-          
+
+          container.innerHTML = '<div class="questions-list">' +
+            data.questions.map(q => renderQuestionCard(q)).join('') +
+            '</div>';
+
           renderPagination(data.pagination);
         } else {
           container.innerHTML = '<div class="no-questions"><p>No questions yet. Be the first to ask!</p></div>';
@@ -501,13 +683,13 @@
         container.innerHTML = '<div class="no-questions"><p style="color:#ef4444;">Error loading questions</p></div>';
       }
     }
-    
+
     function renderQuestionCard(q) {
       const date = q.created_at ? new Date(q.created_at).toLocaleDateString('en-US', {
         month: 'short', day: 'numeric'
       }) : '';
       const initial = (q.name || 'A').charAt(0).toUpperCase();
-      
+
       return `
         <div class="question-card" id="qcard-${q.id}">
           <div class="question-header" onclick="toggleQuestion(${q.id})">
@@ -551,16 +733,16 @@
         </div>
       `;
     }
-    
+
     async function toggleQuestion(id) {
       const card = document.getElementById('qcard-' + id);
       const wasExpanded = card.classList.contains('expanded');
-      
+
       // Close all other questions
       document.querySelectorAll('.question-card.expanded').forEach(c => {
         c.classList.remove('expanded');
       });
-      
+
       if (!wasExpanded) {
         card.classList.add('expanded');
         expandedQuestionId = id;
@@ -569,21 +751,21 @@
         expandedQuestionId = null;
       }
     }
-    
+
     async function loadReplies(questionId) {
       const container = document.getElementById('replies-' + questionId);
-      
+
       try {
         const res = await fetch(`/api/forum/question-replies?question_id=${questionId}`);
         const data = await res.json();
-        
+
         if (data.replies && data.replies.length > 0) {
           container.innerHTML = `
             <div class="replies-section">
               <div class="replies-title">💬 ${data.replies.length} Replies</div>
               ${data.replies.map(r => {
-                const date = r.created_at ? new Date(r.created_at).toLocaleDateString() : '';
-                return `
+            const date = r.created_at ? new Date(r.created_at).toLocaleDateString() : '';
+            return `
                   <div class="reply-item">
                     <div class="reply-header">
                       <span class="reply-name">${escapeHtml(r.name)}</span>
@@ -592,7 +774,7 @@
                     <div class="reply-content">${escapeHtml(r.content)}</div>
                   </div>
                 `;
-              }).join('')}
+          }).join('')}
             </div>
           `;
         } else {
@@ -602,27 +784,27 @@
         container.innerHTML = '<div class="no-replies">Error loading replies</div>';
       }
     }
-    
+
     async function submitReply(e, questionId) {
       e.preventDefault();
       const btn = document.getElementById('rbtn-' + questionId);
       const msg = document.getElementById('reply-msg-' + questionId);
-      
+
       const data = {
         question_id: questionId,
         name: document.getElementById('rname-' + questionId).value.trim(),
         email: document.getElementById('remail-' + questionId).value.trim(),
         content: document.getElementById('rcontent-' + questionId).value.trim()
       };
-      
+
       if (!data.name || !data.email || !data.content) {
         showMsg(msg, 'Fill all fields', 'error');
         return;
       }
-      
+
       btn.disabled = true;
       btn.textContent = 'Submitting...';
-      
+
       try {
         const res = await fetch('/api/forum/submit-reply', {
           method: 'POST',
@@ -630,7 +812,7 @@
           body: JSON.stringify(data)
         });
         const result = await res.json();
-        
+
         if (result.success) {
           showMsg(msg, '✅ Reply submitted! Will appear after approval.', 'success');
           document.getElementById('rcontent-' + questionId).value = '';
@@ -640,32 +822,32 @@
       } catch (err) {
         showMsg(msg, 'Error. Try again.', 'error');
       }
-      
+
       btn.disabled = false;
       btn.textContent = 'Submit Reply';
     }
-    
+
     function renderPagination(p) {
       const container = document.getElementById('pagination');
       if (p.totalPages <= 1) {
         container.innerHTML = '';
         return;
       }
-      
+
       let html = `<button class="page-btn" onclick="loadQuestions(${p.page - 1})" ${!p.hasPrev ? 'disabled' : ''}>←</button>`;
-      
+
       const start = Math.max(1, p.page - 2);
       const end = Math.min(p.totalPages, p.page + 2);
-      
+
       for (let i = start; i <= end; i++) {
         html += `<button class="page-btn ${i === p.page ? 'active' : ''}" onclick="loadQuestions(${i})">${i}</button>`;
       }
-      
+
       html += `<button class="page-btn" onclick="loadQuestions(${p.page + 1})" ${!p.hasNext ? 'disabled' : ''}>→</button>`;
-      
+
       container.innerHTML = html;
     }
-    
+
     function showMsg(el, text, type) {
       el.textContent = text;
       el.className = 'reply-message ' + type;
@@ -673,7 +855,7 @@
       el.style.display = 'block';
       if (type === 'success') setTimeout(() => el.style.display = 'none', 4000);
     }
-    
+
     function escapeHtml(text) {
       if (!text) return '';
       const div = document.createElement('div');
@@ -681,6 +863,7 @@
       return div.innerHTML;
     }
   </script>
-  <script src="/js/custom-css-loader.js"></script>
+
 </body>
+
 </html>

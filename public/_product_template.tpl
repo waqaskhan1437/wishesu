@@ -152,6 +152,6 @@
   <script src="/js/product/checkout.js" defer></script>
   <script src="/js/product/main.js" defer></script>
   <script src="/js/chat-widget.js" defer></script>
-  <script src="/js/custom-css-loader.js" defer></script>
+
 </body>
 </html>

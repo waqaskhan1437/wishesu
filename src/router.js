@@ -7,59 +7,59 @@ import { json } from './utils/response.js';
 import { initDB } from './config/db.js';
 
 // Products
-import { 
-  getProducts, 
-  getProductsList, 
-  getProduct, 
+import {
+  getProducts,
+  getProductsList,
+  getProduct,
   getAdjacentProducts,
-  saveProduct, 
-  deleteProduct, 
-  updateProductStatus, 
+  saveProduct,
+  deleteProduct,
+  updateProductStatus,
   duplicateProduct
 } from './controllers/products.js';
 
 // Orders
-import { 
-  getOrders, 
-  createOrder, 
+import {
+  getOrders,
+  createOrder,
   createManualOrder,
-  getBuyerOrder, 
-  deleteOrder, 
-  updateOrder, 
-  deliverOrder, 
-  requestRevision, 
-  updatePortfolio, 
+  getBuyerOrder,
+  deleteOrder,
+  updateOrder,
+  deliverOrder,
+  requestRevision,
+  updatePortfolio,
   updateArchiveLink,
   markTipPaid
 } from './controllers/orders.js';
 
 // Reviews
-import { 
-  getReviews, 
-  getProductReviews, 
-  addReview, 
-  updateReview, 
-  deleteReview 
+import {
+  getReviews,
+  getProductReviews,
+  addReview,
+  updateReview,
+  deleteReview
 } from './controllers/reviews.js';
 
 // Chat
-import { 
-  startChat, 
-  syncChat, 
-  sendMessage, 
-  blockSession, 
-  deleteSession, 
-  getSessions 
+import {
+  startChat,
+  syncChat,
+  sendMessage,
+  blockSession,
+  deleteSession,
+  getSessions
 } from './controllers/chat.js';
 
 // Whop
-import { 
-  createCheckout, 
-  createPlanCheckout, 
-  handleWebhook, 
-  testApi as testWhopApi, 
-  testWebhook as testWhopWebhook, 
-  cleanupExpired 
+import {
+  createCheckout,
+  createPlanCheckout,
+  handleWebhook,
+  testApi as testWhopApi,
+  testWebhook as testWhopWebhook,
+  cleanupExpired
 } from './controllers/whop.js';
 
 // PayPal
@@ -83,7 +83,7 @@ import {
 } from './controllers/payment-gateway.js';
 
 // Universal Payment System (2025)
-import { 
+import {
   handleUniversalPaymentAPI,
   handleUniversalWebhook,
   handleAddPaymentGateway,
@@ -94,21 +94,21 @@ import {
 } from './controllers/payment-universal.js';
 
 // Pages
-import { 
-  getPages, 
-  getPagesList, 
-  getPage, 
+import {
+  getPages,
+  getPagesList,
+  getPage,
   getDefaultPage,
   setDefaultPage,
   clearDefaultPage,
-  savePage, 
-  savePageBuilder, 
-  deletePage, 
-  deletePageBySlug, 
+  savePage,
+  savePageBuilder,
+  deletePage,
+  deletePageBySlug,
   updatePageStatus,
   updatePageType,
-  duplicatePage, 
-  loadPageBuilder 
+  duplicatePage,
+  loadPageBuilder
 } from './controllers/pages.js';
 
 // Blog
@@ -283,7 +283,7 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (!env.DB) {
     return json({ error: 'Database not configured' }, 500);
   }
-  
+
   // Initialize DB once for all subsequent routes (optimization)
   await initDB(env);
 
@@ -527,161 +527,10 @@ export async function routeApiRequest(req, env, url, path, method) {
     return getPaymentMethodsStatus(env);
   }
 
-  // ----- UNIVERSAL CUSTOM CSS -----
-  if (method === 'GET' && path === '/api/settings/custom-css') {
-    try {
-      const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('custom_css').first();
-      if (row && row.value) {
-        const settings = JSON.parse(row.value);
-        return new Response(JSON.stringify({ success: true, settings }), {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=60, s-maxage=300'
-          }
-        });
-      }
-      return new Response(JSON.stringify({ success: true, settings: {} }), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=60, s-maxage=300'
-        }
-      });
-    } catch (err) {
-      return json({ success: true, settings: {} });
-    }
-  }
+  // ----- UNIVERSAL CUSTOM CSS & CODE EDITOR (REMOVED) -----
+  // Custom code handling removed as part of settings cleanup.
 
-  if (method === 'POST' && path === '/api/settings/custom-css') {
-    try {
-      const body = await req.json();
-      const value = JSON.stringify(body);
-      await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('custom_css', value).run();
-      return json({ success: true, cacheCleared: true });
-    } catch (err) {
-      return json({ error: err.message }, 500);
-    }
-  }
 
-  // ----- UNIVERSAL CODE EDITOR -----
-  if (method === 'GET' && path === '/api/settings/code-snippets') {
-    try {
-      const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('code_snippets').first();
-      if (row && row.value) {
-        const snippets = JSON.parse(row.value);
-        return new Response(JSON.stringify({ success: true, snippets }), {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=60, s-maxage=300'
-          }
-        });
-      }
-      return new Response(JSON.stringify({ success: true, snippets: [] }), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=60, s-maxage=300'
-        }
-      });
-    } catch (err) {
-      return json({ success: true, snippets: [] });
-    }
-  }
-
-  if (method === 'POST' && path === '/api/settings/code-snippets') {
-    try {
-      const body = await req.json();
-      const value = JSON.stringify(body.snippets || []);
-      await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('code_snippets', value).run();
-      return json({ success: true });
-    } catch (err) {
-      return json({ error: err.message }, 500);
-    }
-  }
-
-  // Public endpoint to get active code snippets - CACHED for performance
-  if (method === 'GET' && path === '/api/public/code-snippets') {
-    try {
-      const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('code_snippets').first();
-      if (row && row.value) {
-        const snippets = JSON.parse(row.value);
-        const pageType = url.searchParams.get('page') || 'all';
-        const position = url.searchParams.get('position') || 'all';
-        
-        // Filter active snippets for the requested page and position
-        const filtered = snippets.filter(s => {
-          if (!s.enabled) return false;
-          if (position !== 'all' && s.position !== position) return false;
-          if (s.pages.includes('all')) return true;
-          if (pageType !== 'all' && s.pages.includes(pageType)) return true;
-          return false;
-        });
-        
-        return new Response(JSON.stringify({ success: true, snippets: filtered }), {
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=300, s-maxage=600',
-            'CDN-Cache-Control': 'public, max-age=600'
-          }
-        });
-      }
-      return new Response(JSON.stringify({ success: true, snippets: [] }), {
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=300, s-maxage=600'
-        }
-      });
-    } catch (err) {
-      return new Response(JSON.stringify({ success: true, snippets: [] }), {
-        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' }
-      });
-    }
-  }
-
-  // Public endpoint to get CSS for frontend injection - CACHED for performance
-  if (method === 'GET' && path === '/api/public/custom-css') {
-    try {
-      const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('custom_css').first();
-      if (row && row.value) {
-        const settings = JSON.parse(row.value);
-        const section = url.searchParams.get('section') || 'all';
-        
-        let css = '';
-        if (section === 'all' || section === 'global') {
-          css += settings.global || '';
-        }
-        if (section === 'all' || section === 'product') {
-          css += '\n' + (settings.product || '');
-        }
-        if (section === 'all' || section === 'blog') {
-          css += '\n' + (settings.blog || '');
-        }
-        if (section === 'all' || section === 'forum') {
-          css += '\n' + (settings.forum || '');
-        }
-        
-        return new Response(css.trim(), {
-          headers: {
-            'Content-Type': 'text/css',
-            'Cache-Control': 'public, max-age=300, s-maxage=600',
-            'CDN-Cache-Control': 'public, max-age=600'
-          }
-        });
-      }
-      return new Response('', { 
-        headers: { 
-          'Content-Type': 'text/css',
-          'Cache-Control': 'public, max-age=300, s-maxage=600'
-        } 
-      });
-    } catch (err) {
-      return new Response('', { 
-        headers: { 
-          'Content-Type': 'text/css',
-          'Cache-Control': 'public, max-age=60'
-        } 
-      });
-    }
-  }
-  
   if (method === 'POST' && path === '/api/settings/payment-methods') {
     const body = await req.json();
     return savePaymentMethodsEnabled(env, body);
@@ -1075,7 +924,7 @@ export async function routeApiRequest(req, env, url, path, method) {
           FROM blog_comments
           GROUP BY LOWER(email)
         `).all().catch(() => ({ results: [] })),
-        
+
         // Get emails from forum_questions
         env.DB.prepare(`
           SELECT 
@@ -1087,7 +936,7 @@ export async function routeApiRequest(req, env, url, path, method) {
           WHERE email IS NOT NULL AND email != ''
           GROUP BY LOWER(email)
         `).all().catch(() => ({ results: [] })),
-        
+
         // Get emails from forum_replies
         env.DB.prepare(`
           SELECT 
@@ -1099,16 +948,16 @@ export async function routeApiRequest(req, env, url, path, method) {
           WHERE email IS NOT NULL AND email != ''
           GROUP BY LOWER(email)
         `).all().catch(() => ({ results: [] })),
-        
+
         // Get orders for email extraction
         env.DB.prepare(`
           SELECT id, order_id, encrypted_data, created_at FROM orders
         `).all().catch(() => ({ results: [] }))
       ]);
-      
+
       // Build user map
       const userMap = new Map();
-      
+
       // Add comment users
       for (const u of (commentUsers.results || [])) {
         if (!u.email) continue;
@@ -1128,7 +977,7 @@ export async function routeApiRequest(req, env, url, path, method) {
         user.name = user.name || u.name || '';
         if (u.last_activity > user.last_activity) user.last_activity = u.last_activity;
       }
-      
+
       // Add forum question users
       for (const u of (forumQUsers.results || [])) {
         if (!u.email) continue;
@@ -1148,7 +997,7 @@ export async function routeApiRequest(req, env, url, path, method) {
         user.name = user.name || u.name || '';
         if (u.last_activity > user.last_activity) user.last_activity = u.last_activity;
       }
-      
+
       // Add forum reply users
       for (const u of (forumRUsers.results || [])) {
         if (!u.email) continue;
@@ -1168,7 +1017,7 @@ export async function routeApiRequest(req, env, url, path, method) {
         user.name = user.name || u.name || '';
         if (u.last_activity > user.last_activity) user.last_activity = u.last_activity;
       }
-      
+
       // Extract emails from orders encrypted_data
       for (const o of (orders.results || [])) {
         try {
@@ -1194,14 +1043,14 @@ export async function routeApiRequest(req, env, url, path, method) {
               if (orderTime > user.last_activity) user.last_activity = orderTime;
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
-      
+
       // Convert to array and sort
       const users = Array.from(userMap.values())
         .filter(u => u.email)
         .sort((a, b) => (b.last_activity || 0) - (a.last_activity || 0));
-      
+
       return json({
         success: true,
         users: users,
@@ -1219,7 +1068,7 @@ export async function routeApiRequest(req, env, url, path, method) {
       if (!email) {
         return json({ error: 'Email required' }, 400);
       }
-      
+
       // Run all queries in parallel for better CPU efficiency
       const [comments, forumQuestions, forumReplies, allOrders] = await Promise.all([
         // Get blog comments
@@ -1230,14 +1079,14 @@ export async function routeApiRequest(req, env, url, path, method) {
           WHERE LOWER(c.email) = ?
           ORDER BY c.created_at DESC
         `).bind(email).all().catch(() => ({ results: [] })),
-        
+
         // Get forum questions
         env.DB.prepare(`
           SELECT * FROM forum_questions
           WHERE LOWER(email) = ?
           ORDER BY created_at DESC
         `).bind(email).all().catch(() => ({ results: [] })),
-        
+
         // Get forum replies
         env.DB.prepare(`
           SELECT r.*, q.title as question_title, q.slug as question_slug
@@ -1246,13 +1095,13 @@ export async function routeApiRequest(req, env, url, path, method) {
           WHERE LOWER(r.email) = ?
           ORDER BY r.created_at DESC
         `).bind(email).all().catch(() => ({ results: [] })),
-        
+
         // Get orders
         env.DB.prepare(`
           SELECT * FROM orders ORDER BY created_at DESC
         `).all().catch(() => ({ results: [] }))
       ]);
-      
+
       // Filter orders by email
       const userOrders = [];
       for (const o of (allOrders.results || [])) {
@@ -1268,9 +1117,9 @@ export async function routeApiRequest(req, env, url, path, method) {
               });
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
-      
+
       return json({
         success: true,
         email: email,
@@ -1553,14 +1402,14 @@ export async function routeApiRequest(req, env, url, path, method) {
       if (!Array.isArray(blogs)) {
         return json({ error: 'Invalid data format' }, 400);
       }
-      
+
       const now = Date.now();
       const validBlogs = blogs.filter(b => b.title);
-      
+
       // Process in batches of 10 for better performance
       const batchSize = 10;
       let imported = 0;
-      
+
       for (let i = 0; i < validBlogs.length; i += batchSize) {
         const batch = validBlogs.slice(i, i + batchSize);
         await Promise.all(batch.map(b =>
@@ -1576,7 +1425,7 @@ export async function routeApiRequest(req, env, url, path, method) {
         ));
         imported += batch.length;
       }
-      
+
       return json({ success: true, imported });
     } catch (err) {
       return json({ error: err.message }, 500);
@@ -1590,13 +1439,13 @@ export async function routeApiRequest(req, env, url, path, method) {
       if (!Array.isArray(products)) {
         return json({ error: 'Invalid data format' }, 400);
       }
-      
+
       const validProducts = products.filter(p => p.title);
-      
+
       // Process in batches of 10 for better performance
       const batchSize = 10;
       let imported = 0;
-      
+
       for (let i = 0; i < validProducts.length; i += batchSize) {
         const batch = validProducts.slice(i, i + batchSize);
         await Promise.all(batch.map(p => {
@@ -1614,7 +1463,7 @@ export async function routeApiRequest(req, env, url, path, method) {
         }));
         imported += batch.length;
       }
-      
+
       return json({ success: true, imported });
     } catch (err) {
       return json({ error: err.message }, 500);
@@ -1628,13 +1477,13 @@ export async function routeApiRequest(req, env, url, path, method) {
       if (!Array.isArray(pages)) {
         return json({ error: 'Invalid data format' }, 400);
       }
-      
+
       const validPages = pages.filter(p => p.slug || p.name);
-      
+
       // Process in batches of 10 for better performance
       const batchSize = 10;
       let imported = 0;
-      
+
       for (let i = 0; i < validPages.length; i += batchSize) {
         const batch = validPages.slice(i, i + batchSize);
         await Promise.all(batch.map(p =>
@@ -1647,7 +1496,7 @@ export async function routeApiRequest(req, env, url, path, method) {
         ));
         imported += batch.length;
       }
-      
+
       return json({ success: true, imported });
     } catch (err) {
       return json({ error: err.message }, 500);
