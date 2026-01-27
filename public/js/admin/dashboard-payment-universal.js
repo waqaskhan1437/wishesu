@@ -17,9 +17,28 @@ let currentEditingGateway = null;
 // Initialize payment tab
 async function initPaymentTab() {
     console.log('Initializing Payment Gateway Management...');
-    await loadPaymentGateways();
-    // Load standard settings as well
-    await loadStandardSettings();
+
+    // Show loading state immediately to improve perceived performance
+    const container = document.getElementById('main-panel');
+    if (container) {
+        container.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: #6b7280;">
+                <div style="border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%; width: 30px; height: 30px; animation: spin 0.8s linear infinite; margin-bottom: 15px;"></div>
+                <div style="font-size: 16px; font-weight: 500;">Loading payment settings...</div>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            </div>
+        `;
+    }
+
+    try {
+        // Run fetch operations in parallel
+        await Promise.all([
+            loadPaymentGateways(),
+            loadStandardSettings()
+        ]);
+    } catch (err) {
+        console.error('Error loading payment data:', err);
+    }
 
     renderPaymentGateways();
     setupPaymentEventListeners();
