@@ -8,10 +8,65 @@
 
 import { json } from '../utils/response.js';
 import { CORS } from '../config/cors.js';
+import { dispatch as dispatchWebhook } from './webhooks.js';
+import { requireAdminOrApiKey } from '../middleware/api-auth.js';
 
 const MAX_TABLES = 200; // safety
 const MAX_ROWS_PER_TABLE = 200000; // safety
 const BACKUP_PREFIX = 'backups/';
+
+async function getSetting(env, key) {
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first();
+    return row?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function isValidBackupWebhookSecret(env, provided) {
+  if (!provided) return false;
+
+  // 1) Explicit env secret (recommended)
+  if (env.BACKUP_WEBHOOK_SECRET && provided === env.BACKUP_WEBHOOK_SECRET) return true;
+
+  // 2) Optional DB setting secret
+  const dbSecret = await getSetting(env, 'backup_webhook_secret');
+  if (dbSecret && provided === dbSecret) return true;
+
+  // 3) Convenience: allow matching any configured outgoing webhook secret
+  // (so user can reuse the same secret they already set in Webhooks UI)
+  const cfgRaw = await getSetting(env, 'webhooks_config');
+  if (cfgRaw) {
+    try {
+      const cfg = JSON.parse(cfgRaw);
+      const eps = Array.isArray(cfg?.endpoints) ? cfg.endpoints : [];
+      for (const e of eps) {
+        if (e?.secret && provided === e.secret) return true;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return false;
+}
+
+export async function requireBackupAuth(req, env, requiredPermission) {
+  // Accept webhook secret OR admin cookie OR API key
+  const provided = req.headers.get('X-Webhook-Secret') || req.headers.get('x-webhook-secret');
+  if (provided) {
+    const ok = await isValidBackupWebhookSecret(env, provided);
+    if (!ok) return json({ ok: false, error: 'Invalid webhook secret' }, 401);
+
+    // Mark as authed (for downstream/logging parity)
+    req.apiKeyData = { id: 'webhook', name: 'Webhook Secret', permissions: ['*'], usageCount: 0 };
+    return null;
+  }
+
+  // Fall back to admin session or API key with permission
+  return await requireAdminOrApiKey(req, env, requiredPermission);
+}
 
 function safeIdent(name) {
   // Safely quote SQLite identifiers (table/column names)
@@ -204,10 +259,108 @@ export async function getBackupHistory(env) {
   }
 }
 
+
+async function createBackupInternal(env, meta = {}) {
+  await ensureBackupsTable(env);
+
+  const BUCKET = getBackupBucket(env);
+  if (!BUCKET) {
+    throw new Error('R2 bucket binding missing (R2_BUCKET or PRODUCT_MEDIA).');
+  }
+
+  const { jsonStr, size, media_count } = await generateBackupData(env);
+  const id = 'backup-' + Date.now();
+  const r2_key = `${BACKUP_PREFIX}${id}.json`;
+  const created_at = nowIso();
+
+  await BUCKET.put(r2_key, jsonStr, {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+
+  const cols = await getBackupsColumns(env);
+
+  const insertCols = ['id'];
+  const insertVals = [id];
+
+  if (cols.has('created_at')) {
+    insertCols.push('created_at');
+    insertVals.push(created_at);
+  } else if (cols.has('timestamp')) {
+    insertCols.push('timestamp');
+    insertVals.push(created_at);
+  }
+
+  if (cols.has('size')) {
+    insertCols.push('size');
+    insertVals.push(size);
+  }
+  if (cols.has('media_count')) {
+    insertCols.push('media_count');
+    insertVals.push(media_count);
+  }
+  if (cols.has('r2_key')) {
+    insertCols.push('r2_key');
+    insertVals.push(r2_key);
+  }
+
+  const placeholders = insertCols.map(() => '?').join(', ');
+  await env.DB
+    .prepare(`INSERT INTO backups (${insertCols.join(', ')}) VALUES (${placeholders})`)
+    .bind(...insertVals)
+    .run();
+
+  // Notifications: webhook dispatch + optional direct email
+  const url = meta.base_url || (meta.req_url ? new URL(meta.req_url).origin : null) || env.PUBLIC_BASE_URL || env.SITE_URL || env.BASE_URL || null;
+  const download_url = url ? `${url}/api/backup/download/${id}` : null;
+
+  // Always dispatch webhook event if enabled and subscribed (email workflow can live there)
+  try {
+    await dispatchWebhook(env, 'backup.created', {
+      id,
+      created_at,
+      size,
+      media_count,
+      download_url,
+      trigger: meta.trigger || 'manual',
+      note: 'Media files not included; links only',
+    });
+  } catch (e) {
+    // don't fail backup creation because webhook failed
+    console.log('backup.created webhook dispatch failed:', e?.message || e);
+  }
+
+  // Direct email (optional) — only if env vars configured
+  try {
+    const subject = `WishesU Backup Created - ${created_at.slice(0, 10)}`;
+    const text =
+      `Backup created at ${created_at}\n` +
+      `ID: ${id}\n` +
+      `Size: ${size} bytes\n` +
+      `Media links: ${media_count}\n` +
+      (download_url ? `Download: ${download_url}\n` : '') +
+      `\nNote: Media files are NOT included (links only).`;
+
+    // Attach JSON only if small enough
+    const attach = size <= 6_000_000 ? jsonStr : null;
+    await sendBackupEmail(
+      env,
+      subject,
+      text + (attach ? '' : '\n\nBackup is too large for email attachment. Use the download link or Admin > Backup.'),
+      `${id}.json`,
+      attach
+    );
+  } catch (e) {
+    // ignore email failures
+    console.log('backup email skipped/failed:', e?.message || e);
+  }
+
+  return { id, created_at, size, media_count, r2_key };
+}
+
 /**
  * Create a backup, store JSON in R2 and metadata in D1
  */
-export async function createBackup(env) {
+export async function createBackup(env, meta = {}) {
   try {
     await ensureBackupsTable(env);
 

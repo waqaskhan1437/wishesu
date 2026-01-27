@@ -99,6 +99,12 @@ export const PERMISSIONS = {
     automation: 'settings:automation',
     payments: 'settings:payments'
   },
+  backup: {
+    history: 'backup:history',
+    create: 'backup:create',
+    download: 'backup:download',
+    restore: 'backup:restore'
+  },
   export: {
     full: 'export:full',
     products: 'export:products',

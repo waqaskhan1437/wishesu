@@ -18,6 +18,7 @@
     'forum.question': { icon: '❓', label: 'Forum Question', desc: 'New question', audience: 'admin' },
     'forum.reply': { icon: '💬', label: 'Forum Reply', desc: 'New forum reply', audience: 'admin' },
     'chat.message': { icon: '💬', label: 'Chat Message', desc: 'New support chat', audience: 'admin' },
+    'backup.created': { icon: '🗄️', label: 'Backup Created', desc: 'Manual/API/cron backup created', audience: 'admin' },
     'customer.order.confirmed': { icon: '✅', label: 'Order Confirmed (Customer)', desc: 'Send to customer', audience: 'customer' },
     'customer.order.delivered': { icon: '🎬', label: 'Order Delivered (Customer)', desc: 'Send to customer', audience: 'customer' },
     'customer.chat.reply': { icon: '💬', label: 'Chat Reply (Customer)', desc: 'Send to customer', audience: 'customer' },

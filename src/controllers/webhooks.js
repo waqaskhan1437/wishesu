@@ -28,6 +28,7 @@ export const EVENT_TYPES = {
   FORUM_QUESTION: 'forum.question',
   FORUM_REPLY: 'forum.reply',
   CHAT_MESSAGE: 'chat.message',
+  BACKUP_CREATED: 'backup.created',
   
   // Customer notifications
   CUSTOMER_ORDER_CONFIRMED: 'customer.order.confirmed',

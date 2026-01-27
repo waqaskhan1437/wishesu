@@ -193,7 +193,8 @@ import {
   createBackup,
   restoreBackup,
   downloadBackup,
-  importBackup
+  importBackup,
+  requireBackupAuth
 } from './controllers/backup.js';
 
 // Clean Settings (Essential Only)
@@ -368,13 +369,44 @@ export async function routeApiRequest(req, env, url, path, method) {
     return testWebhookV3(env, endpointId);
   }
 
+  
+  // ----- BACKUP SYSTEM (Public API + Webhook Trigger) -----
+  // Auth: Admin cookie OR API key (backup:*) OR X-Webhook-Secret (universal)
+  if (method === 'GET' && path === '/api/backup/history') {
+    const auth = await requireBackupAuth(req, env, 'backup:history');
+    if (auth) return auth;
+    return getBackupHistory(env);
+  }
+
+  if (method === 'POST' && path === '/api/backup/create') {
+    const auth = await requireBackupAuth(req, env, 'backup:create');
+    if (auth) return auth;
+    // createBackup(env) returns Response
+    return createBackup(env, { req_url: req.url, trigger: 'api' });
+  }
+
+  if (method === 'GET' && path.startsWith('/api/backup/download/')) {
+    const auth = await requireBackupAuth(req, env, 'backup:download');
+    if (auth) return auth;
+    const backupId = path.split('/').pop();
+    return downloadBackup(env, backupId);
+  }
+
+  if (method === 'POST' && path === '/api/backup/restore') {
+    const auth = await requireBackupAuth(req, env, 'backup:restore');
+    if (auth) return auth;
+    const body = await req.json().catch(() => ({}));
+    return restoreBackup(env, body);
+  }
+
+
   // ----- BACKUP SYSTEM (Modern 2025) -----
   if (method === 'GET' && path === '/api/admin/backup/history') {
     return getBackupHistory(env);
   }
 
   if (method === 'POST' && path === '/api/admin/backup/create') {
-    return createBackup(env);
+    return createBackup(env, { req_url: req.url, trigger: 'admin' });
   }
 
   if (method === 'POST' && path === '/api/admin/backup/restore') {

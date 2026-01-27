@@ -2154,17 +2154,11 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         // WARMUP: Initialize DB tables if needed
         await initDB(env);
 
-        // DAILY BACKUP + EMAIL (2 AM)
+        // DAILY BACKUP + EMAIL/WEBHOOK (2 AM)
         if (event.cron === '0 2 * * *') {
           try {
-            const { jsonStr, size, media_count } = await generateBackupData(env);
-            // Store in DB as well (manual/history)
+            // createBackup() handles: store in R2 + D1 metadata + webhook dispatch + optional email
             await createBackupApi(env);
-            const subject = `WishesU Daily Backup - ${new Date().toISOString().slice(0,10)}`;
-            const text = `Backup created at ${new Date().toISOString()}\nSize: ${size} bytes\nMedia links: ${media_count}\n\nThis backup contains FULL database export + media links only (no media files).`;
-            // Attach JSON only if small enough
-            const attach = size <= 6_000_000 ? jsonStr : null;
-            await sendBackupEmail(env, subject, text + (attach ? '' : '\n\nBackup is too large for email attachment; please download from Admin > Backup.'), `backup-${Date.now()}.json`, attach);
           } catch (e) {
             console.log('Daily backup failed:', e?.message || e);
           }

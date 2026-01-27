@@ -1,1 +1,0 @@
-This folder contains the built output assets for the worker "wishesu1" generated at 2026-01-19T20:46:48.193Z.
