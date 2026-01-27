@@ -274,6 +274,14 @@
     btn.disabled = true;
     
     try {
+      // Auto-save so tests work even if user didn't click Save Changes
+      const saved = await saveConfig();
+      if (!saved) {
+        alert('❌ Webhook test failed!\n\nError: Could not save webhook config. Please click “Save Changes” and try again.');
+        btn.textContent = originalText;
+        btn.disabled = false;
+        return;
+      }
       const res = await fetch(`/api/admin/webhooks/test/${id}`, { method: 'POST' });
       const data = await res.json();
       
