@@ -74,6 +74,7 @@ function extractLinksFromValue(val) {
 }
 
 async function ensureBackupsTable(env) {
+  // Create table if missing
   await env.DB
     .prepare(
       `CREATE TABLE IF NOT EXISTS backups (
@@ -85,6 +86,38 @@ async function ensureBackupsTable(env) {
       )`
     )
     .run();
+
+  // If table existed from an older version, migrate missing columns
+  const info = await env.DB.prepare('PRAGMA table_info(backups)').all();
+  const cols = new Set((info?.results || []).map((r) => r.name));
+
+  // Older schema might have `timestamp` instead of `created_at`
+  if (!cols.has('created_at') && cols.has('timestamp')) {
+    await env.DB.prepare('ALTER TABLE backups ADD COLUMN created_at DATETIME').run();
+    await env.DB.prepare('UPDATE backups SET created_at = timestamp WHERE created_at IS NULL').run();
+    cols.add('created_at');
+  } else if (!cols.has('created_at')) {
+    await env.DB.prepare('ALTER TABLE backups ADD COLUMN created_at DATETIME').run();
+    cols.add('created_at');
+  }
+
+  if (!cols.has('size')) {
+    await env.DB.prepare('ALTER TABLE backups ADD COLUMN size INTEGER DEFAULT 0').run();
+    cols.add('size');
+  }
+  if (!cols.has('media_count')) {
+    await env.DB.prepare('ALTER TABLE backups ADD COLUMN media_count INTEGER DEFAULT 0').run();
+    cols.add('media_count');
+  }
+  if (!cols.has('r2_key')) {
+    await env.DB.prepare('ALTER TABLE backups ADD COLUMN r2_key TEXT').run();
+    cols.add('r2_key');
+  }
+}
+
+async function getBackupsColumns(env) {
+  const info = await env.DB.prepare('PRAGMA table_info(backups)').all();
+  return new Set((info?.results || []).map((r) => r.name));
 }
 
 async function listTables(env) {
@@ -193,10 +226,38 @@ export async function createBackup(env) {
       httpMetadata: { contentType: 'application/json; charset=utf-8' },
     });
 
-    await env.DB
-      .prepare('INSERT INTO backups (id, created_at, size, media_count, r2_key) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, nowIso(), size, media_count, r2_key)
-      .run();
+    const cols = await getBackupsColumns(env);
+
+// Build INSERT based on available columns (backward compatible)
+const insertCols = ['id'];
+const insertVals = [id];
+
+if (cols.has('created_at')) {
+  insertCols.push('created_at');
+  insertVals.push(nowIso());
+} else if (cols.has('timestamp')) {
+  insertCols.push('timestamp');
+  insertVals.push(nowIso());
+}
+
+if (cols.has('size')) {
+  insertCols.push('size');
+  insertVals.push(size);
+}
+if (cols.has('media_count')) {
+  insertCols.push('media_count');
+  insertVals.push(media_count);
+}
+if (cols.has('r2_key')) {
+  insertCols.push('r2_key');
+  insertVals.push(r2_key);
+}
+
+const placeholders = insertCols.map(() => '?').join(', ');
+await env.DB
+  .prepare(`INSERT INTO backups (${insertCols.join(', ')}) VALUES (${placeholders})`)
+  .bind(...insertVals)
+  .run();
 
     return json({ ok: true, id, size, media_count });
   } catch (e) {
@@ -217,7 +278,7 @@ export async function downloadBackup(env, backupId) {
       return json({ ok: false, error: 'R2 bucket binding missing (R2_BUCKET/PRODUCT_MEDIA).' }, 500);
     }
 
-    const row = await env.DB.prepare('SELECT id, r2_key FROM backups WHERE id = ?').bind(backupId).first();
+    const row = await env.DB.prepare('SELECT * FROM backups WHERE id = ?').bind(backupId).first();
     if (!row || !row.r2_key) {
       return json({ ok: false, error: 'Backup not found' }, 404);
     }
@@ -290,7 +351,7 @@ export async function restoreBackup(env, body = {}) {
       const BUCKET = getBackupBucket(env);
       if (!BUCKET) return json({ ok: false, error: 'R2 bucket binding missing (R2_BUCKET or PRODUCT_MEDIA).' }, 500);
 
-      const row = await env.DB.prepare('SELECT r2_key FROM backups WHERE id = ?').bind(body.backupId).first();
+      const row = await env.DB.prepare('SELECT * FROM backups WHERE id = ?').bind(body.backupId).first();
       if (!row || !row.r2_key) return json({ ok: false, error: 'Backup not found' }, 404);
 
       const obj = await BUCKET.get(row.r2_key);
