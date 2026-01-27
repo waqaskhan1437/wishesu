@@ -466,8 +466,8 @@ export async function requestRevision(env, body) {
   ).bind(body.orderId).first();
 
   await env.DB.prepare(
-    'UPDATE orders SET revision_requested=1, revision_count=revision_count+1, status=? WHERE order_id=?'
-  ).bind('revision', body.orderId).run();
+    'UPDATE orders SET revision_requested=1, revision_count=revision_count+1, revision_reason=?, status=? WHERE order_id=?'
+  ).bind(body.reason || 'No reason provided', 'revision', body.orderId).run();
 
   // Trigger revision notification webhook if configured
   try {

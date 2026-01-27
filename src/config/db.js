@@ -271,11 +271,11 @@ export async function initDB(env) {
 
       // Run migrations and page migrations asynchronously (background)
       if (!migrationsDone) {
-        Promise.resolve().then(() => runMigrations(env).then(() => { migrationsDone = true; }).catch(() => {}));
+        Promise.resolve().then(() => runMigrations(env).then(() => { migrationsDone = true; }).catch(() => { }));
       }
 
       if (!pagesMigrationDone) {
-        Promise.resolve().then(() => runPagesMigration(env).then(() => { pagesMigrationDone = true; }).catch(() => {}));
+        Promise.resolve().then(() => runPagesMigration(env).then(() => { pagesMigrationDone = true; }).catch(() => { }));
       }
     } catch (e) {
       console.error('DB init error:', e);
@@ -297,7 +297,7 @@ export async function initDB(env) {
 export function warmupDB(env, ctx) {
   if (dbReady || !env.DB) return;
   if (ctx && ctx.waitUntil) {
-    ctx.waitUntil(initDB(env).catch(() => {}));
+    ctx.waitUntil(initDB(env).catch(() => { }));
   }
 }
 
@@ -309,7 +309,7 @@ async function runPagesMigration(env) {
     { column: 'page_type', type: "TEXT DEFAULT 'custom'" },
     { column: 'is_default', type: 'INTEGER DEFAULT 0' }, { column: 'feature_image_url', type: 'TEXT' }
   ];
-  
+
   for (const m of pagesMigrations) {
     try {
       await env.DB.prepare(`ALTER TABLE pages ADD COLUMN ${m.column} ${m.type}`).run();
@@ -337,13 +337,14 @@ async function runMigrations(env) {
     { table: 'chat_sessions', column: 'blocked', type: 'INTEGER DEFAULT 0' },
     { table: 'chat_sessions', column: 'last_message_content', type: 'TEXT' },
     { table: 'chat_sessions', column: 'last_message_at', type: 'DATETIME' },
-    { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' }
+    { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' },
+    { table: 'orders', column: 'revision_reason', type: 'TEXT' }
   ];
 
   // Run all migrations in parallel - most will fail silently (column exists)
   await Promise.allSettled(
-    migrations.map(m => 
-      env.DB.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`).run().catch(() => {})
+    migrations.map(m =>
+      env.DB.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`).run().catch(() => { })
     )
   );
 }

@@ -150,6 +150,9 @@
         // Product summary card (buyer-order style)
         renderProductSummary(order);
 
+        // Show revision info if any
+        displayRevisionInfo(order);
+
         displayRequirements(order.addons || []);
 
         const statusMsg = document.getElementById('status-message');
@@ -266,6 +269,71 @@
                 photosGrid.innerHTML = photos.map(url => `<div class="photo-item"><img src="${url}" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'"></div>`).join('');
             }
         }
+    }
+
+    function displayRevisionInfo(order) {
+        // Check if order has revision requested
+        if (!order.revision_requested && order.status !== 'revision') return;
+
+        // Find or create revision info container
+        let revisionSection = document.getElementById('revision-info-section');
+        if (!revisionSection) {
+            revisionSection = document.createElement('div');
+            revisionSection.id = 'revision-info-section';
+            revisionSection.style.cssText = 'background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 2px solid #f87171; border-radius: 12px; padding: 20px; margin-bottom: 20px;';
+
+            // Insert after product summary card or at start of order content
+            const productCard = document.getElementById('product-summary-card');
+            const orderContent = document.getElementById('order-content');
+            if (productCard && productCard.nextSibling) {
+                productCard.parentNode.insertBefore(revisionSection, productCard.nextSibling);
+            } else if (orderContent) {
+                orderContent.insertBefore(revisionSection, orderContent.firstChild);
+            }
+        }
+
+        const revisionCount = order.revision_count || 1;
+        const revisionReason = order.revision_reason || 'No specific reason provided';
+        const isRevisionStatus = order.status === 'revision';
+
+        let headerText = isAdmin ? '⚠️ Revision Requested by Buyer' : '📝 Your Revision Request';
+        let statusText = isRevisionStatus
+            ? '<span style="color: #dc2626; font-weight: 700;">Pending</span>'
+            : '<span style="color: #16a34a; font-weight: 700;">Addressed</span>';
+
+        revisionSection.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 style="color: #b91c1c; margin: 0; font-size: 1.1em;">${headerText}</h3>
+                <span style="background: #fff; padding: 4px 12px; border-radius: 20px; font-size: 0.85em;">
+                    Revision #${revisionCount} • Status: ${statusText}
+                </span>
+            </div>
+            <div style="background: #fff; padding: 15px; border-radius: 8px; border-left: 4px solid #f87171;">
+                <p style="margin: 0 0 8px 0; font-weight: 600; color: #991b1b; font-size: 0.9em;">
+                    ${isAdmin ? 'Buyer\'s Feedback:' : 'What You Requested:'}
+                </p>
+                <p style="margin: 0; color: #374151; line-height: 1.5;">${escapeHtml(revisionReason)}</p>
+            </div>
+            ${isAdmin ? `
+            <p style="margin: 12px 0 0 0; font-size: 0.85em; color: #6b7280;">
+                💡 Please address the buyer's feedback and submit a new delivery.
+            </p>` : `
+            <p style="margin: 12px 0 0 0; font-size: 0.85em; color: #6b7280;">
+                ⏳ Our team is working on your requested changes. You'll be notified when ready!
+            </p>`}
+        `;
+
+        revisionSection.style.display = 'block';
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     function startCountdown(minutes, createdAt) {
