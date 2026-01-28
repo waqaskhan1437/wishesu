@@ -29,6 +29,8 @@ export const EVENT_TYPES = {
   FORUM_REPLY: 'forum.reply',
   CHAT_MESSAGE: 'chat.message',
   BACKUP_CREATED: 'backup.created',
+  // Revision events
+  ORDER_REVISION_REQUESTED: 'order.revision_requested',
   
   // Customer notifications
   CUSTOMER_ORDER_CONFIRMED: 'customer.order.confirmed',
@@ -391,6 +393,27 @@ export async function notifyCustomerForumReply(env, forumData) {
     customerEmail: forumData.customerEmail || forumData.customer_email,
     replyContent: forumData.replyContent || forumData.reply,
     questionUrl: forumData.questionUrl
+  });
+}
+
+/**
+ * Notify that an order revision has been requested.  This event is primarily
+ * for admin notifications when a customer requests changes to their order.
+ *
+ * @param {Object} env Environment bindings
+ * @param {Object} revisionData Contains order and revision details
+ * @returns {Promise<Object>} Dispatch result
+ */
+export async function notifyOrderRevisionRequested(env, revisionData) {
+  return dispatch(env, EVENT_TYPES.ORDER_REVISION_REQUESTED, {
+    orderId: revisionData.orderId || revisionData.order_id,
+    productTitle: revisionData.productTitle || revisionData.product_title,
+    customerName: revisionData.customerName || revisionData.customer_name,
+    customerEmail: revisionData.customerEmail || revisionData.email,
+    revisionReason: revisionData.revisionReason || revisionData.revision_reason,
+    revisionCount: revisionData.revisionCount || revisionData.revision_count,
+    status: revisionData.status || 'revision',
+    submittedAt: new Date().toISOString()
   });
 }
 

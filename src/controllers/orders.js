@@ -208,27 +208,28 @@ export async function createOrder(env, body) {
   notifyOrderReceived(env, { orderId, email, amount, productTitle }).catch(() => { });
   notifyCustomerOrderConfirmed(env, { orderId, email, amount, productTitle, deliveryTime }).catch(() => { });
 
-  // FIXED: Send Google Script webhook for new order (for email notifications)
+  // Send Google Apps Script webhook in the same format used by the universal system.
+  // This uses the "order.received" event name and flattens the payload into a "data" object.
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
     if (googleScriptUrl) {
+      const gsPayload = {
+        event: 'order.received',
+        data: {
+          orderId: orderId,
+          productId: body.productId,
+          productTitle: productTitle,
+          customerName: '', // customer name not available in this context
+          customerEmail: email,
+          amount: amount,
+          currency: 'USD',
+          createdAt: new Date().toISOString()
+        }
+      };
       await fetch(googleScriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: 'order.created',
-          order: {
-            order_id: orderId,
-            product_id: body.productId,
-            product_title: productTitle,
-            email: email,
-            amount: amount,
-            delivery_time_minutes: deliveryMinutes,
-            delivery_time_text: deliveryTime,
-            status: 'paid',
-            created_at: Date.now()
-          }
-        })
+        body: JSON.stringify(gsPayload)
       }).catch(err => console.error('Failed to send new order webhook:', err));
     }
   } catch (err) {
@@ -432,19 +433,22 @@ export async function deliverOrder(env, body) {
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
     if (googleScriptUrl && orderResult) {
+      // Use the universal "order.delivered" event name and flatten payload into a "data" object
+      const gsPayload = {
+        event: 'order.delivered',
+        data: {
+          orderId: body.orderId,
+          productTitle: orderResult.product_title || 'Your Order',
+          customerEmail: customerEmail,
+          // Provide both deliveryUrl and videoUrl for compatibility
+          deliveryUrl: body.videoUrl,
+          videoUrl: body.videoUrl
+        }
+      };
       await fetch(googleScriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: 'order.delivered',
-          order: {
-            order_id: body.orderId,
-            product_title: orderResult.product_title || 'Your Order',
-            email: customerEmail,
-            delivered_video_url: body.videoUrl,
-            status: 'delivered'
-          }
-        })
+        body: JSON.stringify(gsPayload)
       }).catch(err => console.error('Failed to send delivery webhook:', err));
     }
   } catch (err) {
@@ -481,20 +485,22 @@ export async function requestRevision(env, body) {
         console.warn('Could not decrypt order data for email');
       }
 
+      // Use a universal event and flatten payload into a "data" object
+      const gsPayload = {
+        event: 'order.revision_requested',
+        data: {
+          orderId: body.orderId,
+          productTitle: orderResult.product_title || 'Your Order',
+          customerEmail: customerEmail,
+          revisionReason: body.reason || 'No reason provided',
+          revisionCount: (orderResult.revision_count || 0) + 1,
+          status: 'revision'
+        }
+      };
       await fetch(googleScriptUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: 'order.revision_requested',
-          order: {
-            order_id: body.orderId,
-            product_title: orderResult.product_title || 'Your Order',
-            email: customerEmail,
-            revision_reason: body.reason || 'No reason provided',
-            revision_count: (orderResult.revision_count || 0) + 1,
-            status: 'revision'
-          }
-        })
+        body: JSON.stringify(gsPayload)
       }).catch(err => console.error('Failed to send revision webhook:', err));
     }
   } catch (err) {
