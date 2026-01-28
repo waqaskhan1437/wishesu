@@ -271,7 +271,7 @@ export async function createManualOrder(env, body) {
     manualOrder: true
   });
 
-  await env.DB.prepare(
+      await env.DB.prepare(
     'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
   ).bind(
     orderId,
@@ -280,8 +280,67 @@ export async function createManualOrder(env, body) {
     body.status || 'paid',
     Number(body.deliveryTime) || 60
   ).run();
+      // Load product title for notifications
+      let productTitle = '';
+      try {
+        const product = await env.DB.prepare('SELECT title FROM products WHERE id = ?').bind(Number(body.productId)).first();
+        if (product) {
+          productTitle = product.title || '';
+        }
+      } catch (e) {
+        console.warn('Could not load product title for manual order notification');
+      }
 
-  return json({ success: true, orderId });
+      // Determine numeric amount (manual orders may not include addons)
+      const manualAmount = parseFloat(body.amount) || 0;
+
+      // Dispatch universal webhook for admin notification
+      notifyOrderReceived(env, {
+        orderId,
+        productId: body.productId,
+        productTitle,
+        customerName: '',
+        customerEmail: email,
+        amount: manualAmount,
+        currency: 'USD'
+      }).catch(() => {});
+
+      // Dispatch universal webhook for customer confirmation
+      notifyCustomerOrderConfirmed(env, {
+        orderId,
+        email,
+        amount: manualAmount,
+        productTitle
+      }).catch(() => {});
+
+      // Send Google Apps Script webhook using universal event format (if configured)
+      try {
+        const googleScriptUrl = await getGoogleScriptUrl(env);
+        if (googleScriptUrl) {
+          const gsPayload = {
+            event: 'order.received',
+            data: {
+              orderId: orderId,
+              productId: body.productId,
+              productTitle: productTitle,
+              customerName: '',
+              customerEmail: email,
+              amount: manualAmount,
+              currency: 'USD',
+              createdAt: new Date().toISOString()
+            }
+          };
+          await fetch(googleScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(gsPayload)
+          }).catch(err => console.error('Failed to send manual order webhook:', err));
+        }
+      } catch (err) {
+        console.error('Error triggering manual order webhook:', err);
+      }
+
+      return json({ success: true, orderId });
 }
 
 /**
