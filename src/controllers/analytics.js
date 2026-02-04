@@ -34,7 +34,6 @@ const DEFAULT_ANALYTICS_SETTINGS = {
  * @param {object} env Cloudflare environment with DB binding
  */
 async function ensureAnalyticsTable(env) {
-  // NOTE: Table now created in db.js, keeping migration logic only
   if (!env.DB) return;
   try {
     await env.DB.prepare(`
