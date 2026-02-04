@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Successful!</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      background: white;
+      padding: 60px 40px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      text-align: center;
+      animation: slideUp 0.5s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .success-icon {
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 30px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: scaleIn 0.5s ease-out 0.2s both;
+    }
+
+    @keyframes scaleIn {
+      from {
+        transform: scale(0);
+      }
+
+      to {
+        transform: scale(1);
+      }
+    }
+
+    .success-icon svg {
+      width: 50px;
+      height: 50px;
+      stroke: white;
+      stroke-width: 3;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      color: #1f2937;
+      margin-bottom: 20px;
+    }
+
+    .message {
+      font-size: 1.1rem;
+      color: #6b7280;
+      line-height: 1.6;
+      margin-bottom: 40px;
+    }
+
+    .info-box {
+      background: #f0fdf4;
+      border: 2px solid #10b981;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      text-align: left;
+    }
+
+    .info-box h3 {
+      color: #059669;
+      margin-bottom: 15px;
+      font-size: 1.1rem;
+    }
+
+    .info-item {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 10px;
+      color: #166534;
+    }
+
+    .info-item strong {
+      min-width: 120px;
+      color: #047857;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 16px 40px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin: 5px;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Load global components asynchronously -->
+  <script defer src="/js/global-components.js"></script>
+  <div class="container">
+    <div class="success-icon">
+      <svg viewBox="0 0 24 24">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </div>
+
+    <h1>Payment Successful! 🎉</h1>
+
+    <p class="message">
+      Thank you for your purchase! Your order has been confirmed and we're preparing everything for you.
+    </p>
+
+    <div class="info-box">
+      <h3>What happens next?</h3>
+      <div class="info-item">
+        <strong>Confirmation:</strong>
+        <span>You'll receive a confirmation email with your order details shortly.</span>
+      </div>
+      <div class="info-item">
+        <strong>Our Team:</strong>
+        <span>Our creative team will start working on your personalized video.</span>
+      </div>
+      <div class="info-item">
+        <strong>Delivery:</strong>
+        <span>Your video will be delivered to your email based on your selected delivery option.</span>
+      </div>
+    </div>
+
+    <div style="margin-top: 30px; text-align: center;">
+      <a href="#" id="check-order-btn" class="btn" style="display: inline-block;">Check Your Order Status</a>
+    </div>
+
+    <p style="margin-top: 30px; color: #9ca3af; font-size: 0.9rem;">
+      Order ID: <span id="orderId">Processing...</span>
+    </p>
+  </div>
+
+  <script>
+    (async function () {
+      const urlParams = new URLSearchParams(window.location.search);
+      const productId = urlParams.get('product');
+      const provider = urlParams.get('provider');
+      const paypalToken = urlParams.get('token');
+      const directOrderId = urlParams.get('order_id');
+
+      console.log('🎉 Success page loaded');
+      console.log('Provider:', provider, 'PayPal Token:', paypalToken, 'Direct Order ID:', directOrderId);
+
+      // Handle direct PayPal Smart Button payment (already captured)
+      if (provider === 'paypal_direct' && directOrderId) {
+        console.log('🅿️ Direct PayPal payment - already captured');
+        document.getElementById('orderId').textContent = directOrderId;
+        document.getElementById('check-order-btn').href = `/buyer-order?id=${directOrderId}`;
+        return;
+      }
+
+      // Handle PayPal redirect return - capture the payment
+      if (provider === 'paypal' && paypalToken) {
+        console.log('🅿️ Capturing PayPal payment...');
+        document.getElementById('orderId').textContent = 'Processing PayPal payment...';
+
+        try {
+          const captureRes = await fetch('/api/paypal/capture-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_id: paypalToken })
+          });
+
+          const captureData = await captureRes.json();
+          console.log('PayPal capture result:', captureData);
+
+          if (captureData.success && captureData.order_id) {
+            document.getElementById('orderId').textContent = captureData.order_id;
+            document.getElementById('check-order-btn').href = `/buyer-order?id=${captureData.order_id}`;
+            console.log('✅ PayPal order captured:', captureData.order_id);
+
+            // Clean URL
+            window.history.replaceState({}, '', `/success.html?product=${productId}`);
+            return;
+          } else {
+            console.error('PayPal capture failed:', captureData);
+            document.getElementById('orderId').textContent = 'Payment processing failed - Contact support';
+          }
+        } catch (err) {
+          console.error('PayPal capture error:', err);
+          document.getElementById('orderId').textContent = 'Error - Please contact support';
+        }
+        return;
+      }
+
+      // Check localStorage for pending order data (Whop flow)
+      let orderData = null;
+      try {
+        const stored = localStorage.getItem('pendingOrderData');
+        if (stored) {
+          orderData = JSON.parse(stored);
+          console.log('📦 Found pending order data:', orderData);
+          localStorage.removeItem('pendingOrderData'); // Clear after use
+        }
+      } catch (e) {
+        console.error('Failed to parse localStorage:', e);
+      }
+
+      // If we have order data, create the order
+      if (orderData && orderData.addons && orderData.addons.length > 0) {
+        console.log('🚀 Creating order with addons...');
+
+        // Calculate delivery time
+        let deliveryTime = 2880; // Default 48 hours
+        const deliveryAddon = orderData.addons.find(a => a.field === 'delivery-time');
+        if (deliveryAddon) {
+          const v = (deliveryAddon.value || '').toLowerCase();
+          if (v.includes('instant') || v.includes('60')) deliveryTime = 60;
+          else if (v.includes('24') || v.includes('express')) deliveryTime = 1440;
+          else if (v.includes('48') || v.includes('2 day')) deliveryTime = 2880;
+        }
+
+        const payload = {
+          productId: orderData.productId || productId || 1,
+          amount: orderData.amount || 0,
+          email: orderData.email || '',
+          addons: orderData.addons,
+          deliveryTime: deliveryTime
+        };
+
+        console.log('📤 Sending to API:', payload);
+
+        try {
+          const res = await fetch('/api/order/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+          console.log('📥 API Response:', data);
+
+          if (data && data.orderId) {
+            document.getElementById('orderId').textContent = data.orderId;
+            document.getElementById('check-order-btn').href = `/buyer-order?id=${data.orderId}`;
+            console.log('✅ Order created:', data.orderId);
+          } else {
+            document.getElementById('orderId').textContent = 'Order processing...';
+            document.getElementById('check-order-btn').href = '/';
+          }
+        } catch (err) {
+          console.error('❌ Order creation failed:', err);
+          document.getElementById('orderId').textContent = 'Error - Please contact support';
+        }
+      } else {
+        // No pending order data - just display generic success
+        const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        document.getElementById('orderId').textContent = orderId;
+        document.getElementById('check-order-btn').href = '/';
+        console.log('⚠️ No pending order data found in localStorage');
+      }
+    })();
+  </script>
+
+</body>
+
+</html>
