@@ -118,7 +118,6 @@ export async function createCheckout(env, body, origin) {
         VALUES (?, ?, NULL, ?, 'pending', datetime('now'))
       `).bind(checkoutData.id, product.id, expiryTime).run();
     } catch (e) {
-      console.log('Checkout tracking skipped:', e.message);
     }
 
     return json({
@@ -155,7 +154,6 @@ export async function createPlanCheckout(env, body, origin) {
     deliveryTimeMinutes = calculateDeliveryMinutes(product);
   }
   deliveryTimeMinutes = Number(deliveryTimeMinutes) || 60;
-  console.log('📦 Delivery time calculated:', deliveryTimeMinutes, 'minutes');
 
   // SECURITY: Calculate price server-side, ignoring client-provided amount
   // This prevents price manipulation attacks
@@ -187,10 +185,8 @@ export async function createPlanCheckout(env, body, origin) {
       ).bind('whop').first();
       if (gateway && gateway.whop_product_id) {
         finalProdId = (gateway.whop_product_id || '').trim();
-        console.log('Using Whop product ID from payment_gateways:', finalProdId);
       }
     } catch (e) {
-      console.log('Failed to load whop settings from payment_gateways:', e);
     }
   }
 
@@ -204,10 +200,8 @@ export async function createPlanCheckout(env, body, origin) {
       }
       if (settings && settings.default_product_id) {
         finalProdId = (settings.default_product_id || '').trim();
-        console.log('Using Whop product ID from legacy settings:', finalProdId);
       }
     } catch (e) {
-      console.log('Failed to load whop settings for default product ID:', e);
     }
   }
 
@@ -237,9 +231,7 @@ export async function createPlanCheckout(env, body, origin) {
       },
       body: JSON.stringify({ one_per_user: false })
     }, WHOP_API_TIMEOUT);
-    console.log('✅ Product updated: one_per_user = false');
   } catch (e) {
-    console.log('Product update skipped:', e.message);
   }
 
   // Create one-time plan with unlimited purchases allowed
@@ -309,7 +301,6 @@ export async function createPlanCheckout(env, body, origin) {
         VALUES (?, ?, ?, ?, ?, 'pending', datetime('now'))
       `).bind('plan_' + planId, product.id, planId, JSON.stringify(checkoutMetadata), expiryTime).run();
     } catch (e) {
-      console.log('Plan tracking insert failed:', e.message);
     }
 
     // Create checkout session
@@ -361,7 +352,6 @@ export async function createPlanCheckout(env, body, origin) {
         WHERE checkout_id = ?
       `).bind(checkoutData.id, 'plan_' + planId).run();
     } catch (e) {
-      console.log('Checkout session tracking update failed:', e.message);
     }
 
     return json({
@@ -396,7 +386,6 @@ export async function handleWebhook(env, webhookData) {
   try {
     const eventType = webhookData.type;
 
-    console.log('Whop webhook received:', eventType);
 
     // Handle payment success - this is the ONLY place orders are created
     if (eventType === 'payment.succeeded') {
@@ -404,7 +393,6 @@ export async function handleWebhook(env, webhookData) {
       const membershipId = webhookData.data?.id;
       let metadata = webhookData.data?.metadata || {};
 
-      console.log('Payment succeeded:', { checkoutSessionId, membershipId, metadata });
 
       // Get email from webhook data for duplicate checking
       const customerEmail = metadata.email ||
@@ -439,11 +427,9 @@ export async function handleWebhook(env, webhookData) {
           }
 
           if (existingOrder) {
-            console.log('Order already exists, skipping duplicate creation');
             return json({ received: true, duplicate: true, message: 'Order already processed' });
           }
         } catch (e) {
-          console.log('Order existence check failed:', e.message);
         }
       }
 
@@ -457,7 +443,6 @@ export async function handleWebhook(env, webhookData) {
 
           if (sessionRow?.metadata) {
             const storedMetadata = JSON.parse(sessionRow.metadata);
-            console.log('Retrieved stored metadata from DB:', storedMetadata);
             // Merge stored metadata with webhook metadata (prefer stored for addons, amount)
             metadata = {
               ...metadata,
@@ -469,7 +454,6 @@ export async function handleWebhook(env, webhookData) {
             };
           }
         } catch (e) {
-          console.log('Failed to retrieve stored metadata:', e.message);
         }
       }
 
@@ -482,7 +466,6 @@ export async function handleWebhook(env, webhookData) {
             WHERE checkout_id = ?
           `).bind(checkoutSessionId).run();
         } catch (e) {
-          console.log('Checkout tracking update skipped:', e.message);
         }
       }
 
@@ -494,7 +477,6 @@ export async function handleWebhook(env, webhookData) {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${apiKey}` }
           }, WHOP_API_TIMEOUT);
-          console.log('Checkout session deleted immediately after payment:', checkoutSessionId);
         } catch (e) {
           console.error('Failed to delete checkout session:', e);
         }
@@ -508,7 +490,6 @@ export async function handleWebhook(env, webhookData) {
               method: 'DELETE',
               headers: { 'Authorization': `Bearer ${apiKey}` }
             }, WHOP_API_TIMEOUT);
-            console.log('Plan deleted immediately after payment:', planId);
           }
         } catch (e) {
           console.error('Failed to delete plan:', e);
@@ -521,7 +502,6 @@ export async function handleWebhook(env, webhookData) {
           await env.DB.prepare(
             'UPDATE orders SET tip_paid = 1, tip_amount = ? WHERE order_id = ?'
           ).bind(Number(metadata.tipAmount) || Number(metadata.amount) || 0, metadata.orderId).run();
-          console.log('Tip marked as paid for order:', metadata.orderId);
         } catch (e) {
           console.error('Failed to update tip status:', e);
         }
@@ -546,11 +526,9 @@ export async function handleWebhook(env, webhookData) {
 
               deliveryTimeMinutes = calculateDeliveryMinutes(product);
             } catch (e) {
-              console.log('Could not get product delivery time:', e);
               deliveryTimeMinutes = 60;
             }
           }
-          console.log('Final delivery time for order:', deliveryTimeMinutes, 'minutes');
 
           // Get email from multiple sources (whop webhook data is authoritative)
           const customerEmail = metadata.email ||
@@ -579,7 +557,6 @@ export async function handleWebhook(env, webhookData) {
             encryptedData
           });
 
-          console.log('Order created via webhook:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes', 'Amount:', orderAmount);
         } catch (e) {
           console.error('Failed to create order:', e);
           // Still return success to Whop so they don't retry
@@ -590,7 +567,6 @@ export async function handleWebhook(env, webhookData) {
 
     // Handle membership validation
     if (eventType === 'membership.went_valid') {
-      console.log('Membership validated:', webhookData.data?.id);
     }
 
     return json({ received: true });
@@ -711,7 +687,6 @@ export async function cleanupExpired(env) {
 
             if (archiveResp.ok) {
               success = true;
-              console.log('✅ Plan archived (hidden):', checkout.plan_id);
             } else {
               // Fallback: try DELETE
               const deleteResp = await fetchWithTimeout(`https://api.whop.com/api/v2/plans/${checkout.plan_id}`, {
@@ -719,7 +694,6 @@ export async function cleanupExpired(env) {
                 headers: { 'Authorization': `Bearer ${apiKey}` }
               }, WHOP_API_TIMEOUT);
               success = deleteResp.ok || deleteResp.status === 404;
-              if (success) console.log('✅ Plan deleted:', checkout.plan_id);
             }
           } catch (e) {
             console.error('Plan archive failed:', checkout.plan_id, e.message);

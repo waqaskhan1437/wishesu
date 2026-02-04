@@ -81,7 +81,6 @@ async function migrateLegacyWhopSettings(env) {
     ).bind('whop').first();
 
     if (existingWhop) {
-      console.log('Whop gateway already exists, skipping migration');
       return;
     }
 
@@ -95,7 +94,6 @@ async function migrateLegacyWhopSettings(env) {
       try {
         legacySettings = JSON.parse(settingsRow.value);
       } catch (e) {
-        console.log('Failed to parse legacy Whop settings:', e);
       }
     }
 
@@ -110,7 +108,6 @@ async function migrateLegacyWhopSettings(env) {
 
     // Always create Whop gateway if env API key exists OR legacy settings exist
     if (!hasEnvApiKey && !hasLegacySettings && !productId) {
-      console.log('No Whop configuration found (no env.WHOP_API_KEY, no legacy settings)');
       return;
     }
 
@@ -133,9 +130,6 @@ async function migrateLegacyWhopSettings(env) {
       theme
     ).run();
 
-    console.log('✅ Whop gateway created in payment_gateways');
-    console.log('   Product ID:', productId || '(not set - please configure in Payment tab)');
-    console.log('   API Key: Using env.WHOP_API_KEY =', hasEnvApiKey ? 'SET' : 'NOT SET');
 
     // Clear cache
     gatewaysCache = null;
@@ -392,7 +386,6 @@ export async function handleUniversalWebhook(env, payload, headers) {
       if (paypalSettings && paypalSettings.value) {
         // For backward compatibility, temporarily forward to original PayPal handler
         // In a real implementation, we would call the original PayPal webhook handler
-        console.log('Processing PayPal webhook with original handler for backward compatibility');
       }
     } else if (isWhopWebhook(payload, headers)) {
       // Check if we have Whop settings in the old format for backward compatibility
@@ -400,7 +393,6 @@ export async function handleUniversalWebhook(env, payload, headers) {
       if (whopSettings && whopSettings.value) {
         // For backward compatibility, temporarily forward to original Whop handler
         // In a real implementation, we would call the original Whop webhook handler
-        console.log('Processing Whop webhook with original handler for backward compatibility');
       }
     }
     
@@ -425,14 +417,12 @@ export async function handleUniversalWebhook(env, payload, headers) {
     }
     
     if (!gateway) {
-      console.log('No matching gateway found for webhook:', payload);
       // Could not identify gateway - return generic success to avoid webhook failures
       return new Response(JSON.stringify({ received: true, gateway: 'unknown' }), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
     
-    console.log(`Processing webhook for gateway: ${gateway.name}`, { 
       gateway_type: gateway.gateway_type,
       event_type: payload.type || payload.event_type
     });
@@ -507,7 +497,6 @@ async function executeCustomCode(env, gateway, payload) {
   
   try {
     // Log the custom processing
-    console.log(`Executing custom code for ${gateway.name}:`, payload);
     
     // In production, use a secure sandbox like:
     // - VM module with limited access
@@ -534,13 +523,11 @@ async function processPaymentEvent(env, gateway, payload) {
     if ((gateway.gateway_type === 'paypal' || gateway.name.toLowerCase().includes('paypal')) && 
         (!gateway.custom_code || gateway.custom_code.trim() === '')) {
       // Forward to original PayPal handler for backward compatibility
-      console.log('Forwarding PayPal webhook to original handler for backward compatibility');
       // Note: In a real implementation, you'd call the original PayPal webhook handler
       // For now, we'll process with the universal handler
     } else if ((gateway.gateway_type === 'whop' || gateway.name.toLowerCase().includes('whop')) && 
                (!gateway.custom_code || gateway.custom_code.trim() === '')) {
       // Forward to original Whop handler for backward compatibility
-      console.log('Forwarding Whop webhook to original handler for backward compatibility');
       // Note: In a real implementation, you'd call the original Whop webhook handler
       // For now, we'll process with the universal handler
     }
@@ -550,13 +537,11 @@ async function processPaymentEvent(env, gateway, payload) {
     
     if (isSuccess) {
       // Process successful payment
-      console.log(`Successful payment from ${gateway.name}:`, { eventId, amount, currency });
       
       // In real implementation, create/update order records
       // Call existing order processing functions
     } else {
       // Log failed payment
-      console.log(`Failed payment from ${gateway.name}:`, { eventId, eventType });
     }
 
     // Store webhook event for debugging
@@ -630,7 +615,6 @@ export async function migratePayPalSettings(env) {
     const paypalRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('paypal').first();
     
     if (!paypalRow || !paypalRow.value) {
-      console.log('No existing PayPal settings to migrate');
       return { success: true, migrated: false, message: 'No PayPal settings found to migrate' };
     }
     
@@ -642,7 +626,6 @@ export async function migratePayPalSettings(env) {
     ).bind('paypal').first();
     
     if (existingPayPal) {
-      console.log('PayPal gateway already exists in universal system');
       return { success: true, migrated: false, message: 'PayPal gateway already exists' };
     }
     
@@ -698,7 +681,6 @@ function processPayPalWebhook(payload, headers) {
       })
     ).run();
     
-    console.log('PayPal settings migrated to universal system');
     
     // Optionally, backup the old settings
     await env.DB.prepare(`
@@ -732,7 +714,6 @@ export async function migrateWhopSettings(env) {
     const whopRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
     
     if (!whopRow || !whopRow.value) {
-      console.log('No existing Whop settings to migrate');
       return { success: true, migrated: false, message: 'No Whop settings found to migrate' };
     }
     
@@ -744,7 +725,6 @@ export async function migrateWhopSettings(env) {
     ).bind('whop').first();
     
     if (existingWhop) {
-      console.log('Whop gateway already exists in universal system');
       return { success: true, migrated: false, message: 'Whop gateway already exists' };
     }
     
@@ -801,7 +781,6 @@ function processWhopWebhook(payload, headers) {
       })
     ).run();
     
-    console.log('Whop settings migrated to universal system');
     
     // Optionally, backup the old settings
     await env.DB.prepare(`

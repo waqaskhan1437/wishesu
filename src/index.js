@@ -2211,7 +2211,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 
                 // Store in cache asynchronously
                 ctx.waitUntil(caches.default.put(cacheKey, cacheResponse));
-                console.log('Cached response for:', req.url);
               } catch (cacheError) {
                 console.warn('Cache storage failed:', cacheError);
                 // Continue even if caching fails
@@ -2275,7 +2274,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
   // Keeps DB connection warm and prevents cold start issues
   async scheduled(event, env, ctx) {
     setVersion(env.VERSION);
-    console.log('Cron job started:', event.cron, 'at', new Date().toISOString());
 
     try {
       if (env.DB) {
@@ -2288,7 +2286,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             // createBackup() handles: store in R2 + D1 metadata + webhook dispatch + optional email
             await createBackupApi(env);
           } catch (e) {
-            console.log('Daily backup failed:', e?.message || e);
           }
         }
 
@@ -2303,7 +2300,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
           env.DB.prepare('SELECT COUNT(*) as count FROM blogs WHERE status = ?').bind('published').first().catch(() => null),
           env.DB.prepare('SELECT COUNT(*) as count FROM forum_questions').first().catch(() => null)
         ]);
-        console.log('DB connection warmed successfully with multiple queries');
 
         // Cleanup expired Whop checkout sessions (daily cron only)
         // The 3-minute cron is intended for warming; cleanup is heavier and can increase subrequests/wall time.
@@ -2311,9 +2307,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
           const result = await cleanupExpired(env);
           try {
             const data = await result.json();
-            console.log('Cleanup result:', data);
           } catch (_) {
-            console.log('Cleanup finished (non-JSON response)');
           }
         }
       }

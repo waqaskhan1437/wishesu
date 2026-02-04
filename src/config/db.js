@@ -264,12 +264,87 @@ export async function initDB(env) {
         env.DB.prepare(`
           CREATE INDEX IF NOT EXISTS idx_api_key_usage_key_id
           ON api_key_usage(api_key_id)
+        ),
+        // Analytics settings table (for GA, FB Pixel, etc.)
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS analytics_settings (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            ga_id TEXT,
+            google_verify TEXT,
+            bing_verify TEXT,
+            fb_pixel_id TEXT
+          )
+        `),
+        // SEO minimal settings table
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS seo_minimal (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            robots_txt TEXT,
+            site_url TEXT,
+            sitemap_custom TEXT
+          )
+        `),
+        // Noindex pages table
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS noindex_pages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pattern TEXT UNIQUE NOT NULL,
+            created_at INTEGER
+          )
+        `),
+        // Email templates table
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS email_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT UNIQUE NOT NULL,
+            subject TEXT,
+            body TEXT,
+            updated_at INTEGER
+          )
+        `),
+        // Leads table
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            name TEXT,
+            source TEXT DEFAULT website,
+            created_at INTEGER
+          )
+        `),
+        // Payment gateways settings
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS payment_gateways (
+            id TEXT PRIMARY KEY,
+            enabled INTEGER DEFAULT 0,
+            config TEXT,
+            updated_at INTEGER
+          )
+        `),
+        // Webhook events log
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS webhook_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gateway TEXT NOT NULL,
+            event_type TEXT,
+            payload TEXT,
+            processed INTEGER DEFAULT 0,
+            created_at INTEGER
+          )
+        `),
+        // Clean settings
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS clean_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at INTEGER
+          )
+        `
         `)
       ]);
 
       // Mark DB as ready as soon as the core CREATE TABLEs complete
       dbReady = true;
-      console.log(`DB init completed in ${Date.now() - initStartTime}ms`);
 
       // Run migrations and page migrations asynchronously (background)
       if (!migrationsDone) {
@@ -315,7 +390,6 @@ async function runPagesMigration(env) {
   for (const m of pagesMigrations) {
     try {
       await env.DB.prepare(`ALTER TABLE pages ADD COLUMN ${m.column} ${m.type}`).run();
-      console.log(`Added pages.${m.column}`);
     } catch (e) {
       // Column already exists - this is expected
     }

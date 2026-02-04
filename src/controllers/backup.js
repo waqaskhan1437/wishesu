@@ -326,7 +326,6 @@ async function createBackupInternal(env, meta = {}) {
     });
   } catch (e) {
     // don't fail backup creation because webhook failed
-    console.log('backup.created webhook dispatch failed:', e?.message || e);
   }
 
   // Direct email (optional) — only if env vars configured
@@ -351,7 +350,6 @@ async function createBackupInternal(env, meta = {}) {
     );
   } catch (e) {
     // ignore email failures
-    console.log('backup email skipped/failed:', e?.message || e);
   }
 
   return { id, created_at, size, media_count, r2_key };

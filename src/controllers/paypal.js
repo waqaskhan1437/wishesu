@@ -120,13 +120,10 @@ export async function createPayPalOrder(env, body, origin) {
   }
 
   try {
-    console.log('🅿️ PayPal: Getting access token...');
-    console.log('🅿️ Mode:', credentials.mode);
 
     let accessToken;
     try {
       accessToken = await getAccessToken(credentials);
-      console.log('🅿️ Access token obtained successfully');
     } catch (authErr) {
       console.error('🅿️ PayPal auth failed:', authErr.message);
       return json({ error: 'PayPal authentication failed: ' + authErr.message }, 500);
@@ -160,7 +157,6 @@ export async function createPayPalOrder(env, body, origin) {
       }
     };
 
-    console.log('🅿️ Creating PayPal order with payload:', JSON.stringify(orderPayload, null, 2));
 
     // Create order
     const orderResponse = await fetchWithTimeout(`${baseUrl}/v2/checkout/orders`, {
@@ -173,8 +169,6 @@ export async function createPayPalOrder(env, body, origin) {
     }, PAYPAL_API_TIMEOUT);
 
     const responseText = await orderResponse.text();
-    console.log('🅿️ PayPal response status:', orderResponse.status);
-    console.log('🅿️ PayPal response:', responseText);
 
     if (!orderResponse.ok) {
       let errorMessage = 'Failed to create PayPal order';
@@ -224,7 +218,6 @@ export async function createPayPalOrder(env, body, origin) {
         JSON.stringify(sessionMetadata)
       ).run();
     } catch (e) {
-      console.log('Checkout session storage skipped:', e.message);
     }
 
     // Find approval URL
@@ -259,7 +252,6 @@ export async function capturePayPalOrder(env, body) {
   }
 
   try {
-    console.log('🅿️ Capturing PayPal order:', order_id);
 
     const accessToken = await getAccessToken(credentials);
     const baseUrl = getPayPalBaseUrl(credentials.mode);
@@ -274,8 +266,6 @@ export async function capturePayPalOrder(env, body) {
     }, PAYPAL_API_TIMEOUT);
 
     const responseText = await captureResponse.text();
-    console.log('🅿️ Capture response status:', captureResponse.status);
-    console.log('🅿️ Capture response:', responseText);
 
     if (!captureResponse.ok) {
       let errorMessage = 'Payment capture failed';
@@ -300,7 +290,6 @@ export async function capturePayPalOrder(env, body) {
           metadata = JSON.parse(sessionRow.metadata);
         }
       } catch (e) {
-        console.log('Failed to get stored metadata:', e);
       }
 
       // Parse custom_id from PayPal response (minimal data)
@@ -311,7 +300,6 @@ export async function capturePayPalOrder(env, body) {
           customData = JSON.parse(customId);
         }
       } catch (e) {
-        console.log('Failed to parse custom_id:', e);
       }
 
       // Create order in database
@@ -371,11 +359,9 @@ export async function capturePayPalOrder(env, body) {
 
           deliveryTimeMinutes = calculateDeliveryMinutes(product);
         } catch (e) {
-          console.log('Could not get product delivery time for PayPal order:', e);
           deliveryTimeMinutes = 60;
         }
       }
-      console.log('🅿️ Delivery time for PayPal order:', deliveryTimeMinutes, 'minutes');
 
       const encryptedData = {
         email: buyerEmail,
@@ -394,7 +380,6 @@ export async function capturePayPalOrder(env, body) {
         encryptedData
       });
 
-      console.log('🅿️ Order created:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes');
 
       // Update checkout session
       try {
@@ -429,7 +414,6 @@ export async function capturePayPalOrder(env, body) {
  */
 export async function handlePayPalWebhook(env, body, headers) {
   const eventType = body.event_type;
-  console.log('PayPal webhook received:', eventType);
 
   // Verify webhook signature (recommended for production)
   // For now, just process the event
@@ -437,13 +421,11 @@ export async function handlePayPalWebhook(env, body, headers) {
   if (eventType === 'CHECKOUT.ORDER.APPROVED') {
     // Order was approved, can auto-capture if needed
     const orderId = body.resource?.id;
-    console.log('Order approved:', orderId);
   }
 
   if (eventType === 'PAYMENT.CAPTURE.COMPLETED') {
     // Payment was captured
     const captureId = body.resource?.id;
-    console.log('Payment captured:', captureId);
   }
 
   return json({ received: true });
@@ -477,7 +459,6 @@ export async function getPayPalSettings(env) {
  * Save PayPal settings
  */
 export async function savePayPalSettings(env, body) {
-  console.log('🅿️ Saving PayPal settings:', {
     enabled: body.enabled,
     client_id: body.client_id ? '***' + body.client_id.slice(-4) : 'empty',
     secret: body.secret ? '***' + body.secret.slice(-4) : 'empty',
@@ -498,14 +479,11 @@ export async function savePayPalSettings(env, body) {
       if (existing?.value) {
         const old = JSON.parse(existing.value);
         settings.secret = old.secret || '';
-        console.log('🅿️ Keeping existing secret');
       }
     } catch (e) {
-      console.log('🅿️ No existing settings found');
     }
   }
 
-  console.log('🅿️ Final settings to save:', {
     enabled: settings.enabled,
     client_id: settings.client_id ? '***' + settings.client_id.slice(-4) : 'empty',
     has_secret: !!settings.secret,
@@ -516,7 +494,6 @@ export async function savePayPalSettings(env, body) {
     'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
   ).bind('paypal', JSON.stringify(settings)).run();
 
-  console.log('🅿️ PayPal settings saved successfully');
 
   return json({ success: true });
 }
