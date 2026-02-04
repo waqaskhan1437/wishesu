@@ -174,6 +174,7 @@ export async function createOrder(env, body) {
       deliveryMinutes = calculateDeliveryMinutes(product);
     }
   } catch (e) {
+    console.log('Could not get product details:', e);
   }
 
   // Ensure we have a valid delivery time

@@ -269,6 +269,7 @@ export async function initDB(env) {
 
       // Mark DB as ready as soon as the core CREATE TABLEs complete
       dbReady = true;
+      console.log(`DB init completed in ${Date.now() - initStartTime}ms`);
 
       // Run migrations and page migrations asynchronously (background)
       if (!migrationsDone) {
@@ -314,6 +315,7 @@ async function runPagesMigration(env) {
   for (const m of pagesMigrations) {
     try {
       await env.DB.prepare(`ALTER TABLE pages ADD COLUMN ${m.column} ${m.type}`).run();
+      console.log(`Added pages.${m.column}`);
     } catch (e) {
       // Column already exists - this is expected
     }

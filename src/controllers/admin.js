@@ -25,11 +25,13 @@ let purgeVersionChecked = false;
  */
 async function verifyTurnstileToken(env, token, remoteIp) {
   if (!token) {
+    console.log('Turnstile token missing');
     return false;
   }
 
   const secretKey = env.TURNSTILE_SECRET_KEY;
   if (!secretKey) {
+    console.log('Turnstile secret key not configured');
     // For development/testing, allow bypass if no secret configured
     // In production, this should always be configured
     return env.NODE_ENV === 'development' || env.ENVIRONMENT === 'development';
@@ -50,8 +52,10 @@ async function verifyTurnstileToken(env, token, remoteIp) {
     const result = await response.json();
 
     if (result.success) {
+      console.log('Turnstile verification successful');
       return true;
     } else {
+      console.log('Turnstile verification failed:', result.error_codes);
       return false;
     }
   } catch (e) {
@@ -92,6 +96,7 @@ async function validateUploadRequest(env, req, url) {
         }
       }
     } catch (e) {
+      console.log('Admin bypass verification failed:', e.message);
     }
   }
 
@@ -116,6 +121,7 @@ async function validateUploadRequest(env, req, url) {
     );
 
     if (isWhitelistedPattern) {
+      console.log('Upload allowed: whitelisted frontend session pattern:', sessionId.substring(0, 20) + '...');
       return null; // Whitelisted pattern, no captcha needed
     }
 
@@ -128,6 +134,7 @@ async function validateUploadRequest(env, req, url) {
         return null; // Valid checkout session exists
       }
     } catch (e) {
+      console.log('Session validation failed:', e.message);
     }
   }
 
@@ -141,8 +148,10 @@ async function validateUploadRequest(env, req, url) {
     // Allow uploads without captcha if no secret key is configured
     const secretKey = env.TURNSTILE_SECRET_KEY;
     if (!secretKey) {
+      console.log('No Turnstile secret key configured, allowing upload without captcha');
       return null; // No captcha required if no secret key
     }
+    console.log('Upload rejected: No Turnstile token provided');
     return json({
       error: 'Captcha validation failed. Please refresh and try again.',
       code: 'CAPTCHA_REQUIRED'
@@ -154,6 +163,7 @@ async function validateUploadRequest(env, req, url) {
   const isValid = await verifyTurnstileToken(env, turnstileToken, clientIp);
 
   if (!isValid) {
+    console.log('Upload rejected: Invalid Turnstile captcha');
     return json({
       error: 'Captcha validation failed. Please refresh and try again.',
       code: 'CAPTCHA_INVALID'
@@ -309,6 +319,7 @@ export async function uploadTempFile(env, req, url) {
       return json({ error: 'sessionId and filename required' }, 400);
     }
 
+    console.log('Uploading file:', filename, 'for session:', sessionId);
 
     // Get content length for size validation (before reading body)
     const contentLength = req.headers.get('content-length');
@@ -338,6 +349,7 @@ export async function uploadTempFile(env, req, url) {
 
     if (fileSize !== null && fileSize > SIZE_THRESHOLD) {
       // Large file: stream directly to R2 (no memory buffering)
+      console.log('Large file detected, streaming directly to R2...');
       fileData = req.body;
       actualSize = fileSize;
     } else {
@@ -362,6 +374,7 @@ export async function uploadTempFile(env, req, url) {
       }
 
       fileData = buf;
+      console.log('File size:', (actualSize / 1024 / 1024).toFixed(2), 'MB');
     }
 
     const key = `temp/${sessionId}/${filename}`;
@@ -370,6 +383,7 @@ export async function uploadTempFile(env, req, url) {
       httpMetadata: { contentType: req.headers.get('content-type') || 'application/octet-stream' }
     });
 
+    console.log('File uploaded successfully:', key);
 
     return json({ success: true, tempUrl: `r2://${key}` });
   } catch (err) {
@@ -420,6 +434,7 @@ export async function uploadCustomerFile(env, req, url) {
       return json({ error: 'itemId and filename required' }, 400);
     }
 
+    console.log('Starting direct Archive.org upload:', filename, 'Item:', itemId);
 
     // Get content length for size validation (before reading body)
     const contentLength = req.headers.get('content-length');
@@ -493,6 +508,7 @@ export async function uploadCustomerFile(env, req, url) {
     };
 
     // Upload directly to Archive.org (NO R2 stage)
+    console.log('Uploading directly to Archive.org...');
     const archiveUrl = `https://s3.us.archive.org/${itemId}/${filename}`;
 
     // For large files, stream directly; otherwise buffer
@@ -575,6 +591,7 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
 
   // If fetch failed, try redirecting to source
   if (!fileResp.ok) {
+    console.log('Proxy failed (' + fileResp.status + '), redirecting to source...');
     return Response.redirect(sourceUrl, 302);
   }
 

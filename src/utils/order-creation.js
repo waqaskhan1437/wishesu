@@ -73,4 +73,5 @@ export async function createOrderRecord(env, params) {
         Number(deliveryMinutes)
     ).run();
 
+    console.log(`📦 Order created: ${orderId}, Product: ${productId}, Delivery: ${deliveryMinutes} mins`);
 }
