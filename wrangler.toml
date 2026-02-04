@@ -53,7 +53,7 @@ bucket_name = "temp-uploads-bucket"
 # This prevents cold start issues and connection reset errors
 # More frequent pings ensure the worker stays active
 # Also runs cleanup at 2 AM daily
-crons = ["*/3 * * * *", "0 2 * * *"]
+crons = ["*/1 * * * *", "0 2 * * *"]
 
 # Optional build-time variables.  You can update VERSION before each publish
 # to force Cloudflare to treat your worker and static assets as a new
