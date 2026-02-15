@@ -1556,6 +1556,28 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
 
     // Dynamic robots.txt + sitemap.xml (Minimal SEO 2025 - Google Standards)
     if ((method === 'GET' || method === 'HEAD')) {
+      if (path === '/.well-known/apple-developer-merchantid-domain-association') {
+        if (env.ASSETS) {
+          // Try canonical Apple Pay verification path first.
+          let assetResp = await env.ASSETS.fetch(new Request(new URL('/.well-known/apple-developer-merchantid-domain-association', req.url)));
+          // Fallback for environments that skip dot-directories during asset upload.
+          if (assetResp.status !== 200) {
+            assetResp = await env.ASSETS.fetch(new Request(new URL('/apple-developer-merchantid-domain-association', req.url)));
+          }
+          if (assetResp.status === 200) {
+            const txt = await assetResp.text();
+            return new Response(txt.trim(), {
+              status: 200,
+              headers: {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Cache-Control': 'public, max-age=300'
+              }
+            });
+          }
+        }
+        return new Response('Not found', { status: 404 });
+      }
+
       if (path === '/robots.txt') {
         if (env.DB) await initDB(env);
         const txt = await buildMinimalRobotsTxt(env, req);
