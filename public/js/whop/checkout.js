@@ -13,16 +13,24 @@
    * Load the Whop checkout loader script.
    * (Fix for: loadWhopScript is not defined)
    */
-  function loadWhopScript() {
-    if (window.Whop) return Promise.resolve();
+  function loadWhopScript(opts = {}) {
+    const forceReload = !!opts.forceReload;
+    if (window.Whop && !forceReload) return Promise.resolve();
     if (scriptPromise) return scriptPromise;
 
     scriptPromise = new Promise((resolve, reject) => {
       const s = document.createElement('script');
-      s.src = 'https://js.whop.com/static/checkout/loader.js';
+      const cacheBust = forceReload ? `?t=${Date.now()}` : '';
+      s.src = `https://js.whop.com/static/checkout/loader.js${cacheBust}`;
       s.async = true;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error('Failed to load Whop checkout'));
+      s.onload = () => {
+        scriptPromise = null;
+        resolve();
+      };
+      s.onerror = () => {
+        scriptPromise = null;
+        reject(new Error('Failed to load Whop checkout'));
+      };
       document.head.appendChild(s);
     });
     return scriptPromise;
@@ -421,6 +429,11 @@
         revealCheckout();
       }
 
+      // If script was preloaded earlier, force one re-scan pass to mount embed reliably.
+      if (!container.querySelector('iframe')) {
+        loadWhopScript({ forceReload: true }).catch(() => {});
+      }
+
       // Keep user informed on slow networks instead of showing blank panel
       loadingTimeout = setTimeout(() => {
         if (loadingEl && loadingEl.parentNode) {
@@ -430,6 +443,14 @@
           `;
         }
       }, 4000);
+
+      // Hard fallback: if embed still doesn't mount, use hosted checkout URL.
+      setTimeout(() => {
+        if (container.querySelector('iframe')) return;
+        if (opts.checkoutUrl) {
+          window.location.href = opts.checkoutUrl;
+        }
+      }, 9000);
 
       // OPTIMIZATION: Removed useless interval loop that checked for embed
       // The Whop script handles the embed rendering internally
