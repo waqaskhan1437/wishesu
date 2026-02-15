@@ -370,7 +370,10 @@
       // Restore buttons before redirect
       restoreButtons();
 
-      if (typeof window.whopCheckout === 'function') {
+      // Reliability-first: hosted Whop checkout avoids embedded loader hangs.
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else if (typeof window.whopCheckout === 'function') {
         window.whopCheckout({
           planId: data.plan_id,
           email: data.email || email,
@@ -382,8 +385,6 @@
           amount: window.currentTotal,
           checkoutUrl: data.checkout_url
         });
-      } else if (data.checkout_url) {
-        window.location.href = data.checkout_url;
       } else {
         throw new Error('Checkout session not ready. Please try again.');
       }

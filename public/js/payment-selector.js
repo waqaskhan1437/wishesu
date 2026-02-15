@@ -532,8 +532,13 @@
     // Close selector modal
     window.PaymentSelector.close();
 
-    // Prefer embedded Whop checkout whenever available.
-    // Some API fallback responses include plan_id without checkout_url.
+    // Reliability-first: hosted Whop checkout is more stable than embedded mode.
+    if (data.checkout_url) {
+      window.location.href = data.checkout_url;
+      return;
+    }
+
+    // Fallback to embedded checkout only if hosted URL is unavailable.
     if (typeof window.whopCheckout === 'function') {
       window.whopCheckout({
         planId: data.plan_id,
@@ -547,8 +552,6 @@
         amount: checkoutData.amount,
         checkoutUrl: data.checkout_url
       });
-    } else if (data.checkout_url) {
-      window.location.href = data.checkout_url;
     } else {
       throw new Error('Checkout session not ready. Please try again.');
     }
