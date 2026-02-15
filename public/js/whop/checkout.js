@@ -33,6 +33,7 @@
   let savedAddons = [];
 
   let lastAmount = 0;
+  let whopWarmupTriggered = false;
 
   function formatUSD(amount) {
     const n = Number(amount);
@@ -336,8 +337,28 @@
       return;
     }
 
-    container.innerHTML = embed;
+    container.innerHTML = `
+      <div class="whop-inline-loading" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;min-height:260px;color:#6b7280;">
+        <div style="width:28px;height:28px;border:3px solid #e5e7eb;border-top-color:#2563eb;border-radius:50%;animation:whop-spin 0.7s linear infinite;"></div>
+        <div style="font-size:14px;">Loading secure checkout...</div>
+      </div>
+      <div class="whop-embed-shell" style="opacity:0;transition:opacity .2s ease;">
+        ${embed}
+      </div>
+    `;
     //console.log('🟢 Embed inserted into container');
+
+    const loadingEl = container.querySelector('.whop-inline-loading');
+    const embedShell = container.querySelector('.whop-embed-shell');
+    let observer = null;
+    let loadingTimeout = null;
+
+    const revealCheckout = () => {
+      if (embedShell) embedShell.style.opacity = '1';
+      if (loadingEl && loadingEl.parentNode) loadingEl.parentNode.removeChild(loadingEl);
+      if (observer) observer.disconnect();
+      if (loadingTimeout) clearTimeout(loadingTimeout);
+    };
 
     // Lock body scroll before showing overlay
     document.documentElement.classList.add('whop-open');
@@ -387,6 +408,29 @@
       // Update price header once after script loads
       updatePriceHeader(overlay, lastAmount);
 
+      // Reveal checkout once Whop iframe is mounted
+      observer = new MutationObserver(() => {
+        if (container.querySelector('iframe')) {
+          revealCheckout();
+        }
+      });
+      observer.observe(container, { childList: true, subtree: true });
+
+      // If iframe is already present (fast path), reveal immediately
+      if (container.querySelector('iframe')) {
+        revealCheckout();
+      }
+
+      // Keep user informed on slow networks instead of showing blank panel
+      loadingTimeout = setTimeout(() => {
+        if (loadingEl && loadingEl.parentNode) {
+          loadingEl.innerHTML = `
+            <div style="width:28px;height:28px;border:3px solid #e5e7eb;border-top-color:#2563eb;border-radius:50%;animation:whop-spin 0.7s linear infinite;"></div>
+            <div style="font-size:14px;">Still loading checkout...</div>
+          `;
+        }
+      }, 4000);
+
       // OPTIMIZATION: Removed useless interval loop that checked for embed
       // The Whop script handles the embed rendering internally
 
@@ -397,27 +441,29 @@
       // Unlock body
       document.documentElement.classList.remove('whop-open');
       document.body.classList.remove('whop-open');
+      if (observer) observer.disconnect();
+      if (loadingTimeout) clearTimeout(loadingTimeout);
     }
   }
 
   window.whopCheckout = openCheckout;
 
-  // OPTIMIZATION: Preload Whop script as soon as possible to make checkout faster
-  // Use requestIdleCallback if available; fallback to a short timeout
+  // Preload Whop script aggressively to reduce first-open latency.
   const preload = () => {
-    if (window.requestIdleCallback) {
-      window.requestIdleCallback(() => loadWhopScript().catch(() => {}));
-    } else {
-      // Schedule soon after the page becomes interactive; 500ms delay balances
-      // not blocking critical rendering while avoiding long wait times
-      setTimeout(() => loadWhopScript().catch(() => {}), 500);
-    }
+    if (whopWarmupTriggered) return;
+    whopWarmupTriggered = true;
+    loadWhopScript().catch(() => {});
   };
 
-  // Trigger preload once DOM is interactive or complete
+  // Trigger preload once DOM is interactive or complete.
   if (document.readyState === 'interactive' || document.readyState === 'complete') {
-    preload();
+    setTimeout(preload, 0);
   } else {
     document.addEventListener('DOMContentLoaded', preload);
   }
+
+  // Also warm up on first user interaction in case idle callbacks are delayed.
+  ['pointerdown', 'touchstart', 'keydown'].forEach((evt) => {
+    window.addEventListener(evt, preload, { once: true, passive: true });
+  });
 })();
