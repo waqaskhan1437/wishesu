@@ -532,8 +532,9 @@
     // Close selector modal
     window.PaymentSelector.close();
 
-    // Use embedded Whop checkout if available
-    if (typeof window.whopCheckout === 'function' && data.checkout_url) {
+    // Prefer embedded Whop checkout whenever available.
+    // Some API fallback responses include plan_id without checkout_url.
+    if (typeof window.whopCheckout === 'function') {
       window.whopCheckout({
         planId: data.plan_id,
         email: data.email || checkoutData.email,
@@ -548,6 +549,8 @@
       });
     } else if (data.checkout_url) {
       window.location.href = data.checkout_url;
+    } else {
+      throw new Error('Checkout session not ready. Please try again.');
     }
   }
 

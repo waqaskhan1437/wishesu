@@ -370,7 +370,7 @@
       // Restore buttons before redirect
       restoreButtons();
 
-      if (typeof window.whopCheckout === 'function' && data.checkout_url) {
+      if (typeof window.whopCheckout === 'function') {
         window.whopCheckout({
           planId: data.plan_id,
           email: data.email || email,
@@ -384,6 +384,8 @@
         });
       } else if (data.checkout_url) {
         window.location.href = data.checkout_url;
+      } else {
+        throw new Error('Checkout session not ready. Please try again.');
       }
     } catch (err) {
       console.error('Checkout error:', err);
