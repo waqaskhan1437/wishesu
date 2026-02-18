@@ -2,5 +2,9 @@ User-agent: *
 Allow: /
 Disallow: /admin/
 Disallow: /api/
+Disallow: /buyer-order
+Disallow: /order-detail
+Disallow: /order-success
+Disallow: /success
 
 Sitemap: https://wishvideo.com/sitemap.xml

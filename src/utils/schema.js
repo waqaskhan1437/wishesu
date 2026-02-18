@@ -115,7 +115,7 @@ export function generateVideoObject(product, baseUrl) {
     "interactionStatistic": {
       "@type": "InteractionCounter",
       "interactionType": { "@type": "WatchAction" },
-      "userInteractionCount": parseInt(product.view_count) || 100
+      "userInteractionCount": parseInt(product.view_count) || 0
     },
     "publisher": {
       "@type": "Organization",
@@ -196,14 +196,16 @@ export function generateProductSchema(product, baseUrl, reviews = []) {
     };
   }
 
-  // Add aggregateRating (always present, even with 0 reviews for better Rich Results)
-  schema.aggregateRating = {
-    "@type": "AggregateRating",
-    "ratingValue": parseFloat(product.rating_average) || 5.0,
-    "reviewCount": Math.max(1, parseInt(product.review_count) || 1),
-    "bestRating": 5,
-    "worstRating": 1
-  };
+  // Only add aggregateRating when real reviews exist
+  if (parseInt(product.review_count) > 0) {
+    schema.aggregateRating = {
+      "@type": "AggregateRating",
+      "ratingValue": parseFloat(product.rating_average),
+      "reviewCount": parseInt(product.review_count),
+      "bestRating": 5,
+      "worstRating": 1
+    };
+  }
 
   // Add individual reviews (first 5 for Rich Results)
   if (reviews && reviews.length > 0) {
@@ -309,6 +311,143 @@ export function generateCollectionSchema(products, baseUrl) {
     "itemListElement": itemListElement
   };
 
+  return JSON.stringify(schema);
+}
+
+/**
+ * Generate BlogPosting JSON-LD schema for individual blog posts
+ * @param {Object} blog - Blog data from database
+ * @param {string} baseUrl - Site base URL
+ * @returns {string} JSON-LD schema as string
+ */
+export function generateBlogPostingSchema(blog, baseUrl) {
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": blog.title || '',
+    "description": (blog.seo_description || blog.description || '').substring(0, 160),
+    "image": blog.thumbnail_url || `${baseUrl}/favicon.ico`,
+    "datePublished": blog.created_at ? new Date(blog.created_at).toISOString() : new Date().toISOString(),
+    "dateModified": blog.updated_at
+      ? new Date(blog.updated_at).toISOString()
+      : (blog.created_at ? new Date(blog.created_at).toISOString() : new Date().toISOString()),
+    "author": {
+      "@type": "Organization",
+      "name": "WishVideo"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "WishVideo",
+      "logo": {
+        "@type": "ImageObject",
+        "url": `${baseUrl}/favicon.ico`
+      }
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": `${baseUrl}/blog/${blog.slug}`
+    }
+  };
+  return JSON.stringify(schema);
+}
+
+/**
+ * Generate QAPage JSON-LD schema for forum question pages
+ * @param {Object} question - Forum question data
+ * @param {Array} replies - Array of approved replies
+ * @param {string} baseUrl - Site base URL
+ * @returns {string} JSON-LD schema as string
+ */
+export function generateQAPageSchema(question, replies, baseUrl) {
+  const suggestedAnswers = (replies || []).map(r => ({
+    "@type": "Answer",
+    "text": r.content || '',
+    "dateCreated": r.created_at ? new Date(r.created_at).toISOString() : undefined,
+    "author": {
+      "@type": "Person",
+      "name": r.name || 'Anonymous'
+    }
+  }));
+
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "QAPage",
+    "mainEntity": {
+      "@type": "Question",
+      "name": question.title || '',
+      "text": question.content || '',
+      "dateCreated": question.created_at ? new Date(question.created_at).toISOString() : undefined,
+      "author": {
+        "@type": "Person",
+        "name": question.name || 'Anonymous'
+      },
+      "answerCount": suggestedAnswers.length
+    }
+  };
+
+  if (suggestedAnswers.length > 0) {
+    schema.mainEntity.suggestedAnswer = suggestedAnswers;
+    // Mark the first reply as the accepted answer if available
+    schema.mainEntity.acceptedAnswer = suggestedAnswers[0];
+  }
+
+  return JSON.stringify(schema);
+}
+
+/**
+ * Generate BreadcrumbList JSON-LD schema
+ * @param {Array} items - Array of {name, url} breadcrumb items
+ * @returns {string} JSON-LD schema as string
+ */
+export function generateBreadcrumbSchema(items) {
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": items.map((item, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "name": item.name,
+      "item": item.url
+    }))
+  };
+  return JSON.stringify(schema);
+}
+
+/**
+ * Generate Organization JSON-LD schema for homepage
+ * @param {Object} settings - Site settings (site_url, site_title, etc.)
+ * @returns {string} JSON-LD schema as string
+ */
+export function generateOrganizationSchema(settings) {
+  const baseUrl = settings.site_url || '';
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": settings.site_title || 'WishVideo',
+    "url": baseUrl,
+    "logo": `${baseUrl}/favicon.ico`
+  };
+  return JSON.stringify(schema);
+}
+
+/**
+ * Generate WebSite JSON-LD schema for homepage
+ * @param {Object} settings - Site settings
+ * @returns {string} JSON-LD schema as string
+ */
+export function generateWebSiteSchema(settings) {
+  const baseUrl = settings.site_url || '';
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": settings.site_title || 'WishVideo',
+    "url": baseUrl,
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": `${baseUrl}/products?q={search_term_string}`,
+      "query-input": "required name=search_term_string"
+    }
+  };
   return JSON.stringify(schema);
 }
 

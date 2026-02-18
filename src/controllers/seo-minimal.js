@@ -183,12 +183,20 @@ export async function buildMinimalSitemapXml(env, req) {
   // Products (max 10,000)
   try {
     const products = await env.DB.prepare(
-      'SELECT id, slug FROM products WHERE status = ? ORDER BY id DESC LIMIT 10000'
+      'SELECT id, slug, seo_canonical, updated_at, created_at FROM products WHERE status = ? ORDER BY id DESC LIMIT 10000'
     ).bind('active').all();
-    
+
     for (const p of products.results || []) {
+      // Fix 11: Use seo_canonical if set, otherwise construct path
+      const loc = (p.seo_canonical && String(p.seo_canonical).trim())
+        ? String(p.seo_canonical).trim()
+        : `${base}/product-${p.id}/${p.slug || p.id}`;
+      const lastmod = (p.updated_at || p.created_at)
+        ? new Date(p.updated_at || p.created_at).toISOString().split('T')[0]
+        : undefined;
       urls.push({
-        loc: `${base}/product-${p.id}/${p.slug || p.id}`,
+        loc,
+        lastmod,
         changefreq: 'weekly',
         priority: 0.8
       });
@@ -198,14 +206,56 @@ export async function buildMinimalSitemapXml(env, req) {
   // Blog posts (max 10,000)
   try {
     const blogs = await env.DB.prepare(
-      'SELECT slug FROM blogs WHERE status = ? ORDER BY created_at DESC LIMIT 10000'
+      'SELECT slug, updated_at, created_at FROM blogs WHERE status = ? ORDER BY created_at DESC LIMIT 10000'
     ).bind('published').all();
-    
+
     for (const b of blogs.results || []) {
+      const lastmod = (b.updated_at || b.created_at)
+        ? new Date(b.updated_at || b.created_at).toISOString().split('T')[0]
+        : undefined;
       urls.push({
         loc: `${base}/blog/${b.slug}`,
+        lastmod,
         changefreq: 'weekly',
         priority: 0.7
+      });
+    }
+  } catch (e) {}
+
+  // CMS pages (published custom pages)
+  try {
+    const pages = await env.DB.prepare(
+      "SELECT slug, updated_at, created_at FROM pages WHERE status = 'published' AND page_type = 'custom' AND slug IS NOT NULL ORDER BY created_at DESC LIMIT 10000"
+    ).all();
+
+    for (const p of pages.results || []) {
+      const lastmod = (p.updated_at || p.created_at)
+        ? new Date(p.updated_at || p.created_at).toISOString().split('T')[0]
+        : undefined;
+      urls.push({
+        loc: `${base}/${p.slug}`,
+        lastmod,
+        changefreq: 'monthly',
+        priority: 0.6
+      });
+    }
+  } catch (e) {}
+
+  // Forum questions (approved)
+  try {
+    const questions = await env.DB.prepare(
+      "SELECT slug, updated_at, created_at FROM forum_questions WHERE status = 'approved' AND slug IS NOT NULL ORDER BY created_at DESC LIMIT 10000"
+    ).all();
+
+    for (const q of questions.results || []) {
+      const lastmod = (q.updated_at || q.created_at)
+        ? new Date(q.updated_at || q.created_at).toISOString().split('T')[0]
+        : undefined;
+      urls.push({
+        loc: `${base}/forum/${q.slug}`,
+        lastmod,
+        changefreq: 'weekly',
+        priority: 0.5
       });
     }
   } catch (e) {}
@@ -213,7 +263,8 @@ export async function buildMinimalSitemapXml(env, req) {
   // Core pages
   urls.push(
     { loc: `${base}/products`, changefreq: 'daily', priority: 0.9 },
-    { loc: `${base}/blog`, changefreq: 'daily', priority: 0.8 }
+    { loc: `${base}/blog`, changefreq: 'daily', priority: 0.8 },
+    { loc: `${base}/forum`, changefreq: 'daily', priority: 0.7 }
   );
 
   // Build XML (UTF-8, Google format)

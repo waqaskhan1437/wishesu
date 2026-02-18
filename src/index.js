@@ -13,7 +13,7 @@ import { handleProductRouting } from './controllers/products.js';
 import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
 import { generateBackupData, sendBackupEmail, createBackup as createBackupApi } from './controllers/backup.js';
-import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML } from './utils/schema.js';
+import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML, generateBlogPostingSchema, generateQAPageSchema, generateBreadcrumbSchema, generateOrganizationSchema, generateWebSiteSchema } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildMinimalRobotsTxt, buildMinimalSitemapXml, getMinimalSEOSettings } from './controllers/seo-minimal.js';
 import { getNoindexMetaTags, shouldNoindexUrl } from './controllers/noindex.js';
@@ -1681,11 +1681,34 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               const comments = commentsResult.results || [];
               const htmlRaw = generateBlogPostHTML(blog, previousBlogs, comments);
               let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+
+              // Fix 7: Inject BlogPosting JSON-LD schema
+              try {
+                const blogSchemaJson = generateBlogPostingSchema(blog, url.origin);
+                html = html.replace('</head>', `<script type="application/ld+json">${blogSchemaJson}</script>\n</head>`);
+              } catch (_) {}
+
+              // Fix 7: Add og:url to blog pages
+              try {
+                const ogUrlTag = `<meta property="og:url" content="${seo.canonical}">`;
+                html = html.replace('</head>', `${ogUrlTag}\n</head>`);
+              } catch (_) {}
+
+              // Fix 9: Add BreadcrumbList to blog pages
+              try {
+                const breadcrumbJson = generateBreadcrumbSchema([
+                  { name: 'Home', url: url.origin },
+                  { name: 'Blog', url: `${url.origin}/blog` },
+                  { name: blog.title || '', url: seo.canonical }
+                ]);
+                html = html.replace('</head>', `<script type="application/ld+json">${breadcrumbJson}</script>\n</head>`);
+              } catch (_) {}
+
               // Inject analytics scripts and verification meta tags
               try {
                 html = await injectAnalyticsAndMeta(env, html);
               } catch (e) {}
-              
+
               const resp = new Response(html, {
                 status: 200,
                 headers: {
@@ -1774,11 +1797,49 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               
               const htmlRaw = generateForumQuestionHTML(question, replies, sidebar);
               let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+
+              // Fix 8: Inject QAPage JSON-LD schema
+              try {
+                const qaSchemaJson = generateQAPageSchema(question, replies, url.origin);
+                html = html.replace('</head>', `<script type="application/ld+json">${qaSchemaJson}</script>\n</head>`);
+              } catch (_) {}
+
+              // Fix 8: Add OG tags to forum pages
+              try {
+                const safeForumTitle = (question.title || '').replace(/"/g, '&quot;');
+                const forumContentSnippet = (question.content || '').replace(/<[^>]*>/g, '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+                const ogTags = `<meta property="og:title" content="${safeForumTitle}">
+    <meta property="og:description" content="${forumContentSnippet}">
+    <meta property="og:url" content="${seo.canonical}">
+    <meta property="og:type" content="website">`;
+                html = html.replace('</head>', `${ogTags}\n</head>`);
+              } catch (_) {}
+
+              // Fix 8: Fix description meta to use actual content snippet
+              try {
+                const contentSnippet = (question.content || '').replace(/<[^>]*>/g, '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+                const safeQTitle = (question.title || '').replace(/"/g, '&quot;');
+                html = html.replace(
+                  `<meta name="description" content="${safeQTitle}">`,
+                  `<meta name="description" content="${contentSnippet || safeQTitle}">`
+                );
+              } catch (_) {}
+
+              // Fix 9: Add BreadcrumbList to forum pages
+              try {
+                const breadcrumbJson = generateBreadcrumbSchema([
+                  { name: 'Home', url: url.origin },
+                  { name: 'Forum', url: `${url.origin}/forum` },
+                  { name: question.title || '', url: seo.canonical }
+                ]);
+                html = html.replace('</head>', `<script type="application/ld+json">${breadcrumbJson}</script>\n</head>`);
+              } catch (_) {}
+
               // Inject analytics scripts and verification meta tags
               try {
                 html = await injectAnalyticsAndMeta(env, html);
               } catch (e) {}
-              
+
               const resp = new Response(html, {
                 status: 200,
                 headers: {
@@ -2006,14 +2067,49 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               if (html.includes('<body') && !html.includes('global-components.js')) {
                 html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script src="/js/global-components.js"></script>');
               }
-              
+
+              // Apply SEO tags (robots, canonical)
+              const responseHeaders = {
+                'Content-Type': 'text/html; charset=utf-8',
+                'X-Worker-Version': VERSION,
+                'X-Default-Page': defaultPageType
+              };
+              try {
+                const seo = await getSeoForRequest(env, req, { path });
+                html = applySeoToHtml(html, seo.robots, seo.canonical);
+                responseHeaders['X-Robots-Tag'] = seo.robots;
+                // Add noindex tags if needed
+                const noindexTags = await getNoindexMetaTags(env, path);
+                if (noindexTags) {
+                  html = html.replace(/<\/head>/i, `\n    ${noindexTags}\n  </head>`);
+                }
+                // Inject analytics and verification tags
+                try {
+                  html = await injectAnalyticsAndMeta(env, html);
+                } catch (_) {}
+                // Homepage: inject Organization + WebSite schema
+                if (defaultPageType === 'home') {
+                  try {
+                    const seoResp = await getMinimalSEOSettings(env);
+                    let seoSettings = {};
+                    if (seoResp && typeof seoResp.json === 'function') {
+                      const parsed = await seoResp.json();
+                      seoSettings = (parsed && parsed.settings) || {};
+                    }
+                    if (!seoSettings.site_url) seoSettings.site_url = url.origin;
+                    if (!seoSettings.site_title) seoSettings.site_title = 'WishVideo';
+                    const orgSchema = generateOrganizationSchema(seoSettings);
+                    const siteSchema = generateWebSiteSchema(seoSettings);
+                    html = html.replace(/<\/head>/i, `<script type="application/ld+json">${orgSchema}</script>\n<script type="application/ld+json">${siteSchema}</script>\n</head>`);
+                  } catch (_) {}
+                }
+              } catch (e) {
+                // ignore SEO injection errors
+              }
+
               return new Response(html, {
                 status: 200,
-                headers: {
-                  'Content-Type': 'text/html; charset=utf-8',
-                  'X-Worker-Version': VERSION,
-                  'X-Default-Page': defaultPageType
-                }
+                headers: responseHeaders
               });
             }
           } catch (e) {
@@ -2165,6 +2261,21 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                   html = html.replace('<meta name="description" content="Custom personalized video greetings from Africa.">', `<meta name="description" content="${safeDesc}">`);
                   // Keywords tag (if provided, override default keywords)
                   html = html.replace('<meta name="keywords" content="video, greeting, birthday, wish, africa">', `<meta name="keywords" content="${safeKeywords}">`);
+
+                  // Fix 6: Add og:url to product pages
+                  try {
+                    const productSeo = await getSeoForRequest(env, req, { product });
+                    const ogUrlTag = `<meta property="og:url" content="${productSeo.canonical}">`;
+                    html = html.replace('</head>', `${ogUrlTag}\n</head>`);
+
+                    // Fix 9: Add BreadcrumbList schema to product pages
+                    const breadcrumbJson = generateBreadcrumbSchema([
+                      { name: 'Home', url: baseUrl },
+                      { name: 'Products', url: `${baseUrl}/products` },
+                      { name: product.title || '', url: productSeo.canonical }
+                    ]);
+                    html = html.replace('</head>', `<script type="application/ld+json">${breadcrumbJson}</script>\n</head>`);
+                  } catch (_) {}
                 }
               }
             }
@@ -2187,6 +2298,23 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                   const schemaJson = generateCollectionSchema(products, baseUrl);
                   html = injectSchemaIntoHTML(html, 'collection-schema', schemaJson);
                 }
+              }
+
+              // Fix 10: Inject Organization + WebSite schema on homepage
+              if (assetPath === '/index.html' || assetPath === '/') {
+                try {
+                  const seoResp2 = await getMinimalSEOSettings(env);
+                  let seoSettings2 = {};
+                  if (seoResp2 && typeof seoResp2.json === 'function') {
+                    const parsed2 = await seoResp2.json();
+                    seoSettings2 = (parsed2 && parsed2.settings) || {};
+                  }
+                  if (!seoSettings2.site_url) seoSettings2.site_url = baseUrl;
+                  if (!seoSettings2.site_title) seoSettings2.site_title = 'WishVideo';
+                  const orgSchema = generateOrganizationSchema(seoSettings2);
+                  const siteSchema = generateWebSiteSchema(seoSettings2);
+                  html = html.replace(/<\/head>/i, `<script type="application/ld+json">${orgSchema}</script>\n<script type="application/ld+json">${siteSchema}</script>\n</head>`);
+                } catch (_) {}
               }
             }
             
