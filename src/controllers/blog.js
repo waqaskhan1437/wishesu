@@ -188,7 +188,15 @@ export async function saveBlog(env, body) {
     const now = Date.now();
 
     if (id) {
-      // Update existing blog
+      // Partial update: fetch existing blog and only overwrite fields that were explicitly sent
+      const existing = await env.DB.prepare('SELECT * FROM blogs WHERE id = ?').bind(id).first();
+      if (!existing) {
+        return json({ error: 'Blog post not found' }, 404);
+      }
+
+      // Helper: use the new value only if the key was present in the request body
+      const pick = (key, fallback) => (key in body) ? (body[key] ?? '') : (fallback ?? '');
+
       await env.DB.prepare(`
         UPDATE blogs SET
           title = ?,
@@ -207,15 +215,15 @@ export async function saveBlog(env, body) {
       `).bind(
         title,
         finalSlug,
-        description || '',
-        content || '',
-        thumbnail_url || '',
-        custom_css || '',
-        custom_js || '',
-        seo_title || '',
-        seo_description || '',
-        seo_keywords || '',
-        status,
+        pick('description', existing.description),
+        pick('content', existing.content),
+        pick('thumbnail_url', existing.thumbnail_url),
+        pick('custom_css', existing.custom_css),
+        pick('custom_js', existing.custom_js),
+        pick('seo_title', existing.seo_title),
+        pick('seo_description', existing.seo_description),
+        pick('seo_keywords', existing.seo_keywords),
+        pick('status', existing.status),
         now,
         id
       ).run();
