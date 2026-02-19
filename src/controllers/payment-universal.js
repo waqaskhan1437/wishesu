@@ -377,12 +377,33 @@ export async function getWhopCheckoutSettings(env) {
 }
 
 /**
+ * Identify gateway from payload/headers
+ */
+function identifyGateway(payload, gateway) {
+  const type = (gateway.gateway_type || '').toLowerCase();
+  
+  if (type === 'whop') {
+    return !!(payload.checkout_id || payload.subscription_id || (payload.type && payload.type.includes('payment.')));
+  }
+  
+  if (type === 'paypal') {
+    return !!(payload.event_type || payload.resource);
+  }
+  
+  if (type === 'stripe') {
+    return !!(payload.object === 'event' || (payload.type && payload.type.includes('payment_intent.')));
+  }
+  
+  return false;
+}
+
+/**
  * Universal webhook handler - handles webhooks from any payment gateway
  */
-export async function handleUniversalWebhook(env, payload, headers) {
+export async function handleUniversalWebhook(env, payload, headers, rawBody) {
   try {
     // Ensure payment gateways table exists
-    await ensurePaymentGatewaysTable(env);
+    await ensureTable(env);
     
     // Check if this is a PayPal or Whop webhook that should be processed by the original handler
     // for backward compatibility
@@ -411,7 +432,7 @@ export async function handleUniversalWebhook(env, payload, headers) {
     
     // Get all enabled gateways to check signatures
     const gateways = await env.DB.prepare(
-      'SELECT * FROM payment_gateways WHERE enabled = 1'
+      'SELECT * FROM payment_gateways WHERE is_enabled = 1'
     ).all();
     
     // Try to identify the calling gateway based on the payload/headers
@@ -438,8 +459,8 @@ export async function handleUniversalWebhook(env, payload, headers) {
     });
     
     // Verify webhook signature if secret is configured
-    if (gateway.secret && gateway.secret.trim()) {
-      const isValid = await verifyWebhookSignature(payload, headers, gateway);
+    if (gateway.webhook_secret && gateway.webhook_secret.trim()) {
+      const isValid = await verifyWebhookSignature(rawBody, headers, gateway.webhook_secret);
       if (!isValid) {
         console.error(`Invalid signature for gateway: ${gateway.name}`);
         return new Response(JSON.stringify({ error: 'Invalid signature' }), { 
@@ -471,18 +492,14 @@ export async function handleUniversalWebhook(env, payload, headers) {
 /**
  * Verify webhook signature (generic - supports multiple formats)
  */
-async function verifyWebhookSignature(req, secret) {
+async function verifyWebhookSignature(rawBody, headers, secret) {
   try {
-    // Get raw body for signature verification
-    const body = await req.text();
-    req = new Request(req.url, { method: req.method, headers: req.headers, body }); // Reset body
-    
     // Try different signature formats
-    const signatureHeader = req.headers.get('x-signature') || 
-                          req.headers.get('x-webhook-signature') || 
-                          req.headers.get('stripe-signature') || 
-                          req.headers.get('paypal-transmission-sig') ||
-                          req.headers.get('authorization');
+    const signatureHeader = headers.get('x-signature') || 
+                          headers.get('x-webhook-signature') || 
+                          headers.get('stripe-signature') || 
+                          headers.get('paypal-transmission-sig') ||
+                          headers.get('authorization');
     
     if (!signatureHeader) {
       return true; // If no signature header, assume valid (some gateways don't provide)
@@ -574,7 +591,7 @@ async function processPaymentEvent(env, gateway, payload) {
  */
 function isPaymentSuccessEvent(eventType, payload, gatewayName) {
   const successIndicators = {
-    stripe: ['payment_intent.succeeded', 'payment_intent.payment_failed', 'invoice.paid'],
+    stripe: ['payment_intent.succeeded', 'invoice.paid'],
     paypal: ['PAYMENT.CAPTURE.COMPLETED', 'BILLING.SUBSCRIPTION.ACTIVATED'],
     whop: ['checkout.completed', 'subscription.created'],
     gumroad: ['charge_success', 'subscription_renewal'],
@@ -655,10 +672,10 @@ export async function migratePayPalSettings(env) {
         name, 
         gateway_type, 
         webhook_url, 
-        secret, 
+        webhook_secret, 
         custom_code, 
-        enabled, 
-        config,
+        is_enabled, 
+        whop_product_id,
         created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).bind(
@@ -690,12 +707,8 @@ function processPayPalWebhook(payload, headers) {
     gateway: 'paypal'
   };
 }`, // Custom code for PayPal webhook processing
-      paypalSettings.enabled || false,
-      JSON.stringify({
-        client_id: paypalSettings.client_id || '',
-        mode: paypalSettings.mode || 'sandbox',
-        original_settings: paypalSettings // Preserve original settings
-      })
+      paypalSettings.enabled ? 1 : 0,
+      paypalSettings.client_id || ''
     ).run();
     
     console.log('PayPal settings migrated to universal system');
@@ -757,17 +770,18 @@ export async function migrateWhopSettings(env) {
         name, 
         gateway_type, 
         webhook_url, 
-        secret, 
+        webhook_secret, 
         custom_code, 
-        enabled, 
-        config,
+        is_enabled, 
+        whop_product_id,
+        whop_api_key,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     `).bind(
       'Whop',
       'whop',
       webhookUrl,
-      whopSettings.webhook_secret || whopSettings.api_key || '',  // Use existing secret/api key
+      whopSettings.webhook_secret || '',
       `// Custom Whop webhook processing
 function processWhopWebhook(payload, headers) {
   // Verify Whop signature if needed
@@ -792,13 +806,9 @@ function processWhopWebhook(payload, headers) {
     gateway: 'whop'
   };
 }`, // Custom code for Whop webhook processing
-      whopSettings.enabled !== false, // Default to enabled if not specified
-      JSON.stringify({
-        api_key: whopSettings.api_key || '',
-        product_id: whopSettings.product_id || whopSettings.whop_product_id || '',
-        webhook_secret: whopSettings.webhook_secret || '',
-        original_settings: whopSettings // Preserve original settings
-      })
+      whopSettings.enabled !== false ? 1 : 0,
+      whopSettings.product_id || whopSettings.whop_product_id || '',
+      whopSettings.api_key || ''
     ).run();
     
     console.log('Whop settings migrated to universal system');
@@ -877,7 +887,7 @@ export async function handleDeletePaymentGateway(env, id) {
  */
 export async function handlePaymentTab(env) {
   // Ensure the payment_gateways table exists
-  await ensurePaymentGatewaysTable(env);
+  await ensureTable(env);
   
   // Attempt to migrate existing PayPal and Whop settings if they exist and not yet migrated
   await migratePayPalSettings(env).catch(console.error);

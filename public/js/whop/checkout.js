@@ -404,24 +404,32 @@
         }
       }, 4000);
 
-      // Hard fallback: if embed still doesn't mount after 9s, try hosted checkout URL
+      // Hard fallback: if embed still doesn't mount after 7s, try hosted checkout URL
       setTimeout(() => {
         if (container.querySelector('iframe')) return;
         if (opts.checkoutUrl) {
+          console.log('🔄 Embedded checkout taking too long, redirecting to hosted checkout...');
           window.location.href = opts.checkoutUrl;
           return;
         }
-        // No checkoutUrl fallback — let the hard timeout below handle cleanup
-      }, 9000);
+      }, 7000);
 
-      // Fix B: Hard timeout — if no iframe mounted after 12s and no redirect happened,
+      // Fix B: Hard timeout — if no iframe mounted after 15s and no redirect happened,
       // close the overlay and show error
       hardTimeout = setTimeout(() => {
         if (container.querySelector('iframe')) return;
         // Iframe never mounted — clean up and inform user
         forceCleanup();
-        alert('Checkout could not load. Please try again or refresh the page.');
-      }, 12000);
+        const msg = opts.checkoutUrl 
+          ? 'Checkout taking too long to load. Redirecting to secure checkout page...' 
+          : 'Checkout could not load. Please try again or refresh the page.';
+        
+        if (opts.checkoutUrl) {
+          window.location.href = opts.checkoutUrl;
+        } else {
+          alert(msg);
+        }
+      }, 15000);
 
     } catch (err) {
       console.error('🔴 FAILED TO LOAD WHOP SCRIPT:', err);

@@ -543,8 +543,14 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/whop/webhook') {
-    const body = await req.json();
-    return handleWebhook(env, body);
+    const rawBody = await req.text();
+    let body;
+    try {
+      body = JSON.parse(rawBody);
+    } catch (e) {
+      return json({ error: 'Invalid JSON' }, 400);
+    }
+    return handleWebhook(env, body, req.headers, rawBody);
   }
 
   if (method === 'GET' && path === '/api/whop/test-api') {
@@ -567,8 +573,10 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/paypal/webhook') {
-    const body = await req.json();
-    return handlePayPalWebhook(env, body, req.headers);
+    const rawBody = await req.text();
+    let body;
+    try { body = JSON.parse(rawBody); } catch (e) { return json({ error: 'Invalid JSON' }, 400); }
+    return handlePayPalWebhook(env, body, req.headers, rawBody);
   }
 
   if (method === 'GET' && path === '/api/paypal/client-id') {
@@ -637,8 +645,10 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/payment/universal/webhook') {
-    const body = await req.json();
-    return handleUniversalWebhook(env, body, req.headers);
+    const rawBody = await req.text();
+    let body;
+    try { body = JSON.parse(rawBody); } catch (e) { return json({ error: 'Invalid JSON' }, 400); }
+    return handleUniversalWebhook(env, body, req.headers, rawBody);
   }
 
   if (method === 'GET' && path === '/api/payment/universal/test') {

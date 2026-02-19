@@ -22,12 +22,13 @@ import { canonicalProductPath } from './utils/formatting.js';
 // Inject analytics & verification meta tags (Google Analytics, Facebook Pixel, site verification)
 import { injectAnalyticsAndMeta } from './controllers/analytics.js';
 
+// Auth utilities
+import { isAdminAuthed, createAdminSessionCookie, createLogoutCookie } from './utils/auth.js';
+
 
 // =========================
 // ADMIN AUTH HELPERS (Module Level - OPTIMIZED)
 // =========================
-const ADMIN_COOKIE = 'admin_session';
-const ADMIN_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 function noStoreHeaders(extra = {}) {
   return {
@@ -35,55 +36,6 @@ function noStoreHeaders(extra = {}) {
     'Pragma': 'no-cache',
     ...extra
   };
-}
-
-function base64url(bytes) {
-  const b64 = btoa(String.fromCharCode(...bytes));
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-async function hmacSha256(secret, message) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
-  return base64url(new Uint8Array(sig));
-}
-
-function getCookieValue(cookieHeader, name) {
-  if (!cookieHeader) return null;
-  const parts = cookieHeader.split(';');
-  for (const p of parts) {
-    const [k, ...rest] = p.trim().split('=');
-    if (k === name) return rest.join('=') || '';
-  }
-  return null;
-}
-
-async function isAdminAuthed(req, env) {
-  const cookieHeader = req.headers.get('Cookie') || '';
-  const value = getCookieValue(cookieHeader, ADMIN_COOKIE);
-  if (!value) return false;
-
-  const [tsStr, sig] = value.split('.');
-  if (!tsStr || !sig) return false;
-
-  const ts = Number(tsStr);
-  if (!Number.isFinite(ts)) return false;
-
-  const ageSec = Math.floor((Date.now() - ts) / 1000);
-  if (ageSec < 0 || ageSec > ADMIN_MAX_AGE_SECONDS) return false;
-
-  const secret = env.ADMIN_SESSION_SECRET;
-  if (!secret) return false;
-
-  const expected = await hmacSha256(secret, tsStr);
-  return expected === sig;
 }
 
 // -------------------------------
@@ -1450,25 +1402,23 @@ if (isLoginRoute && method === 'POST') {
 
 
   if (email === (env.ADMIN_EMAIL || '') && password === (env.ADMIN_PASSWORD || '')) {
-    const tsStr = String(Date.now());
-    const sig = await hmacSha256(env.ADMIN_SESSION_SECRET || 'missing', tsStr);
-    const cookieVal = `${tsStr}.${sig}`;
+    const cookieVal = await createAdminSessionCookie(env);
 
     return new Response(null, {
-  status: 302,
-  headers: noStoreHeaders({
-    'Set-Cookie': `${ADMIN_COOKIE}=${cookieVal}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${ADMIN_MAX_AGE_SECONDS}`,
-    'Location': new URL('/admin', req.url).toString()
-  })
-});
+      status: 302,
+      headers: noStoreHeaders({
+        'Set-Cookie': cookieVal,
+        'Location': new URL('/admin', req.url).toString()
+      })
+    });
   }
 
   return new Response('Invalid login', {
-  status: 401,
-  headers: noStoreHeaders({
-    'Set-Cookie': `${ADMIN_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`
-  })
-});
+    status: 401,
+    headers: noStoreHeaders({
+      'Set-Cookie': createLogoutCookie()
+    })
+  });
 }
 
 // Handle logout
@@ -1476,7 +1426,7 @@ if (isLogoutRoute) {
   return new Response(null, {
     status: 302,
     headers: noStoreHeaders({
-      'Set-Cookie': `${ADMIN_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`,
+      'Set-Cookie': createLogoutCookie(),
       'Location': new URL('/admin/login', req.url).toString()
     })
   });

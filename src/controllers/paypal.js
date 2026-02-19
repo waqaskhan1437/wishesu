@@ -426,24 +426,82 @@ export async function capturePayPalOrder(env, body) {
 
 /**
  * Handle PayPal webhook
+ * RELIABILITY: Can be used to reconcile orders if capture fails on frontend
  */
-export async function handlePayPalWebhook(env, body, headers) {
+export async function handlePayPalWebhook(env, body, headers, rawBody) {
   const eventType = body.event_type;
-  console.log('PayPal webhook received:', eventType);
+  const resource = body.resource;
+  
+  console.log('PayPal webhook received:', eventType, resource?.id);
 
-  // Verify webhook signature (recommended for production)
-  // For now, just process the event
-
-  if (eventType === 'CHECKOUT.ORDER.APPROVED') {
-    // Order was approved, can auto-capture if needed
-    const orderId = body.resource?.id;
-    console.log('Order approved:', orderId);
-  }
+  // NOTE: Full PayPal signature verification requires fetching PayPal public keys
+  // and verifying the signature against the raw body. 
+  // For high-security environments, implement verification here.
 
   if (eventType === 'PAYMENT.CAPTURE.COMPLETED') {
-    // Payment was captured
-    const captureId = body.resource?.id;
-    console.log('Payment captured:', captureId);
+    const captureId = resource.id;
+    const orderId = resource.supplementary_data?.related_ids?.order_id || resource.parent_payment;
+    
+    console.log('💰 PayPal Payment Captured:', captureId, 'Order:', orderId);
+    
+    // Check if order already exists (idempotency)
+    try {
+      const existingOrder = await env.DB.prepare(
+        "SELECT id FROM orders WHERE encrypted_data LIKE ?"
+      ).bind(`%"paypalOrderId":"${orderId}"%`).first();
+      
+      if (existingOrder) {
+        console.log('Order already exists for this PayPal checkout, skipping webhook processing');
+        return json({ received: true, duplicate: true });
+      }
+    } catch (e) {
+      console.error('Error checking for existing PayPal order:', e);
+    }
+
+    // Reconciliation logic: If order doesn't exist, we could potentially create it here
+    // using stored metadata from checkout_sessions table.
+    try {
+      const sessionRow = await env.DB.prepare(
+        'SELECT metadata, product_id FROM checkout_sessions WHERE checkout_id = ?'
+      ).bind(orderId).first();
+
+      if (sessionRow?.metadata) {
+        const metadata = JSON.parse(sessionRow.metadata);
+        
+        // Only create if it's a normal order (not a tip)
+        if (metadata.type !== 'tip') {
+          const newOrderId = `PP-REC-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+          const productId = metadata.product_id;
+          const email = metadata.email;
+          const amount = resource.amount?.value || metadata.amount || 0;
+          
+          console.log('🔄 Reconciling missing PayPal order from webhook:', newOrderId);
+          
+          await createOrderRecord(env, {
+            orderId: newOrderId,
+            productId,
+            status: 'PAID',
+            deliveryMinutes: metadata.deliveryTimeMinutes || 60,
+            encryptedData: {
+              email,
+              amount: parseFloat(amount),
+              productId,
+              addons: metadata.addons || [],
+              paypalOrderId: orderId,
+              source: 'webhook-reconciliation'
+            }
+          });
+        } else if (metadata.type === 'tip' && metadata.orderId) {
+          // Handle tip reconciliation
+          await env.DB.prepare(
+            'UPDATE orders SET tip_paid = 1, tip_amount = ? WHERE order_id = ?'
+          ).bind(parseFloat(resource.amount?.value || metadata.tipAmount || 0), metadata.orderId).run();
+          console.log('✅ Reconciled tip from PayPal webhook:', metadata.orderId);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to reconcile PayPal order from webhook:', e);
+    }
   }
 
   return json({ received: true });
