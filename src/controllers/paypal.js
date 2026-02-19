@@ -428,7 +428,7 @@ export async function capturePayPalOrder(env, body) {
  * Handle PayPal webhook
  * RELIABILITY: Can be used to reconcile orders if capture fails on frontend
  */
-export async function handlePayPalWebhook(env, body, headers) {
+export async function handlePayPalWebhook(env, body, headers, rawBody) {
   const eventType = body.event_type;
   const resource = body.resource;
 

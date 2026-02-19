@@ -1,0 +1,24 @@
+
+ ⛅️ wrangler 4.66.0
+───────────────────
+Your Worker has access to the following bindings:
+Binding                                       Resource                  Mode
+env.DB (secure-shop-db)                       D1 Database               local
+env.PRODUCT_MEDIA (product-media-bucket)      R2 Bucket                 local
+env.R2_BUCKET (temp-uploads-bucket)           R2 Bucket                 local
+env.ASSETS                                    Assets                    local
+env.VERSION ("22")                            Environment Variable      local
+
+⎔ Starting local server...
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mScheduled Workers are not automatically triggered during local development.[0m
+
+  To manually trigger a scheduled event, run:
+    curl "http://127.0.0.1:5001/cdn-cgi/handler/scheduled"
+  For more details, see [4mhttps://developers.cloudflare.com/workers/configuration/cron-triggers/#test-cron-triggers-locally[0m
+
+
+[wrangler:info] Ready on http://0.0.0.0:5001
+[wrangler:info] - http://127.0.0.1:5001
+[wrangler:info] - http://192.168.0.2:5001
+DB init completed in 21ms
+[wrangler:info] HEAD /api/health 200 OK (117ms)

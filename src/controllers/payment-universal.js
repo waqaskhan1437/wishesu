@@ -400,7 +400,7 @@ function identifyGateway(payload, gateway) {
 /**
  * Universal webhook handler - handles webhooks from any payment gateway
  */
-export async function handleUniversalWebhook(env, payload, headers) {
+export async function handleUniversalWebhook(env, payload, headers, rawBody) {
   try {
     // Ensure payment gateways table exists
     await ensureTable(env);
@@ -459,8 +459,8 @@ export async function handleUniversalWebhook(env, payload, headers) {
     });
     
     // Verify webhook signature if secret is configured
-    if (gateway.secret && gateway.secret.trim()) {
-      const isValid = await verifyWebhookSignature(payload, headers, gateway);
+    if (gateway.webhook_secret && gateway.webhook_secret.trim()) {
+      const isValid = await verifyWebhookSignature(rawBody, headers, gateway.webhook_secret);
       if (!isValid) {
         console.error(`Invalid signature for gateway: ${gateway.name}`);
         return new Response(JSON.stringify({ error: 'Invalid signature' }), { 
@@ -492,18 +492,14 @@ export async function handleUniversalWebhook(env, payload, headers) {
 /**
  * Verify webhook signature (generic - supports multiple formats)
  */
-async function verifyWebhookSignature(req, secret) {
+async function verifyWebhookSignature(rawBody, headers, secret) {
   try {
-    // Get raw body for signature verification
-    const body = await req.text();
-    req = new Request(req.url, { method: req.method, headers: req.headers, body }); // Reset body
-    
     // Try different signature formats
-    const signatureHeader = req.headers.get('x-signature') || 
-                          req.headers.get('x-webhook-signature') || 
-                          req.headers.get('stripe-signature') || 
-                          req.headers.get('paypal-transmission-sig') ||
-                          req.headers.get('authorization');
+    const signatureHeader = headers.get('x-signature') ||
+                          headers.get('x-webhook-signature') ||
+                          headers.get('stripe-signature') ||
+                          headers.get('paypal-transmission-sig') ||
+                          headers.get('authorization');
     
     if (!signatureHeader) {
       return true; // If no signature header, assume valid (some gateways don't provide)

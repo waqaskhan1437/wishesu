@@ -382,8 +382,8 @@ export async function createPlanCheckout(env, body, origin) {
 /**
  * Verify Whop webhook signature
  */
-async function verifyWhopSignature(signature, body, secret) {
-  if (!signature || !secret) return false;
+async function verifyWhopSignature(signature, rawBody, secret) {
+  if (!signature || !secret || !rawBody) return false;
 
   try {
     const encoder = new TextEncoder();
@@ -395,12 +395,10 @@ async function verifyWhopSignature(signature, body, secret) {
       ['sign']
     );
 
-    // Whop sends JSON body for signature verification
-    const data = typeof body === 'string' ? body : JSON.stringify(body);
     const sig = await crypto.subtle.sign(
       'HMAC',
       key,
-      encoder.encode(data)
+      encoder.encode(rawBody)
     );
 
     const expected = Array.from(new Uint8Array(sig))
@@ -419,7 +417,7 @@ async function verifyWhopSignature(signature, body, secret) {
  * RELIABILITY: Order creation happens ONLY here, not on client redirect
  * This ensures orders are created even if user closes browser during redirect
  */
-export async function handleWebhook(env, webhookData, headers) {
+export async function handleWebhook(env, webhookData, headers, rawBody) {
   try {
     const eventType = webhookData.type || webhookData.event;
     const signature = headers?.get('x-whop-signature') || headers?.get('whop-signature');
@@ -429,7 +427,7 @@ export async function handleWebhook(env, webhookData, headers) {
     // Verify signature if secret is configured
     const secret = await getWhopWebhookSecret(env);
     if (secret && signature) {
-      const isValid = await verifyWhopSignature(signature, webhookData, secret);
+      const isValid = await verifyWhopSignature(signature, rawBody, secret);
       if (!isValid) {
         console.error('❌ Invalid Whop signature');
         return json({ error: 'Invalid signature' }, 401);
