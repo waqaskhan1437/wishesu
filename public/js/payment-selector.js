@@ -70,7 +70,9 @@
       deliveryTimeMinutes: Number(payload.deliveryTimeMinutes || payload.delivery_time_minutes || 60) || 60,
       sourceUrl: payload.sourceUrl || payload.source_url || (window.location.pathname + window.location.search),
       productTitle: payload.productTitle || payload.product_title || (window.productData && window.productData.title) || '',
-      productThumbnail: payload.productThumbnail || payload.product_thumbnail || (window.productData && window.productData.thumbnail_url) || ''
+      productThumbnail: payload.productThumbnail || payload.product_thumbnail || (window.productData && window.productData.thumbnail_url) || '',
+      preferredMethod: payload.preferredMethod || payload.preferred_method || '',
+      availableMethods: Array.isArray(payload.availableMethods) ? payload.availableMethods : []
     };
 
     const serialized = JSON.stringify(intent);
@@ -593,7 +595,10 @@
   async function processWhopCheckout() {
     // Close selector modal, then open dedicated internal checkout page.
     window.PaymentSelector.close();
-    redirectToWhopCheckoutPage(checkoutData);
+    redirectToWhopCheckoutPage({
+      ...checkoutData,
+      availableMethods: Array.isArray(paymentMethods) ? paymentMethods : []
+    });
   }
 
   /**
@@ -644,42 +649,48 @@
   }
 
   /**
-   * Open payment selector modal
+   * Start checkout flow on dedicated /checkout page
    */
   let onCloseCallback = null;
   
   async function open(data) {
-    checkoutData = data;
+    checkoutData = data || {};
     paypalButtonsRendered = false;
-    onCloseCallback = data.onClose || null; // Store callback
-    
-    // Load payment methods first
+    onCloseCallback = checkoutData.onClose || null;
+
     await loadPaymentMethods();
-    
-    // If only Whop available, use it directly (no modal)
-    if (paymentMethods.length === 1 && paymentMethods[0].id === 'whop') {
-      
-      await selectMethod('whop');
-      return;
-    }
-    
-    // If no payment methods, show error
+
     if (paymentMethods.length === 0) {
       alert('No payment methods configured. Please contact support.');
-      if (onCloseCallback) onCloseCallback();
+      if (onCloseCallback) {
+        onCloseCallback();
+        onCloseCallback = null;
+      }
+      if (typeof window.restoreCheckoutButtons === 'function') {
+        window.restoreCheckoutButtons();
+      }
       return;
     }
-    
-    createModal();
-    
-    // Update amount display
-    const totalEl = document.getElementById('payment-total');
-    if (totalEl) {
-      totalEl.textContent = (data.amount || 0).toLocaleString();
+
+    const compactMethods = paymentMethods.map((method) => ({
+      id: method.id,
+      name: method.name,
+      icon: method.icon,
+      enabled: method.enabled
+    }));
+
+    if (onCloseCallback) {
+      onCloseCallback();
+      onCloseCallback = null;
+    }
+    if (typeof window.restoreCheckoutButtons === 'function') {
+      window.restoreCheckoutButtons();
     }
 
-    // Render payment methods with PayPal Smart Buttons
-    await renderPaymentMethods();
+    redirectToWhopCheckoutPage({
+      ...checkoutData,
+      availableMethods: compactMethods
+    });
   }
 
   /**
@@ -720,6 +731,7 @@
 
   // Public helper for non-modal fallback flows.
   window.startWhopCheckoutPage = redirectToWhopCheckoutPage;
+  window.startCheckoutPage = redirectToWhopCheckoutPage;
 
   
 })();

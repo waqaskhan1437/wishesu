@@ -399,6 +399,10 @@
       };
 
       restoreButtons();
+      if (typeof window.startCheckoutPage === 'function') {
+        window.startCheckoutPage(payload);
+        return;
+      }
       if (typeof window.startWhopCheckoutPage === 'function') {
         window.startWhopCheckoutPage(payload);
         return;
