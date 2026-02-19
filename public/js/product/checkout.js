@@ -378,6 +378,9 @@
   async function processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes, restoreButtons) {
     try {
       const appliedCoupon = typeof window.getAppliedCoupon === 'function' ? window.getAppliedCoupon() : null;
+      if (typeof window.whopCheckoutWarmup === 'function') {
+        window.whopCheckoutWarmup();
+      }
       
       const response = await fetch('/api/whop/create-plan-checkout', {
         method: 'POST',
@@ -409,10 +412,8 @@
       // Restore buttons before redirect
       restoreButtons();
 
-      // Reliability-first: hosted Whop checkout avoids embedded loader hangs.
-      if (data.checkout_url) {
-        window.location.href = data.checkout_url;
-      } else if (typeof window.whopCheckout === 'function') {
+      // Embedded-first: open Whop modal inside current page.
+      if (typeof window.whopCheckout === 'function' && data.plan_id) {
         window.whopCheckout({
           planId: data.plan_id,
           email: data.email || email,
@@ -424,9 +425,16 @@
           amount: window.currentTotal,
           checkoutUrl: data.checkout_url
         });
-      } else {
-        throw new Error('Checkout session not ready. Please try again.');
+        return;
       }
+
+      // Fallback: hosted checkout redirect if embed isn't available.
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+
+      throw new Error('Checkout session not ready. Please try again.');
     } catch (err) {
       console.error('Checkout error:', err);
       alert('Checkout Error: ' + extractErrorMessage(err));

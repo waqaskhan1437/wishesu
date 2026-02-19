@@ -556,6 +556,10 @@
    * Process Whop checkout
    */
   async function processWhopCheckout() {
+    if (typeof window.whopCheckoutWarmup === 'function') {
+      window.whopCheckoutWarmup();
+    }
+
     const response = await fetch('/api/whop/create-plan-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -587,29 +591,30 @@
     // Close selector modal
     window.PaymentSelector.close();
 
-    // Reliability-first: hosted Whop checkout is more stable than embedded mode.
-    if (data.checkout_url) {
-      window.location.href = data.checkout_url;
-      return;
-    }
-
-    // Fallback to embedded checkout only if hosted URL is unavailable.
-    if (typeof window.whopCheckout === 'function') {
+    // Embedded-first: open Whop modal inside the website for faster checkout UX.
+    if (typeof window.whopCheckout === 'function' && data.plan_id) {
       window.whopCheckout({
         planId: data.plan_id,
         email: data.email || checkoutData.email,
         deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
         metadata: {
-          addons: checkoutData.addons,
+          addons: checkoutData.addons || [],
           product_id: checkoutData.productId,
           deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60
         },
         amount: checkoutData.amount,
         checkoutUrl: data.checkout_url
       });
-    } else {
-      throw new Error('Checkout session not ready. Please try again.');
+      return;
     }
+
+    // Fallback: redirect to hosted checkout if embed is unavailable.
+    if (data.checkout_url) {
+      window.location.href = data.checkout_url;
+      return;
+    }
+
+    throw new Error('Checkout session not ready. Please try again.');
   }
 
   /**

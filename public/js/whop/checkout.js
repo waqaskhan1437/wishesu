@@ -456,4 +456,7 @@
   ['pointerdown', 'touchstart', 'keydown'].forEach((evt) => {
     window.addEventListener(evt, preload, { once: true, passive: true });
   });
+
+  // Expose manual warmup so checkout flows can preload before API response.
+  window.whopCheckoutWarmup = preload;
 })();
