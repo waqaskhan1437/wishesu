@@ -50,6 +50,80 @@ function normalizeGatewayError(value, fallback = 'Payment gateway error') {
   }
 }
 
+function serializeWhopMetadata(metadata = {}) {
+  const output = {};
+  if (!metadata || typeof metadata !== 'object') return output;
+
+  for (const [key, rawValue] of Object.entries(metadata)) {
+    if (rawValue === undefined || rawValue === null) continue;
+
+    if (typeof rawValue === 'string') {
+      output[key] = rawValue;
+      continue;
+    }
+
+    if (typeof rawValue === 'number' || typeof rawValue === 'boolean' || typeof rawValue === 'bigint') {
+      output[key] = String(rawValue);
+      continue;
+    }
+
+    try {
+      output[key] = JSON.stringify(rawValue);
+    } catch (e) {
+      output[key] = String(rawValue);
+    }
+  }
+
+  return output;
+}
+
+function parseWhopMetadata(metadata = {}) {
+  let source = {};
+
+  if (typeof metadata === 'string') {
+    try {
+      const maybeObj = JSON.parse(metadata);
+      if (maybeObj && typeof maybeObj === 'object') {
+        source = maybeObj;
+      }
+    } catch (e) {}
+  } else if (metadata && typeof metadata === 'object') {
+    source = metadata;
+  }
+
+  const parsed = { ...source };
+
+  if (typeof parsed.addons === 'string') {
+    try {
+      const addons = JSON.parse(parsed.addons);
+      parsed.addons = Array.isArray(addons) ? addons : [];
+    } catch (e) {
+      parsed.addons = [];
+    }
+  }
+
+  if (typeof parsed.amount === 'string') {
+    const amount = Number(parsed.amount);
+    if (Number.isFinite(amount)) parsed.amount = amount;
+  }
+
+  if (typeof parsed.deliveryTimeMinutes === 'string') {
+    const minutes = Number(parsed.deliveryTimeMinutes);
+    if (Number.isFinite(minutes)) parsed.deliveryTimeMinutes = minutes;
+  }
+
+  if (typeof parsed.tipAmount === 'string') {
+    const tip = Number(parsed.tipAmount);
+    if (Number.isFinite(tip)) parsed.tipAmount = tip;
+  }
+
+  if (parsed.product_id !== undefined && parsed.product_id !== null) {
+    parsed.product_id = String(parsed.product_id);
+  }
+
+  return parsed;
+}
+
 /**
  * Create checkout session using existing plan
  */
@@ -382,7 +456,7 @@ export async function createPlanCheckout(env, body, origin) {
     const checkoutBody = {
       plan_id: planId,
       redirect_url: `${origin}/success.html?product=${product.id}`,
-      metadata: checkoutMetadata
+      metadata: serializeWhopMetadata(checkoutMetadata)
     };
 
     if (email && email.includes('@')) {
@@ -507,7 +581,7 @@ export async function handleWebhook(env, webhookData, headers, rawBody) {
     if (eventType === 'payment.succeeded') {
       const checkoutSessionId = webhookData.data?.checkout_session_id;
       const membershipId = webhookData.data?.id;
-      let metadata = webhookData.data?.metadata || {};
+      let metadata = parseWhopMetadata(webhookData.data?.metadata || {});
 
       console.log('Payment succeeded:', { checkoutSessionId, membershipId, metadata });
 
@@ -564,14 +638,14 @@ export async function handleWebhook(env, webhookData, headers, rawBody) {
             const storedMetadata = JSON.parse(sessionRow.metadata);
             console.log('Retrieved stored metadata from DB:', storedMetadata);
             // Merge stored metadata with webhook metadata (prefer stored for addons, amount)
-            metadata = {
+            metadata = parseWhopMetadata({
               ...metadata,
               ...storedMetadata,
               // Ensure addons come from stored metadata if available
               addons: storedMetadata.addons || metadata.addons || [],
               // Ensure amount comes from stored metadata (server-side calculated)
               amount: storedMetadata.amount || metadata.amount || 0
-            };
+            });
           }
         } catch (e) {
           console.log('Failed to retrieve stored metadata:', e.message);
