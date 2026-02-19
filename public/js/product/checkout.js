@@ -378,63 +378,34 @@
   async function processDirectWhopCheckout(selectedAddons, email, originalText, btn, deliveryTimeMinutes, restoreButtons) {
     try {
       const appliedCoupon = typeof window.getAppliedCoupon === 'function' ? window.getAppliedCoupon() : null;
-      if (typeof window.whopCheckoutWarmup === 'function') {
-        window.whopCheckoutWarmup();
-      }
-      
-      const response = await fetch('/api/whop/create-plan-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product_id: window.productData.id,
-          amount: window.currentTotal,
-          email: email,
-          couponCode: appliedCoupon?.code || '',
-          metadata: { 
-            addons: selectedAddons,
-            deliveryTimeMinutes: deliveryTimeMinutes || 60,
-            couponCode: appliedCoupon?.code || ''
-          }
-        })
-      });
+      const discountPrice = Number(appliedCoupon?.discounted_price);
+      const finalAmount = Number.isFinite(discountPrice) ? discountPrice : Number(window.currentTotal || 0);
 
-      const data = await response.json().catch(() => ({}));
+      const payload = {
+        productId: window.productData.id,
+        amount: finalAmount,
+        originalAmount: Number(window.currentTotal || 0),
+        email: email || '',
+        addons: selectedAddons || [],
+        coupon: appliedCoupon || null,
+        deliveryTimeMinutes: deliveryTimeMinutes || 60,
+        sourceUrl: window.location.pathname + window.location.search
+      };
 
-      if (!response.ok || data.error) {
-        throw new Error(
-          extractErrorMessage(
-            data.error || data.message || data,
-            `Failed to create checkout (${response.status})`
-          )
-        );
-      }
-
-      // Restore buttons before redirect
       restoreButtons();
-
-      // Embedded-first: open Whop modal inside current page.
-      if (typeof window.whopCheckout === 'function' && data.plan_id) {
-        window.whopCheckout({
-          planId: data.plan_id,
-          email: data.email || email,
-          metadata: { 
-            addons: selectedAddons, 
-            product_id: window.productData.id,
-            deliveryTimeMinutes: deliveryTimeMinutes || 60
-          },
-          amount: window.currentTotal,
-          checkoutUrl: data.checkout_url
-        });
+      if (typeof window.startWhopCheckoutPage === 'function') {
+        window.startWhopCheckoutPage(payload);
         return;
       }
 
-      // Fallback: hosted checkout redirect if embed isn't available.
-      if (data.checkout_url) {
-        window.location.href = data.checkout_url;
-        return;
-      }
-
-      throw new Error('Checkout session not ready. Please try again.');
+      const serialized = JSON.stringify({
+        version: 1,
+        created_at: Date.now(),
+        ...payload
+      });
+      try { sessionStorage.setItem('whop_checkout_intent_v1', serialized); } catch (e) {}
+      try { localStorage.setItem('whop_checkout_intent_v1', serialized); } catch (e) {}
+      window.location.href = '/checkout';
     } catch (err) {
       console.error('Checkout error:', err);
       alert('Checkout Error: ' + extractErrorMessage(err));

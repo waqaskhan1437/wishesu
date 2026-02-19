@@ -10,6 +10,8 @@
   let checkoutData = null;
   let modalElement = null;
   let paypalButtonsRendered = false;
+  const WHOP_CHECKOUT_INTENT_KEY = 'whop_checkout_intent_v1';
+  const CHECKOUT_INTENT_VERSION = 1;
 
   function extractErrorMessage(value, fallback = 'Payment failed') {
     if (!value) return fallback;
@@ -53,6 +55,37 @@
     } catch (e) {
       return fallback;
     }
+  }
+
+  function saveWhopCheckoutIntent(payload) {
+    const intent = {
+      version: CHECKOUT_INTENT_VERSION,
+      created_at: Date.now(),
+      productId: Number(payload.productId || payload.product_id || 0),
+      amount: Number(payload.amount || 0),
+      originalAmount: Number(payload.originalAmount || payload.original_amount || payload.amount || 0),
+      email: (payload.email || '').trim(),
+      addons: Array.isArray(payload.addons) ? payload.addons : [],
+      coupon: payload.coupon || null,
+      deliveryTimeMinutes: Number(payload.deliveryTimeMinutes || payload.delivery_time_minutes || 60) || 60,
+      sourceUrl: payload.sourceUrl || payload.source_url || (window.location.pathname + window.location.search)
+    };
+
+    const serialized = JSON.stringify(intent);
+    try { sessionStorage.setItem(WHOP_CHECKOUT_INTENT_KEY, serialized); } catch (e) {}
+    try { localStorage.setItem(WHOP_CHECKOUT_INTENT_KEY, serialized); } catch (e) {}
+    return intent;
+  }
+
+  function redirectToWhopCheckoutPage(payload) {
+    const source = payload || checkoutData || {};
+    const intent = saveWhopCheckoutIntent(source);
+
+    if (!intent.productId) {
+      throw new Error('Invalid product for checkout');
+    }
+
+    window.location.href = '/checkout';
   }
 
   /**
@@ -556,65 +589,9 @@
    * Process Whop checkout
    */
   async function processWhopCheckout() {
-    if (typeof window.whopCheckoutWarmup === 'function') {
-      window.whopCheckoutWarmup();
-    }
-
-    const response = await fetch('/api/whop/create-plan-checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        product_id: checkoutData.productId,
-        amount: checkoutData.amount,
-        email: checkoutData.email || '',
-        couponCode: checkoutData.coupon?.code || '',
-        deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
-        metadata: {
-          addons: checkoutData.addons || [],
-          deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
-          couponCode: checkoutData.coupon?.code || ''
-        }
-      })
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok || data.error) {
-      throw new Error(
-        extractErrorMessage(
-          data.error || data.message || data,
-          `Whop checkout failed (${response.status})`
-        )
-      );
-    }
-
-    // Close selector modal
+    // Close selector modal, then open dedicated internal checkout page.
     window.PaymentSelector.close();
-
-    // Embedded-first: open Whop modal inside the website for faster checkout UX.
-    if (typeof window.whopCheckout === 'function' && data.plan_id) {
-      window.whopCheckout({
-        planId: data.plan_id,
-        email: data.email || checkoutData.email,
-        deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60,
-        metadata: {
-          addons: checkoutData.addons || [],
-          product_id: checkoutData.productId,
-          deliveryTimeMinutes: checkoutData.deliveryTimeMinutes || 60
-        },
-        amount: checkoutData.amount,
-        checkoutUrl: data.checkout_url
-      });
-      return;
-    }
-
-    // Fallback: redirect to hosted checkout if embed is unavailable.
-    if (data.checkout_url) {
-      window.location.href = data.checkout_url;
-      return;
-    }
-
-    throw new Error('Checkout session not ready. Please try again.');
+    redirectToWhopCheckoutPage(checkoutData);
   }
 
   /**
@@ -738,6 +715,9 @@
     selectMethod,
     loadPaymentMethods
   };
+
+  // Public helper for non-modal fallback flows.
+  window.startWhopCheckoutPage = redirectToWhopCheckoutPage;
 
   
 })();

@@ -1868,7 +1868,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       // Support both clean URLs (/forum) and .html URLs (/forum.html)
       // Instead of redirecting .html to clean URLs, we attempt to serve
       // dynamic pages directly when a matching slug exists in the database.
-      const coreStaticPages = ['index', 'products-grid', 'product', 'buyer-order', 'order-detail', 'order-success', 'success', 'page-builder'];
+      const coreStaticPages = ['index', 'products-grid', 'product', 'buyer-order', 'order-detail', 'order-success', 'success', 'checkout', 'page-builder'];
       
       // Check for .html extension and attempt to serve a dynamic page when a slug exists.
       if (path.endsWith('.html') && !path.includes('/admin/') && !path.startsWith('/admin') && !path.startsWith('/blog/') && !path.startsWith('/forum/')) {
@@ -1954,11 +1954,14 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       // Certain `.html` routes should serve a different static file directly
       // rather than redirecting.  This avoids broken links when no database
       // is configured and eliminates unnecessary redirects for end users.
-      if (method === 'GET') {
+      if (method === 'GET' || method === 'HEAD') {
         const htmlAssetTargets = {
           // Map `/products.html` to the existing grid file; this file lives in
           // the static assets folder and can be served without DB access.
           '/products.html': '/products-grid.html',
+          '/checkout': '/checkout.html',
+          '/checkout/': '/checkout.html',
+          '/checkout/index.html': '/checkout.html',
           // Map blog and forum to their index files so these archives load
           // without needing to redirect to `/blog` or `/forum`.
           '/blog.html': '/blog/index.html',

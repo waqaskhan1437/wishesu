@@ -375,7 +375,8 @@ function collectBase(form){
     instant_delivery: form.instant_delivery.checked ? 1 : 0,
     delivery_time_days: parseInt(form.delivery_time_days?.value) || 1,
     whop_plan: form.whop_plan ? form.whop_plan.value.trim() : '',
-    whop_price_map: form.whop_price_map ? form.whop_price_map.value.trim() : ''
+    whop_price_map: form.whop_price_map ? form.whop_price_map.value.trim() : '',
+    whop_product_id: form.whop_product_id ? form.whop_product_id.value.trim() : ''
   };
 }
 function readMediaFields(form){
@@ -413,8 +414,9 @@ function fillBaseFields(form, product){
   }
   if(product.thumbnail_url) form.thumbnail_url.value = product.thumbnail_url;
   if(product.video_url) form.video_url.value = product.video_url;
-  if (form.whop_plan && product.whop_plan) form.whop_plan.value = product.whop_plan;
-  if (form.whop_price_map && product.whop_price_map) form.whop_price_map.value = product.whop_price_map;
+  if (form.whop_plan) form.whop_plan.value = product.whop_plan || '';
+  if (form.whop_price_map) form.whop_price_map.value = product.whop_price_map || '';
+  if (form.whop_product_id) form.whop_product_id.value = product.whop_product_id || '';
 }
 function fillDemoProduct(form){
   form.title.value = 'Happy Birthday Video from Africa';

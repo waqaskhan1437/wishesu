@@ -286,8 +286,8 @@ export async function duplicateProduct(env, body) {
       title, slug, description, normal_price, sale_price,
       instant_delivery, normal_delivery_text, thumbnail_url, video_url,
       addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
-      whop_plan, whop_price_map, status, sort_order
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      whop_plan, whop_price_map, whop_product_id, status, sort_order
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     (row.title || '') + ' Copy',
     newSlug,
@@ -305,6 +305,7 @@ export async function duplicateProduct(env, body) {
     row.seo_canonical || '',
     row.whop_plan || '',
     row.whop_price_map || '',
+    row.whop_product_id || '',
     'draft',
     0
   ).run();

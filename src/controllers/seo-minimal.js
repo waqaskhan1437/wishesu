@@ -147,6 +147,7 @@ Disallow: /api/
 Disallow: /buyer-order
 Disallow: /order-detail
 Disallow: /order-success
+Disallow: /checkout
 Disallow: /success
 
 # Sitemap

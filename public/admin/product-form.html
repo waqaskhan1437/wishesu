@@ -727,7 +727,16 @@
           </div>
 
           <div class="form-group">
-            <label for="whop_plan">Whop Product Link or Plan ID</label>
+            <label for="whop_product_id">Whop Product ID (Dynamic Checkout)</label>
+            <input type="text" id="whop_product_id" name="whop_product_id" placeholder="prod_XXXXXXXXX or Whop product URL">
+            <span class="field-helper-text">
+              Dynamic checkout pehle is product-specific value ko use karta hai.<br>
+              Is field se yeh product global gateway product ID ko override karega.
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label for="whop_plan">Whop Product Link or Plan ID (Optional)</label>
             <input type="text" id="whop_plan" name="whop_plan" placeholder="https://whop.com/your-product OR plan_XXXXXXXXX">
             <span class="field-helper-text">
               <strong>Option 1:</strong> Paste your Whop product link (e.g., https://whop.com/your-product)<br>
