@@ -36,6 +36,12 @@
   function setStatus(message, type) {
     const el = document.getElementById('checkout-status');
     if (!el) return;
+    if (!message) {
+      el.style.display = 'none';
+      el.textContent = '';
+      return;
+    }
+    el.style.display = '';
     el.className = `status ${type || 'info'}`;
     el.textContent = message;
   }
@@ -316,7 +322,7 @@
       if (revealed) return;
       revealed = true;
       embedShell.style.opacity = '1';
-      setStatus('Checkout ready. Complete payment to continue.', 'ok');
+      setStatus('', 'ok');
     };
 
     const observer = new MutationObserver(() => {
