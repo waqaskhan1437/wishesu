@@ -46,6 +46,28 @@
     link.href = url || '/';
   }
 
+  function setupSummaryDetailsMode() {
+    const details = document.getElementById('summary-details');
+    if (!details || !window.matchMedia) return;
+
+    const mq = window.matchMedia('(max-width: 900px)');
+    const apply = () => {
+      if (mq.matches) {
+        details.removeAttribute('open');
+      } else {
+        details.setAttribute('open', '');
+      }
+    };
+
+    apply();
+
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', apply);
+    } else if (typeof mq.addListener === 'function') {
+      mq.addListener(apply);
+    }
+  }
+
   function clearIntentStorage() {
     try { sessionStorage.removeItem(INTENT_KEY); } catch (e) {}
     try { localStorage.removeItem(INTENT_KEY); } catch (e) {}
@@ -128,6 +150,15 @@
     return '$' + n.toFixed(2);
   }
 
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function renderSummary(intent) {
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = formatUsd(intent.amount);
@@ -135,13 +166,17 @@
     const metaEl = document.getElementById('checkout-meta');
     if (!metaEl) return;
 
-    const lines = [];
-    lines.push(`Product ID: ${intent.productId}`);
-    if (intent.email) lines.push(`Email: ${intent.email}`);
-    if (intent.coupon && intent.coupon.code) lines.push(`Coupon: ${intent.coupon.code}`);
-    lines.push(`Add-ons: ${Array.isArray(intent.addons) ? intent.addons.length : 0}`);
-    lines.push(`Delivery: ${Math.max(1, Math.round((intent.deliveryTimeMinutes || 60) / 60))} hour(s)`);
-    metaEl.innerHTML = lines.join('<br>');
+    const rows = [
+      { label: 'Product', value: '#' + intent.productId }
+    ];
+    if (intent.email) rows.push({ label: 'Email', value: intent.email });
+    if (intent.coupon && intent.coupon.code) rows.push({ label: 'Coupon', value: intent.coupon.code });
+    rows.push({ label: 'Add-ons', value: String(Array.isArray(intent.addons) ? intent.addons.length : 0) });
+    rows.push({ label: 'Delivery', value: Math.max(1, Math.round((intent.deliveryTimeMinutes || 60) / 60)) + ' hour(s)' });
+
+    metaEl.innerHTML = rows.map((row) => {
+      return `<div class="meta-line"><span class="meta-label">${escapeHtml(row.label)}</span><span class="meta-value">${escapeHtml(row.value)}</span></div>`;
+    }).join('');
 
     if (intent.sourceUrl) {
       setBackLink(intent.sourceUrl);
@@ -319,6 +354,8 @@
   }
 
   async function init() {
+    setupSummaryDetailsMode();
+
     const intent = loadIntent();
     if (!intent) {
       clearIntentStorage();
