@@ -27,7 +27,14 @@ export async function getWhopApiKey(env) {
   try {
     if (env.DB) {
       const gateway = await env.DB.prepare(
-        'SELECT whop_api_key FROM payment_gateways WHERE gateway_type = ? AND is_enabled = 1 LIMIT 1'
+        `SELECT whop_api_key
+         FROM payment_gateways
+         WHERE gateway_type = ?
+           AND is_enabled = 1
+           AND whop_api_key IS NOT NULL
+           AND TRIM(whop_api_key) != ''
+         ORDER BY id DESC
+         LIMIT 1`
       ).bind('whop').first();
       if (gateway && gateway.whop_api_key) {
         return gateway.whop_api_key;
@@ -70,7 +77,14 @@ export async function getWhopWebhookSecret(env) {
   try {
     if (env.DB) {
       const gateway = await env.DB.prepare(
-        'SELECT webhook_secret FROM payment_gateways WHERE gateway_type = ? AND is_enabled = 1 LIMIT 1'
+        `SELECT webhook_secret
+         FROM payment_gateways
+         WHERE gateway_type = ?
+           AND is_enabled = 1
+           AND webhook_secret IS NOT NULL
+           AND TRIM(webhook_secret) != ''
+         ORDER BY id DESC
+         LIMIT 1`
       ).bind('whop').first();
       if (gateway && gateway.webhook_secret) {
         return gateway.webhook_secret;

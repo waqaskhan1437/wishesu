@@ -272,16 +272,67 @@ export async function maybePurgeCache(env, initDB) {
 /**
  * Get Whop settings
  */
+async function ensurePaymentGatewaysTable(env) {
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS payment_gateways (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        gateway_type TEXT DEFAULT '',
+        webhook_url TEXT,
+        webhook_secret TEXT,
+        custom_code TEXT,
+        is_enabled INTEGER DEFAULT 1,
+        whop_product_id TEXT DEFAULT '',
+        whop_api_key TEXT DEFAULT '',
+        whop_theme TEXT DEFAULT 'light',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+  } catch (e) {
+    // Continue with legacy settings fallback if table creation fails
+  }
+}
+
 export async function getWhopSettings(env) {
-  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
-  if (row && row.value) {
-    try {
+  await ensurePaymentGatewaysTable(env);
+
+  // Prefer payment_gateways (new system), fallback to legacy settings table
+  try {
+    const gateway = await env.DB.prepare(`
+      SELECT whop_product_id, whop_theme, webhook_secret, whop_api_key
+      FROM payment_gateways
+      WHERE gateway_type = 'whop'
+      ORDER BY is_enabled DESC, id DESC
+      LIMIT 1
+    `).first();
+
+    if (gateway) {
+      return json({
+        settings: {
+          default_product_id: gateway.whop_product_id || '',
+          product_id: gateway.whop_product_id || '',
+          theme: gateway.whop_theme || 'light',
+          webhook_secret: gateway.webhook_secret || '',
+          api_key: (env.WHOP_API_KEY || gateway.whop_api_key) ? '********' : ''
+        }
+      });
+    }
+  } catch (e) {
+    console.log('Failed to read Whop settings from payment_gateways:', e.message);
+  }
+
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
+    if (row && row.value) {
       const settings = JSON.parse(row.value);
       return json({ settings });
-    } catch (e) {
-      return json({ settings: {} });
     }
+  } catch (e) {
+    console.log('Failed to read legacy Whop settings:', e.message);
   }
+
   return json({ settings: {} });
 }
 
@@ -289,7 +340,89 @@ export async function getWhopSettings(env) {
  * Save Whop settings
  */
 export async function saveWhopSettings(env, body) {
-  const value = JSON.stringify(body);
+  await ensurePaymentGatewaysTable(env);
+
+  const productId = (body.default_product_id || body.product_id || '').trim();
+  const theme = (body.theme || 'light').trim();
+  const webhookSecret = (body.webhook_secret || '').trim();
+  let apiKey = (body.api_key || '').trim();
+  if (apiKey === '********') {
+    apiKey = '';
+  }
+
+  try {
+    const existing = await env.DB.prepare(`
+      SELECT id, whop_api_key
+      FROM payment_gateways
+      WHERE gateway_type = 'whop'
+      ORDER BY id DESC
+      LIMIT 1
+    `).first();
+
+    if (existing) {
+      const finalApiKey = apiKey || existing.whop_api_key || '';
+
+      await env.DB.prepare(`
+        UPDATE payment_gateways
+        SET whop_product_id = ?,
+            whop_theme = ?,
+            webhook_secret = ?,
+            whop_api_key = ?,
+            is_enabled = 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(productId, theme, webhookSecret, finalApiKey, existing.id).run();
+
+      // Keep only one active Whop gateway to avoid ambiguous checkout config
+      await env.DB.prepare(`
+        UPDATE payment_gateways
+        SET is_enabled = CASE WHEN id = ? THEN 1 ELSE 0 END
+        WHERE gateway_type = 'whop'
+      `).bind(existing.id).run();
+    } else {
+      await env.DB.prepare(`
+        INSERT INTO payment_gateways
+        (name, gateway_type, webhook_url, webhook_secret, custom_code, is_enabled, whop_product_id, whop_api_key, whop_theme)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        'Whop',
+        'whop',
+        '/api/whop/webhook',
+        webhookSecret,
+        '',
+        1,
+        productId,
+        apiKey,
+        theme
+      ).run();
+    }
+  } catch (e) {
+    console.log('Failed to sync Whop settings to payment_gateways:', e.message);
+  }
+
+  // Also keep legacy settings row for backward compatibility
+  let existingLegacy = {};
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
+    if (row?.value) {
+      existingLegacy = JSON.parse(row.value);
+    }
+  } catch (e) {}
+
+  const mergedLegacy = {
+    ...existingLegacy,
+    ...body,
+    default_product_id: productId,
+    product_id: productId,
+    theme,
+    webhook_secret: webhookSecret
+  };
+
+  if (apiKey) {
+    mergedLegacy.api_key = apiKey;
+  }
+
+  const value = JSON.stringify(mergedLegacy);
   await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('whop', value).run();
   return json({ success: true });
 }

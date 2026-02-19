@@ -5,11 +5,26 @@
  */
 
 import { json, cachedJson } from '../utils/response.js';
+import { getWhopApiKey } from '../config/secrets.js';
 
 // In-memory cache for payment methods
 let paymentMethodsCache = null;
 let paymentMethodsCacheTime = 0;
 const PAYMENT_CACHE_TTL = 60000; // 1 minute
+
+async function getLatestEnabledWhopGateway(env) {
+  try {
+    return await env.DB.prepare(`
+      SELECT whop_product_id
+      FROM payment_gateways
+      WHERE gateway_type = 'whop' AND is_enabled = 1
+      ORDER BY id DESC
+      LIMIT 1
+    `).first();
+  } catch (e) {
+    return null;
+  }
+}
 
 /**
  * Get payment methods enabled status
@@ -47,32 +62,18 @@ export async function getPaymentMethods(env) {
   // Check Whop - only if enabled
   if (enabledStatus.whop_enabled !== false) {
     try {
-      const whopRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
-      if (whopRow?.value) {
-        const whop = JSON.parse(whopRow.value);
-        if (whop.api_key || env.WHOP_API_KEY) {
-          methods.push({
-            id: 'whop',
-            name: 'All Payment Methods',
-            icon: '🌐',
-            description: 'GPay, Apple Pay, Cards, Bank & more',
-            enabled: true,
-            priority: 2
-          });
-        }
-      } else if (env.WHOP_API_KEY) {
+      const whopApiKey = await getWhopApiKey(env);
+      if (whopApiKey) {
         methods.push({
           id: 'whop',
           name: 'All Payment Methods',
-          icon: '🌐',
+          icon: '\u{1F310}',
           description: 'GPay, Apple Pay, Cards, Bank & more',
           enabled: true,
           priority: 2
         });
       }
-    } catch (e) {
-      
-    }
+    } catch (e) {}
   }
   
   // Check PayPal - only if enabled
@@ -201,13 +202,8 @@ export async function getPaymentMethodsStatus(env) {
   } catch (e) {}
   
   try {
-    const whopRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
-    if (whopRow?.value) {
-      const whop = JSON.parse(whopRow.value);
-      whopConfigured = !!whop.api_key;
-    } else if (env.WHOP_API_KEY) {
-      whopConfigured = true;
-    }
+    const whopApiKey = await getWhopApiKey(env);
+    whopConfigured = !!whopApiKey;
   } catch (e) {}
   
   // Cache for 2 minutes - payment settings don't change often
@@ -232,16 +228,23 @@ export async function getAllPaymentSettings(env) {
   try {
     // Whop
     const whopRow = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('whop').first();
+    const whopGateway = await getLatestEnabledWhopGateway(env);
+    const whopApiKey = await getWhopApiKey(env);
     if (whopRow?.value) {
       const whop = JSON.parse(whopRow.value);
       settings.whop = {
-        enabled: !!(whop.api_key || env.WHOP_API_KEY),
-        has_api_key: !!(whop.api_key || env.WHOP_API_KEY),
-        default_product_id: whop.default_product_id || '',
+        enabled: !!whopApiKey,
+        has_api_key: !!whopApiKey,
+        default_product_id: whopGateway?.whop_product_id || whop.default_product_id || '',
         default_plan_id: whop.default_plan_id || ''
       };
-    } else if (env.WHOP_API_KEY) {
-      settings.whop = { enabled: true, has_api_key: true };
+    } else if (whopApiKey || whopGateway?.whop_product_id) {
+      settings.whop = {
+        enabled: !!whopApiKey,
+        has_api_key: !!whopApiKey,
+        default_product_id: whopGateway?.whop_product_id || '',
+        default_plan_id: ''
+      };
     }
     
     // PayPal
@@ -309,6 +312,9 @@ export async function savePaymentMethodSettings(env, body) {
   await env.DB.prepare(
     'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
   ).bind(provider, JSON.stringify(merged)).run();
+
+  paymentMethodsCache = null;
+  paymentMethodsCacheTime = 0;
   
   return json({ success: true });
 }

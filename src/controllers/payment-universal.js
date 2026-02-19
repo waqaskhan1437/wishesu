@@ -22,6 +22,18 @@ const CACHE_TTL = 60000; // 1 minute
 let migrationDone = false;
 
 const DEFAULT_GATEWAYS = [];
+const SINGLE_ACTIVE_GATEWAYS = new Set(['whop', 'paypal', 'stripe']);
+
+async function enforceSingleActiveGateway(env, gatewayType, activeId) {
+  const type = (gatewayType || '').toLowerCase();
+  if (!SINGLE_ACTIVE_GATEWAYS.has(type) || !activeId) return;
+
+  await env.DB.prepare(`
+    UPDATE payment_gateways
+    SET is_enabled = CASE WHEN id = ? THEN 1 ELSE 0 END
+    WHERE lower(gateway_type) = ?
+  `).bind(Number(activeId), type).run();
+}
 
 /**
  * Ensure payment gateways table exists
@@ -239,7 +251,7 @@ export async function addPaymentGatewayApi(env, body) {
       return json({ error: 'Gateway name is required' }, 400);
     }
 
-    await env.DB.prepare(`
+    const insertResult = await env.DB.prepare(`
       INSERT INTO payment_gateways
       (name, gateway_type, webhook_url, webhook_secret, custom_code, is_enabled, whop_product_id, whop_api_key, whop_theme)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -254,6 +266,10 @@ export async function addPaymentGatewayApi(env, body) {
       gateway.whop_api_key,
       gateway.whop_theme
     ).run();
+
+    if (gateway.is_enabled === 1 && gateway.gateway_type) {
+      await enforceSingleActiveGateway(env, gateway.gateway_type, insertResult?.meta?.last_row_id);
+    }
 
     gatewaysCache = null; // Clear cache
 
@@ -318,6 +334,10 @@ export async function updatePaymentGatewayApi(env, id, body) {
       id
     ).run();
 
+    if (gateway.is_enabled === 1 && gateway.gateway_type) {
+      await enforceSingleActiveGateway(env, gateway.gateway_type, id);
+    }
+
     gatewaysCache = null; // Clear cache
 
     return json({ success: true, message: 'Gateway updated successfully' });
@@ -356,6 +376,7 @@ export async function getWhopCheckoutSettings(env) {
       SELECT whop_product_id, whop_theme
       FROM payment_gateways
       WHERE gateway_type = 'whop' AND is_enabled = 1
+      ORDER BY id DESC
       LIMIT 1
     `).first();
 
@@ -961,4 +982,3 @@ function isWhopWebhook(payload, headers) {
     (payload.type && (payload.type.includes('whop') || payload.type.includes('checkout')))
   );
 }
-

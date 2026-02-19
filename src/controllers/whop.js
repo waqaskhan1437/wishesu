@@ -172,22 +172,42 @@ export async function createPlanCheckout(env, body, origin) {
     return json({ error: 'Invalid price' }, 400);
   }
 
+  const normalizeWhopProductId = (value) => {
+    const raw = (value || '').trim();
+    if (!raw) return '';
+
+    // Allow either direct product ID or full Whop URL containing prod_xxx
+    const match = raw.match(/prod_[a-zA-Z0-9_-]+/);
+    if (match) {
+      return match[0];
+    }
+
+    return raw;
+  };
+
   // Get Whop product ID - check multiple sources in order:
   // 1. Product-specific whop_product_id
   // 2. Payment gateway (from payment_gateways table)
   // 3. Legacy whop settings (from settings table)
-  const directProdId = (product.whop_product_id || '').trim();
+  const directProdId = normalizeWhopProductId(product.whop_product_id);
   let finalProdId = directProdId;
 
   if (!finalProdId) {
     // Try payment_gateways table first (new universal payment system)
     try {
-      const gateway = await env.DB.prepare(
-        'SELECT whop_product_id FROM payment_gateways WHERE gateway_type = ? AND is_enabled = 1 LIMIT 1'
-      ).bind('whop').first();
+      const gateway = await env.DB.prepare(`
+        SELECT id, whop_product_id
+        FROM payment_gateways
+        WHERE gateway_type = ?
+          AND is_enabled = 1
+          AND whop_product_id IS NOT NULL
+          AND TRIM(whop_product_id) != ''
+        ORDER BY id DESC
+        LIMIT 1
+      `).bind('whop').first();
       if (gateway && gateway.whop_product_id) {
-        finalProdId = (gateway.whop_product_id || '').trim();
-        console.log('Using Whop product ID from payment_gateways:', finalProdId);
+        finalProdId = normalizeWhopProductId(gateway.whop_product_id);
+        console.log(`Using Whop product ID from payment_gateways (id=${gateway.id}):`, finalProdId);
       }
     } catch (e) {
       console.log('Failed to load whop settings from payment_gateways:', e);
@@ -202,8 +222,9 @@ export async function createPlanCheckout(env, body, origin) {
       if (srow && srow.value) {
         try { settings = JSON.parse(srow.value); } catch (e) { settings = {}; }
       }
-      if (settings && settings.default_product_id) {
-        finalProdId = (settings.default_product_id || '').trim();
+      const fallbackProdId = settings.default_product_id || settings.product_id || '';
+      if (fallbackProdId) {
+        finalProdId = normalizeWhopProductId(fallbackProdId);
         console.log('Using Whop product ID from legacy settings:', finalProdId);
       }
     } catch (e) {
@@ -213,6 +234,12 @@ export async function createPlanCheckout(env, body, origin) {
 
   if (!finalProdId) {
     return json({ error: 'whop_product_id not configured. Please set it in Payment Settings (Payment tab > Whop gateway)' }, 400);
+  }
+
+  if (!/^prod_[a-zA-Z0-9_-]+$/.test(finalProdId)) {
+    return json({
+      error: 'Invalid Whop Product ID format. Use prod_xxxxx or a Whop URL containing prod_xxxxx.'
+    }, 400);
   }
 
   const companyId = env.WHOP_COMPANY_ID;
