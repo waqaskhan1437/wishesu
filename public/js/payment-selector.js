@@ -11,6 +11,50 @@
   let modalElement = null;
   let paypalButtonsRendered = false;
 
+  function extractErrorMessage(value, fallback = 'Payment failed') {
+    if (!value) return fallback;
+
+    if (typeof value === 'string') {
+      const msg = value.trim();
+      return msg || fallback;
+    }
+
+    if (value instanceof Error) {
+      return extractErrorMessage(value.message, fallback);
+    }
+
+    if (typeof value === 'object') {
+      const candidates = [
+        value.error,
+        value.message,
+        value.detail,
+        value.details,
+        value.description,
+        value.reason,
+        value.statusText
+      ];
+
+      for (const candidate of candidates) {
+        const msg = extractErrorMessage(candidate, '');
+        if (msg) return msg;
+      }
+
+      try {
+        const serialized = JSON.stringify(value);
+        if (serialized && serialized !== '{}' && serialized !== '[]') {
+          return serialized;
+        }
+      } catch (e) {}
+    }
+
+    try {
+      const msg = String(value).trim();
+      return msg || fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
   /**
    * Load available payment methods from API
    */
@@ -400,10 +444,15 @@
             })
           });
           
-          const orderData = await response.json();
+          const orderData = await response.json().catch(() => ({}));
           
-          if (orderData.error) {
-            throw new Error(orderData.error);
+          if (!response.ok || orderData.error) {
+            throw new Error(
+              extractErrorMessage(
+                orderData.error || orderData.message || orderData,
+                `PayPal order creation failed (${response.status})`
+              )
+            );
           }
           
           
@@ -434,7 +483,7 @@
         
         onError: (err) => {
           console.error('🅿️ PayPal error:', err);
-          alert('Payment error: ' + err.message);
+          alert('Payment error: ' + extractErrorMessage(err));
         },
         
         onCancel: () => {
@@ -490,13 +539,14 @@
       }
     } catch (err) {
       console.error('Payment error:', err);
+      const errorMessage = extractErrorMessage(err);
       
       // Show error but keep modal open if there are other payment methods
       if (paymentMethods.length > 1) {
-        alert('Payment error: ' + err.message + '\n\nPlease try another payment method.');
+        alert('Payment error: ' + errorMessage + '\n\nPlease try another payment method.');
         renderPaymentMethods(); // Reset UI so user can choose another method
       } else {
-        alert('Payment error: ' + err.message);
+        alert('Payment error: ' + errorMessage);
         window.PaymentSelector.close();
       }
     }
@@ -523,10 +573,15 @@
       })
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
-    if (data.error) {
-      throw new Error(data.error);
+    if (!response.ok || data.error) {
+      throw new Error(
+        extractErrorMessage(
+          data.error || data.message || data,
+          `Whop checkout failed (${response.status})`
+        )
+      );
     }
 
     // Close selector modal
@@ -576,10 +631,15 @@
       })
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
-    if (data.error) {
-      throw new Error(data.error);
+    if (!response.ok || data.error) {
+      throw new Error(
+        extractErrorMessage(
+          data.error || data.message || data,
+          `PayPal checkout failed (${response.status})`
+        )
+      );
     }
 
     // Close modal and redirect to PayPal

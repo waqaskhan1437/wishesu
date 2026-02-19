@@ -11,6 +11,45 @@ import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-crea
 // API timeout constants
 const WHOP_API_TIMEOUT = 10000; // 10 seconds
 
+function normalizeGatewayError(value, fallback = 'Payment gateway error') {
+  if (!value) return fallback;
+
+  if (typeof value === 'string') {
+    const msg = value.trim();
+    return msg || fallback;
+  }
+
+  if (typeof value === 'object') {
+    const candidates = [
+      value.message,
+      value.error,
+      value.detail,
+      value.details,
+      value.description,
+      value.reason
+    ];
+
+    for (const candidate of candidates) {
+      const msg = normalizeGatewayError(candidate, '');
+      if (msg) return msg;
+    }
+
+    try {
+      const serialized = JSON.stringify(value);
+      if (serialized && serialized !== '{}' && serialized !== '[]') {
+        return serialized;
+      }
+    } catch (e) {}
+  }
+
+  try {
+    const msg = String(value).trim();
+    return msg || fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+
 /**
  * Create checkout session using existing plan
  */
@@ -102,7 +141,7 @@ export async function createCheckout(env, body, origin) {
       try {
         const errorData = JSON.parse(errorText);
         return json({
-          error: errorData.message || errorData.error || 'Failed to create checkout'
+          error: normalizeGatewayError(errorData, 'Failed to create checkout')
         }, whopResponse.status);
       } catch (e) {
         return json({ error: 'Failed to create checkout session' }, whopResponse.status);
@@ -304,7 +343,7 @@ export async function createPlanCheckout(env, body, origin) {
       let msg = 'Failed to create plan';
       try {
         const j = JSON.parse(errorText);
-        msg = j.message || j.error || msg;
+        msg = normalizeGatewayError(j, msg);
       } catch (_) { }
       return json({ error: msg }, planResp.status);
     }
@@ -365,7 +404,7 @@ export async function createPlanCheckout(env, body, origin) {
       let msg = 'Failed to create checkout session';
       try {
         const j = JSON.parse(errorText);
-        msg = j.message || j.error || msg;
+        msg = normalizeGatewayError(j, msg);
       } catch (_) {}
       return json({ error: msg }, checkoutResp.status);
     }

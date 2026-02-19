@@ -11,6 +11,40 @@
   let cachedAddonEmail = '';
   let isCheckoutInProgress = false; // Prevent double clicks
 
+  function extractErrorMessage(value, fallback = 'Checkout failed') {
+    if (!value) return fallback;
+
+    if (typeof value === 'string') {
+      const msg = value.trim();
+      return msg || fallback;
+    }
+
+    if (value instanceof Error) {
+      return extractErrorMessage(value.message, fallback);
+    }
+
+    if (typeof value === 'object') {
+      const candidates = [value.error, value.message, value.detail, value.details, value.description];
+      for (const candidate of candidates) {
+        const msg = extractErrorMessage(candidate, '');
+        if (msg) return msg;
+      }
+      try {
+        const serialized = JSON.stringify(value);
+        if (serialized && serialized !== '{}' && serialized !== '[]') {
+          return serialized;
+        }
+      } catch (e) {}
+    }
+
+    try {
+      const msg = String(value).trim();
+      return msg || fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
   function syncEmailToWhop(email) {
     cachedAddonEmail = email || '';
     window.cachedAddonEmail = cachedAddonEmail;
@@ -361,10 +395,15 @@
         })
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok || data.error) {
-        throw new Error(data.error || 'Failed to create checkout');
+        throw new Error(
+          extractErrorMessage(
+            data.error || data.message || data,
+            `Failed to create checkout (${response.status})`
+          )
+        );
       }
 
       // Restore buttons before redirect
@@ -390,7 +429,7 @@
       }
     } catch (err) {
       console.error('Checkout error:', err);
-      alert('Checkout Error: ' + err.message);
+      alert('Checkout Error: ' + extractErrorMessage(err));
       restoreButtons();
     }
   }

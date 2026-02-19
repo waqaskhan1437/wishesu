@@ -144,7 +144,7 @@
   <script src="/js/universal-player.js" defer></script>
   <script src="/js/instant-upload.js" defer></script>
   <!-- Payment methods -->
-  <script src="/js/payment-selector.js" defer></script>
+  <script src="/js/payment-selector.js?v=26" defer></script>
   <!-- Coupon widget -->
   <script src="/js/coupon-widget.js" defer></script>
   <!-- Whop checkout integration -->
@@ -156,7 +156,7 @@
   <script src="/js/product/seo-utils.js" defer></script>
   <script src="/js/product/layout-main.js" defer></script>
   <script src="/js/product/layout-extra.js" defer></script>
-  <script src="/js/product/checkout.js" defer></script>
+  <script src="/js/product/checkout.js?v=26" defer></script>
   <script src="/js/product/main.js" defer></script>
   <script src="/js/chat-widget.js" defer></script>
 
