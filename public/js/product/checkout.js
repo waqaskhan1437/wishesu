@@ -350,6 +350,8 @@
       originalAmount: window.currentTotal,
       coupon: appliedCoupon,
       productId: window.productData.id,
+      productTitle: window.productData?.title || '',
+      productThumbnail: window.productData?.thumbnail_url || '',
       deliveryTimeMinutes: deliveryTimeMinutes,
       timestamp: Date.now()
     };
@@ -360,6 +362,8 @@
       // Open payment selector modal - buttons will be restored when modal closes
       window.PaymentSelector.open({
         productId: window.productData.id,
+        productTitle: window.productData?.title || '',
+        productThumbnail: window.productData?.thumbnail_url || '',
         amount: finalAmount,
         originalAmount: window.currentTotal,
         coupon: appliedCoupon,
@@ -383,6 +387,8 @@
 
       const payload = {
         productId: window.productData.id,
+        productTitle: window.productData?.title || '',
+        productThumbnail: window.productData?.thumbnail_url || '',
         amount: finalAmount,
         originalAmount: Number(window.currentTotal || 0),
         email: email || '',

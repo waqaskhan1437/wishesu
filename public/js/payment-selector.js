@@ -68,7 +68,9 @@
       addons: Array.isArray(payload.addons) ? payload.addons : [],
       coupon: payload.coupon || null,
       deliveryTimeMinutes: Number(payload.deliveryTimeMinutes || payload.delivery_time_minutes || 60) || 60,
-      sourceUrl: payload.sourceUrl || payload.source_url || (window.location.pathname + window.location.search)
+      sourceUrl: payload.sourceUrl || payload.source_url || (window.location.pathname + window.location.search),
+      productTitle: payload.productTitle || payload.product_title || (window.productData && window.productData.title) || '',
+      productThumbnail: payload.productThumbnail || payload.product_thumbnail || (window.productData && window.productData.thumbnail_url) || ''
     };
 
     const serialized = JSON.stringify(intent);

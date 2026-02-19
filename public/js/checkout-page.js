@@ -112,7 +112,8 @@
       coupon: rawIntent.coupon || null,
       deliveryTimeMinutes: delivery,
       sourceUrl: rawIntent.sourceUrl || rawIntent.source_url || '',
-      productTitle: rawIntent.productTitle || rawIntent.product_title || ''
+      productTitle: rawIntent.productTitle || rawIntent.product_title || '',
+      productThumbnail: rawIntent.productThumbnail || rawIntent.product_thumbnail || ''
     };
   }
 
@@ -143,8 +144,29 @@
         email: legacy.email,
         addons: legacy.addons,
         coupon: legacy.coupon,
-        deliveryTimeMinutes: legacy.deliveryTimeMinutes
+        deliveryTimeMinutes: legacy.deliveryTimeMinutes,
+        productTitle: legacy.productTitle || legacy.product_title || '',
+        productThumbnail: legacy.productThumbnail || legacy.product_thumbnail || ''
       });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function fetchProductDetails(productId) {
+    if (!productId) return null;
+    try {
+      const response = await fetch(`/api/product/${encodeURIComponent(String(productId))}`);
+      if (!response.ok) return null;
+
+      const data = await response.json().catch(() => ({}));
+      const product = data && data.product ? data.product : null;
+      if (!product) return null;
+
+      return {
+        title: (product.title || '').trim(),
+        thumbnail: (product.thumbnail_url || '').trim()
+      };
     } catch (e) {
       return null;
     }
@@ -169,12 +191,29 @@
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = formatUsd(intent.amount);
 
+    const productTitleEl = document.getElementById('checkout-product-title');
+    const productThumbEl = document.getElementById('checkout-product-thumb');
+    const productPreviewEl = document.getElementById('checkout-product-preview');
+    const productTitle = (intent.productTitle || '').trim() || `Product #${intent.productId}`;
+
+    if (productTitleEl) productTitleEl.textContent = productTitle;
+    if (productPreviewEl) productPreviewEl.hidden = false;
+
+    if (productThumbEl) {
+      const thumb = (intent.productThumbnail || '').trim();
+      if (thumb) {
+        productThumbEl.src = thumb;
+        productThumbEl.style.display = '';
+      } else {
+        productThumbEl.removeAttribute('src');
+        productThumbEl.style.display = 'none';
+      }
+    }
+
     const metaEl = document.getElementById('checkout-meta');
     if (!metaEl) return;
 
-    const rows = [
-      { label: 'Product', value: '#' + intent.productId }
-    ];
+    const rows = [];
     if (intent.email) rows.push({ label: 'Email', value: intent.email });
     if (intent.coupon && intent.coupon.code) rows.push({ label: 'Coupon', value: intent.coupon.code });
     rows.push({ label: 'Add-ons', value: String(Array.isArray(intent.addons) ? intent.addons.length : 0) });
@@ -371,6 +410,14 @@
     }
 
     renderSummary(intent);
+
+    fetchProductDetails(intent.productId).then((productInfo) => {
+      if (!productInfo) return;
+      if (productInfo.title) intent.productTitle = productInfo.title;
+      if (productInfo.thumbnail) intent.productThumbnail = productInfo.thumbnail;
+      renderSummary(intent);
+    }).catch(() => {});
+
     setStatus('Creating your secure checkout session...', 'info');
 
     try {
