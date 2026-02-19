@@ -544,7 +544,7 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (method === 'POST' && path === '/api/whop/webhook') {
     const body = await req.json();
-    return handleWebhook(env, body);
+    return handleWebhook(env, body, req.headers);
   }
 
   if (method === 'GET' && path === '/api/whop/test-api') {

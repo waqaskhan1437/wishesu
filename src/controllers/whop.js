@@ -3,7 +3,7 @@
  */
 
 import { json } from '../utils/response.js';
-import { getWhopApiKey } from '../config/secrets.js';
+import { getWhopApiKey, getWhopWebhookSecret } from '../config/secrets.js';
 import { fetchWithTimeout } from '../utils/fetch-timeout.js';
 import { calculateAddonPrice, calculateServerSidePrice } from '../utils/pricing.js';
 import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-creation.js';
@@ -335,20 +335,12 @@ export async function createPlanCheckout(env, body, origin) {
     if (!checkoutResp.ok) {
       const errorText = await checkoutResp.text();
       console.error('Whop checkout session error:', errorText);
-      return json({
-        success: true,
-        plan_id: planId,
-        product_id: product.id,
-        email: email,
-        metadata: {
-          product_id: product.id.toString(),
-          product_title: product.title,
-          addons: metadata?.addons || [],
-          amount: priceValue
-        },
-        expires_in: '15 minutes',
-        warning: 'Email prefill not available'
-      });
+      let msg = 'Failed to create checkout session';
+      try {
+        const j = JSON.parse(errorText);
+        msg = j.message || j.error || msg;
+      } catch (_) {}
+      return json({ error: msg }, checkoutResp.status);
     }
 
     const checkoutData = await checkoutResp.json();
@@ -388,15 +380,64 @@ export async function createPlanCheckout(env, body, origin) {
 }
 
 /**
+ * Verify Whop webhook signature
+ */
+async function verifyWhopSignature(signature, body, secret) {
+  if (!signature || !secret) return false;
+
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    // Whop sends JSON body for signature verification
+    const data = typeof body === 'string' ? body : JSON.stringify(body);
+    const sig = await crypto.subtle.sign(
+      'HMAC',
+      key,
+      encoder.encode(data)
+    );
+
+    const expected = Array.from(new Uint8Array(sig))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    return signature === expected;
+  } catch (e) {
+    console.error('Signature verification error:', e);
+    return false;
+  }
+}
+
+/**
  * Handle Whop webhook
  * RELIABILITY: Order creation happens ONLY here, not on client redirect
  * This ensures orders are created even if user closes browser during redirect
  */
-export async function handleWebhook(env, webhookData) {
+export async function handleWebhook(env, webhookData, headers) {
   try {
-    const eventType = webhookData.type;
+    const eventType = webhookData.type || webhookData.event;
+    const signature = headers?.get('x-whop-signature') || headers?.get('whop-signature');
 
     console.log('Whop webhook received:', eventType);
+
+    // Verify signature if secret is configured
+    const secret = await getWhopWebhookSecret(env);
+    if (secret && signature) {
+      const isValid = await verifyWhopSignature(signature, webhookData, secret);
+      if (!isValid) {
+        console.error('❌ Invalid Whop signature');
+        return json({ error: 'Invalid signature' }, 401);
+      }
+      console.log('✅ Whop signature verified');
+    } else if (secret && !signature) {
+      console.warn('⚠️ Whop secret configured but no signature received');
+    }
 
     // Handle payment success - this is the ONLY place orders are created
     if (eventType === 'payment.succeeded') {
