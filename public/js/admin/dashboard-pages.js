@@ -67,7 +67,10 @@
     panel.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
         <h2 style="margin:0;font-size:1.5em;color:#1f2937;">📄 Landing Pages</h2>
-        <button id="create-page-btn" class="btn btn-primary">+ Create New Page</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="delete-all-pages-btn" class="btn btn-danger">Delete All Pages</button>
+          <button id="create-page-btn" class="btn btn-primary">+ Create New Page</button>
+        </div>
       </div>
       
       <!-- Current Defaults -->
@@ -84,6 +87,37 @@
     if (createBtn) {
       createBtn.addEventListener('click', () => {
         window.location.href = '/page-builder.html';
+      });
+    }
+
+    const deleteAllBtn = panel.querySelector('#delete-all-pages-btn');
+    if (deleteAllBtn) {
+      deleteAllBtn.addEventListener('click', async () => {
+        const confirmDelete = confirm('Delete ALL pages?\n\nThis action is permanent and cannot be undone.');
+        if (!confirmDelete) return;
+
+        const token = prompt('Type DELETE to confirm:', '');
+        if (token !== 'DELETE') {
+          alert('Cancelled. Confirmation text did not match.');
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/admin/pages/delete-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'all' })
+          });
+          const data = await res.json();
+          if (data.success) {
+            alert(`✅ Deleted ${data.count || 0} pages.`);
+            AD.loadPages(panel);
+          } else {
+            alert('❌ Failed: ' + (data.error || 'Unknown error'));
+          }
+        } catch (err) {
+          alert('❌ Error: ' + err.message);
+        }
       });
     }
 

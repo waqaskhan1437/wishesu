@@ -105,6 +105,7 @@ import {
   savePageBuilder,
   deletePage,
   deletePageBySlug,
+  deleteAllPages,
   updatePageStatus,
   updatePageType,
   duplicatePage,
@@ -867,6 +868,11 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/pages/delete') {
     const body = await req.json().catch(() => ({}));
     return deletePageBySlug(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/admin/pages/delete-all') {
+    const body = await req.json().catch(() => ({}));
+    return deleteAllPages(env, body);
   }
 
   if (method === 'POST' && path === '/api/pages/status') {

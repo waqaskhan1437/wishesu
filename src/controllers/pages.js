@@ -301,6 +301,62 @@ export async function deletePageBySlug(env, body) {
 }
 
 /**
+ * Bulk delete pages (admin cleanup utility)
+ * body: { status?: 'all'|'draft'|'published', page_type?: 'all'|PAGE_TYPES }
+ */
+export async function deleteAllPages(env, body = {}) {
+  const status = String(body.status || 'all').trim().toLowerCase();
+  const pageType = String(body.page_type || 'all').trim().toLowerCase();
+
+  if (!['all', 'draft', 'published'].includes(status)) {
+    return json({ error: 'Invalid status filter. Use all, draft, or published.' }, 400);
+  }
+
+  const validPageTypes = new Set(['all', ...Object.values(PAGE_TYPES)]);
+  if (!validPageTypes.has(pageType)) {
+    return json({ error: 'Invalid page_type filter.' }, 400);
+  }
+
+  let query = 'DELETE FROM pages';
+  const conditions = [];
+  const params = [];
+
+  if (status !== 'all') {
+    conditions.push('status = ?');
+    params.push(status);
+  }
+  if (pageType !== 'all') {
+    conditions.push('page_type = ?');
+    params.push(pageType);
+  }
+
+  if (conditions.length) {
+    query += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  try {
+    const result = await env.DB.prepare(query).bind(...params).run();
+    return json({ success: true, count: result?.changes || 0 });
+  } catch (err) {
+    const message = String(err?.message || '');
+    const pageTypeColumnMissing = /no such column: page_type/i.test(message);
+
+    // Backward compatibility for older schema without page_type column
+    if (pageTypeColumnMissing && pageType !== 'all') {
+      return json({ error: 'page_type filtering is not available on current schema.' }, 400);
+    }
+    if (pageTypeColumnMissing) {
+      const fallbackQuery = status === 'all' ? 'DELETE FROM pages' : 'DELETE FROM pages WHERE status = ?';
+      const fallbackParams = status === 'all' ? [] : [status];
+      const fallback = await env.DB.prepare(fallbackQuery).bind(...fallbackParams).run();
+      return json({ success: true, count: fallback?.changes || 0 });
+    }
+
+    return json({ error: message || 'Failed to delete pages.' }, 500);
+  }
+}
+
+/**
  * Update page status
  */
 export async function updatePageStatus(env, body) {
