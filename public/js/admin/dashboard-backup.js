@@ -50,7 +50,7 @@
         <div style="background:white;border-radius:16px;padding:25px;margin-bottom:25px;box-shadow:0 1px 3px rgba(0,0,0,0.1);border-left:4px solid #3b82f6;">
           <h3 style="margin:0 0 15px;font-size:18px;color:#1f2937;">📋 Backup Strategy</h3>
           <ul style="margin:0;padding-left:20px;color:#4b5563;font-size:14px;line-height:1.8;">
-            <li><strong>Automatic:</strong> Daily backups at 2:00 AM</li>
+            <li><strong>Automatic:</strong> Daily backups at 2:00 AM UTC</li>
             <li><strong>Retention:</strong> Last 7 backups kept</li>
             <li><strong>Storage:</strong> Secure Cloudflare storage</li>
             <li><strong>Content:</strong> All website data & settings</li>

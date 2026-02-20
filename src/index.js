@@ -2389,7 +2389,15 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         if (event.cron === '0 2 * * *') {
           try {
             // createBackup() handles: store in R2 + D1 metadata + webhook dispatch + optional email
-            await createBackupApi(env);
+            const baseUrl = env.PUBLIC_BASE_URL || env.SITE_URL || env.BASE_URL || null;
+            const backupResp = await createBackupApi(env, { trigger: 'cron', base_url: baseUrl });
+            if (!backupResp?.ok) {
+              const errBody = await backupResp.text().catch(() => '');
+              console.log('Daily backup API returned non-OK:', backupResp?.status, errBody);
+            } else {
+              const payload = await backupResp.clone().json().catch(() => ({}));
+              console.log('Daily backup created:', payload?.id || 'unknown-id');
+            }
           } catch (e) {
             console.log('Daily backup failed:', e?.message || e);
           }

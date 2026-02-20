@@ -362,57 +362,14 @@ async function createBackupInternal(env, meta = {}) {
  */
 export async function createBackup(env, meta = {}) {
   try {
-    await ensureBackupsTable(env);
-
-    const BUCKET = getBackupBucket(env);
-
-    if (!BUCKET) {
-      throw new Error('R2 bucket binding missing (R2_BUCKET or PRODUCT_MEDIA).');
-    }
-
-    const { jsonStr, size, media_count } = await generateBackupData(env);
-    const id = 'backup-' + Date.now();
-    const r2_key = `${BACKUP_PREFIX}${id}.json`;
-
-    // Put into R2 (avoid D1 size limits)
-    await BUCKET.put(r2_key, jsonStr, {
-      httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    const created = await createBackupInternal(env, meta);
+    return json({
+      ok: true,
+      id: created.id,
+      created_at: created.created_at,
+      size: created.size,
+      media_count: created.media_count
     });
-
-    const cols = await getBackupsColumns(env);
-
-// Build INSERT based on available columns (backward compatible)
-const insertCols = ['id'];
-const insertVals = [id];
-
-if (cols.has('created_at')) {
-  insertCols.push('created_at');
-  insertVals.push(nowIso());
-} else if (cols.has('timestamp')) {
-  insertCols.push('timestamp');
-  insertVals.push(nowIso());
-}
-
-if (cols.has('size')) {
-  insertCols.push('size');
-  insertVals.push(size);
-}
-if (cols.has('media_count')) {
-  insertCols.push('media_count');
-  insertVals.push(media_count);
-}
-if (cols.has('r2_key')) {
-  insertCols.push('r2_key');
-  insertVals.push(r2_key);
-}
-
-const placeholders = insertCols.map(() => '?').join(', ');
-await env.DB
-  .prepare(`INSERT INTO backups (${insertCols.join(', ')}) VALUES (${placeholders})`)
-  .bind(...insertVals)
-  .run();
-
-    return json({ ok: true, id, size, media_count });
   } catch (e) {
     return json({ ok: false, error: e?.message || String(e) }, 500);
   }
@@ -577,4 +534,3 @@ function getBackupBucket(env) {
   // Prefer dedicated backup bucket, fallback to PRODUCT_MEDIA if configured
   return env.R2_BUCKET || env.PRODUCT_MEDIA || null;
 }
-
