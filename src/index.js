@@ -38,6 +38,91 @@ function noStoreHeaders(extra = {}) {
   };
 }
 
+// Common automated scanner paths (WordPress/PHP/admin probes) that do not
+// exist on this app. Fast-rejecting them avoids unnecessary subrequests and
+// DB warmup work on every probe.
+const SCANNER_PREFIXES = [
+  '/wp-admin',
+  '/wp-content',
+  '/wp-includes',
+  '/phpmyadmin',
+  '/pma',
+  '/adminer',
+  '/mysql',
+  '/xmlrpc.php',
+  '/cgi-bin',
+  '/vendor/',
+  '/boaform',
+  '/hnap1',
+  '/.git',
+  '/.env'
+];
+
+const SCANNER_PATH_RE = /\.(php[0-9]?|phtml|asp|aspx|jsp|cgi|env|ini|sql|bak|old|log|swp)$/i;
+const DYNAMIC_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
+// Top-level `/api/{segment}` allowlist. Keep aligned with `src/router.js`.
+const KNOWN_API_SEGMENTS = new Set([
+  'admin',
+  'backup',
+  'blog',
+  'blogs',
+  'chat',
+  'coupons',
+  'debug',
+  'forum',
+  'health',
+  'lead',
+  'order',
+  'orders',
+  'page',
+  'pages',
+  'payment',
+  'paypal',
+  'product',
+  'products',
+  'purge-cache',
+  'r2',
+  'reviews',
+  'settings',
+  'time',
+  'upload',
+  'whop'
+]);
+
+function isLikelyScannerPath(pathname) {
+  const p = String(pathname || '').toLowerCase();
+  if (!p || p === '/') return false;
+
+  if (SCANNER_PREFIXES.some((prefix) => p.startsWith(prefix))) return true;
+  if (p.includes('/.git/') || p.includes('/.env')) return true;
+  if (SCANNER_PATH_RE.test(p) && !p.endsWith('.html')) return true;
+
+  return false;
+}
+
+function canLookupDynamicSlug(slug) {
+  const s = String(slug || '').toLowerCase();
+  return DYNAMIC_SLUG_RE.test(s);
+}
+
+function isKnownApiPath(pathname) {
+  const p = String(pathname || '');
+  if (!p.startsWith('/api/')) return true;
+  const apiTail = p.slice('/api/'.length);
+  const firstSegment = apiTail.split('/')[0].toLowerCase();
+  return !!firstSegment && KNOWN_API_SEGMENTS.has(firstSegment);
+}
+
+function isMalformedNestedSlug(pathname, prefix) {
+  const p = String(pathname || '');
+  if (!p.startsWith(prefix) || p === prefix || p.includes('.')) return false;
+  let slug = p.slice(prefix.length);
+  if (slug.endsWith('/')) slug = slug.slice(0, -1);
+  if (!slug) return false;
+  if (slug.includes('/')) return true;
+  return !canLookupDynamicSlug(slug);
+}
+
 // -------------------------------
 // SEO helper functions
 // -------------------------------
@@ -1318,6 +1403,44 @@ export default {
     }
     const method = req.method;
 
+    // Fast reject obvious scanner/bot probes before any expensive work.
+    if ((method === 'GET' || method === 'HEAD' || method === 'POST') && isLikelyScannerPath(path)) {
+      return new Response('Not found', {
+        status: 404,
+        headers: {
+          'Cache-Control': 'public, max-age=300',
+          'X-Worker-Version': VERSION
+        }
+      });
+    }
+
+    // Fast reject unknown API probes to avoid unnecessary DB initialization.
+    if (method !== 'OPTIONS' && path.startsWith('/api/') && !isKnownApiPath(path)) {
+      return new Response(JSON.stringify({ error: 'Not found' }), {
+        status: 404,
+        headers: {
+          ...CORS,
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'public, max-age=300',
+          'X-Worker-Version': VERSION
+        }
+      });
+    }
+
+    // Fast reject malformed blog/forum detail URLs before any DB warmup work.
+    if ((method === 'GET' || method === 'HEAD') && (
+      isMalformedNestedSlug(path, '/blog/') ||
+      isMalformedNestedSlug(path, '/forum/')
+    )) {
+      return new Response('Not found', {
+        status: 404,
+        headers: {
+          'Cache-Control': 'public, max-age=300',
+          'X-Worker-Version': VERSION
+        }
+      });
+    }
+
     // COLD START FIX: Start DB initialization early and WAIT for critical paths
     // For API routes and dynamic pages, we need the DB ready before processing
     const requiresDB = path.startsWith('/api/') || 
@@ -1874,7 +1997,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       if (path.endsWith('.html') && !path.includes('/admin/') && !path.startsWith('/admin') && !path.startsWith('/blog/') && !path.startsWith('/forum/')) {
         const slug = path.slice(1).replace(/\.html$/, '');
         // Only attempt to serve non-core pages via the database
-        if (!coreStaticPages.includes(slug)) {
+        if (!coreStaticPages.includes(slug) && canLookupDynamicSlug(slug)) {
           try {
             if (env.DB) {
               await initDB(env);
@@ -1913,7 +2036,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       // Serve dynamic pages with clean URLs (no .html)
       if (!path.includes('.') && !path.includes('/admin') && !path.startsWith('/api/') && path !== '/' && !path.startsWith('/blog/') && !path.startsWith('/forum/') && !path.startsWith('/product-') && !path.startsWith('/download/')) {
         const slug = path.slice(1).replace(/\/$/, ''); // Remove leading slash and trailing slash
-        if (slug && !coreStaticPages.includes(slug)) {
+        if (slug && !coreStaticPages.includes(slug) && canLookupDynamicSlug(slug)) {
           try {
             if (env.DB) {
               await initDB(env);
@@ -2374,7 +2497,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
   },
 
   // Scheduled handler for cron jobs
-  // WARMING: This runs every 3 minutes (configure in wrangler.toml)
+  // WARMING: This runs every 5 minutes (configure in wrangler.toml)
   // Keeps DB connection warm and prevents cold start issues
   async scheduled(event, env, ctx) {
     setVersion(env.VERSION);
@@ -2417,7 +2540,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         console.log('DB connection warmed successfully with multiple queries');
 
         // Cleanup expired Whop checkout sessions (daily cron only)
-        // The 3-minute cron is intended for warming; cleanup is heavier and can increase subrequests/wall time.
+        // The 5-minute cron is intended for warming; cleanup is heavier and can increase subrequests/wall time.
         if (event.cron === '0 2 * * *') {
           const result = await cleanupExpired(env);
           try {
