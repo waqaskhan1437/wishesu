@@ -163,6 +163,21 @@
             }
           };
 
+          // Try to show a frame from inside the video instead of external posters.
+          const setVideoPreviewFrame = (videoEl) => {
+            if (!videoEl) return;
+            videoEl.addEventListener('loadedmetadata', () => {
+              try {
+                const duration = Number(videoEl.duration) || 0;
+                if (!duration || !Number.isFinite(duration)) return;
+                const target = duration > 8 ? 5 : Math.max(1, duration * 0.35);
+                videoEl.currentTime = Math.min(target, Math.max(0.1, duration - 0.1));
+              } catch (_) {
+                // Ignore seek failures (cross-origin streams may block seeking).
+              }
+            }, { once: true });
+          };
+
           const resolveReviewVideoMedia = (review) => {
             const metadata = parseReviewVideoMetadata(review);
             const youtubeUrl = (metadata.youtubeUrl || metadata.reviewYoutubeUrl || '').toString().trim();
@@ -174,7 +189,8 @@
             const isNativeVideo =
               !!detected && ['direct', 'cloudinary', 'bunny'].includes(detected.type);
 
-            let posterUrl = (review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url || '').toString().trim();
+            // Delivery/review videos should not use product thumbnail fallback.
+            let posterUrl = '';
             if (!posterUrl && detected && detected.type === 'youtube' && detected.id) {
               posterUrl = `https://i.ytimg.com/vi/${detected.id}/hqdefault.jpg`;
             }
@@ -218,6 +234,7 @@
               videoEl.style.cssText = 'width:100%; height:100%; min-height:200px; border-radius:12px; background:#000;';
               videoEl.controlsList = 'nodownload';
               if (posterUrl) videoEl.poster = posterUrl;
+              setVideoPreviewFrame(videoEl);
               
               playerContainer.appendChild(videoEl);
               
@@ -337,6 +354,10 @@
                 videoThumb.preload = 'metadata';
                 videoThumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
                 videoThumb.muted = true;
+                videoThumb.playsInline = true;
+                videoThumb.setAttribute('playsinline', '');
+                videoThumb.controls = false;
+                setVideoPreviewFrame(videoThumb);
                 thumbContainer.appendChild(videoThumb);
               } else if (reviewMedia.posterUrl) {
                 // For YouTube/embedded sources use poster image instead of <video>.
@@ -474,6 +495,7 @@
               videoThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover; pointer-events: none; background: #1a1a2e;';
               galleryThumb.appendChild(videoThumb);
               videoObserver.observe(videoThumb);
+              setVideoPreviewFrame(videoThumb);
             } else if (media.posterUrl) {
               const imageThumb = document.createElement('img');
               imageThumb.src = media.posterUrl;
@@ -503,7 +525,7 @@
 
               showHighlight(review);
               scrollToPlayer();
-              setPlayerSource(portfolioVideoUrl, media.posterUrl || review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url);
+              setPlayerSource(portfolioVideoUrl, media.posterUrl || null);
             };
 
             galleryThumb.onmouseenter = () => {

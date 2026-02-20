@@ -18,6 +18,19 @@
     return src;
   }
 
+  function normalizeMediaUrl(url) {
+    const raw = (url || '').toString().trim();
+    if (!raw) return '';
+    try {
+      const u = new URL(raw, window.location.origin);
+      u.hash = '';
+      u.search = '';
+      return u.toString();
+    } catch (_) {
+      return raw.split('#')[0].split('?')[0];
+    }
+  }
+
   function renderProductMain(container, product, addonGroups) {
     container.className = '';
     container.innerHTML = '';
@@ -320,8 +333,17 @@
       }
 
       if (Array.isArray(galleryImages) && galleryImages.length > 0) {
+        const normalizedMainThumb = normalizeMediaUrl(product.thumbnail_url || '');
+        const seenGallery = new Set();
         galleryImages.forEach((imageUrl, index) => {
-          if (!imageUrl) return; 
+          if (!imageUrl) return;
+          const normalizedImage = normalizeMediaUrl(imageUrl);
+          if (!normalizedImage) return;
+
+          // Do not duplicate product thumbnail inside gallery strip.
+          if (normalizedMainThumb && normalizedImage === normalizedMainThumb) return;
+          if (seenGallery.has(normalizedImage)) return;
+          seenGallery.add(normalizedImage);
           
           const galleryThumb = document.createElement('img');
           galleryThumb.src = imageUrl;
