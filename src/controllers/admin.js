@@ -701,13 +701,48 @@ export async function uploadEncryptedFile(env, req, url) {
 export async function handleSecureDownload(env, orderId, baseUrl) {
   if (!orderId) return new Response('Order ID required', { status: 400 });
 
-  // Fetch order to get delivery URL
-  const order = await env.DB.prepare('SELECT delivered_video_url FROM orders WHERE order_id = ?').bind(orderId).first();
-  if (!order || !order.delivered_video_url) {
+  const order = await env.DB.prepare(
+    'SELECT archive_url, delivered_video_url, delivered_video_metadata FROM orders WHERE order_id = ?'
+  ).bind(orderId).first();
+
+  if (!order) {
     return new Response('File not found', { status: 404 });
   }
 
-  let sourceUrl = order.delivered_video_url;
+  let metadata = {};
+  try {
+    if (order.delivered_video_metadata) {
+      const parsed = JSON.parse(order.delivered_video_metadata);
+      if (parsed && typeof parsed === 'object') metadata = parsed;
+    }
+  } catch (_) {
+    metadata = {};
+  }
+
+  const preferredDownloadUrl = String(metadata.downloadUrl || metadata.buyerDownloadUrl || '').trim();
+  const sourceUrl = String(
+    preferredDownloadUrl ||
+    order.delivered_video_url ||
+    order.archive_url ||
+    ''
+  ).trim();
+
+  if (!sourceUrl) {
+    return new Response('Download link expired or not found', { status: 404 });
+  }
+
+  const lowered = sourceUrl.toLowerCase();
+  const isStreamOnly =
+    lowered.includes('youtube.com') ||
+    lowered.includes('youtu.be') ||
+    lowered.includes('vimeo.com') ||
+    lowered.includes('iframe.mediadelivery.net/embed/') ||
+    lowered.includes('video.bunnycdn.com/play/') ||
+    (lowered.includes('archive.org/details/') && !lowered.includes('/download/'));
+
+  if (isStreamOnly) {
+    return new Response('Download is not available for this delivery link.', { status: 400 });
+  }
 
   // Fetch the file
   let fileResp;
@@ -722,10 +757,10 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
     return new Response('Failed to fetch file: ' + e.message, { status: 502 });
   }
 
-  // If fetch failed, try redirecting to source
+  // If proxy fetch fails, avoid exposing private source by returning a user-safe error.
   if (!fileResp.ok) {
-    console.log('Proxy failed (' + fileResp.status + '), redirecting to source...');
-    return Response.redirect(sourceUrl, 302);
+    console.log('Proxy failed (' + fileResp.status + ') for source: ' + sourceUrl);
+    return new Response('File not available right now', { status: 404 });
   }
 
   // Determine filename from URL
@@ -758,7 +793,7 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
   if (hasBody) {
     headers.set('Content-Type', contentType);
     headers.set('Content-Disposition', `attachment; filename="${filename}"`);
-    headers.set('Content-Length', contentLength || '');
+    if (contentLength) headers.set('Content-Length', contentLength);
     headers.set('Accept-Ranges', 'bytes');
     headers.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     headers.set('Pragma', 'no-cache');
@@ -766,14 +801,12 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
 
     // Stream the response body
     return new Response(fileResp.body, {
-      status: 206, // Partial Content for range support
-      statusText: 'Partial Content',
+      status: 200,
       headers
     });
   }
 
-  // Fallback for responses without body
-  return Response.redirect(sourceUrl, 302);
+  return new Response('File stream unavailable', { status: 404 });
 }
 
 /**

@@ -372,8 +372,14 @@
       <div id="delivery-section" class="delivery-section admin-only" style="display: none;">
         <h3>📤 Deliver Video</h3>
         <div class="form-group">
-          <label>Video URL:</label>
-          <input type="text" id="delivery-url" placeholder="https://archive.org/download/...">
+          <label>Buyer Download URL:</label>
+          <input type="text" id="delivery-url" placeholder="https://archive.org/download/.../video.mp4">
+          <small style="color: #6b7280;">Buyer only sees this downloadable link.</small>
+        </div>
+        <div class="form-group">
+          <label>YouTube URL (private for review streaming):</label>
+          <input type="text" id="youtube-url" placeholder="https://www.youtube.com/watch?v=...">
+          <small style="color: #6b7280;">Optional. This URL is hidden from buyer delivery view.</small>
         </div>
         <div class="form-group">
           <label>OR Upload Video File:</label>

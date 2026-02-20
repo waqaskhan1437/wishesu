@@ -128,7 +128,10 @@ export async function getProduct(env, id) {
       'SELECT COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id = ? AND status = ?'
     ).bind(row.id, 'approved').first(),
     env.DB.prepare(
-      `SELECT reviews.*, orders.delivered_video_url, orders.delivered_thumbnail_url 
+      `SELECT reviews.*,
+              COALESCE(orders.delivered_video_url, reviews.delivered_video_url) as delivered_video_url,
+              COALESCE(orders.delivered_thumbnail_url, reviews.delivered_thumbnail_url) as delivered_thumbnail_url,
+              orders.delivered_video_metadata
        FROM reviews 
        LEFT JOIN orders ON reviews.order_id = orders.order_id 
        WHERE reviews.product_id = ? AND reviews.status = ? 

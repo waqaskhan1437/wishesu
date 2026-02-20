@@ -123,6 +123,8 @@ window.openDeliverModal = function(orderId) {
   currentEditOrderId = orderId;
   document.getElementById('modal-order-id').textContent = 'Order ID: ' + orderId;
   document.getElementById('deliver-url-input').value = '';
+  const youtubeInput = document.getElementById('deliver-youtube-input');
+  if (youtubeInput) youtubeInput.value = '';
   document.getElementById('deliver-file-input').value = '';
   document.getElementById('deliver-modal').style.display = 'flex';
 };
@@ -152,10 +154,11 @@ window.submitDelivery = async function() {
       if (!data.success) throw new Error(data.error || 'Upload failed');
     } else {
       const urlVal = document.getElementById('deliver-url-input').value.trim();
+      const youtubeVal = document.getElementById('deliver-youtube-input')?.value.trim() || '';
       if (!urlVal) throw new Error('Please enter a URL');
       const res = await fetch('/api/order/archive-link', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ orderId: currentEditOrderId, archiveUrl: urlVal })
+        body: JSON.stringify({ orderId: currentEditOrderId, archiveUrl: urlVal, youtubeUrl: youtubeVal })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Save failed');

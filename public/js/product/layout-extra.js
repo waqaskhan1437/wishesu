@@ -153,6 +153,35 @@
             highlight.appendChild(span);
           };
 
+          const parseReviewVideoMetadata = (review) => {
+            if (!review || !review.delivered_video_metadata) return {};
+            try {
+              const parsed = JSON.parse(review.delivered_video_metadata);
+              return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch (_) {
+              return {};
+            }
+          };
+
+          const resolveReviewVideoMedia = (review) => {
+            const metadata = parseReviewVideoMetadata(review);
+            const youtubeUrl = (metadata.youtubeUrl || metadata.reviewYoutubeUrl || '').toString().trim();
+            const fallbackUrl = (review.delivered_video_url || '').toString().trim();
+            const videoUrl = youtubeUrl || fallbackUrl;
+
+            const player = window.UniversalVideoPlayer;
+            const detected = player && typeof player.detect === 'function' ? player.detect(videoUrl) : null;
+            const isNativeVideo =
+              !!detected && ['direct', 'cloudinary', 'bunny'].includes(detected.type);
+
+            let posterUrl = (review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url || '').toString().trim();
+            if (!posterUrl && detected && detected.type === 'youtube' && detected.id) {
+              posterUrl = `https://i.ytimg.com/vi/${detected.id}/hqdefault.jpg`;
+            }
+
+            return { videoUrl, posterUrl, isNativeVideo };
+          };
+
           const setPlayerSource = (videoUrl, posterUrl) => {
             if (!videoUrl) return;
             
@@ -170,9 +199,14 @@
             playerContainer.id = 'universal-player-container';
             playerContainer.style.cssText = `width: 100%; height: 100%; min-height: ${isMobile ? '200px' : '300px'}; border-radius: 12px; overflow: visible; background: #000;`;
             videoWrapper.appendChild(playerContainer);
+
+            const detected = typeof window.UniversalVideoPlayer !== 'undefined' && typeof window.UniversalVideoPlayer.detect === 'function'
+              ? window.UniversalVideoPlayer.detect(videoUrl)
+              : null;
+            const useNativeMobile = isMobile && detected && ['direct', 'cloudinary', 'bunny'].includes(detected.type);
             
             // On mobile, use simple HTML5 video for better compatibility
-            if (isMobile) {
+            if (useNativeMobile) {
               const videoEl = document.createElement('video');
               videoEl.src = videoUrl;
               videoEl.controls = true;
@@ -194,13 +228,24 @@
                 videoEl.controls = true;
               });
             } else {
-              // Desktop - use UniversalVideoPlayer
+              // Use UniversalVideoPlayer for YouTube, embeds, and desktop playback
               if (typeof window.UniversalVideoPlayer !== 'undefined') {
                 window.UniversalVideoPlayer.render('universal-player-container', videoUrl, {
                   poster: posterUrl || '',
                   thumbnailUrl: posterUrl || '',
                   autoplay: true
                 });
+              } else if (detected && detected.type === 'youtube' && detected.id) {
+                playerContainer.innerHTML = `
+                  <iframe
+                    src="https://www.youtube.com/embed/${detected.id}?autoplay=1&rel=0&modestbranding=1"
+                    title="Review Video"
+                    frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen
+                    style="width:100%; height:100%; min-height:200px; border-radius:12px;"
+                  ></iframe>
+                `;
               } else {
                 // Fallback
                 playerContainer.innerHTML = `
@@ -272,7 +317,8 @@
             }
 
             // Only show portfolio video if buyer explicitly allowed it
-            const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
+            const reviewMedia = resolveReviewVideoMedia(review);
+            const portfolioVideoUrl = reviewMedia.videoUrl;
             const canWatch = !!portfolioVideoUrl && Number(review.show_on_product) === 1;
 
             if (canWatch) {
@@ -284,15 +330,23 @@
               const thumbContainer = document.createElement('div');
               thumbContainer.style.cssText = 'position:relative; width:260px; height:146px; flex-shrink:0; cursor:pointer; border-radius:10px; overflow:hidden; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition:transform 0.2s, box-shadow 0.2s; background:#000;';
 
-              // Use HTML5 video element to show actual video frame as thumbnail
-              // Browser will automatically show a frame from the video
-              const videoThumb = document.createElement('video');
-              videoThumb.src = portfolioVideoUrl;
-              videoThumb.preload = 'metadata'; // Load just enough to show first frame
-              videoThumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
-              videoThumb.muted = true; // Muted so it doesn't autoplay with sound
-              
-              thumbContainer.appendChild(videoThumb);
+              if (reviewMedia.isNativeVideo) {
+                // Use an actual video frame when source is a direct media URL.
+                const videoThumb = document.createElement('video');
+                videoThumb.src = portfolioVideoUrl;
+                videoThumb.preload = 'metadata';
+                videoThumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+                videoThumb.muted = true;
+                thumbContainer.appendChild(videoThumb);
+              } else if (reviewMedia.posterUrl) {
+                // For YouTube/embedded sources use poster image instead of <video>.
+                const imageThumb = document.createElement('img');
+                imageThumb.src = reviewMedia.posterUrl;
+                imageThumb.alt = 'Review video thumbnail';
+                imageThumb.loading = 'lazy';
+                imageThumb.style.cssText = 'width:100%; height:100%; object-fit:cover;';
+                thumbContainer.appendChild(imageThumb);
+              }
               
               // Add "Review" badge overlay
               const reviewBadge = document.createElement('div');
@@ -314,7 +368,7 @@
               const onWatch = () => {
                 showHighlight(review);
                 scrollToPlayer();
-                setPlayerSource(portfolioVideoUrl, null); // Use video itself for preview
+                setPlayerSource(portfolioVideoUrl, reviewMedia.posterUrl || null);
               };
               
               // Hover effects
@@ -378,10 +432,9 @@
           }; // End renderPage
           
           // Gallery thumbnails - only last 20 reviews with allowed portfolio videos
-          const reviewsWithVideo = product.reviews.filter(review => {
-            const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
-            return !!portfolioVideoUrl && Number(review.show_on_product) === 1;
-          });
+          const reviewsWithVideo = product.reviews
+            .map(review => ({ review, media: resolveReviewVideoMedia(review) }))
+            .filter(item => !!item.media.videoUrl && Number(item.review.show_on_product) === 1);
           
           // Take only last 20 for slider
           const sliderReviews = reviewsWithVideo.slice(-20);
@@ -400,17 +453,19 @@
             });
           }, { rootMargin: '100px' });
           
-          sliderReviews.forEach(review => {
-            const portfolioVideoUrl = (review.delivered_video_url || '').toString().trim();
+          sliderReviews.forEach(item => {
+            const review = item.review;
+            const media = item.media;
+            const portfolioVideoUrl = media.videoUrl;
+            if (!portfolioVideoUrl || !window.productThumbnailsSlider) return;
 
-            if (window.productThumbnailsSlider) {
-              const galleryThumb = document.createElement('div');
-              galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: border-color 0.15s ease, transform 0.15s ease; background:#1a1a2e; contain: layout style;';
+            const galleryThumb = document.createElement('div');
+            galleryThumb.style.cssText = 'position: relative; min-width: 140px; width: 140px; height: 100px; flex-shrink: 0; cursor: pointer; border-radius: 10px; overflow: hidden; border: 3px solid transparent; transition: border-color 0.15s ease, transform 0.15s ease; background:#1a1a2e; contain: layout style;';
 
-              // Use video element with lazy loading for authentic video thumbnail
+            if (media.isNativeVideo) {
               const videoThumb = document.createElement('video');
-              videoThumb.dataset.src = portfolioVideoUrl; // Store URL, load on intersection
-              videoThumb.preload = 'none'; // Don't load until visible
+              videoThumb.dataset.src = portfolioVideoUrl;
+              videoThumb.preload = 'none';
               videoThumb.muted = true;
               videoThumb.playsInline = true;
               videoThumb.setAttribute('playsinline', '');
@@ -418,49 +473,48 @@
               videoThumb.controls = false;
               videoThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover; pointer-events: none; background: #1a1a2e;';
               galleryThumb.appendChild(videoThumb);
-              
-              // Observe for lazy loading
               videoObserver.observe(videoThumb);
-
-              // Add review badge to gallery thumbnail
-              const badge = document.createElement('div');
-              badge.textContent = 'Review';
-              badge.style.cssText = 'position: absolute; bottom: 4px; right: 4px; background: rgba(16,185,129,0.95); color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; z-index: 10;';
-
-              const playIcon = document.createElement('div');
-              playIcon.className = 'thumb-play-btn';
-              playIcon.innerHTML = '▶';
-              playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px; z-index:100; pointer-events:none;';
-
-              galleryThumb.appendChild(badge);
-              galleryThumb.appendChild(playIcon);
-
-              // Click handler
-              galleryThumb.onclick = () => {
-                // Remove active from all thumbs
-                document.querySelectorAll('#thumbnails-slider .thumb, #thumbnails-slider > div').forEach(t => {
-                  if (t.style) t.style.border = '3px solid transparent';
-                });
-                galleryThumb.style.border = '3px solid #667eea';
-
-                showHighlight(review);
-                scrollToPlayer();
-	              // Always use the unified setPlayerSource function
-	              setPlayerSource(portfolioVideoUrl, review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url);
-              };
-
-              // Hover effect
-              galleryThumb.onmouseenter = () => {
-                galleryThumb.style.transform = 'scale(1.05)';
-              };
-              galleryThumb.onmouseleave = () => {
-                galleryThumb.style.transform = 'scale(1)';
-              };
-
-              window.productThumbnailsSlider.appendChild(galleryThumb);
+            } else if (media.posterUrl) {
+              const imageThumb = document.createElement('img');
+              imageThumb.src = media.posterUrl;
+              imageThumb.alt = 'Review video thumbnail';
+              imageThumb.loading = 'lazy';
+              imageThumb.style.cssText = 'width: 100%; height: 100%; object-fit: cover; pointer-events: none; background: #1a1a2e;';
+              galleryThumb.appendChild(imageThumb);
             }
+
+            const badge = document.createElement('div');
+            badge.textContent = 'Review';
+            badge.style.cssText = 'position: absolute; bottom: 4px; right: 4px; background: rgba(16,185,129,0.95); color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; z-index: 10;';
+
+            const playIcon = document.createElement('div');
+            playIcon.className = 'thumb-play-btn';
+            playIcon.innerHTML = '▶';
+            playIcon.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.6); color:white; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; padding-left:2px; z-index:100; pointer-events:none;';
+
+            galleryThumb.appendChild(badge);
+            galleryThumb.appendChild(playIcon);
+
+            galleryThumb.onclick = () => {
+              document.querySelectorAll('#thumbnails-slider .thumb, #thumbnails-slider > div').forEach(t => {
+                if (t.style) t.style.border = '3px solid transparent';
+              });
+              galleryThumb.style.border = '3px solid #667eea';
+
+              showHighlight(review);
+              scrollToPlayer();
+              setPlayerSource(portfolioVideoUrl, media.posterUrl || review.delivered_thumbnail_url || review.thumbnail_url || product.thumbnail_url);
+            };
+
+            galleryThumb.onmouseenter = () => {
+              galleryThumb.style.transform = 'scale(1.05)';
+            };
+            galleryThumb.onmouseleave = () => {
+              galleryThumb.style.transform = 'scale(1)';
+            };
+
+            window.productThumbnailsSlider.appendChild(galleryThumb);
           });
-          
           // Update slider arrows visibility after all thumbs added (single check instead of per-thumb)
           if (sliderReviews.length > 0) {
             setTimeout(() => {
@@ -536,3 +590,4 @@
   window.renderProductDescription = renderProductDescription;
   window.initializePlayer = initializePlayer;
 })();
+

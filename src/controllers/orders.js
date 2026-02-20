@@ -371,9 +371,19 @@ export async function getBuyerOrder(env, orderId) {
     console.error('Failed to parse order encrypted_data for buyer order:', orderId, e.message);
   }
 
+  // Hide internal stream URLs (e.g., YouTube) from buyer payload.
+  let buyerSafeVideoMetadata = row.delivered_video_metadata || null;
+  if (buyerSafeVideoMetadata) {
+    const meta = parseMetadataObject(buyerSafeVideoMetadata);
+    if (meta.youtubeUrl) delete meta.youtubeUrl;
+    if (meta.reviewYoutubeUrl) delete meta.reviewYoutubeUrl;
+    buyerSafeVideoMetadata = Object.keys(meta).length ? JSON.stringify(meta) : null;
+  }
+
   // Convert SQLite datetime to ISO 8601 format
   const orderData = {
     ...row,
+    delivered_video_metadata: buyerSafeVideoMetadata,
     addons,
     email,
     amount,
@@ -448,16 +458,36 @@ export async function updateOrder(env, body) {
   return json({ success: true });
 }
 
+function parseMetadataObject(raw) {
+  if (!raw || typeof raw !== 'string') return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
 /**
  * Deliver order
  */
 export async function deliverOrder(env, body) {
-  if (!body.orderId || !body.videoUrl) return json({ error: 'orderId and videoUrl required' }, 400);
+  const orderId = String(body?.orderId || '').trim();
+  const videoUrl = String(body?.videoUrl || '').trim();
+  const downloadUrl = String(body?.downloadUrl || videoUrl || body?.archiveUrl || '').trim();
+  const youtubeUrl = String(body?.youtubeUrl || '').trim();
+
+  if (!orderId) return json({ error: 'orderId required' }, 400);
+  if (!downloadUrl && !youtubeUrl) {
+    return json({ error: 'downloadUrl or youtubeUrl required' }, 400);
+  }
+
+  const deliveredVideoUrl = downloadUrl || youtubeUrl;
 
   // Get order data before updating
   const orderResult = await env.DB.prepare(
     'SELECT orders.*, products.title as product_title FROM orders LEFT JOIN products ON orders.product_id = products.id WHERE orders.order_id = ?'
-  ).bind(body.orderId).first();
+  ).bind(orderId).first();
 
   // Prepare additional metadata for delivered videos
   const deliveredVideoMetadata = JSON.stringify({
@@ -465,12 +495,14 @@ export async function deliverOrder(env, body) {
     itemId: body.itemId,
     subtitlesUrl: body.subtitlesUrl,
     tracks: Array.isArray(body.tracks) ? body.tracks : undefined,
+    downloadUrl: downloadUrl || undefined,
+    youtubeUrl: youtubeUrl || undefined,
     deliveredAt: new Date().toISOString()
   });
 
   await env.DB.prepare(
-    'UPDATE orders SET delivered_video_url=?, delivered_thumbnail_url=?, status=?, delivered_at=CURRENT_TIMESTAMP, delivered_video_metadata=? WHERE order_id=?'
-  ).bind(body.videoUrl, body.thumbnailUrl || null, 'delivered', deliveredVideoMetadata, body.orderId).run();
+    'UPDATE orders SET delivered_video_url=?, delivered_thumbnail_url=?, archive_url=COALESCE(?, archive_url), status=?, delivered_at=CURRENT_TIMESTAMP, delivered_video_metadata=? WHERE order_id=?'
+  ).bind(deliveredVideoUrl, body.thumbnailUrl || null, downloadUrl || null, 'delivered', deliveredVideoMetadata, orderId).run();
 
   // Get customer email for notification
   let customerEmail = '';
@@ -483,7 +515,7 @@ export async function deliverOrder(env, body) {
 
   // Send customer delivery notification (async)
   notifyCustomerOrderDelivered(env, {
-    orderId: body.orderId,
+    orderId: orderId,
     email: customerEmail,
     productTitle: orderResult?.product_title || 'Your Order'
   }).catch(() => { });
@@ -496,12 +528,13 @@ export async function deliverOrder(env, body) {
       const gsPayload = {
         event: 'order.delivered',
         data: {
-          orderId: body.orderId,
+          orderId: orderId,
           productTitle: orderResult.product_title || 'Your Order',
           customerEmail: customerEmail,
           // Provide both deliveryUrl and videoUrl for compatibility
-          deliveryUrl: body.videoUrl,
-          videoUrl: body.videoUrl
+          deliveryUrl: downloadUrl || deliveredVideoUrl,
+          videoUrl: deliveredVideoUrl,
+          youtubeUrl: youtubeUrl || undefined
         }
       };
       await fetch(googleScriptUrl, {
@@ -514,7 +547,7 @@ export async function deliverOrder(env, body) {
     console.error('Error triggering delivery webhook:', err);
   }
 
-  return json({ success: true });
+  return json({ success: true, deliveredVideoUrl, downloadUrl: downloadUrl || null, youtubeUrl: youtubeUrl || null });
 }
 
 /**
@@ -583,7 +616,30 @@ export async function updatePortfolio(env, body) {
  * Update archive link
  */
 export async function updateArchiveLink(env, body) {
-  await env.DB.prepare('UPDATE orders SET archive_url=? WHERE order_id=?').bind(body.archiveUrl, body.orderId).run();
+  const orderId = String(body?.orderId || '').trim();
+  const archiveUrl = String(body?.archiveUrl || '').trim();
+  const youtubeUrl = String(body?.youtubeUrl || '').trim();
+
+  if (!orderId || !archiveUrl) {
+    return json({ error: 'orderId and archiveUrl required' }, 400);
+  }
+
+  const existing = await env.DB.prepare(
+    'SELECT delivered_video_metadata FROM orders WHERE order_id = ?'
+  ).bind(orderId).first();
+
+  const existingMeta = parseMetadataObject(existing?.delivered_video_metadata || '');
+  const nextMeta = {
+    ...existingMeta,
+    downloadUrl: archiveUrl,
+    youtubeUrl: youtubeUrl || existingMeta.youtubeUrl,
+    deliveredAt: new Date().toISOString()
+  };
+
+  await env.DB.prepare(
+    'UPDATE orders SET archive_url=?, delivered_video_url=?, status=?, delivered_at=CURRENT_TIMESTAMP, delivered_video_metadata=? WHERE order_id=?'
+  ).bind(archiveUrl, archiveUrl, 'delivered', JSON.stringify(nextMeta), orderId).run();
+
   return json({ success: true });
 }
 

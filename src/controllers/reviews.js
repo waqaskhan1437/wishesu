@@ -76,7 +76,10 @@ export async function getReviews(env, url) {
  */
 export async function getProductReviews(env, productId) {
   const r = await env.DB.prepare(
-    `SELECT reviews.*, orders.delivered_video_url, orders.delivered_thumbnail_url 
+    `SELECT reviews.*,
+            COALESCE(orders.delivered_video_url, reviews.delivered_video_url) as delivered_video_url,
+            COALESCE(orders.delivered_thumbnail_url, reviews.delivered_thumbnail_url) as delivered_thumbnail_url,
+            orders.delivered_video_metadata
      FROM reviews 
      LEFT JOIN orders ON reviews.order_id = orders.order_id 
      WHERE reviews.product_id = ? AND reviews.status = ? 
@@ -116,7 +119,7 @@ export async function addReview(env, body) {
   }
   
   await env.DB.prepare(
-    'INSERT INTO reviews (product_id, author_name, rating, comment, status, order_id, show_on_product) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    'INSERT INTO reviews (product_id, author_name, rating, comment, status, order_id, show_on_product, delivered_video_url, delivered_thumbnail_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(
     Number(body.productId), 
     authorName, 
@@ -124,7 +127,9 @@ export async function addReview(env, body) {
     comment, 
     'approved', 
     body.orderId || null, 
-    body.showOnProduct !== undefined ? (body.showOnProduct ? 1 : 0) : 1
+    body.showOnProduct !== undefined ? (body.showOnProduct ? 1 : 0) : 1,
+    body.deliveredVideoUrl || null,
+    body.deliveredThumbnailUrl || null
   ).run();
   
   // Get product title for notification

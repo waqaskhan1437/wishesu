@@ -112,6 +112,78 @@
         }
     }
 
+    function parseVideoMetadata(order) {
+        if (!order || !order.delivered_video_metadata) return {};
+        try {
+            const parsed = JSON.parse(order.delivered_video_metadata);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (e) {
+            console.warn('Failed to parse video metadata:', e);
+            return {};
+        }
+    }
+
+    function isArchiveDetailsUrl(url) {
+        const lowered = (url || '').toString().toLowerCase();
+        return lowered.includes('archive.org/details/') && !lowered.includes('/download/');
+    }
+
+    function isOpenOnlyUrl(url) {
+        if (!url) return false;
+
+        const lowered = url.toLowerCase();
+        if (isArchiveDetailsUrl(url)) return true;
+        if (lowered.includes('youtube.com') || lowered.includes('youtu.be')) return true;
+        if (lowered.includes('vimeo.com')) return true;
+        if (lowered.includes('iframe.mediadelivery.net/embed/')) return true;
+        if (lowered.includes('video.bunnycdn.com/play/')) return true;
+
+        const player = window.UniversalVideoPlayer || window.UniversalPlayer;
+        if (player && typeof player.detect === 'function') {
+            try {
+                const detected = player.detect(url);
+                const openOnlyTypes = ['youtube', 'vimeo', 'bunny-embed'];
+                if (detected && openOnlyTypes.includes(detected.type)) return true;
+            } catch (_) {
+                // Ignore detector errors and fall back to URL checks above.
+            }
+        }
+
+        return false;
+    }
+
+    function resolveDeliveryUrls(order) {
+        const metadata = parseVideoMetadata(order);
+        const storedUrl = (order?.delivered_video_url || '').toString().trim();
+        const metadataDownloadUrl = (metadata.downloadUrl || metadata.buyerDownloadUrl || metadata.deliveryUrl || '').toString().trim();
+        const metadataYoutubeUrl = (metadata.youtubeUrl || metadata.reviewYoutubeUrl || '').toString().trim();
+
+        let buyerDownloadUrl = metadataDownloadUrl || storedUrl;
+        if (metadataYoutubeUrl && buyerDownloadUrl && buyerDownloadUrl === metadataYoutubeUrl && storedUrl && storedUrl !== metadataYoutubeUrl) {
+            buyerDownloadUrl = storedUrl;
+        }
+
+        let buyerPlaybackUrl = '';
+        if (buyerDownloadUrl && !isOpenOnlyUrl(buyerDownloadUrl)) {
+            buyerPlaybackUrl = buyerDownloadUrl;
+        } else if (storedUrl && !isOpenOnlyUrl(storedUrl)) {
+            buyerPlaybackUrl = storedUrl;
+        } else if (metadataDownloadUrl && !isOpenOnlyUrl(metadataDownloadUrl)) {
+            buyerPlaybackUrl = metadataDownloadUrl;
+        }
+
+        const adminPreviewUrl = metadataYoutubeUrl || storedUrl || metadataDownloadUrl;
+        const hasDownloadableDelivery = !!buyerDownloadUrl && !isOpenOnlyUrl(buyerDownloadUrl);
+
+        return {
+            metadata,
+            buyerDownloadUrl,
+            buyerPlaybackUrl,
+            adminPreviewUrl,
+            hasDownloadableDelivery
+        };
+    }
+
     function displayOrder(order) {
         document.getElementById('loading').style.display = 'none';
         document.getElementById('order-content').style.display = 'block';
@@ -156,8 +228,10 @@
         displayRequirements(order.addons || []);
 
         const statusMsg = document.getElementById('status-message');
+        const deliveryUrls = resolveDeliveryUrls(order);
+        const hasDeliveredMedia = !!(deliveryUrls.adminPreviewUrl || deliveryUrls.buyerDownloadUrl || deliveryUrls.buyerPlaybackUrl);
 
-        if (order.status === 'delivered' && order.delivered_video_url) {
+        if (order.status === 'delivered' && hasDeliveredMedia) {
             showDelivery(order);
         } else {
             startCountdown(order.delivery_time_minutes || 60, order.created_at);
@@ -361,57 +435,56 @@
         const videoSection = document.getElementById('video-section') || document.getElementById('video-player-section');
         if (videoSection) videoSection.style.display = 'block';
 
+        const deliveryUrls = resolveDeliveryUrls(order);
+        const isBuyer = !isAdmin;
+
         const statusMsg = document.getElementById('status-message');
-        if (statusMsg && !isAdmin) {
+        if (statusMsg && isBuyer) {
             statusMsg.style.display = 'block';
             statusMsg.className = 'status-message status-delivered';
-            statusMsg.innerHTML = '<h3>✅ Video Ready!</h3><p>Your video has been delivered and is ready to watch.</p>';
+            statusMsg.innerHTML = '<h3>Video Ready</h3><p>Your delivery is available below.</p>';
         }
 
         // Initialize video player
         const playerContainer = document.getElementById('player-container') || document.getElementById('universal-video-player');
-        if (playerContainer && order.delivered_video_url) {
-            let videoMetadata = null;
-            if (order.delivered_video_metadata) {
-                try {
-                    videoMetadata = JSON.parse(order.delivered_video_metadata);
-                } catch (e) {
-                    console.warn('Failed to parse video metadata:', e);
-                }
-            }
+        const playerUrl = isBuyer ? deliveryUrls.buyerPlaybackUrl : (deliveryUrls.adminPreviewUrl || deliveryUrls.buyerPlaybackUrl);
 
+        if (playerContainer && playerUrl) {
             const player = window.UniversalVideoPlayer || window.UniversalPlayer;
             if (player) {
-                // Merge allowDownload with existing metadata
-                const renderMetadata = { ...videoMetadata, allowDownload: true };
-                player.render(playerContainer.id, order.delivered_video_url, renderMetadata);
+                const renderMetadata = { ...deliveryUrls.metadata, allowDownload: isBuyer };
+                player.render(playerContainer.id, playerUrl, renderMetadata);
             }
+        } else if (playerContainer && isBuyer) {
+            playerContainer.innerHTML = `
+                <div style="padding:20px;border:1px solid #e5e7eb;border-radius:10px;background:#f9fafb;color:#374151;">
+                    Download is ready below.
+                </div>
+            `;
         }
 
         // Setup download button
         const downloadBtn = document.getElementById('download-btn');
-        if (downloadBtn && order.delivered_video_url) {
-            const player = window.UniversalVideoPlayer || window.UniversalPlayer;
-            if (player) {
-                const detected = player.detect(order.delivered_video_url);
-                const openOnlyTypes = ['youtube', 'vimeo', 'bunny-embed'];
+        if (downloadBtn) {
+            downloadBtn.style.display = 'none';
 
-                if (openOnlyTypes.includes(detected.type)) {
-                    downloadBtn.textContent = '🔗 Open Video';
-                    downloadBtn.href = order.delivered_video_url;
-                    downloadBtn.target = '_blank';
-                    downloadBtn.removeAttribute('download');
-                } else {
-                    downloadBtn.textContent = '⬇️ Download Video';
-                    downloadBtn.href = `/download/${order.order_id}`;
-                    downloadBtn.removeAttribute('target');
-                    downloadBtn.setAttribute('download', '');
-                }
+            if (deliveryUrls.hasDownloadableDelivery) {
+                downloadBtn.style.display = 'inline-flex';
+                downloadBtn.textContent = 'Download Video';
+                downloadBtn.href = `/download/${order.order_id}`;
+                downloadBtn.removeAttribute('target');
+                downloadBtn.setAttribute('download', '');
+            } else if (!isBuyer && deliveryUrls.adminPreviewUrl) {
+                downloadBtn.style.display = 'inline-flex';
+                downloadBtn.textContent = 'Open Preview';
+                downloadBtn.href = deliveryUrls.adminPreviewUrl;
+                downloadBtn.target = '_blank';
+                downloadBtn.removeAttribute('download');
             }
         }
 
         // Show action buttons for buyers
-        if (!isAdmin) {
+        if (isBuyer) {
             const revisionBtn = document.getElementById('revision-btn');
             const approveBtn = document.getElementById('approve-btn');
             if (revisionBtn) revisionBtn.style.display = 'inline-flex';
@@ -423,7 +496,7 @@
                 if (videoSection) {
                     const thankYou = document.createElement('div');
                     thankYou.style.cssText = 'background:#d1fae5;border:2px solid #10b981;padding:20px;border-radius:12px;text-align:center;margin-top:20px;';
-                    thankYou.innerHTML = '<h3 style="color:#065f46;margin:0;">✅ Thank you for your review!</h3><p style="color:#047857;margin:10px 0 0;">Your feedback has been submitted.</p>';
+                    thankYou.innerHTML = '<h3 style="color:#065f46;margin:0;">Thank you for your review!</h3><p style="color:#047857;margin:10px 0 0;">Your feedback has been submitted.</p>';
                     videoSection.appendChild(thankYou);
                 }
             }
@@ -432,15 +505,15 @@
             updateTipUI(order);
         }
     }
-
     async function submitDelivery() {
         const url = document.getElementById('delivery-url')?.value.trim();
+        const youtubeUrl = document.getElementById('youtube-url')?.value.trim();
         const file = document.getElementById('delivery-file')?.files[0];
         const thumb = document.getElementById('thumbnail-url')?.value.trim();
         const subtitlesUrl = document.getElementById('subtitles-url')?.value.trim();
 
         if (!url && !file) {
-            alert('Provide URL or upload file');
+            alert('Provide buyer download URL or upload file');
             return;
         }
 
@@ -481,7 +554,7 @@
                     if (xhr.status === 200) {
                         const data = JSON.parse(xhr.responseText);
                         if (data.url) {
-                            submitDeliveryWithUrl(data.url, thumb, subtitlesUrl, data);
+                            submitDeliveryWithUrl(data.url, thumb, subtitlesUrl, data, youtubeUrl);
                         } else {
                             alert('Upload failed: ' + (data.error || 'Unknown error'));
                         }
@@ -496,23 +569,30 @@
             } catch (err) {
                 alert('Upload failed: ' + err.message);
                 if (btn) {
-                    btn.textContent = '✅ Submit Delivery';
+                    btn.textContent = 'Submit Delivery';
                     btn.disabled = false;
                 }
                 return;
             }
-        } else {
-            submitDeliveryWithUrl(videoUrl, thumb, subtitlesUrl);
         }
+
+        submitDeliveryWithUrl(videoUrl, thumb, subtitlesUrl, null, youtubeUrl);
     }
 
-    async function submitDeliveryWithUrl(videoUrl, thumb, subtitlesUrl, uploadData) {
+    async function submitDeliveryWithUrl(videoUrl, thumb, subtitlesUrl, uploadData, youtubeUrl) {
         const btn = document.getElementById('submit-delivery-btn');
 
         try {
             if (btn) btn.innerHTML = 'Submitting...';
 
-            const deliveryData = { orderId, videoUrl, thumbnailUrl: thumb };
+            const deliveryData = {
+                orderId,
+                videoUrl,
+                downloadUrl: videoUrl,
+                thumbnailUrl: thumb
+            };
+
+            if (youtubeUrl) deliveryData.youtubeUrl = youtubeUrl;
             if (subtitlesUrl) deliveryData.subtitlesUrl = subtitlesUrl;
             if (uploadData?.embedUrl) {
                 deliveryData.embedUrl = uploadData.embedUrl;
@@ -526,18 +606,17 @@
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                if (btn) btn.innerHTML = '✅ Delivered!';
+                if (btn) btn.innerHTML = 'Delivered';
                 setTimeout(() => loadOrder(), 1500);
             } else throw new Error(data.error || 'Failed');
         } catch (err) {
             alert('Error: ' + err.message);
             if (btn) {
-                btn.textContent = '✅ Submit Delivery';
+                btn.textContent = 'Submit Delivery';
                 btn.disabled = false;
             }
         }
     }
-
     async function requestRevision(e) {
         if (e) e.preventDefault();
         const reason = prompt('What needs to be changed?');
@@ -777,3 +856,5 @@
 
     updateStars(5);
 })();
+
+
