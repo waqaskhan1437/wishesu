@@ -52,7 +52,7 @@ Tables are created automatically:
 
 ### Admin Access
 
-Access the admin panel at: `https://your-domain.workers.dev/admin`
+Access the admin panel at: `https://prankwish.com/admin`
 
 ### Support
 

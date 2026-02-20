@@ -8,4 +8,4 @@ Disallow: /order-success
 Disallow: /checkout
 Disallow: /success
 
-Sitemap: https://wishvideo.com/sitemap.xml
+Sitemap: https://prankwish.com/sitemap.xml

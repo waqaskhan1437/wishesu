@@ -764,7 +764,7 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
   }
 
   // Determine filename from URL
-  const urlObj = new URL(sourceUrl, baseUrl || 'https://wishesu.com');
+  const urlObj = new URL(sourceUrl, baseUrl || 'https://prankwish.com');
   let filename = urlObj.pathname.split('/').pop() || 'video.mp4';
 
   // Clean filename - remove special chars, decode URI

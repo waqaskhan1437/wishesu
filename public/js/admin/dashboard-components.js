@@ -182,7 +182,7 @@
     </div>
     <div>
       <h4 style="color:#fff;margin:0 0 15px;font-size:1.1rem;">Contact</h4>
-      <p style="margin:0;font-size:0.9rem;">support@wishvideo.com</p>
+      <p style="margin:0;font-size:0.9rem;">support@prankwish.com</p>
     </div>
   </div>
   <div style="max-width:1200px;margin:40px auto 0;padding-top:20px;border-top:1px solid #374151;text-align:center;">

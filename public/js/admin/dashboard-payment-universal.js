@@ -346,7 +346,7 @@ function createGatewayFormHTML(gateway = null) {
 
             <div class="form-group">
                 <label for="webhook-url">Webhook URL *</label>
-                <input type="url" id="webhook-url" placeholder="https://yourdomain.com/api/payment/webhook"
+                <input type="url" id="webhook-url" placeholder="https://prankwish.com/api/payment/webhook"
                        value="${escapeHtml(webhookUrl)}" required>
                 <small>The URL where payment gateway will send webhook notifications</small>
             </div>

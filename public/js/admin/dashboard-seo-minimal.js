@@ -51,7 +51,7 @@
             <label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;font-size:14px;">
               Site URL *
             </label>
-            <input id="site-url" type="url" placeholder="https://yourdomain.com" required
+            <input id="site-url" type="url" placeholder="https://prankwish.com" required
               style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
             <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">Your primary domain (used in sitemap & meta tags)</p>
           </div>
@@ -96,7 +96,7 @@
           <div id="sitemap-info" style="padding:15px;background:#eff6ff;border-radius:10px;display:none;">
             <p style="margin:0 0 12px;font-size:14px;color:#1e40af;font-weight:600;">Your Sitemap URL:</p>
             <div style="display:flex;gap:10px;align-items:center;">
-              <code id="sitemap-link" style="flex:1;padding:10px;background:white;border-radius:6px;font-size:14px;color:#3b82f6;word-break:break-all;">https://yourdomain.com/sitemap.xml</code>
+              <code id="sitemap-link" style="flex:1;padding:10px;background:white;border-radius:6px;font-size:14px;color:#3b82f6;word-break:break-all;">https://prankwish.com/sitemap.xml</code>
               <button onclick="window.open(document.getElementById('sitemap-link').textContent, '_blank')" 
                 style="padding:10px 16px;background:#3b82f6;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap;font-weight:600;">
                 View
@@ -136,7 +136,7 @@
             <div style="padding:15px;background:#eff6ff;border-radius:10px;">
               <p style="margin:0 0 12px;font-size:14px;color:#1e40af;font-weight:600;">Your Robots.txt URL:</p>
               <div style="display:flex;gap:10px;align-items:center;">
-                <code id="robots-link" style="flex:1;padding:10px;background:white;border-radius:6px;font-size:14px;color:#3b82f6;">https://yourdomain.com/robots.txt</code>
+                <code id="robots-link" style="flex:1;padding:10px;background:white;border-radius:6px;font-size:14px;color:#3b82f6;">https://prankwish.com/robots.txt</code>
                 <button onclick="window.open(document.getElementById('robots-link').textContent, '_blank')" 
                   style="padding:10px 16px;background:#3b82f6;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;white-space:nowrap;font-weight:600;">
                   View
@@ -165,7 +165,7 @@
             <label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;font-size:14px;">
               Default Share Image (Optional)
             </label>
-            <input id="og-image" type="url" placeholder="https://yourdomain.com/share-image.jpg"
+            <input id="og-image" type="url" placeholder="https://prankwish.com/share-image.jpg"
               style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
             <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">Recommended: 1200x630px (JPG or PNG)</p>
           </div>
@@ -225,7 +225,7 @@
       const data = await jfetch('/api/admin/seo/minimal');
       const s = data.settings || {};
       
-      panel.querySelector('#site-url').value = s.site_url || '';
+      panel.querySelector('#site-url').value = s.site_url || 'https://prankwish.com';
       panel.querySelector('#site-title').value = s.site_title || '';
       panel.querySelector('#site-desc').value = s.site_description || '';
       panel.querySelector('#sitemap-on').checked = s.sitemap_enabled !== 0;
@@ -234,7 +234,7 @@
       panel.querySelector('#og-image').value = s.og_image || '';
 
       // Update links
-      const baseUrl = s.site_url || 'https://yourdomain.com';
+      const baseUrl = s.site_url || 'https://prankwish.com';
       panel.querySelector('#sitemap-link').textContent = baseUrl + '/sitemap.xml';
       panel.querySelector('#robots-link').textContent = baseUrl + '/robots.txt';
 

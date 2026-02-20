@@ -128,7 +128,7 @@ function doPost(e) {
     let recipient = '';
     
     if (event === 'order.received') {
-      recipient = 'admin@yourdomain.com';
+      recipient = 'admin@prankwish.com';
       subject = '🎉 New Order #' + payload.orderId;
       body = `
 New Order Received!
