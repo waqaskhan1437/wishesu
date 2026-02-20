@@ -242,6 +242,22 @@ export async function deleteProduct(env, id) {
 }
 
 /**
+ * Delete all products (admin cleanup)
+ */
+export async function deleteAllProducts(env) {
+  try {
+    // Invalidate products cache
+    productsCache = null;
+    productsCacheTime = 0;
+
+    const result = await env.DB.prepare('DELETE FROM products').run();
+    return json({ success: true, count: result?.changes || 0 });
+  } catch (err) {
+    return json({ error: err.message || 'Failed to delete all products' }, 500);
+  }
+}
+
+/**
  * Update product status
  */
 export async function updateProductStatus(env, body) {

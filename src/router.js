@@ -14,6 +14,7 @@ import {
   getAdjacentProducts,
   saveProduct,
   deleteProduct,
+  deleteAllProducts,
   updateProductStatus,
   duplicateProduct
 } from './controllers/products.js';
@@ -25,6 +26,7 @@ import {
   createManualOrder,
   getBuyerOrder,
   deleteOrder,
+  deleteAllOrders,
   updateOrder,
   deliverOrder,
   requestRevision,
@@ -122,6 +124,7 @@ import {
   getPreviousBlogs,
   saveBlog,
   deleteBlog,
+  deleteAllBlogs,
   updateBlogStatus,
   duplicateBlog
 } from './controllers/blog.js';
@@ -152,6 +155,7 @@ import {
   updateReplyStatus,
   deleteQuestion,
   deleteReply,
+  deleteAllForumContent,
   getForumSidebar
 } from './controllers/forum.js';
 
@@ -532,6 +536,10 @@ export async function routeApiRequest(req, env, url, path, method) {
     return deleteProduct(env, id);
   }
 
+  if (method === 'POST' && path === '/api/admin/products/delete-all') {
+    return deleteAllProducts(env);
+  }
+
   // ----- WHOP CHECKOUT -----
   if (method === 'POST' && path === '/api/whop/create-checkout') {
     const body = await req.json();
@@ -684,6 +692,10 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'DELETE' && path === '/api/order/delete') {
     const id = url.searchParams.get('id');
     return deleteOrder(env, id);
+  }
+
+  if (method === 'POST' && path === '/api/admin/orders/delete-all') {
+    return deleteAllOrders(env);
   }
 
   if (method === 'POST' && path === '/api/order/update') {
@@ -961,6 +973,10 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/blogs/duplicate') {
     const body = await req.json().catch(() => ({}));
     return duplicateBlog(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/admin/blogs/delete-all') {
+    return deleteAllBlogs(env);
   }
 
   // ----- BLOG COMMENTS -----
@@ -1427,6 +1443,10 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'DELETE' && path === '/api/admin/forum/reply') {
     const id = url.searchParams.get('id');
     return deleteReply(env, id);
+  }
+
+  if (method === 'POST' && path === '/api/admin/forum/delete-all') {
+    return deleteAllForumContent(env);
   }
 
   // ----- R2 FILE ACCESS -----

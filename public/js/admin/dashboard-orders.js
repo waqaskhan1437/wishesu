@@ -49,7 +49,10 @@
         </div>
       </div>
       
-      <button class="btn btn-primary" onclick="openCreateOrderModal()" style="margin-bottom: 20px;">➕ Create New Order</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+        <button class="btn btn-danger" onclick="deleteAllOrders()">Delete All Orders</button>
+        <button class="btn btn-primary" onclick="openCreateOrderModal()">➕ Create New Order</button>
+      </div>
       <div class="table-container">
         <table>
           <thead>
@@ -185,6 +188,31 @@
         if (AD._ordersPanel) AD.loadOrders(AD._ordersPanel);
       } else {
         alert('Delete failed: ' + (result.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
+    }
+  };
+
+  // Delete all orders
+  window.deleteAllOrders = async function() {
+    if (!confirm('Delete ALL orders?\n\nThis action is permanent and cannot be undone.')) return;
+
+    const token = prompt('Type DELETE to confirm:', '');
+    if (token !== 'DELETE') {
+      alert('Cancelled. Confirmation text did not match.');
+      return;
+    }
+
+    try {
+      const result = await AD.apiFetch('/api/admin/orders/delete-all', { method: 'POST' });
+      if (result && result.success) {
+        const deletedOrders = result.count || 0;
+        const deletedReviews = result.deleted_order_reviews || 0;
+        alert(`✅ Deleted ${deletedOrders} orders and ${deletedReviews} linked reviews.`);
+        if (AD._ordersPanel) AD.loadOrders(AD._ordersPanel);
+      } else {
+        alert('Delete failed: ' + (result?.error || 'Unknown error'));
       }
     } catch (err) {
       alert('Delete failed: ' + err.message);

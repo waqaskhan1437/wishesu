@@ -274,6 +274,26 @@ export async function deleteBlog(env, id) {
 }
 
 /**
+ * Delete all blogs (admin cleanup)
+ */
+export async function deleteAllBlogs(env) {
+  try {
+    const commentsResult = await env.DB.prepare(
+      'DELETE FROM blog_comments WHERE blog_id IN (SELECT id FROM blogs)'
+    ).run();
+    const blogsResult = await env.DB.prepare('DELETE FROM blogs').run();
+
+    return json({
+      success: true,
+      count: blogsResult?.changes || 0,
+      deleted_blog_comments: commentsResult?.changes || 0
+    });
+  } catch (err) {
+    return json({ error: err.message || 'Failed to delete all blogs' }, 500);
+  }
+}
+
+/**
  * Update blog status
  */
 export async function updateBlogStatus(env, body) {

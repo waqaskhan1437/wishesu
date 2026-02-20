@@ -719,6 +719,24 @@ export async function deleteReply(env, id) {
 }
 
 /**
+ * Delete all forum questions and replies (admin cleanup)
+ */
+export async function deleteAllForumContent(env) {
+  try {
+    const repliesResult = await env.DB.prepare('DELETE FROM forum_replies').run();
+    const questionsResult = await env.DB.prepare('DELETE FROM forum_questions').run();
+
+    return json({
+      success: true,
+      questions_deleted: questionsResult?.changes || 0,
+      replies_deleted: repliesResult?.changes || 0
+    });
+  } catch (err) {
+    return json({ error: err.message || 'Failed to delete forum data' }, 500);
+  }
+}
+
+/**
  * Get sidebar content (products and blogs based on question id for internal linking)
  */
 export async function getForumSidebar(env, questionId) {

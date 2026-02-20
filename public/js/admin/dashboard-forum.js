@@ -5,6 +5,10 @@
 (function(AD) {
   AD.loadForum = async function(panel) {
     panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+        <h2 style="margin:0;color:#1f2937;font-size:1.35rem;">Forum Moderation</h2>
+        <button class="btn btn-danger" onclick="deleteAllForumContent()">Delete All Forum Data</button>
+      </div>
       <div class="forum-admin-tabs" style="margin-bottom: 20px;">
         <button class="tab-btn active" onclick="switchForumTab('questions')">❓ Questions</button>
         <button class="tab-btn" onclick="switchForumTab('replies')">💬 Replies</button>
@@ -186,6 +190,30 @@
     
     document.getElementById('forum-questions-tab').style.display = tab === 'questions' ? 'block' : 'none';
     document.getElementById('forum-replies-tab').style.display = tab === 'replies' ? 'block' : 'none';
+  };
+
+  window.deleteAllForumContent = async function() {
+    if (!confirm('Delete ALL forum questions and replies?\n\nThis action is permanent and cannot be undone.')) return;
+
+    const token = prompt('Type DELETE to confirm:', '');
+    if (token !== 'DELETE') {
+      alert('Cancelled. Confirmation text did not match.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/forum/delete-all', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ Deleted ${data.questions_deleted || 0} questions and ${data.replies_deleted || 0} replies.`);
+        AD.loadView('forum');
+      } else {
+        alert('Error: ' + (data.error || 'Failed to delete forum data'));
+      }
+    } catch (err) {
+      alert('Error deleting forum data');
+      console.error(err);
+    }
   };
 
   // Questions

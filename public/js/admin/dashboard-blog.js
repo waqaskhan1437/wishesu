@@ -6,7 +6,10 @@
   AD.loadBlog = async function(panel) {
     panel.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <button class="btn btn-primary" onclick="window.location.href='/admin/blog-form.html'">+ Add Blog Post</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-danger" onclick="deleteAllBlogs()">Delete All Blogs</button>
+          <button class="btn btn-primary" onclick="window.location.href='/admin/blog-form.html'">+ Add Blog Post</button>
+        </div>
       </div>
       <div class="table-container">
         <table id="blogs-table">
@@ -125,6 +128,33 @@
       }
     } catch (err) {
       alert('Error deleting blog');
+      console.error(err);
+    }
+  };
+
+  // Delete all blogs
+  window.deleteAllBlogs = async function() {
+    if (!confirm('Delete ALL blogs?\n\nThis action is permanent and cannot be undone.')) return;
+
+    const token = prompt('Type DELETE to confirm:', '');
+    if (token !== 'DELETE') {
+      alert('Cancelled. Confirmation text did not match.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/blogs/delete-all', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        const deletedBlogs = data.count || 0;
+        const deletedComments = data.deleted_blog_comments || 0;
+        alert(`✅ Deleted ${deletedBlogs} blogs and ${deletedComments} related comments.`);
+        AD.loadView('blog');
+      } else {
+        alert('Error: ' + (data.error || 'Failed to delete blogs'));
+      }
+    } catch (err) {
+      alert('Error deleting all blogs');
       console.error(err);
     }
   };

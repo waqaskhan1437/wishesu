@@ -468,6 +468,27 @@ export async function deleteOrder(env, id) {
 }
 
 /**
+ * Delete all orders (admin cleanup)
+ */
+export async function deleteAllOrders(env) {
+  try {
+    // Remove reviews linked to existing orders first to avoid orphaned review rows
+    const reviewsResult = await env.DB.prepare(
+      'DELETE FROM reviews WHERE order_id IN (SELECT order_id FROM orders)'
+    ).run();
+    const ordersResult = await env.DB.prepare('DELETE FROM orders').run();
+
+    return json({
+      success: true,
+      count: ordersResult?.changes || 0,
+      deleted_order_reviews: reviewsResult?.changes || 0
+    });
+  } catch (err) {
+    return json({ error: err.message || 'Failed to delete all orders' }, 500);
+  }
+}
+
+/**
  * Update order
  */
 export async function updateOrder(env, body) {

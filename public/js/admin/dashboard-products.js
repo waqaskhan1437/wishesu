@@ -6,7 +6,10 @@
   AD.loadProducts = async function(panel) {
     panel.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <button class="btn btn-primary" onclick="window.location.href='/admin/product-form.html'">+ Add Product</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-danger" onclick="deleteAllProducts()">Delete All Products</button>
+          <button class="btn btn-primary" onclick="window.location.href='/admin/product-form.html'">+ Add Product</button>
+        </div>
       </div>
       <div class="table-container">
         <table id="products-table">
@@ -80,6 +83,32 @@
       }
     } catch (err) {
       alert('Error duplicating product');
+      console.error(err);
+    }
+  };
+
+  // Delete all products
+  window.deleteAllProducts = async function() {
+    if (!confirm('Delete ALL products?\n\nThis action is permanent and cannot be undone.')) return;
+
+    const token = prompt('Type DELETE to confirm:', '');
+    if (token !== 'DELETE') {
+      alert('Cancelled. Confirmation text did not match.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/products/delete-all', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.success) {
+        alert(`✅ Deleted ${data.count || 0} products.`);
+        AD.loadView('products');
+      } else {
+        alert('Error: ' + (data.error || 'Failed to delete products'));
+      }
+    } catch (err) {
+      alert('Error deleting all products');
       console.error(err);
     }
   };

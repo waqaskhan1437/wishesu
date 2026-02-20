@@ -46,6 +46,7 @@ export const ENDPOINT_PERMISSIONS = {
   '/api/products/save': { method: 'POST', permission: 'products:create' },
   '/api/products/duplicate': { method: 'POST', permission: 'products:create' },
   '/api/products/status': { method: 'POST', permission: 'products:update' },
+  '/api/admin/products/delete-all': { method: 'POST', permission: 'settings:admin' },
 
   // Orders APIs
   '/api/orders': { method: 'GET', permission: 'orders:list' },
@@ -60,6 +61,7 @@ export const ENDPOINT_PERMISSIONS = {
   '/api/order/request-revision': { method: 'POST', permission: 'orders:revise' },
   '/api/order/update-portfolio': { method: 'POST', permission: 'orders:update' },
   '/api/admin/order/manual-create': { method: 'POST', permission: 'orders:create' },
+  '/api/admin/orders/delete-all': { method: 'POST', permission: 'settings:admin' },
 
   // Reviews APIs
   '/api/reviews': { method: 'GET', permission: 'reviews:list' },
@@ -99,6 +101,7 @@ export const ENDPOINT_PERMISSIONS = {
   '/api/blog/published/': { method: 'GET', permission: 'blogs:read' }, // Dynamic route
   '/api/blog/previous/': { method: 'GET', permission: 'blogs:read' }, // Dynamic route
   '/api/blog/duplicate': { method: 'POST', permission: 'blogs:create' },
+  '/api/admin/blogs/delete-all': { method: 'POST', permission: 'settings:admin' },
 
   // Blog Comments
   '/api/blog/comments': { method: 'GET', permission: 'blogs:comments:list' },
@@ -124,6 +127,7 @@ export const ENDPOINT_PERMISSIONS = {
   '/api/forum/question/delete': { method: 'DELETE', permission: 'forum:questions:delete' },
   '/api/forum/reply/delete': { method: 'DELETE', permission: 'forum:replies:delete' },
   '/api/forum/sidebar': { method: 'GET', permission: 'forum:list' },
+  '/api/admin/forum/delete-all': { method: 'POST', permission: 'settings:admin' },
 
   // Admin APIs
   '/api/admin/debug': { method: 'GET', permission: null }, // No permission needed
