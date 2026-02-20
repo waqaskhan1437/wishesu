@@ -7,6 +7,7 @@ import { toISO8601 } from '../utils/formatting.js';
 import { getGoogleScriptUrl } from '../config/secrets.js';
 import { calculateAddonPrice, calculateServerSidePrice } from '../utils/pricing.js';
 import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-creation.js';
+import { sendOrderNotificationEmails } from '../utils/order-email-notifier.js';
 
 // Webhooks (New Universal System)
 import {
@@ -201,6 +202,24 @@ export async function createOrder(env, body) {
     encryptedData: data
   });
 
+  // Send transactional buyer/admin emails via Brevo (best effort)
+  try {
+    await sendOrderNotificationEmails(env, {
+      orderId,
+      customerEmail: email,
+      amount,
+      currency: 'USD',
+      productId: body.productId,
+      productTitle,
+      addons,
+      deliveryTimeMinutes: deliveryMinutes,
+      paymentMethod: body.paymentMethod || 'Website Checkout',
+      orderSource: 'frontend'
+    });
+  } catch (e) {
+    console.error('Order email notification failed:', e?.message || e);
+  }
+
   // Send notifications (async, don't wait)
   const deliveryTime = deliveryMinutes < 1440 ? `${Math.round(deliveryMinutes / 60)} hour(s)` : `${Math.round(deliveryMinutes / 1440)} day(s)`;
 
@@ -270,6 +289,7 @@ export async function createManualOrder(env, body) {
     addons: addons,
     manualOrder: true
   });
+  const manualDeliveryMinutes = Number(body.deliveryTime) || 60;
 
       await env.DB.prepare(
     'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
@@ -278,7 +298,7 @@ export async function createManualOrder(env, body) {
     Number(body.productId),
     encryptedData,
     body.status || 'paid',
-    Number(body.deliveryTime) || 60
+    manualDeliveryMinutes
   ).run();
       // Load product title for notifications
       let productTitle = '';
@@ -293,6 +313,24 @@ export async function createManualOrder(env, body) {
 
       // Determine numeric amount (manual orders may not include addons)
       const manualAmount = parseFloat(body.amount) || 0;
+
+      // Send transactional buyer/admin emails via Brevo (best effort)
+      try {
+        await sendOrderNotificationEmails(env, {
+          orderId,
+          customerEmail: email,
+          amount: manualAmount,
+          currency: 'USD',
+          productId: body.productId,
+          productTitle,
+          addons,
+          deliveryTimeMinutes: manualDeliveryMinutes,
+          paymentMethod: 'Manual Order',
+          orderSource: 'admin-manual'
+        });
+      } catch (e) {
+        console.error('Manual order email notification failed:', e?.message || e);
+      }
 
       // Dispatch universal webhook for admin notification
       notifyOrderReceived(env, {

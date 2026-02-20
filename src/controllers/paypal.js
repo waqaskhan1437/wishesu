@@ -5,6 +5,7 @@
 import { json } from '../utils/response.js';
 import { fetchWithTimeout } from '../utils/fetch-timeout.js';
 import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-creation.js';
+import { sendOrderNotificationEmails } from '../utils/order-email-notifier.js';
 
 // API timeout constants
 const PAYPAL_API_TIMEOUT = 10000; // 10 seconds
@@ -361,18 +362,26 @@ export async function capturePayPalOrder(env, body) {
       const productId = customData.pid || metadata.product_id;
       const buyerEmail = customData.email || metadata.email || captureData.payer?.email_address || '';
       const addons = metadata.addons || [];
+      let productTitle = String(metadata.productTitle || metadata.product_title || '').trim();
 
       // Get delivery time from metadata or calculate from product
       let deliveryTimeMinutes = Number(metadata.deliveryTimeMinutes) || 0;
-      if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0) {
+      if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0 || !productTitle) {
         try {
-          const product = await env.DB.prepare('SELECT instant_delivery, delivery_time_days FROM products WHERE id = ?')
+          const product = await env.DB.prepare('SELECT title, instant_delivery, normal_delivery_text, delivery_time_days FROM products WHERE id = ?')
             .bind(Number(productId)).first();
 
-          deliveryTimeMinutes = calculateDeliveryMinutes(product);
+          if (product?.title && !productTitle) {
+            productTitle = String(product.title).trim();
+          }
+          if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0) {
+            deliveryTimeMinutes = calculateDeliveryMinutes(product);
+          }
         } catch (e) {
           console.log('Could not get product delivery time for PayPal order:', e);
-          deliveryTimeMinutes = 60;
+          if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0) {
+            deliveryTimeMinutes = 60;
+          }
         }
       }
       console.log('🅿️ Delivery time for PayPal order:', deliveryTimeMinutes, 'minutes');
@@ -395,6 +404,24 @@ export async function capturePayPalOrder(env, body) {
       });
 
       console.log('🅿️ Order created:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes');
+
+      // Send transactional buyer/admin emails via Brevo (best effort)
+      try {
+        await sendOrderNotificationEmails(env, {
+          orderId,
+          customerEmail: buyerEmail,
+          amount: parseFloat(amount),
+          currency: 'USD',
+          productId,
+          productTitle,
+          addons,
+          deliveryTimeMinutes,
+          paymentMethod: 'PayPal',
+          orderSource: 'paypal-capture'
+        });
+      } catch (e) {
+        console.error('PayPal order email notification failed:', e?.message || e);
+      }
 
       // Update checkout session
       try {
@@ -474,6 +501,7 @@ export async function handlePayPalWebhook(env, body, headers, rawBody) {
           const productId = metadata.product_id;
           const email = metadata.email;
           const amount = resource.amount?.value || metadata.amount || 0;
+          const productTitle = String(metadata.productTitle || metadata.product_title || '').trim();
           
           console.log('🔄 Reconciling missing PayPal order from webhook:', newOrderId);
           
@@ -491,6 +519,24 @@ export async function handlePayPalWebhook(env, body, headers, rawBody) {
               source: 'webhook-reconciliation'
             }
           });
+
+          // Send transactional buyer/admin emails via Brevo (best effort)
+          try {
+            await sendOrderNotificationEmails(env, {
+              orderId: newOrderId,
+              customerEmail: email,
+              amount: parseFloat(amount),
+              currency: 'USD',
+              productId,
+              productTitle,
+              addons: metadata.addons || [],
+              deliveryTimeMinutes: metadata.deliveryTimeMinutes || 60,
+              paymentMethod: 'PayPal',
+              orderSource: 'paypal-webhook-reconciliation'
+            });
+          } catch (e) {
+            console.error('PayPal reconciliation email notification failed:', e?.message || e);
+          }
         } else if (metadata.type === 'tip' && metadata.orderId) {
           // Handle tip reconciliation
           await env.DB.prepare(

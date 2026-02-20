@@ -7,6 +7,7 @@ import { getWhopApiKey, getWhopWebhookSecret } from '../config/secrets.js';
 import { fetchWithTimeout } from '../utils/fetch-timeout.js';
 import { calculateAddonPrice, calculateServerSidePrice } from '../utils/pricing.js';
 import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-creation.js';
+import { sendOrderNotificationEmails } from '../utils/order-email-notifier.js';
 
 // API timeout constants
 const WHOP_API_TIMEOUT = 10000; // 10 seconds
@@ -718,11 +719,15 @@ export async function handleWebhook(env, webhookData, headers, rawBody) {
 
           // Get delivery time from metadata or product default
           let deliveryTimeMinutes = Number(metadata.deliveryTimeMinutes) || 0;
+          let productTitle = String(metadata.productTitle || metadata.product_title || '').trim();
           if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0) {
             try {
-              const product = await env.DB.prepare('SELECT instant_delivery, normal_delivery_text FROM products WHERE id = ?')
+              const product = await env.DB.prepare('SELECT title, instant_delivery, normal_delivery_text FROM products WHERE id = ?')
                 .bind(Number(metadata.product_id)).first();
 
+              if (product?.title && !productTitle) {
+                productTitle = String(product.title).trim();
+              }
               deliveryTimeMinutes = calculateDeliveryMinutes(product);
             } catch (e) {
               console.log('Could not get product delivery time:', e);
@@ -757,6 +762,24 @@ export async function handleWebhook(env, webhookData, headers, rawBody) {
             deliveryMinutes: deliveryTimeMinutes,
             encryptedData
           });
+
+          // Send transactional buyer/admin emails via Brevo (best effort)
+          try {
+            await sendOrderNotificationEmails(env, {
+              orderId,
+              customerEmail,
+              amount: orderAmount,
+              currency: 'USD',
+              productId: metadata.product_id,
+              productTitle,
+              addons: metadata.addons || [],
+              deliveryTimeMinutes,
+              paymentMethod: 'Whop',
+              orderSource: 'whop-webhook'
+            });
+          } catch (e) {
+            console.error('Whop order email notification failed:', e?.message || e);
+          }
 
           console.log('Order created via webhook:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes', 'Amount:', orderAmount);
         } catch (e) {
