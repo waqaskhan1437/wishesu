@@ -662,9 +662,9 @@
     </div>
   </div>
 
-  <script src="/js/product-cards.js"></script>
-  <script src="/js/blog-cards.js"></script>
-  <script src="/js/instant-upload.js"></script>
+  <script defer src="/js/product-cards.js"></script>
+  <script defer src="/js/blog-cards.js"></script>
+  <script defer src="/js/instant-upload.js"></script>
   <script>
     // State
     let currentPageType = 'custom';
@@ -1667,11 +1667,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
   <meta name="description" content="${desc.replace(/"/g, '&quot;')}">${ogImageMeta}
-  <link rel="stylesheet" href="/css/style.css">
-  <script src="/js/product-cards.js"><\/script>
-  <script src="/js/blog-cards.js"><\/script>
-</head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/css/style.css"></noscript>
+  <script defer src="/js/product-cards.js"><\/script>
+  <script defer src="/js/blog-cards.js"><\/script>
+ </head>
+ <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
 ${html}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -1747,7 +1748,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const html = generateOutputHtml();
       const title = document.getElementById('seo-title').value || 'Preview';
       const previewWindow = window.open('', 'preview', 'width=1200,height=800');
-      previewWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${title}</title><link rel="stylesheet" href="/css/style.css"><script src="/js/product-cards.js"><\/script><script src="/js/blog-cards.js"><\/script></head><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${html}<script>
+      previewWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${title}</title><link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="/css/style.css"></noscript><script defer src="/js/product-cards.js"><\/script><script defer src="/js/blog-cards.js"><\/script></head><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${html}<script>
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('[data-embed*="product"]').forEach(function(el, i) {
     if (typeof ProductCards !== 'undefined') {

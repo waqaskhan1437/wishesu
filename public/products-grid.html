@@ -5,7 +5,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>All Products - WishesU</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <!-- Load main stylesheet without blocking first paint -->
+  <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="/css/style.css"></noscript>
   <!-- Removed empty JSON-LD placeholder. The product collection schema is now injected server-side. -->
   <style>
     body {
@@ -56,21 +58,23 @@
   </div>
 
   <!-- SAME component as index.html -->
-  <script src="/js/product-cards.js"></script>
+  <script defer src="/js/product-cards.js"></script>
   <script>
     // Use exact same component as index.html
     // 3 columns, same design, same everything
-    if (window.ProductCards) {
-      ProductCards.render('all-products', {
-        filter: 'all',
-        columns: 3,
-        limit: 100,
-        showReviews: true,
-        showDelivery: true
-      });
-    } else {
-      console.error('ProductCards not loaded');
-    }
+    document.addEventListener('DOMContentLoaded', function() {
+      if (window.ProductCards) {
+        ProductCards.render('all-products', {
+          filter: 'all',
+          columns: 3,
+          limit: 100,
+          showReviews: true,
+          showDelivery: true
+        });
+      } else {
+        console.error('ProductCards not loaded');
+      }
+    });
   </script>
 
 </body>

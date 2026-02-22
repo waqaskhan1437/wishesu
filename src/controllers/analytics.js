@@ -171,16 +171,23 @@ export async function injectAnalyticsAndMeta(env, html) {
           `<!-- Google tag (gtag.js) - deferred for performance -->\n` +
           `<script>\n` +
           `window.addEventListener('load', function() {\n` +
-          `  var s = document.createElement('script');\n` +
-          `  s.src = 'https://www.googletagmanager.com/gtag/js?id=${gaId}';\n` +
-          `  s.async = true;\n` +
-          `  document.head.appendChild(s);\n` +
-          `  s.onload = function() {\n` +
-          `    window.dataLayer = window.dataLayer || [];\n` +
-          `    function gtag(){dataLayer.push(arguments);}\n` +
-          `    gtag('js', new Date());\n` +
-          `    gtag('config', '${gaId}');\n` +
-          `  };\n` +
+          `  function initGA() {\n` +
+          `    var s = document.createElement('script');\n` +
+          `    s.src = 'https://www.googletagmanager.com/gtag/js?id=${gaId}';\n` +
+          `    s.async = true;\n` +
+          `    document.head.appendChild(s);\n` +
+          `    s.onload = function() {\n` +
+          `      window.dataLayer = window.dataLayer || [];\n` +
+          `      function gtag(){dataLayer.push(arguments);}\n` +
+          `      gtag('js', new Date());\n` +
+          `      gtag('config', '${gaId}');\n` +
+          `    };\n` +
+          `  }\n` +
+          `  if ('requestIdleCallback' in window) {\n` +
+          `    requestIdleCallback(initGA, { timeout: 2000 });\n` +
+          `  } else {\n` +
+          `    setTimeout(initGA, 1);\n` +
+          `  }\n` +
           `});\n` +
           `</script>`
         );
