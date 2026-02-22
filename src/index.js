@@ -2007,7 +2007,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 let html = row.content;
                 // Inject global components script for header/footer if missing.
                 if (html.includes('<body') && !html.includes('global-components.js')) {
-                  html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script src="/js/global-components.js"></script>');
+                  html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script defer src="/js/global-components.js"></script>');
                 }
                 // Apply SEO tags if available.
                 try {
@@ -2045,9 +2045,9 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 // Inject global components script for header/footer
                 let html = row.content;
                 if (html.includes('<body') && !html.includes('global-components.js')) {
-                  html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script src="/js/global-components.js"></script>');
+                  html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script defer src="/js/global-components.js"></script>');
                 }
-                
+
                 // Apply SEO
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
@@ -2113,8 +2113,8 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
       if ((method === 'GET' || method === 'HEAD') && env.DB) {
         let defaultPageType = null;
         
-        // Home page
-        if (path === '/' || path === '/index.html') {
+        // Home page — serve default home from DB at both / and /home
+        if (path === '/' || path === '/index.html' || path === '/home' || path === '/home/') {
           defaultPageType = 'home';
         }
         // Blog archive

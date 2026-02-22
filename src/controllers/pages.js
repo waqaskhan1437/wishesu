@@ -195,15 +195,16 @@ export async function savePage(env, body) {
   }
 
   const pageType = body.page_type || 'custom';
-  const isDefault = body.is_default ? 1 : 0;
-  
+  // Auto-set is_default when page_type is not custom (home, blog_archive, etc.)
+  const isDefault = (body.is_default || pageType !== 'custom') ? 1 : 0;
+
   // If setting as default, clear other defaults first
   if (isDefault && pageType !== 'custom') {
     await env.DB.prepare(
       'UPDATE pages SET is_default = 0 WHERE page_type = ?'
     ).bind(pageType).run();
   }
-  
+
   // When updating existing page, use the sanitized slug. When creating a new
   // page, check for slug uniqueness and append a numeric suffix if needed.
   if (body.id) {
@@ -257,8 +258,9 @@ export async function savePageBuilder(env, body) {
   const name = (body.name || '').trim();
   const content = body.content || '';
   const pageType = body.page_type || 'custom';
-  const isDefault = body.is_default ? 1 : 0;
-  
+  // Auto-set is_default when page_type is not custom (home, blog_archive, etc.)
+  const isDefault = (body.is_default || pageType !== 'custom') ? 1 : 0;
+
   if (!name) return json({ error: 'name required' }, 400);
 
   // If setting as default, clear other defaults first
