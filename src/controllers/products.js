@@ -16,6 +16,97 @@ const PRODUCTS_CACHE_TTL = 30000; // 30 seconds
 const productSlugCache = new Map();
 const SLUG_CACHE_TTL = 300000; // 5 minutes
 
+function toCleanString(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function stripUrlQueryHash(raw) {
+  const s = toCleanString(raw);
+  if (!s) return '';
+  // Avoid URL() here to preserve relative URLs as-is.
+  return s.split('#')[0].split('?')[0];
+}
+
+function isBadMediaValue(raw) {
+  const s = stripUrlQueryHash(raw).toLowerCase();
+  if (!s) return true;
+  if (s === 'null' || s === 'undefined' || s === 'false' || s === 'true' || s === '0') return true;
+  return false;
+}
+
+function isLikelyVideoUrl(raw) {
+  const s = stripUrlQueryHash(raw).toLowerCase();
+  if (!s) return false;
+  if (s.includes('youtube.com') || s.includes('youtu.be')) return true;
+  return /\.(mp4|webm|mov|mkv|avi|m4v|flv|wmv|m3u8|mpd)(?:$)/i.test(s);
+}
+
+function isLikelyImageUrl(raw) {
+  const s = toCleanString(raw).toLowerCase();
+  if (!s) return false;
+  if (s.startsWith('data:image/')) return true;
+  if (s.startsWith('/')) return true;
+  if (s.startsWith('http://') || s.startsWith('https://')) return true;
+  if (s.startsWith('//')) return true;
+  return false;
+}
+
+function coerceGalleryArray(value) {
+  if (Array.isArray(value)) return value;
+  const s = toCleanString(value);
+  if (!s) return [];
+
+  // Allow JSON array string.
+  if (s.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(s);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // Accept comma-separated list as a fallback.
+  if (s.includes(',')) {
+    return s.split(',').map(v => toCleanString(v)).filter(Boolean);
+  }
+
+  // Single URL string
+  return [s];
+}
+
+function normalizeGalleryImages(body) {
+  const raw = body && (body.gallery_images ?? body.gallery_urls);
+  const input = coerceGalleryArray(raw);
+
+  const normalizedMainThumb = stripUrlQueryHash(body?.thumbnail_url || '');
+  const normalizedVideo = stripUrlQueryHash(body?.video_url || '');
+
+  const seen = new Set();
+  const out = [];
+
+  for (const item of input) {
+    const url = toCleanString(item);
+    if (isBadMediaValue(url)) continue;
+    if (isLikelyVideoUrl(url)) continue;
+    if (!isLikelyImageUrl(url)) continue;
+
+    const normalized = stripUrlQueryHash(url);
+    if (!normalized) continue;
+    if (normalizedMainThumb && normalized === normalizedMainThumb) continue;
+    if (normalizedVideo && normalized === normalizedVideo) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+
+    out.push(url);
+    // Hard cap to keep payloads sane.
+    if (out.length >= 50) break;
+  }
+
+  return out;
+}
+
 /**
  * Get active products (public)
  * OPTIMIZED: Single JOIN query + Pagination Support
@@ -179,12 +270,9 @@ export async function saveProduct(env, body) {
   
   const slug = (body.slug || '').trim() || slugifyStr(title);
   const addonsJson = JSON.stringify(body.addons || []);
+  const galleryJson = JSON.stringify(normalizeGalleryImages(body));
   
   if (body.id) {
-    const galleryJson = Array.isArray(body.gallery_images) 
-      ? JSON.stringify(body.gallery_images) 
-      : (body.gallery_images || '[]');
-    
     // Store delivery_time_days in normal_delivery_text field as days number
     const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';
     
@@ -202,10 +290,6 @@ export async function saveProduct(env, body) {
     ).run();
     return json({ success: true, id: body.id, slug, url: `/product-${body.id}/${encodeURIComponent(slug)}` });
   }
-  
-  const galleryJson = Array.isArray(body.gallery_images) 
-    ? JSON.stringify(body.gallery_images) 
-    : (body.gallery_images || '[]');
   
   // Store delivery_time_days in normal_delivery_text field as days number
   const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';

@@ -62,6 +62,28 @@
     return s;
   }
 
+  function isLikelyVideoUrl(url) {
+    const s = (url || '').toString().trim().toLowerCase();
+    if (!s) return false;
+    if (s.includes('youtube.com') || s.includes('youtu.be')) return true;
+    return /\.(mp4|webm|mov|mkv|avi|m4v|flv|wmv|m3u8|mpd)(?:[?#]|$)/i.test(s);
+  }
+
+  function isBadMediaValue(url) {
+    const s = (url || '').toString().trim().toLowerCase();
+    if (!s) return true;
+    if (s === 'null' || s === 'undefined' || s === 'false' || s === 'true' || s === '0') return true;
+    return false;
+  }
+
+  function isLikelyImageUrl(url) {
+    const s = (url || '').toString().trim().toLowerCase();
+    if (!s) return false;
+    if (s.startsWith('data:image/')) return true;
+    if (s.startsWith('/')) return true;
+    return s.startsWith('http://') || s.startsWith('https://');
+  }
+
   function normalizeMediaUrl(url) {
     const raw = (url || '').toString().trim();
     if (!raw) return '';
@@ -384,14 +406,19 @@
 
       if (Array.isArray(galleryImages) && galleryImages.length > 0) {
         const normalizedMainThumb = normalizeMediaUrl(product.thumbnail_url || '');
+        const normalizedVideo = normalizeMediaUrl(product.video_url || '');
         const seenGallery = new Set();
         galleryImages.forEach((imageUrl, index) => {
-          if (!imageUrl) return;
+          if (isBadMediaValue(imageUrl)) return;
+          if (isLikelyVideoUrl(imageUrl)) return;
+          if (!isLikelyImageUrl(imageUrl)) return;
           const normalizedImage = normalizeMediaUrl(imageUrl);
           if (!normalizedImage) return;
 
           // Do not duplicate product thumbnail inside gallery strip.
           if (normalizedMainThumb && normalizedImage === normalizedMainThumb) return;
+          // Do not render the product video URL as an image.
+          if (normalizedVideo && normalizedImage === normalizedVideo) return;
           if (seenGallery.has(normalizedImage)) return;
           seenGallery.add(normalizedImage);
           
@@ -405,6 +432,10 @@
           galleryThumb.decoding = 'async';
           galleryThumb.width = 140;
           galleryThumb.height = 100;
+          galleryThumb.onerror = () => {
+            // Remove broken images instead of showing a broken icon + alt text.
+            try { galleryThumb.remove(); } catch (_) {}
+          };
           
           galleryThumb.onclick = () => {
             thumbsDiv.querySelectorAll('.thumb').forEach(t => t.style.border = '3px solid transparent');

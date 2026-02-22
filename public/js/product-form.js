@@ -252,9 +252,9 @@ window.updateDeliveryPreview = updateDeliveryPreview;
       }
 
       // Upload gallery files if selected
-      if (media.files.gallery_files && media.files.gallery_files.length > 0) {
-        btn.textContent = `Uploading gallery images (0/${media.files.gallery_files.length})...`;
-        const uploadedGalleryUrls = [];
+       if (media.files.gallery_files && media.files.gallery_files.length > 0) {
+         btn.textContent = `Uploading gallery images (0/${media.files.gallery_files.length})...`;
+         const uploadedGalleryUrls = [];
         for (let i = 0; i < media.files.gallery_files.length; i++) {
           btn.textContent = `Uploading gallery images (${i + 1}/${media.files.gallery_files.length})...`;
           const file = media.files.gallery_files[i];
@@ -262,12 +262,12 @@ window.updateDeliveryPreview = updateDeliveryPreview;
           if (uploadedUrl) {
             uploadedGalleryUrls.push(uploadedUrl);
           }
-        }
-        // Merge uploaded gallery URLs with existing text input URLs
-        media.meta.gallery_urls = [...uploadedGalleryUrls, ...media.meta.gallery_urls];
-      }
+         }
+         // Merge uploaded gallery URLs with existing text input URLs
+        media.meta.gallery_images = [...uploadedGalleryUrls, ...media.meta.gallery_images];
+       }
 
-      btn.textContent = 'Saving product...';
+       btn.textContent = 'Saving product...';
 
       const payload = { ...base, ...media.meta, ...seo.meta, addons };
       if(productId) payload.id = Number(productId);
@@ -395,7 +395,7 @@ function readMediaFields(form){
     meta: {
       thumbnail_url: form.thumbnail_url.value.trim(),
       video_url: form.video_url.value.trim(),
-      gallery_urls: galleryUrls
+      gallery_images: galleryUrls
     },
     files: { thumbnail_file: thumbFile, video_file: videoFile, gallery_files: galleryFiles }
   };
@@ -417,6 +417,51 @@ function fillBaseFields(form, product){
   if (form.whop_plan) form.whop_plan.value = product.whop_plan || '';
   if (form.whop_price_map) form.whop_price_map.value = product.whop_price_map || '';
   if (form.whop_product_id) form.whop_product_id.value = product.whop_product_id || '';
+
+  // Populate gallery URLs when editing. This keeps gallery images visible in the form
+  // and prevents accidental wipe when saving.
+  try {
+    const wrapper = form.querySelector('#gallery-wrapper');
+    if (wrapper) {
+      let galleryImages = [];
+      try {
+        galleryImages = typeof product.gallery_images === 'string'
+          ? JSON.parse(product.gallery_images)
+          : product.gallery_images;
+      } catch (_) {
+        galleryImages = [];
+      }
+      if (!Array.isArray(galleryImages)) galleryImages = [];
+      galleryImages = galleryImages
+        .map(v => (v == null ? '' : String(v)).trim())
+        .filter(Boolean);
+
+      const rows = Array.from(wrapper.querySelectorAll('.gallery-row'));
+      const first = rows[0];
+      if (first) {
+        // Reset rows to a single template row.
+        rows.slice(1).forEach(r => { try { r.remove(); } catch (_) {} });
+        first.querySelectorAll('input').forEach(inp => { try { inp.value = ''; } catch (_) {} });
+
+        const addBtn = wrapper.querySelector('#add-gallery-image') || document.getElementById('add-gallery-image');
+
+        galleryImages.forEach((url, idx) => {
+          const row = idx === 0 ? first : first.cloneNode(true);
+          row.querySelectorAll('input').forEach(inp => { try { inp.value = ''; } catch (_) {} });
+          const u = row.querySelector('input[name="gallery_urls[]"]');
+          if (u) u.value = url;
+
+          if (idx > 0) {
+            if (addBtn && addBtn.parentNode === wrapper) {
+              wrapper.insertBefore(row, addBtn);
+            } else {
+              wrapper.appendChild(row);
+            }
+          }
+        });
+      }
+    }
+  } catch (_) {}
 }
 function fillDemoProduct(form){
   form.title.value = 'Happy Birthday Video from Africa';
