@@ -527,8 +527,26 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/product/save') {
-    const body = await req.json();
-    return saveProduct(env, body);
+    const body = await req.json().catch(() => ({}));
+    const resp = await saveProduct(env, body);
+
+    // Invalidate cached product page HTML so media/SEO updates show immediately.
+    // Product pages are cached in `caches.default` by full URL; we rebuild the URL
+    // from the current request origin and the canonical product path returned by saveProduct.
+    try {
+      const data = await resp.clone().json().catch(() => ({}));
+      if (data && data.success && data.url && caches && caches.default) {
+        const origin = new URL(req.url).origin;
+        const full = new URL(String(data.url), origin).toString();
+        const cacheKey = new Request(full, {
+          method: 'GET',
+          headers: { 'Accept': 'text/html' }
+        });
+        await caches.default.delete(cacheKey);
+      }
+    } catch (_) {}
+
+    return resp;
   }
 
   if (method === 'DELETE' && path === '/api/product/delete') {
