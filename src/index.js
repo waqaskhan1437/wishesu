@@ -2277,16 +2277,54 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 ]);
                 
                 const product = productResult;
-                if (product) {
-                  schemaProduct = product;
-                  const reviews = reviewsResult.results || [];
-                  const schemaJson = generateProductSchema(product, baseUrl, reviews);
-                  html = injectSchemaIntoHTML(html, 'product-schema', schemaJson);
-                  
-                  // Inject VideoObject schema for video rich results
-                  const videoSchemaJson = generateVideoSchema(product, baseUrl);
-                  if (videoSchemaJson && videoSchemaJson !== '{}') {
-                    const videoSchemaTag = `<script type="application/ld+json" id="video-schema">${videoSchemaJson}</script>`;
+                  if (product) {
+                    schemaProduct = product;
+                    const reviews = reviewsResult.results || [];
+                    const schemaJson = generateProductSchema(product, baseUrl, reviews);
+                    html = injectSchemaIntoHTML(html, 'product-schema', schemaJson);
+
+                    // Product bootstrap: embed enough data to render without an extra API call.
+                    // This improves LCP on slow networks (product layout is client-rendered).
+                    try {
+                      if (!html.includes('id="product-bootstrap"')) {
+                        let addons = [];
+                        try {
+                          addons = JSON.parse(product.addons_json || '[]');
+                        } catch (_) {
+                          addons = [];
+                        }
+
+                        const deliveryTimeDays = parseInt(product.normal_delivery_text) || 1;
+                        const bootstrap = {
+                          product: {
+                            id: product.id,
+                            title: product.title,
+                            description: product.description || '',
+                            normal_price: product.normal_price,
+                            sale_price: product.sale_price,
+                            instant_delivery: product.instant_delivery,
+                            normal_delivery_text: product.normal_delivery_text,
+                            delivery_time_days: deliveryTimeDays,
+                            thumbnail_url: product.thumbnail_url,
+                            video_url: product.video_url,
+                            gallery_images: product.gallery_images,
+                            review_count: parseInt(product.review_count) || 0,
+                            rating_average: product.rating_average ? Math.round(Number(product.rating_average) * 10) / 10 : 0,
+                            reviews
+                          },
+                          addons
+                        };
+
+                        const bootstrapJson = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
+                        const bootstrapTag = `<script type="application/json" id="product-bootstrap">${bootstrapJson}</script>`;
+                        html = html.replace('</head>', `${bootstrapTag}\n</head>`);
+                      }
+                    } catch (_) {}
+                   
+                    // Inject VideoObject schema for video rich results
+                    const videoSchemaJson = generateVideoSchema(product, baseUrl);
+                    if (videoSchemaJson && videoSchemaJson !== '{}') {
+                      const videoSchemaTag = `<script type="application/ld+json" id="video-schema">${videoSchemaJson}</script>`;
                     html = html.replace('</head>', `${videoSchemaTag}\n</head>`);
                   }
                   

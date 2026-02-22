@@ -10,6 +10,20 @@
   window.basePrice = 0;
   window.currentTotal = 0;
   window.productData = null;
+
+  function readProductBootstrap(expectedId) {
+    const el = document.getElementById('product-bootstrap');
+    if (!el) return null;
+    try {
+      const data = JSON.parse(el.textContent || '{}');
+      const bootId = data && data.product ? data.product.id : null;
+      if (expectedId && bootId != null && String(bootId) !== String(expectedId)) return null;
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function initProductPage() {
     // Load global Whop settings early so checkout can use them.
     try {
@@ -35,9 +49,10 @@
       return;
     }
     try {
-      const data = await getProduct(productId);
+      const boot = readProductBootstrap(productId);
+      const data = boot || await getProduct(productId);
       const product = data.product;
-      const addons = data.addons;
+      const addons = data.addons || product?.addons || [];
       if (!product) {
         container.innerHTML = '<div class="loading-state"><p>Product not found.</p><a href="/" class="btn">Go Home</a></div>';
         return;

@@ -5,8 +5,44 @@
  */
 
 ;(function(){
-  // Helper to optimize image URLs for Cloudinary
-  function optimizeImageUrl(src, width) {
+  // Helpers to optimize image URLs for Cloudinary + Googleusercontent.
+  function splitUrlSuffix(raw) {
+    const s = (raw || '').toString();
+    const hashIndex = s.indexOf('#');
+    const noHash = hashIndex === -1 ? s : s.slice(0, hashIndex);
+    const hash = hashIndex === -1 ? '' : s.slice(hashIndex);
+    const queryIndex = noHash.indexOf('?');
+    const base = queryIndex === -1 ? noHash : noHash.slice(0, queryIndex);
+    const query = queryIndex === -1 ? '' : noHash.slice(queryIndex);
+    return { base, query, hash };
+  }
+
+  function optimizeGoogleusercontentUrl(src, targetWidth, targetHeight) {
+    const s = (src || '').toString().trim();
+    if (!s || !s.includes('googleusercontent.com')) return src;
+
+    const { base, query, hash } = splitUrlSuffix(s);
+    // Googleusercontent sizing typically ends with `=w600-h315-...`
+    const m = base.match(/^(.*)=w(\d+)-h(\d+)(-[^?#]*)?$/);
+    if (!m) return src;
+
+    const prefix = m[1];
+    const originalW = parseInt(m[2], 10) || 0;
+    const originalH = parseInt(m[3], 10) || 0;
+    const suffix = m[4] || '';
+
+    const w = Math.max(1, Math.round(Number(targetWidth) || originalW || 0));
+    let h = Math.round(Number(targetHeight) || 0);
+    if (!h || !Number.isFinite(h)) {
+      // Preserve aspect ratio when only width is provided.
+      h = (originalW > 0 && originalH > 0) ? Math.round((originalH * w) / originalW) : 0;
+    }
+    if (!h || !Number.isFinite(h)) h = originalH || 1;
+
+    return `${prefix}=w${w}-h${h}${suffix}${query}${hash}`;
+  }
+
+  function optimizeCloudinaryUrl(src, width) {
     if (!src || !src.includes('res.cloudinary.com')) return src;
     const cloudinaryRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)/;
     const match = src.match(cloudinaryRegex);
@@ -16,6 +52,14 @@
       return `${baseUrl}f_auto,q_auto,w_${width || 400}/${imagePath}`;
     }
     return src;
+  }
+
+  function optimizeImageUrl(src, width, height) {
+    const s = (src || '').toString().trim();
+    if (!s) return src;
+    if (s.includes('res.cloudinary.com')) return optimizeCloudinaryUrl(s, width);
+    if (s.includes('googleusercontent.com')) return optimizeGoogleusercontentUrl(s, width, height);
+    return s;
   }
 
   function normalizeMediaUrl(url) {
@@ -59,22 +103,22 @@
     const createMainImage = (src) => {
       const img = document.createElement('img');
       
-      // Cloudinary URL optimization - convert to WebP and add responsive sizes
-      let optimizedSrc = src;
+      // Optimize image URLs and add responsive srcset when possible.
+      const rawSrc = (src || '').toString().trim();
+      let optimizedSrc = rawSrc;
       let srcsetAttr = '';
-      
-      if (src && src.includes('res.cloudinary.com')) {
+
+      if (rawSrc && rawSrc.includes('res.cloudinary.com')) {
         // Extract parts of Cloudinary URL and add transformations
         const cloudinaryRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)/;
-        const match = src.match(cloudinaryRegex);
+        const match = rawSrc.match(cloudinaryRegex);
         if (match) {
           const baseUrl = match[1];
           const imagePath = match[2];
-          
-          // Add WebP format and quality optimization
-          optimizedSrc = `${baseUrl}f_auto,q_auto/${imagePath}`;
-          
-          // Create srcset for responsive images
+
+          // Use a reasonable default fallback; browsers will pick the right candidate from srcset.
+          optimizedSrc = `${baseUrl}f_auto,q_auto,w_800/${imagePath}`;
+
           srcsetAttr = [
             `${baseUrl}f_auto,q_auto,w_400/${imagePath} 400w`,
             `${baseUrl}f_auto,q_auto,w_600/${imagePath} 600w`,
@@ -82,6 +126,12 @@
             `${baseUrl}f_auto,q_auto,w_1200/${imagePath} 1200w`
           ].join(', ');
         }
+      } else if (rawSrc && rawSrc.includes('googleusercontent.com')) {
+        // Common for Google Photos / Googleusercontent thumbnails.
+        optimizedSrc = optimizeImageUrl(rawSrc, 600);
+        srcsetAttr = [400, 600, 800, 1200]
+          .map(w => `${optimizeImageUrl(rawSrc, w)} ${w}w`)
+          .join(', ');
       }
       
       img.src = optimizedSrc;
@@ -96,9 +146,9 @@
       // Fix Performance: Prioritize loading for LCP
       img.setAttribute('fetchpriority', 'high');
       img.loading = 'eager';
-      // Add explicit dimensions to prevent layout shift
-      img.width = 650;
-      img.height = 433;
+      // Add explicit dimensions to prevent layout shift (container is 16:9).
+      img.width = 800;
+      img.height = 450;
       img.decoding = 'async';
       return img;
     };
@@ -346,11 +396,15 @@
           seenGallery.add(normalizedImage);
           
           const galleryThumb = document.createElement('img');
-          galleryThumb.src = imageUrl;
+          galleryThumb.src = optimizeImageUrl(imageUrl, 280);
           galleryThumb.className = 'thumb';
           galleryThumb.style.cssText = 'min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid transparent; transition: border-color 0.15s ease; contain: layout;';
           galleryThumb.alt = (product.title || 'Product') + ' - Gallery Image ' + (index + 1);
           galleryThumb.dataset.type = 'gallery';
+          galleryThumb.loading = 'lazy';
+          galleryThumb.decoding = 'async';
+          galleryThumb.width = 140;
+          galleryThumb.height = 100;
           
           galleryThumb.onclick = () => {
             thumbsDiv.querySelectorAll('.thumb').forEach(t => t.style.border = '3px solid transparent');

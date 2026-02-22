@@ -12,6 +12,64 @@
     youtube: { noCookie: true, rel: 0, showinfo: 0, iv_load_policy: 3, modestbranding: 1 }
   };
 
+  function splitUrlSuffix(raw) {
+    const s = (raw || '').toString();
+    const hashIndex = s.indexOf('#');
+    const noHash = hashIndex === -1 ? s : s.slice(0, hashIndex);
+    const hash = hashIndex === -1 ? '' : s.slice(hashIndex);
+    const queryIndex = noHash.indexOf('?');
+    const base = queryIndex === -1 ? noHash : noHash.slice(0, queryIndex);
+    const query = queryIndex === -1 ? '' : noHash.slice(queryIndex);
+    return { base, query, hash };
+  }
+
+  function optimizeGoogleusercontentUrl(src, targetWidth, targetHeight) {
+    const s = (src || '').toString().trim();
+    if (!s || !s.includes('googleusercontent.com')) return src;
+
+    const { base, query, hash } = splitUrlSuffix(s);
+    const m = base.match(/^(.*)=w(\d+)-h(\d+)(-[^?#]*)?$/);
+    if (!m) return src;
+
+    const prefix = m[1];
+    const originalW = parseInt(m[2], 10) || 0;
+    const originalH = parseInt(m[3], 10) || 0;
+    const suffix = m[4] || '';
+
+    const w = Math.max(1, Math.round(Number(targetWidth) || originalW || 0));
+    let h = Math.round(Number(targetHeight) || 0);
+    if (!h || !Number.isFinite(h)) {
+      h = (originalW > 0 && originalH > 0) ? Math.round((originalH * w) / originalW) : 0;
+    }
+    if (!h || !Number.isFinite(h)) h = originalH || 1;
+
+    return `${prefix}=w${w}-h${h}${suffix}${query}${hash}`;
+  }
+
+  function optimizeNavThumbUrl(src) {
+    const s = (src || '').toString().trim();
+    if (!s) return src;
+
+    // 2x for retina (displayed at 60px square).
+    const targetW = 120;
+
+    if (s.includes('res.cloudinary.com')) {
+      const cloudinaryRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)/;
+      const match = s.match(cloudinaryRegex);
+      if (match) {
+        const baseUrl = match[1];
+        const imagePath = match[2];
+        return `${baseUrl}f_auto,q_auto,w_${targetW}/${imagePath}`;
+      }
+    }
+
+    if (s.includes('googleusercontent.com')) {
+      return optimizeGoogleusercontentUrl(s, targetW);
+    }
+
+    return s;
+  }
+
   function renderProductDescription(wrapper, product) {
     const descRow = document.createElement('div');
     descRow.className = 'product-desc-row';
@@ -75,7 +133,7 @@
                onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
                onmouseleave="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)';">
               <div style="width: 60px; height: 60px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: #f3f4f6;">
-                ${data.previous.thumbnail_url ? `<img src="${data.previous.thumbnail_url}" alt="" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">📦</div>'}
+                ${data.previous.thumbnail_url ? `<img src="${optimizeNavThumbUrl(data.previous.thumbnail_url)}" alt="" loading="lazy" decoding="async" width="60" height="60" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">📦</div>'}
               </div>
               <div style="flex: 1; min-width: 0;">
                 <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px;">← Previous</div>
@@ -92,7 +150,7 @@
                onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
                onmouseleave="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)';">
               <div style="width: 60px; height: 60px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: #f3f4f6;">
-                ${data.next.thumbnail_url ? `<img src="${data.next.thumbnail_url}" alt="" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">📦</div>'}
+                ${data.next.thumbnail_url ? `<img src="${optimizeNavThumbUrl(data.next.thumbnail_url)}" alt="" loading="lazy" decoding="async" width="60" height="60" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">📦</div>'}
               </div>
               <div style="flex: 1; min-width: 0;">
                 <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px;">Next →</div>

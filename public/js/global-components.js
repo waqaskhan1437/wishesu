@@ -143,6 +143,24 @@
   // Inject header
   function injectHeader(code) {
     if (document.querySelector('.site-header, #global-header')) return;
+
+    // If a page provides a dedicated slot, inject into it instead of inserting a new
+    // element at the top of <body>. This avoids layout shifts (CLS) on initial render.
+    const slot = document.getElementById('global-header-slot');
+    if (slot) {
+      if (slot.dataset.injected === '1') return;
+      slot.dataset.injected = '1';
+      slot.innerHTML = code;
+      // Execute scripts if any exist in the header code
+      Array.from(slot.querySelectorAll('script')).forEach(oldScript => {
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+      });
+      return;
+    }
+
     const wrapper = document.createElement('div');
     wrapper.id = 'global-header';
     wrapper.innerHTML = code;
@@ -164,6 +182,23 @@
   // Inject footer
   function injectFooter(code) {
     if (document.querySelector('.site-footer, #global-footer')) return;
+
+    // Prefer a slot if the page provides one (lets the page reserve space if needed).
+    const slot = document.getElementById('global-footer-slot');
+    if (slot) {
+      if (slot.dataset.injected === '1') return;
+      slot.dataset.injected = '1';
+      slot.innerHTML = code;
+      // Execute scripts if any exist in the footer code
+      Array.from(slot.querySelectorAll('script')).forEach(oldScript => {
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+      });
+      return;
+    }
+
     const wrapper = document.createElement('div');
     wrapper.id = 'global-footer';
     wrapper.innerHTML = code;

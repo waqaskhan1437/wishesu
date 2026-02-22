@@ -38,13 +38,15 @@
     :root{--primary:#4f46e5;--primary-hover:#4338ca;--success:#047857;--text-main:#1f2937;--text-muted:#4b5563;--bg-page:#f9fafb;--bg-card:#fff;--border:#e5e7eb;--radius:12px;--radius-sm:8px}
     body{margin:0;font-family:'Inter',system-ui,-apple-system,sans-serif;background-color:var(--bg-page);color:var(--text-main);line-height:1.5;-webkit-font-smoothing:antialiased}
     .site-header{background:#fff;border-bottom:1px solid var(--border);padding:1rem 0;margin-bottom:2rem}
-    .header-inner{max-width:1200px;margin:0 auto;padding:0 1.5rem;display:flex;justify-content:space-between;align-items:center}
-    .logo{font-weight:800;font-size:1.5rem;letter-spacing:-.5px}
-    .site-nav a{margin-left:1.5rem;text-decoration:none;color:var(--text-main);font-weight:500;font-size:.95rem}
-    main{max-width:1200px;margin:0 auto;padding:0 5% 4rem}
-    .breadcrumb{margin-bottom:1.5rem}
-    .breadcrumb a{text-decoration:none;color:var(--text-muted);font-size:.9rem;font-weight:500}
-    .loading-state{text-align:center;padding:4rem 0}
+     .header-inner{max-width:1200px;margin:0 auto;padding:0 1.5rem;display:flex;justify-content:space-between;align-items:center}
+     .logo{font-weight:800;font-size:1.5rem;letter-spacing:-.5px}
+     .site-nav a{margin-left:1.5rem;text-decoration:none;color:var(--text-main);font-weight:500;font-size:.95rem}
+     #global-header-slot{display:flow-root;min-height:112px}
+     @media(max-width:600px){#global-header-slot{min-height:152px}}
+     main{max-width:1200px;margin:0 auto;padding:0 5% 4rem}
+     .breadcrumb{margin-bottom:1.5rem}
+     .breadcrumb a{text-decoration:none;color:var(--text-muted);font-size:.9rem;font-weight:500}
+     .loading-state{text-align:center;padding:4rem 0}
     .spinner{border:4px solid #f3f3f3;border-top:4px solid var(--primary);border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 1rem}
     @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
     .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;min-height:200px;background:#000;border-radius:var(--radius);overflow:visible}
@@ -96,6 +98,8 @@
   <!-- Skip to main content for keyboard users -->
   <a href="#main-content" class="sr-only" style="position:absolute;top:-40px;left:0;background:#4f46e5;color:#fff;padding:8px 16px;z-index:100000;text-decoration:none;font-weight:600;" onfocus="this.style.top='0'" onblur="this.style.top='-40px'">Skip to main content</a>
   
+  <div id="global-header-slot"></div>
+
   <!-- Load global components (header/footer) without blocking rendering -->
   <script defer src="/js/global-components.js"></script>
 
