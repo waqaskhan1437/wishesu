@@ -21,8 +21,9 @@
 
   function initFileUploads() {
     document.addEventListener('change', handleFileChange, true);
-    const observer = new MutationObserver(() => {});
-    observer.observe(document.body, { childList: true, subtree: true });
+    // Previously a MutationObserver was attached to the entire document body without
+    // a callback. This observer served no functional purpose and consumed resources
+    // by monitoring all DOM mutations. It has been removed as part of the audit.
   }
 
   function handleFileChange(e) {

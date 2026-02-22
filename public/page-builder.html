@@ -1641,7 +1641,13 @@
         const uploads = window.getUploadedFiles(); if (uploads['feature-image-file']) featureImageUrl = uploads['feature-image-file'];
       }
 
-      if (!title) { alert('Please enter a Page Title'); return; }
+      if (!title) {
+        // Restore button state before exiting due to validation failure
+        alert('Please enter a Page Title');
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+        return;
+      }
       if (!slug) {
         slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
         document.getElementById('seo-slug').value = slug;
@@ -1696,23 +1702,39 @@ document.addEventListener('DOMContentLoaded', function() {
 </html>`;
 
       try {
-        const res = await fetch('/api/pages/save', {
+        // Save full page using /api/page/save so that title and meta description are persisted
+        const res = await fetch('/api/page/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: slug,
+            title: title,
+            slug: slug,
             content: fullHTML,
+            meta_description: desc,
             page_type: currentPageType,
             is_default: isDefault && currentPageType !== 'custom',
-            feature_image_url: featureImageUrl
+            feature_image_url: featureImageUrl,
+            status: 'published'
           })
         });
         const data = await res.json();
+        // Restore button state regardless of outcome
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
         if (data.success) {
-          alert(`✅ Page saved!\n\nURL: ${window.location.origin}/${slug}.html`);
+          // Use slug returned from API if available (handles uniqueness)
+          const savedSlug = data.slug || slug;
+          document.getElementById('seo-slug').value = savedSlug;
+          alert(`✅ Page saved!\n\nURL: ${window.location.origin}/${savedSlug}`);
           loadCurrentDefaults();
-        } else { alert('❌ Save failed: ' + data.error); }
-      } catch (err) { alert('❌ Error: ' + err.message); }
+        } else {
+          alert('❌ Save failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+        alert('❌ Error: ' + err.message);
+      }
     });
 
     // Preview

@@ -89,6 +89,13 @@
               style="width:100%;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-size:15px;">
             <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">From your Facebook Events Manager &gt; Pixels.</p>
           </div>
+
+          <div style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;font-size:14px;">Custom Analytics / Tracking Code</label>
+            <textarea id="custom-script" placeholder="&lt;script&gt;/* your code here */&lt;/script&gt;"
+              style="width:100%;height:140px;padding:12px 16px;border:2px solid #e5e7eb;border-radius:10px;font-family:monospace;font-size:14px;line-height:1.4;"></textarea>
+            <p style="margin:6px 0 0;font-size:13px;color:#6b7280;">Paste any custom HTML/JS snippet (e.g. full Google Analytics tags, Hotjar, etc.). It will be injected into every page.</p>
+          </div>
         </div>
 
         <!-- Save Button -->
@@ -119,6 +126,10 @@
       panel.querySelector('#google-verify').value = settings.google_verify || '';
       panel.querySelector('#bing-verify').value = settings.bing_verify || '';
       panel.querySelector('#fb-pixel').value = settings.fb_pixel_id || '';
+      // Load custom script if present
+      if (panel.querySelector('#custom-script')) {
+        panel.querySelector('#custom-script').value = settings.custom_script || '';
+      }
       toast('✅ Analytics settings loaded', true);
     } catch (e) {
       toast('❌ Failed to load analytics settings', false);
@@ -135,7 +146,8 @@
       ga_id: panel.querySelector('#ga-id').value.trim(),
       google_verify: panel.querySelector('#google-verify').value.trim(),
       bing_verify: panel.querySelector('#bing-verify').value.trim(),
-      fb_pixel_id: panel.querySelector('#fb-pixel').value.trim()
+      fb_pixel_id: panel.querySelector('#fb-pixel').value.trim(),
+      custom_script: panel.querySelector('#custom-script') ? panel.querySelector('#custom-script').value.trim() : ''
     };
     try {
       await jfetch('/api/admin/analytics', {

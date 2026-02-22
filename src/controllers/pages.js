@@ -213,6 +213,29 @@ export async function savePage(env, body) {
     return json({ success: true, id: body.id, slug: finalSlug });
   }
 
+  // If no ID but a page with the same slug exists, update it instead of creating a duplicate
+  try {
+    const existingBySlug = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(finalSlug).first();
+    if (existingBySlug) {
+      await env.DB.prepare(
+        'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, feature_image_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(
+        finalSlug,
+        body.title,
+        body.content || '',
+        body.meta_description || '',
+        pageType,
+        isDefault,
+        body.feature_image_url || '',
+        body.status || 'published',
+        existingBySlug.id
+      ).run();
+      return json({ success: true, id: existingBySlug.id, slug: finalSlug });
+    }
+  } catch (e) {
+    // ignore errors from lookup; fall through to insert below
+  }
+
   // Ensure slug uniqueness for new pages
   let uniqueSlug = finalSlug;
   let idx = 1;

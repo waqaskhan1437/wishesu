@@ -23,7 +23,13 @@ const DEFAULT_ANALYTICS_SETTINGS = {
   ga_id: '',
   google_verify: '',
   bing_verify: '',
-  fb_pixel_id: ''
+  fb_pixel_id: '',
+  /**
+   * Custom analytics or tracking script provided by the admin. This can contain
+   * any HTML/JS snippet (e.g. full Google Analytics script, Hotjar, etc.).
+   * It will be injected as-is into the <head> of every public page.
+   */
+  custom_script: ''
 };
 
 /**
@@ -42,7 +48,8 @@ async function ensureAnalyticsTable(env) {
         ga_id TEXT,
         google_verify TEXT,
         bing_verify TEXT,
-        fb_pixel_id TEXT
+        fb_pixel_id TEXT,
+        custom_script TEXT
       )
     `).run();
     // Add missing columns in case of schema upgrades
@@ -50,7 +57,8 @@ async function ensureAnalyticsTable(env) {
       ['ga_id', 'TEXT'],
       ['google_verify', 'TEXT'],
       ['bing_verify', 'TEXT'],
-      ['fb_pixel_id', 'TEXT']
+      ['fb_pixel_id', 'TEXT'],
+      ['custom_script', 'TEXT']
     ];
     for (const [col, def] of columns) {
       try {
@@ -118,11 +126,12 @@ export async function saveAnalyticsSettings(env, body) {
     const googleVerify = String(body.google_verify || '').trim();
     const bingVerify = String(body.bing_verify || '').trim();
     const fbPixel = String(body.fb_pixel_id || '').trim();
+    const customScript = String(body.custom_script || '').trim();
     await env.DB.prepare(
       `INSERT OR REPLACE INTO analytics_settings
-       (id, ga_id, google_verify, bing_verify, fb_pixel_id)
-       VALUES (1, ?, ?, ?, ?)`
-    ).bind(gaId, googleVerify, bingVerify, fbPixel).run();
+       (id, ga_id, google_verify, bing_verify, fb_pixel_id, custom_script)
+       VALUES (1, ?, ?, ?, ?, ?)`
+    ).bind(gaId, googleVerify, bingVerify, fbPixel, customScript).run();
     analyticsCache = null;
     return json({ success: true });
   } catch (e) {
@@ -194,6 +203,13 @@ export async function injectAnalyticsAndMeta(env, html) {
           `</script>\n` +
           `<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${fbPixel}&ev=PageView&noscript=1"/></noscript>`
         );
+      }
+      // Custom analytics/tracking script provided by admin
+      if (analytics.custom_script) {
+        const trimmedCustom = String(analytics.custom_script).trim();
+        if (trimmedCustom && !html.includes(trimmedCustom)) {
+          snippets.push(trimmedCustom);
+        }
       }
     }
 
