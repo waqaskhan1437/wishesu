@@ -1601,27 +1601,32 @@
     }
 
     function generateOutputHtml() {
+      // Group each section-wrapper into a single container so that custom code
+      // containing multiple top-level elements remains intact on reload. Without
+      // grouping, each child element becomes its own section on load, which
+      // causes the layout to break. Each group will be wrapped in a
+      // <div data-section="true"> for later identification during load.
       const parts = [];
       document.querySelectorAll('#builder-canvas .section-wrapper').forEach(wrapper => {
-        Array.from(wrapper.children).forEach(child => {
-          if (!child.classList.contains('section-controls')) {
-            const clone = child.cloneNode(true);
-            // Remove contenteditable
-            clone.querySelectorAll('[contenteditable]').forEach(el => {
-              el.removeAttribute('contenteditable');
-              el.style.outline = '';
-              el.style.outlineOffset = '';
-            });
-            // Remove widget-config panels (builder-only UI)
-            clone.querySelectorAll('.widget-config').forEach(el => el.remove());
-            // Clean up widget container IDs
-            clone.querySelectorAll('.product-widget-container, .blog-widget-container').forEach(el => {
-              el.removeAttribute('id');
-              el.innerHTML = ''; // Clear preview content
-            });
-            parts.push(clone.outerHTML);
-          }
+        // Clone the wrapper to safely manipulate its children
+        const cloneWrapper = wrapper.cloneNode(true);
+        // Remove control buttons from the clone
+        cloneWrapper.querySelectorAll('.section-controls').forEach(el => el.remove());
+        // Strip builder-only attributes and UI elements
+        cloneWrapper.querySelectorAll('[contenteditable]').forEach(el => {
+          el.removeAttribute('contenteditable');
+          el.style.outline = '';
+          el.style.outlineOffset = '';
         });
+        cloneWrapper.querySelectorAll('.widget-config').forEach(el => el.remove());
+        // Clean up widget container IDs and clear preview content
+        cloneWrapper.querySelectorAll('.product-widget-container, .blog-widget-container').forEach(el => {
+          el.removeAttribute('id');
+          el.innerHTML = '';
+        });
+        // Wrap the entire clone contents in a container element with a marker
+        const sectionHTML = `<div data-section="true">${cloneWrapper.innerHTML}</div>`;
+        parts.push(sectionHTML);
       });
       return parts.join('\n');
     }
@@ -1818,7 +1823,14 @@ document.addEventListener('DOMContentLoaded', function() {
             Array.from(body.children).forEach(child => {
               if (child.tagName === 'SCRIPT' || child.tagName === 'STYLE') return;
               const wrapper = createSectionWrapper();
-              wrapper.innerHTML = child.outerHTML + createControls();
+              // If the saved element contains our section marker, unwrap its contents
+              let sectionHtml;
+              if (child.getAttribute && child.getAttribute('data-section') === 'true') {
+                sectionHtml = child.innerHTML;
+              } else {
+                sectionHtml = child.outerHTML;
+              }
+              wrapper.innerHTML = sectionHtml + createControls();
               canvas.appendChild(wrapper);
               enableEditing(wrapper);
             });
