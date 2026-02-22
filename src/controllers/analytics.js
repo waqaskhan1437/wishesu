@@ -165,16 +165,23 @@ export async function injectAnalyticsAndMeta(env, html) {
     // --- Analytics / Tracking Scripts ---
     if (analytics) {
       const { ga_id: gaId = '', google_verify: gVerify = '', bing_verify: bVerify = '', fb_pixel_id: fbPixel = '' } = analytics;
-      // Google Analytics GA4 via gtag.js
+      // Google Analytics GA4 — deferred to after page load to avoid blocking FCP/LCP
       if (gaId && !html.includes(gaId)) {
         snippets.push(
-          `<!-- Google tag (gtag.js) -->\n` +
-          `<script async src="https://www.googletagmanager.com/gtag/js?id=${gaId}"></script>\n` +
+          `<!-- Google tag (gtag.js) - deferred for performance -->\n` +
           `<script>\n` +
-          `window.dataLayer = window.dataLayer || [];\n` +
-          `function gtag(){dataLayer.push(arguments);}\n` +
-          `gtag('js', new Date());\n` +
-          `gtag('config', '${gaId}');\n` +
+          `window.addEventListener('load', function() {\n` +
+          `  var s = document.createElement('script');\n` +
+          `  s.src = 'https://www.googletagmanager.com/gtag/js?id=${gaId}';\n` +
+          `  s.async = true;\n` +
+          `  document.head.appendChild(s);\n` +
+          `  s.onload = function() {\n` +
+          `    window.dataLayer = window.dataLayer || [];\n` +
+          `    function gtag(){dataLayer.push(arguments);}\n` +
+          `    gtag('js', new Date());\n` +
+          `    gtag('config', '${gaId}');\n` +
+          `  };\n` +
+          `});\n` +
           `</script>`
         );
       }
@@ -186,20 +193,22 @@ export async function injectAnalyticsAndMeta(env, html) {
       if (bVerify && !html.includes('msvalidate.01')) {
         snippets.push(`<meta name="msvalidate.01" content="${bVerify}">`);
       }
-      // Facebook Pixel
+      // Facebook Pixel — deferred to after page load for performance
       if (fbPixel && !html.includes(fbPixel)) {
         snippets.push(
           `<script>\n` +
-          `!function(f,b,e,v,n,t,s){\n` +
-          ` if(f.fbq)return;\n` +
-          ` n=f.fbq=function(){n.callMethod? n.callMethod.apply(n,arguments):n.queue.push(arguments)};\n` +
-          ` if(!f._fbq)f._fbq=n;\n` +
-          ` n.push=n; n.loaded=!0; n.version='2.0'; n.queue=[];\n` +
-          ` t=b.createElement(e); t.async=!0; t.src=v;\n` +
-          ` s=b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t,s)\n` +
-          `}(window, document, 'script','https://connect.facebook.net/en_US/fbevents.js');\n` +
-          `fbq('init','${fbPixel}');\n` +
-          `fbq('track','PageView');\n` +
+          `window.addEventListener('load', function() {\n` +
+          `  !function(f,b,e,v,n,t,s){\n` +
+          `   if(f.fbq)return;\n` +
+          `   n=f.fbq=function(){n.callMethod? n.callMethod.apply(n,arguments):n.queue.push(arguments)};\n` +
+          `   if(!f._fbq)f._fbq=n;\n` +
+          `   n.push=n; n.loaded=!0; n.version='2.0'; n.queue=[];\n` +
+          `   t=b.createElement(e); t.async=!0; t.src=v;\n` +
+          `   s=b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t,s)\n` +
+          `  }(window, document, 'script','https://connect.facebook.net/en_US/fbevents.js');\n` +
+          `  fbq('init','${fbPixel}');\n` +
+          `  fbq('track','PageView');\n` +
+          `});\n` +
           `</script>\n` +
           `<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${fbPixel}&ev=PageView&noscript=1"/></noscript>`
         );

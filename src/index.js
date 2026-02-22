@@ -2141,7 +2141,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               // Inject global components script for header/footer
               let html = defaultPage.content;
               if (html.includes('<body') && !html.includes('global-components.js')) {
-                html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script src="/js/global-components.js"></script>');
+                html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script defer src="/js/global-components.js"></script>');
               }
 
               // Apply SEO tags (robots, canonical)
