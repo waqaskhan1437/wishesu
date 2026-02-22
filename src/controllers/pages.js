@@ -195,8 +195,15 @@ export async function savePage(env, body) {
   }
 
   const pageType = body.page_type || 'custom';
-  // Auto-set is_default when page_type is not custom (home, blog_archive, etc.)
-  const isDefault = (body.is_default || pageType !== 'custom') ? 1 : 0;
+  // Only set as default when explicitly requested by the client UI.
+  // Previously, any non-custom page_type would auto-become default, which caused
+  // the latest-saved page to overwrite the existing default unexpectedly.
+  const wantsDefault =
+    body.is_default === true ||
+    body.is_default === 1 ||
+    body.is_default === '1' ||
+    body.is_default === 'true';
+  const isDefault = wantsDefault && pageType !== 'custom' ? 1 : 0;
 
   // If setting as default, clear other defaults first
   if (isDefault && pageType !== 'custom') {
@@ -258,8 +265,13 @@ export async function savePageBuilder(env, body) {
   const name = (body.name || '').trim();
   const content = body.content || '';
   const pageType = body.page_type || 'custom';
-  // Auto-set is_default when page_type is not custom (home, blog_archive, etc.)
-  const isDefault = (body.is_default || pageType !== 'custom') ? 1 : 0;
+  // Only set as default when explicitly requested by the client UI.
+  const wantsDefault =
+    body.is_default === true ||
+    body.is_default === 1 ||
+    body.is_default === '1' ||
+    body.is_default === 'true';
+  const isDefault = wantsDefault && pageType !== 'custom' ? 1 : 0;
 
   if (!name) return json({ error: 'name required' }, 400);
 
@@ -407,7 +419,12 @@ export async function updatePageType(env, body) {
     return json({ error: 'id and page_type required' }, 400);
   }
   
-  const setDefault = is_default ? 1 : 0;
+  const wantsDefault =
+    is_default === true ||
+    is_default === 1 ||
+    is_default === '1' ||
+    is_default === 'true';
+  const setDefault = wantsDefault ? 1 : 0;
   
   // If setting as default, clear other defaults first
   if (setDefault && page_type !== 'custom') {
