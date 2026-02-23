@@ -2,10 +2,15 @@
   "name": "cloudflare-ecommerce",
   "version": "1.0.1",
   "description": "Complete e-commerce solution with Whop integration and Google Sheets automation.",
-  "main": "worker.js",
+  "main": "src/index.js",
   "scripts": {
-    "dev": "wrangler dev --local --port 5000 --ip 0.0.0.0",
-    "deploy": "wrangler deploy"
+    "dev": "wrangler dev --port 5000 --ip 0.0.0.0",
+    "dev:local": "wrangler dev --local --port 5000 --ip 0.0.0.0",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "d1:execute": "wrangler d1 execute",
+    "r2:list": "wrangler r2 bucket list"
   },
   "keywords": [],
   "author": "",

@@ -9,15 +9,18 @@ A Cloudflare Workers-based e-commerce platform for selling digital video service
 - Archive.org account with API credentials
 - R2 storage bucket configured
 
-### Environment Setup
+### Environment Setup (recommended)
 
-Configure these bindings in your Cloudflare Workers dashboard:
+For a step-by-step deployment (D1 + R2 + secrets + domains), see **DEPLOY.md**.
+
+Configure these bindings in your Cloudflare Workers dashboard / wrangler.toml:
 
 **D1 Database:**
 - Binding name: `DB`
 
-**R2 Bucket:**
-- Binding name: `R2_BUCKET`
+**R2 Buckets:**
+- Binding name: `R2_BUCKET` (temporary uploads)
+- Binding name: `PRODUCT_MEDIA` (product media)
 
 **Secrets:**
 - `ARCHIVE_ACCESS_KEY` - Your Archive.org access key
@@ -26,7 +29,8 @@ Configure these bindings in your Cloudflare Workers dashboard:
 ### Deployment
 
 ```bash
-wrangler deploy
+npm install
+npm run deploy
 ```
 
 The worker will automatically initialize database tables on first run.
@@ -52,7 +56,7 @@ Tables are created automatically:
 
 ### Admin Access
 
-Access the admin panel at: `https://prankwish.com/admin`
+Access the admin panel at: `/admin` on your deployed domain.
 
 ### Support
 

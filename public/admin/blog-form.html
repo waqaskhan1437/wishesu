@@ -550,20 +550,59 @@
     }
 
     // Image upload
+    /*
+      IMPORTANT:
+      Previously we embedded the full image as a base64 data URL inside the blog
+      JSON payload (thumbnail_url). Large images can exceed Cloudflare Worker
+      request size limits, which makes Save/Publish appear to "do nothing".
+
+      Fix: upload the image to R2 via /api/upload/temp-file and store the
+      resulting URL in the thumbnail field.
+    */
     function handleImageUpload(input) {
-      if (input.files && input.files[0]) {
-        const file = input.files[0];
-        
-        // For now, create object URL for preview
-        // In production, you'd upload to R2/server
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          updateImagePreview(e.target.result);
-          // Store as base64 for now (you might want to upload to R2 instead)
-          document.getElementById('blog-thumbnail').value = e.target.result;
-        };
-        reader.readAsDataURL(file);
+      if (!(input && input.files && input.files[0])) return;
+
+      const file = input.files[0];
+      if (!file.type || !file.type.startsWith('image/')) {
+        alert('Please select a valid image file.');
+        return;
       }
+
+      const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+      if (file.size > MAX_SIZE) {
+        alert(`Image too large: ${(file.size / 1024 / 1024).toFixed(2)}MB.\nMaximum allowed size is 10MB.`);
+        input.value = '';
+        return;
+      }
+
+      // Use "admin-" prefix (backend whitelist) to avoid Turnstile on admin uploads.
+      const sessionId = 'admin-' + Date.now() + '-' + Math.random().toString(36).substring(2, 10);
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const uploadUrl = `/api/upload/temp-file?sessionId=${encodeURIComponent(sessionId)}&filename=${encodeURIComponent(safeName)}`;
+
+      fetch(uploadUrl, {
+        method: 'POST',
+        body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' }
+      }).then(async (res) => {
+        let data;
+        try {
+          data = await res.json();
+        } catch (e) {
+          throw new Error('Failed to parse upload response');
+        }
+        if (!res.ok || !data || !data.success) {
+          throw new Error((data && data.error) ? data.error : `Upload failed (${res.status})`);
+        }
+
+        const key = (data.tempUrl || '').replace('r2://', '');
+        const finalUrl = `/api/r2/file?key=${encodeURIComponent(key)}`;
+        updateImagePreview(finalUrl);
+        document.getElementById('blog-thumbnail').value = finalUrl;
+      }).catch((err) => {
+        console.error('Image upload failed:', err);
+        alert('Image upload failed: ' + (err?.message || 'Unknown error'));
+      });
     }
 
     function updateImagePreview(url) {
