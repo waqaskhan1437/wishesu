@@ -36,6 +36,23 @@
                 <option value="rejected">Rejected</option>
               </select>
             </div>
+
+            <!-- Delivery / Portfolio media overrides -->
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Delivery Video URL (optional override)</label>
+              <input type="url" id="edit-delivered-video-url" placeholder="https://..." style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px; box-sizing:border-box;">
+              <div style="font-size:12px;color:#6b7280;margin-top:6px;line-height:1.4;">
+                If the original delivery link expired/broke, paste the new working video URL here.
+                Leave empty to use the order's delivery link (if available).
+              </div>
+            </div>
+            <div style="margin-bottom:15px;">
+              <label style="display:block; font-weight:600; margin-bottom:5px;">Delivery Thumbnail URL (optional override)</label>
+              <input type="url" id="edit-delivered-thumbnail-url" placeholder="https://..." style="width:100%; padding:10px; border:1px solid #d1d5db; border-radius:6px; box-sizing:border-box;">
+              <div style="font-size:12px;color:#6b7280;margin-top:6px;line-height:1.4;">
+                Use this to fix broken thumbnails. Leave empty to fall back.
+              </div>
+            </div>
             <div style="margin-bottom:20px;">
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                 <input type="checkbox" id="edit-show-portfolio">
@@ -86,7 +103,9 @@
         rating: document.getElementById('edit-rating').value,
         comment: document.getElementById('edit-comment').value.trim(),
         status: document.getElementById('edit-status').value,
-        show_on_product: document.getElementById('edit-show-portfolio').checked ? 1 : 0
+        show_on_product: document.getElementById('edit-show-portfolio').checked ? 1 : 0,
+        delivered_video_url: document.getElementById('edit-delivered-video-url').value.trim(),
+        delivered_thumbnail_url: document.getElementById('edit-delivered-thumbnail-url').value.trim()
       };
       
       try {
@@ -133,11 +152,14 @@
       document.getElementById('edit-comment').value = review.comment || '';
       document.getElementById('edit-status').value = review.status || 'approved';
       document.getElementById('edit-show-portfolio').checked = review.show_on_product == 1;
+      document.getElementById('edit-delivered-video-url').value = review.delivered_video_url || '';
+      document.getElementById('edit-delivered-thumbnail-url').value = review.delivered_thumbnail_url || '';
       modal.style.display = 'flex';
     };
     
     try {
-      const data = await AD.apiFetch('/api/reviews');
+      // Bypass cache for admin so edits reflect immediately
+      const data = await AD.apiFetch('/api/reviews?admin=1');
       if (data.reviews) {
         AD.reviews = data.reviews;
         document.getElementById('reviews-tbody').innerHTML = AD.reviews.map(r => {

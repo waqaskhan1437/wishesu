@@ -20,6 +20,9 @@ const REVIEW_LIMITS = {
  */
 export async function getReviews(env, url) {
   const params = url.searchParams;
+  // Admin dashboard should not be served cached data.
+  // Use /api/reviews?admin=1 to bypass edge/browser caching.
+  const isAdminBypassCache = params.get('admin') === '1' || params.get('nocache') === '1';
   const rating = params.get('rating');
   const productId = params.get('productId');
   const productIds = params.get('productIds');
@@ -68,7 +71,7 @@ export async function getReviews(env, url) {
   });
 
   // Cache for 2 minutes - reviews don't change often
-  return cachedJson({ reviews }, 120);
+  return isAdminBypassCache ? json({ reviews }) : cachedJson({ reviews }, 120);
 }
 
 /**
@@ -77,8 +80,9 @@ export async function getReviews(env, url) {
 export async function getProductReviews(env, productId) {
   const r = await env.DB.prepare(
     `SELECT reviews.*,
-            COALESCE(orders.delivered_video_url, reviews.delivered_video_url) as delivered_video_url,
-            COALESCE(orders.delivered_thumbnail_url, reviews.delivered_thumbnail_url) as delivered_thumbnail_url,
+            -- Prefer review overrides first; fall back to order delivery links
+            COALESCE(reviews.delivered_video_url, orders.delivered_video_url) as delivered_video_url,
+            COALESCE(reviews.delivered_thumbnail_url, orders.delivered_thumbnail_url) as delivered_thumbnail_url,
             orders.delivered_video_metadata
      FROM reviews 
      LEFT JOIN orders ON reviews.order_id = orders.order_id 
@@ -182,6 +186,20 @@ export async function updateReview(env, body) {
   if (body.show_on_product !== undefined) {
     updates.push('show_on_product = ?');
     values.push(body.show_on_product ? 1 : 0);
+  }
+
+  // Allow admin to override delivery video + thumbnail links.
+  // These fields are used by the product page to show portfolio media.
+  // If empty string is provided, store NULL so the UI can fall back.
+  if (body.delivered_video_url !== undefined) {
+    const v = String(body.delivered_video_url || '').trim();
+    updates.push('delivered_video_url = ?');
+    values.push(v ? v : null);
+  }
+  if (body.delivered_thumbnail_url !== undefined) {
+    const t = String(body.delivered_thumbnail_url || '').trim();
+    updates.push('delivered_thumbnail_url = ?');
+    values.push(t ? t : null);
   }
   
   if (updates.length === 0) {
