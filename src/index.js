@@ -3034,9 +3034,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 try {
                   html = await injectAnalyticsAndMeta(env, html);
                 } catch (_) {}
-              } catch (e) {
-                // ignore SEO injection errors
-              }
             }
             
             const response = new Response(html, { status: 200, headers });
@@ -3064,9 +3061,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             }
             
             return response;
-          } catch (e) {
-            console.error('Schema injection error:', e);
-          }
         }
         
         // For non-HTML or failed schema injection, just pass through with version header
