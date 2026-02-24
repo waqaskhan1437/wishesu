@@ -4,6 +4,7 @@
  */
 
 (function () {
+    const CHECKOUT_INTENT_KEY = 'whop_checkout_intent_v1';
     const urlParams = new URLSearchParams(window.location.search);
     const orderId = urlParams.get('id');
     const isAdmin = urlParams.get('admin') === '1';
@@ -701,6 +702,61 @@
         });
     }
 
+    function compactMethod(method) {
+        if (!method || typeof method !== 'object') return null;
+        return {
+            id: method.id || '',
+            name: method.name || '',
+            icon: method.icon || '',
+            enabled: method.enabled !== false
+        };
+    }
+
+    function saveCheckoutIntent(intent) {
+        const serialized = JSON.stringify(intent);
+        try { sessionStorage.setItem(CHECKOUT_INTENT_KEY, serialized); } catch (e) { }
+        try { localStorage.setItem(CHECKOUT_INTENT_KEY, serialized); } catch (e) { }
+    }
+
+    function redirectTipToCheckout(tipAmount, whopMethod) {
+        const numericProductId = Number(orderData?.product_id || 0);
+        if (!Number.isFinite(numericProductId) || numericProductId <= 0) {
+            throw new Error('Invalid product for tip checkout');
+        }
+
+        const normalizedTip = Number(tipAmount);
+        if (!Number.isFinite(normalizedTip) || normalizedTip <= 0) {
+            throw new Error('Invalid tip amount');
+        }
+
+        const sourceUrl = `/buyer-order?id=${encodeURIComponent(orderData.order_id)}`;
+        const compactWhop = compactMethod(whopMethod);
+
+        const intent = {
+            version: 1,
+            created_at: Date.now(),
+            productId: numericProductId,
+            amount: normalizedTip,
+            originalAmount: normalizedTip,
+            email: (orderData?.email || '').trim(),
+            addons: [],
+            coupon: null,
+            deliveryTimeMinutes: 60,
+            sourceUrl,
+            productTitle: orderData?.product_title || `Tip for Order #${orderData.order_id}`,
+            productThumbnail: orderData?.product_thumbnail || '',
+            preferredMethod: 'whop',
+            availableMethods: compactWhop ? [compactWhop] : [],
+            flowType: 'tip',
+            tipOrderId: orderData.order_id,
+            tipAmount: normalizedTip,
+            tipReturnUrl: sourceUrl
+        };
+
+        saveCheckoutIntent(intent);
+        window.location.href = '/checkout';
+    }
+
     function updateTipUI(order) {
         const tipSection = document.getElementById('tip-section');
         if (!tipSection) return;
@@ -770,7 +826,19 @@
         const paypalMethod = methods.find(m => m?.id === 'paypal' && m.enabled !== false && m.client_id);
         const whopMethod = methods.find(m => m?.id === 'whop' && m.enabled !== false);
 
-        // PayPal priority
+        // Primary path: route tips through dedicated checkout page with Whop.
+        if (whopMethod) {
+            try {
+                redirectTipToCheckout(tipAmount, whopMethod);
+                return;
+            } catch (err) {
+                alert('Error: ' + (err.message || 'Unable to open checkout page'));
+                setTipButtonsDisabled(false);
+                return;
+            }
+        }
+
+        // Fallback: PayPal popup flow if Whop is unavailable.
         if (paypalMethod && window.TipCheckout?.openPayPalTip) {
             try {
                 window.TipCheckout.openPayPalTip({
@@ -790,52 +858,10 @@
             }
         }
 
-        // Fallback to Whop
-        if (!whopMethod || typeof window.whopCheckout !== 'function') {
+        if (!whopMethod) {
             alert('Payment system not available');
             setTipButtonsDisabled(false);
             return;
-        }
-
-        try {
-            const res = await fetch('/api/whop/create-plan-checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    product_id: orderData.product_id,
-                    amount: tipAmount,
-                    email: orderData.email || '',
-                    metadata: { type: 'tip', orderId: orderData.order_id, tipAmount }
-                })
-            });
-
-            const data = await res.json();
-            if (!res.ok || data.error) throw new Error(data.error || 'Failed');
-
-            if (data.plan_id) {
-                window.whopCheckout({
-                    planId: data.plan_id,
-                    amount: tipAmount,
-                    email: orderData.email || '',
-                    metadata: { type: 'tip', orderId: orderData.order_id, tipAmount },
-                    onComplete: async () => {
-                        await markTipPaid(tipAmount);
-                        window.whopCheckoutClose?.();
-                    }
-                });
-                return;
-            }
-
-            if (data.checkout_url) {
-                window.location.href = data.checkout_url;
-                return;
-            }
-
-            throw new Error('Payment system not available');
-        } catch (err) {
-            alert('Error: ' + err.message);
-        } finally {
-            setTipButtonsDisabled(false);
         }
     }
 
@@ -856,5 +882,4 @@
 
     updateStars(5);
 })();
-
 

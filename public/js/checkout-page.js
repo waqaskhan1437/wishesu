@@ -99,14 +99,28 @@
     const productId = Number(rawIntent.productId || rawIntent.product_id || 0);
     if (!Number.isFinite(productId) || productId <= 0) return null;
 
+    const flowTypeRaw = String(rawIntent.flowType || rawIntent.flow_type || '').trim().toLowerCase();
+    const flowType = flowTypeRaw === 'tip' ? 'tip' : 'order';
+    const tipOrderId = flowType === 'tip'
+      ? String(rawIntent.tipOrderId || rawIntent.tip_order_id || rawIntent.orderId || rawIntent.order_id || '').trim()
+      : '';
+    const tipAmountRaw = Number(rawIntent.tipAmount || rawIntent.tip_amount || rawIntent.amount || 0);
     const amount = Number(rawIntent.amount || 0);
+    const resolvedTipAmount = (flowType === 'tip' && Number.isFinite(tipAmountRaw) && tipAmountRaw > 0)
+      ? tipAmountRaw
+      : amount;
     const originalAmount = Number(rawIntent.originalAmount || rawIntent.original_amount || amount || 0);
     const delivery = Number(rawIntent.deliveryTimeMinutes || rawIntent.delivery_time_minutes || 60) || 60;
+    const finalAmount = flowType === 'tip' ? resolvedTipAmount : amount;
+
+    if (flowType === 'tip' && (!tipOrderId || !Number.isFinite(finalAmount) || finalAmount <= 0)) {
+      return null;
+    }
 
     return {
       created_at: createdAt,
       productId,
-      amount: Number.isFinite(amount) ? amount : 0,
+      amount: Number.isFinite(finalAmount) ? finalAmount : 0,
       originalAmount: Number.isFinite(originalAmount) ? originalAmount : 0,
       email: (rawIntent.email || '').trim(),
       addons: Array.isArray(rawIntent.addons) ? rawIntent.addons : [],
@@ -116,7 +130,13 @@
       productTitle: rawIntent.productTitle || rawIntent.product_title || '',
       productThumbnail: rawIntent.productThumbnail || rawIntent.product_thumbnail || '',
       preferredMethod: rawIntent.preferredMethod || rawIntent.preferred_method || '',
-      availableMethods: Array.isArray(rawIntent.availableMethods) ? rawIntent.availableMethods : []
+      availableMethods: Array.isArray(rawIntent.availableMethods) ? rawIntent.availableMethods : [],
+      flowType,
+      tipOrderId,
+      tipAmount: Number.isFinite(resolvedTipAmount) ? resolvedTipAmount : 0,
+      tipReturnUrl: flowType === 'tip'
+        ? String(rawIntent.tipReturnUrl || rawIntent.tip_return_url || rawIntent.sourceUrl || '').trim()
+        : ''
     };
   }
 
@@ -228,6 +248,7 @@
   function pickDefaultMethod(methods, intent) {
     const preferred = normalizeMethodId(intent && intent.preferredMethod);
     if (preferred && methods.some((m) => m.normalizedId === preferred)) return preferred;
+    if (isTipIntent(intent) && methods.some((m) => m.normalizedId === 'whop')) return 'whop';
     if (methods.some((m) => m.normalizedId === 'whop')) return 'whop';
     if (methods.some((m) => m.normalizedId === 'paypal')) return 'paypal';
     return methods[0] ? methods[0].normalizedId : '';
@@ -309,6 +330,53 @@
       .replace(/'/g, '&#39;');
   }
 
+  function isTipIntent(intent) {
+    return !!(intent && intent.flowType === 'tip');
+  }
+
+  function buildTipReturnUrl(intent, includeSuccess) {
+    const orderId = String(intent?.tipOrderId || '').trim();
+    const fallback = orderId
+      ? `/buyer-order?id=${encodeURIComponent(orderId)}`
+      : '/buyer-order';
+    const base = String(intent?.tipReturnUrl || fallback).trim() || fallback;
+
+    let parsed;
+    try {
+      parsed = new URL(base, window.location.origin);
+    } catch (e) {
+      parsed = new URL(fallback, window.location.origin);
+    }
+
+    if (orderId) parsed.searchParams.set('id', orderId);
+
+    if (includeSuccess) {
+      parsed.searchParams.set('tip_success', '1');
+      const amount = Number(intent?.tipAmount || intent?.amount || 0);
+      if (Number.isFinite(amount) && amount > 0) {
+        parsed.searchParams.set('tip_amount', amount.toFixed(2));
+      }
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  }
+
+  async function confirmTipPaid(intent) {
+    if (!isTipIntent(intent)) return;
+
+    const orderId = String(intent.tipOrderId || '').trim();
+    const tipAmount = Number(intent.tipAmount || intent.amount || 0);
+    if (!orderId || !Number.isFinite(tipAmount) || tipAmount <= 0) return;
+
+    try {
+      await fetch('/api/order/tip-paid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, amount: tipAmount })
+      });
+    } catch (e) {}
+  }
+
   function renderSummary(intent) {
     const totalEl = document.getElementById('checkout-total');
     if (totalEl) totalEl.textContent = formatUsd(intent.amount);
@@ -316,7 +384,9 @@
     const productTitleEl = document.getElementById('checkout-product-title');
     const productThumbEl = document.getElementById('checkout-product-thumb');
     const productPreviewEl = document.getElementById('checkout-product-preview');
-    const productTitle = (intent.productTitle || '').trim() || `Product #${intent.productId}`;
+    const productTitle = isTipIntent(intent)
+      ? `Tip for Order #${intent.tipOrderId || ''}`
+      : ((intent.productTitle || '').trim() || `Product #${intent.productId}`);
 
     if (productTitleEl) productTitleEl.textContent = productTitle;
     if (productPreviewEl) productPreviewEl.hidden = false;
@@ -336,16 +406,25 @@
     if (!metaEl) return;
 
     const rows = [];
-    if (intent.email) rows.push({ label: 'Email', value: intent.email });
-    if (intent.coupon && intent.coupon.code) rows.push({ label: 'Coupon', value: intent.coupon.code });
-    rows.push({ label: 'Add-ons', value: String(Array.isArray(intent.addons) ? intent.addons.length : 0) });
-    rows.push({ label: 'Delivery', value: Math.max(1, Math.round((intent.deliveryTimeMinutes || 60) / 60)) + ' hour(s)' });
+    if (isTipIntent(intent)) {
+      rows.push({ label: 'Checkout type', value: 'Tip payment' });
+      rows.push({ label: 'Order', value: intent.tipOrderId || 'N/A' });
+      if (intent.email) rows.push({ label: 'Email', value: intent.email });
+      rows.push({ label: 'Tip amount', value: formatUsd(intent.tipAmount || intent.amount) });
+    } else {
+      if (intent.email) rows.push({ label: 'Email', value: intent.email });
+      if (intent.coupon && intent.coupon.code) rows.push({ label: 'Coupon', value: intent.coupon.code });
+      rows.push({ label: 'Add-ons', value: String(Array.isArray(intent.addons) ? intent.addons.length : 0) });
+      rows.push({ label: 'Delivery', value: Math.max(1, Math.round((intent.deliveryTimeMinutes || 60) / 60)) + ' hour(s)' });
+    }
 
     metaEl.innerHTML = rows.map((row) => {
       return `<div class="meta-line"><span class="meta-label">${escapeHtml(row.label)}</span><span class="meta-value">${escapeHtml(row.value)}</span></div>`;
     }).join('');
 
-    if (intent.sourceUrl) {
+    if (isTipIntent(intent)) {
+      setBackLink(buildTipReturnUrl(intent, false));
+    } else if (intent.sourceUrl) {
       setBackLink(intent.sourceUrl);
     } else {
       setBackLink(`/product-${encodeURIComponent(intent.productId)}`);
@@ -403,6 +482,19 @@
   }
 
   async function createCheckoutSession(intent) {
+    const isTip = isTipIntent(intent);
+    const payloadMetadata = isTip
+      ? {
+          type: 'tip',
+          orderId: intent.tipOrderId,
+          tipAmount: Number(intent.tipAmount || intent.amount || 0)
+        }
+      : {
+          addons: intent.addons || [],
+          deliveryTimeMinutes: intent.deliveryTimeMinutes || 60,
+          couponCode: intent.coupon?.code || ''
+        };
+
     const response = await fetch('/api/whop/create-plan-checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -410,13 +502,9 @@
         product_id: intent.productId,
         amount: intent.amount,
         email: intent.email || '',
-        couponCode: intent.coupon?.code || '',
+        couponCode: isTip ? '' : (intent.coupon?.code || ''),
         deliveryTimeMinutes: intent.deliveryTimeMinutes || 60,
-        metadata: {
-          addons: intent.addons || [],
-          deliveryTimeMinutes: intent.deliveryTimeMinutes || 60,
-          couponCode: intent.coupon?.code || ''
-        }
+        metadata: payloadMetadata
       })
     });
 
@@ -434,6 +522,19 @@
   }
 
   async function createPayPalOrder(intent) {
+    const isTip = isTipIntent(intent);
+    const payloadMetadata = isTip
+      ? {
+          type: 'tip',
+          orderId: intent.tipOrderId,
+          tipAmount: Number(intent.tipAmount || intent.amount || 0)
+        }
+      : {
+          addons: intent.addons || [],
+          deliveryTimeMinutes: intent.deliveryTimeMinutes || 60,
+          couponCode: intent.coupon?.code || ''
+        };
+
     const response = await fetch('/api/paypal/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -441,13 +542,9 @@
         product_id: intent.productId,
         amount: intent.amount,
         email: intent.email || '',
-        couponCode: intent.coupon?.code || '',
+        couponCode: isTip ? '' : (intent.coupon?.code || ''),
         deliveryTimeMinutes: intent.deliveryTimeMinutes || 60,
-        metadata: {
-          addons: intent.addons || [],
-          deliveryTimeMinutes: intent.deliveryTimeMinutes || 60,
-          couponCode: intent.coupon?.code || ''
-        }
+        metadata: payloadMetadata
       })
     });
 
@@ -526,14 +623,25 @@
       embed.setAttribute('data-whop-checkout-email', intent.email);
     }
 
-    const metadata = serializeWhopMetadata({
-      product_id: String(intent.productId),
-      amount: intent.amount,
-      email: intent.email || '',
-      addons: intent.addons || [],
-      deliveryTimeMinutes: intent.deliveryTimeMinutes || 60,
-      couponCode: intent.coupon?.code || ''
-    });
+    const metadata = serializeWhopMetadata(
+      isTipIntent(intent)
+        ? {
+            product_id: String(intent.productId),
+            amount: intent.amount,
+            email: intent.email || '',
+            type: 'tip',
+            orderId: intent.tipOrderId,
+            tipAmount: Number(intent.tipAmount || intent.amount || 0)
+          }
+        : {
+            product_id: String(intent.productId),
+            amount: intent.amount,
+            email: intent.email || '',
+            addons: intent.addons || [],
+            deliveryTimeMinutes: intent.deliveryTimeMinutes || 60,
+            couponCode: intent.coupon?.code || ''
+          }
+    );
     embed.setAttribute('data-whop-checkout-metadata', JSON.stringify(metadata));
 
     embedShell.appendChild(embed);
@@ -555,8 +663,15 @@
     });
     observer.observe(container, { childList: true, subtree: true });
 
-    window.whopEmbeddedCheckoutComplete = function(completeData) {
+    window.whopEmbeddedCheckoutComplete = async function(completeData) {
       clearIntentStorage();
+      if (isTipIntent(intent)) {
+        setStatus('Tip received. Returning to your order...', 'ok');
+        await confirmTipPaid(intent);
+        window.location.href = buildTipReturnUrl(intent, true);
+        return;
+      }
+
       const checkoutId = completeData && completeData.id ? String(completeData.id) : (checkoutData.checkout_id || '');
       const params = new URLSearchParams({
         product: String(intent.productId),

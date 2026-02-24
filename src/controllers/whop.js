@@ -118,6 +118,14 @@ function parseWhopMetadata(metadata = {}) {
     if (Number.isFinite(tip)) parsed.tipAmount = tip;
   }
 
+  if (parsed.orderId !== undefined && parsed.orderId !== null) {
+    parsed.orderId = String(parsed.orderId);
+  }
+
+  if (typeof parsed.type === 'string') {
+    parsed.type = parsed.type.trim().toLowerCase();
+  }
+
   if (parsed.product_id !== undefined && parsed.product_id !== null) {
     parsed.product_id = String(parsed.product_id);
   }
@@ -251,10 +259,29 @@ export async function createCheckout(env, body, origin) {
  * Create dynamic plan + checkout session
  */
 export async function createPlanCheckout(env, body, origin) {
-  const { product_id, email, metadata, deliveryTimeMinutes: bodyDeliveryTime, couponCode } = body || {};
+  const {
+    product_id,
+    email,
+    amount: requestedAmount,
+    metadata,
+    deliveryTimeMinutes: bodyDeliveryTime,
+    couponCode
+  } = body || {};
   if (!product_id) {
     return json({ error: 'Product ID required' }, 400);
   }
+
+  const normalizedMetadata = (metadata && typeof metadata === 'object') ? metadata : {};
+  const isTipCheckout = String(normalizedMetadata.type || '').toLowerCase() === 'tip';
+  const tipOrderId = isTipCheckout
+    ? String(normalizedMetadata.orderId || normalizedMetadata.order_id || '').trim()
+    : '';
+  const requestedTipAmount = Number(
+    normalizedMetadata.tipAmount ??
+    normalizedMetadata.tip_amount ??
+    requestedAmount ??
+    0
+  );
 
   // Lookup product from database
   const product = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(Number(product_id)).first();
@@ -263,7 +290,7 @@ export async function createPlanCheckout(env, body, origin) {
   }
 
   // Calculate delivery time: use provided value, or calculate from product
-  let deliveryTimeMinutes = bodyDeliveryTime || metadata?.deliveryTimeMinutes;
+  let deliveryTimeMinutes = bodyDeliveryTime || normalizedMetadata.deliveryTimeMinutes;
   if (!deliveryTimeMinutes) {
     // Calculate from product settings
     deliveryTimeMinutes = calculateDeliveryMinutes(product);
@@ -271,15 +298,27 @@ export async function createPlanCheckout(env, body, origin) {
   deliveryTimeMinutes = Number(deliveryTimeMinutes) || 60;
   console.log('📦 Delivery time calculated:', deliveryTimeMinutes, 'minutes');
 
-  // SECURITY: Calculate price server-side, ignoring client-provided amount
-  // This prevents price manipulation attacks
+  // SECURITY: regular product checkouts calculate price server-side.
+  // Tip checkouts use explicit tip amount and bind to an existing order.
   let priceValue = 0;
-  try {
-    const selectedAddons = metadata?.addons || body?.addons || [];
-    priceValue = await calculateServerSidePrice(env, product_id, selectedAddons, couponCode);
-  } catch (e) {
-    console.error('Failed to calculate server-side price:', e);
-    return json({ error: 'Failed to calculate order price' }, 400);
+  if (isTipCheckout) {
+    if (!tipOrderId) {
+      return json({ error: 'Tip order ID required' }, 400);
+    }
+
+    if (!Number.isFinite(requestedTipAmount) || requestedTipAmount <= 0) {
+      return json({ error: 'Invalid tip amount' }, 400);
+    }
+
+    priceValue = Number(requestedTipAmount.toFixed(2));
+  } else {
+    try {
+      const selectedAddons = normalizedMetadata.addons || body?.addons || [];
+      priceValue = await calculateServerSidePrice(env, product_id, selectedAddons, couponCode);
+    } catch (e) {
+      console.error('Failed to calculate server-side price:', e);
+      return json({ error: 'Failed to calculate order price' }, 400);
+    }
   }
 
   if (isNaN(priceValue) || priceValue < 0) {
@@ -436,12 +475,18 @@ export async function createPlanCheckout(env, body, origin) {
     const checkoutMetadata = {
       product_id: product.id.toString(),
       product_title: product.title,
-      addons: metadata?.addons || [],
+      addons: isTipCheckout ? [] : (normalizedMetadata.addons || []),
       email: email || '',
       amount: priceValue, // Use server-side calculated price
       deliveryTimeMinutes: deliveryTimeMinutes,
       created_at: new Date().toISOString()
     };
+
+    if (isTipCheckout) {
+      checkoutMetadata.type = 'tip';
+      checkoutMetadata.orderId = tipOrderId;
+      checkoutMetadata.tipAmount = priceValue;
+    }
 
     // Store plan for cleanup (with metadata for webhook fallback)
     try {
@@ -454,9 +499,18 @@ export async function createPlanCheckout(env, body, origin) {
     }
 
     // Create checkout session
+    let redirectUrl = `${origin}/success.html?product=${product.id}`;
+    if (isTipCheckout && tipOrderId) {
+      const tipUrl = new URL('/buyer-order', origin);
+      tipUrl.searchParams.set('id', tipOrderId);
+      tipUrl.searchParams.set('tip_success', '1');
+      tipUrl.searchParams.set('tip_amount', priceValue.toFixed(2));
+      redirectUrl = tipUrl.toString();
+    }
+
     const checkoutBody = {
       plan_id: planId,
-      redirect_url: `${origin}/success.html?product=${product.id}`,
+      redirect_url: redirectUrl,
       metadata: serializeWhopMetadata(checkoutMetadata)
     };
 
@@ -508,7 +562,10 @@ export async function createPlanCheckout(env, body, origin) {
       metadata: {
         product_id: product.id.toString(),
         product_title: product.title,
-        addons: metadata?.addons || [],
+        addons: isTipCheckout ? [] : (normalizedMetadata.addons || []),
+        type: isTipCheckout ? 'tip' : 'order',
+        orderId: isTipCheckout ? tipOrderId : undefined,
+        tipAmount: isTipCheckout ? priceValue : undefined,
         amount: priceValue // Use server-side calculated price
       },
       expires_in: '15 minutes',
@@ -629,7 +686,15 @@ export async function handleWebhook(env, webhookData, headers, rawBody) {
 
       // Fallback: If metadata from Whop is empty/incomplete, try to get from our database
       // This ensures we have all order details even if Whop's metadata is stripped
-      if (checkoutSessionId && (!metadata.addons || !metadata.addons.length || !metadata.amount)) {
+      const needsStoredMetadata = (
+        !metadata.type ||
+        !metadata.addons ||
+        !metadata.addons.length ||
+        !metadata.amount ||
+        (metadata.type === 'tip' && !metadata.orderId)
+      );
+
+      if (checkoutSessionId && needsStoredMetadata) {
         try {
           const sessionRow = await env.DB.prepare(
             'SELECT metadata FROM checkout_sessions WHERE checkout_id = ?'
