@@ -143,11 +143,9 @@ const CANONICAL_ALIAS_MAP = new Map([
   ['/forum/', '/forum'],
   ['/forum/index.html', '/forum'],
   ['/forum.html', '/forum'],
-  ['/products/', '/products'],
-  ['/products/index.html', '/products'],
-  ['/products.html', '/products'],
-  ['/products-grid', '/products'],
-  ['/products-grid.html', '/products'],
+  ['/products/index.html', '/products-grid.html'],
+  ['/products.html', '/products-grid.html'],
+  ['/products-grid', '/products-grid.html'],
   ['/checkout/', '/checkout'],
   ['/checkout/index.html', '/checkout'],
   ['/success.html', '/success'],
@@ -2202,6 +2200,15 @@ if (method === 'GET' || method === 'HEAD') {
           '/checkout': '/checkout.html',
           '/checkout/': '/checkout.html',
           '/checkout/index.html': '/checkout.html',
+          '/success': '/success.html',
+          '/success/': '/success.html',
+          '/success/index.html': '/success.html',
+          '/buyer-order': '/buyer-order.html',
+          '/buyer-order/': '/buyer-order.html',
+          '/buyer-order/index.html': '/buyer-order.html',
+          '/order-detail': '/order-detail.html',
+          '/order-detail/': '/order-detail.html',
+          '/order-detail/index.html': '/order-detail.html',
           // Map blog and forum to their index files so these archives load
           // without needing to redirect to `/blog` or `/forum`.
           '/blog.html': '/blog/index.html',
@@ -2366,8 +2373,13 @@ if (method === 'GET' || method === 'HEAD') {
         const isHTML = contentType.includes('text/html') || assetPath === '/_product_template.tpl';
         const isSuccess = assetResp.status === 200;
         
-        // Caching: Only cache HTML pages, never admin routes
-        const shouldCache = isHTML && isSuccess && !path.startsWith('/admin') && !path.includes('/admin/');
+        // Caching: Only cache public, non-sensitive HTML pages.
+        const normalizedAssetPathForCache = normalizeCanonicalPath(path);
+        const shouldCache = isHTML &&
+          isSuccess &&
+          !path.startsWith('/admin') &&
+          !path.includes('/admin/') &&
+          !isSensitiveNoindexPath(normalizedAssetPathForCache);
         const cacheKey = new Request(req.url, { 
           method: 'GET',
           headers: { 'Accept': 'text/html' }

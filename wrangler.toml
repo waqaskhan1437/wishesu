@@ -39,6 +39,7 @@ run_worker_first = [
   "/product*",       # Product pages and product grid
   "/checkout*",      # Checkout aliases (force noindex/canonical)
   "/success*",       # Success aliases (force noindex/canonical)
+  "/order-success*", # Legacy success aliases (force noindex/canonical)
   "/buyer-order*",   # Legacy buyer order aliases (force noindex/canonical)
   "/order-detail*",  # Legacy order detail aliases (force noindex/canonical)
   "/download/*",     # Secure downloads
