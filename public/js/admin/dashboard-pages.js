@@ -86,7 +86,7 @@
     const createBtn = panel.querySelector('#create-page-btn');
     if (createBtn) {
       createBtn.addEventListener('click', () => {
-        window.location.href = '/page-builder.html';
+        window.location.href = '/admin/page-builder.html';
       });
     }
 
@@ -133,7 +133,7 @@
           <div style="font-size:3rem;margin-bottom:10px;">📄</div>
           <h3 style="margin-bottom:10px;">No pages yet</h3>
           <p style="margin-bottom:20px;">Create your first landing page using the page builder</p>
-          <button class="btn btn-primary" onclick="window.location.href='/page-builder.html'">Create Page</button>
+          <button class="btn btn-primary" onclick="window.location.href='/admin/page-builder.html'">Create Page</button>
         </div>`;
         return;
       }
@@ -211,7 +211,7 @@
 
   window.editAdminPage = function(slug) {
     if (!slug) return;
-    window.location.href = '/page-builder.html?edit=' + encodeURIComponent(slug);
+    window.location.href = '/admin/page-builder.html?edit=' + encodeURIComponent(slug);
   };
 
   window.duplicateAdminPage = async function(id) {

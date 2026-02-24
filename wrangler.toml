@@ -37,6 +37,8 @@ run_worker_first = [
   "/forum*",         # Forum archive + dynamic forum pages
   "/admin/*",        # Catch-all for all admin routes
   "/product*",       # Product pages and product grid
+  "/page-builder*",  # Legacy builder aliases (redirect to /admin + auth)
+  "/landing-builder*", # Legacy builder aliases (redirect to /admin + auth)
   "/checkout*",      # Checkout aliases (force noindex/canonical)
   "/success*",       # Success aliases (force noindex/canonical)
   "/order-success*", # Legacy success aliases (force noindex/canonical)

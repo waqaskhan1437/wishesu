@@ -137,6 +137,12 @@ const CANONICAL_ALIAS_MAP = new Map([
   ['/index.html', '/'],
   ['/home', '/'],
   ['/home/', '/'],
+  ['/page-builder', '/admin/page-builder.html'],
+  ['/page-builder/', '/admin/page-builder.html'],
+  ['/page-builder.html', '/admin/page-builder.html'],
+  ['/landing-builder', '/admin/landing-builder.html'],
+  ['/landing-builder/', '/admin/landing-builder.html'],
+  ['/landing-builder.html', '/admin/landing-builder.html'],
   ['/blog/', '/blog'],
   ['/blog/index.html', '/blog'],
   ['/blog.html', '/blog'],
@@ -1562,7 +1568,13 @@ const noJsSsrEnabled = isNoJsSsrEnabled(env);
 const isAdminProtectedPage = (
   path === '/order-detail' ||
   path === '/order-detail/' ||
-  path === '/order-detail.html'
+  path === '/order-detail.html' ||
+  path === '/page-builder' ||
+  path === '/page-builder/' ||
+  path === '/page-builder.html' ||
+  path === '/landing-builder' ||
+  path === '/landing-builder/' ||
+  path === '/landing-builder.html'
 );
 
 async function requireAdmin() {
@@ -2068,18 +2080,20 @@ if (method === 'GET' || method === 'HEAD') {
       // Handle both /admin and /admin/ and all admin sub-routes
       if ((path === '/admin' || path.startsWith('/admin/')) && !path.startsWith('/api/')) {
         // These standalone pages should be served directly from assets
-        const standaloneAdminPages = [
-          '/admin/product-form.html',
-          '/admin/blog-form.html',
-          '/admin/page-builder.html',
-          '/admin/landing-builder.html',
-          '/admin/migrate-reviews.html'
-        ];
+        const standaloneAdminPages = new Map([
+          ['/admin/product-form.html', '/admin/product-form.html'],
+          ['/admin/blog-form.html', '/admin/blog-form.html'],
+          // Source file currently lives at project root for legacy compatibility.
+          ['/admin/page-builder.html', '/page-builder.html'],
+          ['/admin/landing-builder.html', '/admin/landing-builder.html'],
+          ['/admin/migrate-reviews.html', '/admin/migrate-reviews.html']
+        ]);
         
-        if (standaloneAdminPages.includes(path)) {
+        if (standaloneAdminPages.has(path)) {
           // Serve these pages directly from assets
           if (env.ASSETS) {
-            const assetResp = await env.ASSETS.fetch(new Request(new URL(path, req.url)));
+            const assetPath = standaloneAdminPages.get(path);
+            const assetResp = await env.ASSETS.fetch(new Request(new URL(assetPath, req.url)));
             const headers = new Headers(assetResp.headers); headers.set('Alt-Svc', 'clear');
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
