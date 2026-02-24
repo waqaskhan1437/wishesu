@@ -21,7 +21,6 @@ import { canonicalProductPath } from './utils/formatting.js';
 
 // Inject analytics & verification meta tags (Google Analytics, Facebook Pixel, site verification)
 import { injectAnalyticsAndMeta } from './controllers/analytics.js';
-import { renderProductSSR } from './renderers/product-ssr.js';
 
 // Auth utilities
 import { isAdminAuthed, createAdminSessionCookie, createLogoutCookie } from './utils/auth.js';
@@ -219,23 +218,6 @@ function applySeoToHtml(html, robots, canonical) {
     }
   }
   return html;
-}
-
-// -------------------------------
-// Settings helpers for SSR pages
-// -------------------------------
-async function readSettingJson(env, key, fallback = null) {
-  try {
-    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first();
-    if (row?.value) {
-      try {
-        return JSON.parse(row.value);
-      } catch (_) {
-        return fallback;
-      }
-    }
-  } catch (_) {}
-  return fallback;
 }
 
 // Blog post HTML template generator
@@ -832,6 +814,630 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
     }
   </script>
   ${blog.custom_js ? `<script>${blog.custom_js}</script>` : ''}
+</body>
+</html>`;
+}
+
+// Product page HTML template generator
+function generateProductPageHTML(product, addons = [], reviews = []) {
+  // Helper to optimize image URLs for Cloudinary + Googleusercontent
+  function optimizeImageUrl(src, width, height) {
+    const s = (src || '').toString().trim();
+    if (!s) return src;
+    // Cloudinary optimization
+    if (s.includes('res.cloudinary.com')) {
+      const cloudinaryRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)/;
+      const match = s.match(cloudinaryRegex);
+      if (match) {
+        const baseUrl = match[1];
+        const imagePath = match[2];
+        return `${baseUrl}f_auto,q_auto,w_${width || 800}/${imagePath}`;
+      }
+    }
+    // Googleusercontent optimization
+    if (s.includes('googleusercontent.com')) {
+      const googleRegex = /^(.*)=w(\d+)-h(\d+)(-[^?#]*)?$/;
+      const match = s.match(googleRegex);
+      if (match) {
+        const prefix = match[1];
+        const originalW = parseInt(match[2]) || 0;
+        const originalH = parseInt(match[3]) || 0;
+        const suffix = match[4] || '';
+        const w = width || originalW || 800;
+        const h = height || (originalW > 0 && originalH > 0 ? Math.round((originalH * w) / originalW) : 450);
+        return `${prefix}=w${w}-h${h}${suffix}`;
+      }
+    }
+    return s;
+  }
+
+  // Helper to normalize media URLs
+  function normalizeMediaUrl(url) {
+    const raw = (url || '').toString().trim();
+    if (!raw) return '';
+    try {
+      const u = new URL(raw, 'https://example.com');
+      u.hash = '';
+      u.search = '';
+      return u.toString();
+    } catch (_) {
+      return raw.split('#')[0].split('?')[0];
+    }
+  }
+
+  // Helper to check media types
+  function isLikelyVideoUrl(url) {
+    const s = (url || '').toString().trim().toLowerCase();
+    if (!s) return false;
+    if (s.includes('youtube.com') || s.includes('youtu.be')) return true;
+    return /\.(mp4|webm|mov|mkv|avi|m4v|flv|wmv|m3u8|mpd)(?:[?#]|$)/i.test(s);
+  }
+
+  function isBadMediaValue(url) {
+    const s = (url || '').toString().trim().toLowerCase();
+    if (!s) return true;
+    if (s === 'null' || s === 'undefined' || s === 'false' || s === 'true' || s === '0') return true;
+    return false;
+  }
+
+  function isLikelyImageUrl(url) {
+    const s = (url || '').toString().trim().toLowerCase();
+    if (!s) return false;
+    if (s.startsWith('data:image/')) return true;
+    if (s.startsWith('/')) return true;
+    return s.startsWith('http://') || s.startsWith('https://');
+  }
+
+  // Helper to get delivery text
+  function getDeliveryText(isInstant, days) {
+    if (isInstant) return 'Instant Delivery In 60 Minutes';
+    days = parseInt(days) || 1;
+    if (days === 1) return '24 Hour Express Delivery';
+    return `${days} Days Delivery`;
+  }
+
+  // Helper to compute delivery badge
+  function computeDeliveryBadge(label) {
+    const raw = (label || '').toString();
+    const v = raw.toLowerCase();
+
+    if (v.includes('instant') || v.includes('60') || v.includes('1 hour')) {
+      return { icon: '⚡', text: raw || 'Instant Delivery In 60 Minutes' };
+    }
+    if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) {
+      return { icon: '🚀', text: raw || '24 Hour Express Delivery' };
+    }
+    if (v.includes('48') || v.includes('2 day')) {
+      return { icon: '📦', text: raw || '2 Days Delivery' };
+    }
+    if (v.includes('3 day') || v.includes('72')) {
+      return { icon: '📅', text: raw || '3 Days Delivery' };
+    }
+    const daysMatch = v.match(/(\d+)\s*day/i);
+    if (daysMatch) {
+      const numDays = parseInt(daysMatch[1]) || 2;
+      return { icon: '📦', text: raw || `${numDays} Days Delivery` };
+    }
+    return { icon: '🚚', text: raw || '2 Days Delivery' };
+  }
+
+  // Helper to render stars
+  function renderStars(rating) {
+    const ratingAverage = parseFloat(rating) || 5.0;
+    const fullStars = Math.floor(ratingAverage);
+    const halfStar = ratingAverage % 1 >= 0.5 ? 1 : 0;
+    const emptyStars = 5 - fullStars - halfStar;
+    
+    let starsHtml = '';
+    for (let i = 0; i < fullStars; i++) starsHtml += '★';
+    if (halfStar) starsHtml += '☆';
+    for (let i = 0; i < emptyStars; i++) starsHtml += '☆';
+    
+    return starsHtml;
+  }
+
+  // Extract gallery images
+  let galleryImages = [];
+  try {
+    galleryImages = typeof product.gallery_images === 'string' 
+      ? JSON.parse(product.gallery_images) 
+      : product.gallery_images;
+  } catch (e) {
+    galleryImages = [];
+  }
+
+  // Normalize media URLs
+  const normalizedMainThumb = normalizeMediaUrl(product.thumbnail_url || '');
+  const normalizedVideo = normalizeMediaUrl(product.video_url || '');
+  const seenGallery = new Set();
+  const filteredGallery = [];
+  
+  if (Array.isArray(galleryImages)) {
+    galleryImages.forEach((imageUrl) => {
+      if (isBadMediaValue(imageUrl)) return;
+      if (isLikelyVideoUrl(imageUrl)) return;
+      if (!isLikelyImageUrl(imageUrl)) return;
+      const normalizedImage = normalizeMediaUrl(imageUrl);
+      if (!normalizedImage) return;
+      if (normalizedMainThumb && normalizedImage === normalizedMainThumb) return;
+      if (normalizedVideo && normalizedImage === normalizedVideo) return;
+      if (seenGallery.has(normalizedImage)) return;
+      seenGallery.add(normalizedImage);
+      filteredGallery.push(imageUrl);
+    });
+  }
+
+  // Calculate prices
+  const normalPrice = parseFloat(product.normal_price) || 0;
+  const salePrice = product.sale_price && parseFloat(product.sale_price) > 0 ? parseFloat(product.sale_price) : null;
+  const basePrice = salePrice !== null ? salePrice : normalPrice;
+
+  // Delivery info
+  let initialDeliveryLabel = '';
+  const deliveryField = addons.find(g => g && g.id === 'delivery-time' && (g.type === 'radio' || g.type === 'select') && Array.isArray(g.options));
+  if (deliveryField) {
+    const defaultOption = deliveryField.options.find(o => o && o.default) || deliveryField.options[0];
+    if (defaultOption) {
+      if (defaultOption.delivery && typeof defaultOption.delivery === 'object') {
+        const isInstant = !!defaultOption.delivery.instant;
+        const days = parseInt(defaultOption.delivery.days) || 1;
+        initialDeliveryLabel = getDeliveryText(isInstant, days);
+      } else {
+        initialDeliveryLabel = defaultOption.label || '';
+      }
+    }
+  }
+  if (!initialDeliveryLabel) {
+    const isInstant = !!product.instant_delivery;
+    const days = parseInt(product.delivery_time_days) || parseInt(product.normal_delivery_text) || 1;
+    initialDeliveryLabel = getDeliveryText(isInstant, days);
+  }
+  const deliveryBadge = computeDeliveryBadge(initialDeliveryLabel);
+
+  // Render media section
+  let mediaSectionHtml = '';
+  if (product.video_url) {
+    const optimizedThumb = optimizeImageUrl(product.thumbnail_url || 'https://via.placeholder.com/600', 800);
+    mediaSectionHtml = `
+      <div class="product-media-col">
+        <div id="review-highlight" style="display:none; background:#f0fdf4; padding:10px; margin-bottom:10px; border-radius:8px;"></div>
+        <div class="video-wrapper" style="aspect-ratio: 16/9; width: 100%;">
+          <div class="video-facade" style="position: relative; width: 100%; cursor: pointer; background: #000; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden;">
+            <img src="${optimizedThumb}" alt="${product.title || 'Product Image'}" style="width: 100%; height: 100%; object-fit: cover; display: block;" fetchpriority="high" loading="eager" width="800" height="450" decoding="async">
+            <button class="play-btn-overlay" type="button" aria-label="Play video" role="button" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80px; height: 80px; background: rgba(0, 0, 0, 0.7); border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; color: white; transition: background-color 0.15s ease, transform 0.15s ease; z-index: 10; cursor: pointer;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false">
+                <path d="M8 5v14l11-7z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+    `;
+  } else {
+    const optimizedImg = optimizeImageUrl(product.thumbnail_url || 'https://via.placeholder.com/600', 800);
+    mediaSectionHtml = `
+      <div class="product-media-col">
+        <div id="review-highlight" style="display:none; background:#f0fdf4; padding:10px; margin-bottom:10px; border-radius:8px;"></div>
+        <div class="video-wrapper" style="aspect-ratio: 16/9; width: 100%;">
+          <img src="${optimizedImg}" alt="${product.title || 'Product Image'}" class="main-img" fetchpriority="high" loading="eager" width="800" height="450" decoding="async">
+        </div>
+    `;
+  }
+
+  // Render thumbnails
+  let thumbnailsHtml = '';
+  if (product.thumbnail_url) {
+    const optimizedThumb = optimizeImageUrl(product.thumbnail_url, 280);
+    thumbnailsHtml += `
+      <div class="thumb-wrapper" style="position: relative; display: inline-block;">
+        <img src="${optimizedThumb}" alt="${product.title || 'Product'} - Thumbnail" class="thumb active" style="min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid #667eea; transition: border-color 0.15s ease; contain: layout;" data-type="main" loading="lazy" decoding="async" width="140" height="100">
+        ${product.video_url ? `<div class="thumb-play-btn" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; padding-left: 2px; pointer-events: none; opacity: 1 !important; visibility: visible !important; z-index: 100;">▶</div>` : ''}
+      </div>
+    `;
+  }
+
+  filteredGallery.forEach((imageUrl, index) => {
+    const optimizedThumb = optimizeImageUrl(imageUrl, 280);
+    thumbnailsHtml += `
+      <img src="${optimizedThumb}" alt="${product.title || 'Product'} - Gallery Image ${index + 1}" class="thumb" style="min-width: 140px; width: 140px; height: 100px; object-fit: cover; border-radius: 10px; cursor: pointer; border: 3px solid transparent; transition: border-color 0.15s ease; contain: layout;" data-type="gallery" loading="lazy" decoding="async" width="140" height="100">
+    `;
+  });
+
+  mediaSectionHtml += `
+      <div style="position: relative; margin-top: 15px;">
+        <div class="thumbnails" id="thumbnails-slider" style="display: flex; gap: 12px; overflow-x: auto; scroll-behavior: smooth; padding: 8px 0; scrollbar-width: thin;">
+          ${thumbnailsHtml}
+        </div>
+        <button aria-label="Previous thumbnails" type="button" style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: ${thumbnailsHtml.length > 1 ? 'block' : 'none'};">‹</button>
+        <button aria-label="Next thumbnails" type="button" style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.7); color: white; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 10; display: ${thumbnailsHtml.length > 1 ? 'block' : 'none'};">›</button>
+      </div>
+    </div>
+  `;
+
+  // Render info section
+  let infoSectionHtml = `
+    <div class="product-info-col">
+      <div class="product-info-panel">
+        <h1 class="product-title">${(product.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h1>
+        <div class="rating-row" role="img" aria-label="Rating: ${(product.rating_average || 5.0).toFixed(1)} out of 5 stars, ${product.review_count || 0} ${(product.review_count || 0) === 1 ? 'review' : 'reviews'}">
+          <span class="stars" aria-hidden="true">${renderStars(product.rating_average || 5.0)}</span>
+          <span class="review-count">${product.review_count === 0 ? 'No reviews yet' : `${(product.rating_average || 5.0).toFixed(1)} (${product.review_count} ${product.review_count === 1 ? 'Review' : 'Reviews'})`}</span>
+        </div>
+        <div class="badges-row">
+          <div class="badge-box badge-delivery" id="delivery-badge">
+            <div class="icon" id="delivery-badge-icon">${deliveryBadge.icon}</div>
+            <span id="delivery-badge-text">${deliveryBadge.text}</span>
+          </div>
+          <div class="badge-box badge-price">
+            <div class="price-final">$${basePrice.toLocaleString()}</div>
+            ${basePrice < normalPrice ? `
+              <div style="font-size:0.9rem"><span class="price-original">$${normalPrice}</span></div>
+              <div class="discount-tag">${Math.round(((normalPrice - basePrice) / normalPrice) * 100)}% OFF</div>
+            ` : ''}
+          </div>
+        </div>
+        <div class="digital-note" role="note">
+          <span aria-hidden="true">📩</span> <span><strong>Digital Delivery:</strong> Receive via WhatsApp/Email.</span>
+        </div>
+        <button id="book-now-trigger" type="button" class="btn-book-now" aria-expanded="false" aria-controls="addons-container" style="width: 100%; padding: 16px 24px; margin-top: 1.5rem; background: linear-gradient(135deg, #FFD700 0%, #FFC107 100%); color: #000; border: none; border-radius: 12px; font-size: 1.2rem; font-weight: 700; cursor: pointer; transition: transform 0.15s ease, filter 0.15s ease; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);">
+          <span aria-hidden="true">🎬</span> Book Now - $${basePrice.toLocaleString()}
+        </button>
+        <div id="addons-container" style="max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out, opacity 0.25s ease; opacity: 0;">
+          <form id="addons-form" style="padding-top: 1.5rem; border-top: 1px solid #e5e7eb; margin-top: 1.5rem;">
+  `;
+
+  // Render addons
+  if (addons && addons.length > 0) {
+    addons.forEach(group => {
+      if (group.type === 'heading') {
+        infoSectionHtml += `<h3 style="margin-top: 1.5rem; font-size: 1.1rem;">${group.text || group.label}</h3>`;
+      } else if (group.type === 'radio') {
+        infoSectionHtml += `<div class="addon-group" data-id="${group.id}">`;
+        group.options.forEach(option => {
+          infoSectionHtml += `
+            <label style="display: block; margin-bottom: 8px;">
+              <input type="radio" name="${group.id}" value="${option.value || option.label}" ${option.default ? 'checked' : ''} style="margin-right: 8px;">
+              ${option.label}
+            </label>
+          `;
+        });
+        infoSectionHtml += `</div>`;
+      } else if (group.type === 'select') {
+        infoSectionHtml += `
+          <div class="addon-group" data-id="${group.id}">
+            <label>${group.label}</label>
+            <select name="${group.id}" style="width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px;">
+              ${group.options.map(option => `<option value="${option.value || option.label}" ${option.default ? 'selected' : ''}>${option.label}</option>`).join('')}
+            </select>
+          </div>
+        `;
+      } else if (group.type === 'checkbox') {
+        infoSectionHtml += `<div class="addon-group" data-id="${group.id}">`;
+        group.options.forEach(option => {
+          infoSectionHtml += `
+            <label style="display: block; margin-bottom: 8px;">
+              <input type="checkbox" name="${group.id}" value="${option.value || option.label}" ${option.default ? 'checked' : ''} style="margin-right: 8px;">
+              ${option.label}
+            </label>
+          `;
+        });
+        infoSectionHtml += `</div>`;
+      } else if (group.type === 'text') {
+        infoSectionHtml += `
+          <div class="addon-group" data-id="${group.id}">
+            <label>${group.label}</label>
+            <input type="text" name="${group.id}" placeholder="${group.placeholder || ''}" style="width: 100%; padding: 8px; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 4px;">
+          </div>
+        `;
+      }
+    });
+  }
+
+  // Render checkout button
+  const useMinimal = false; // Default to standard checkout
+  infoSectionHtml += `
+          </form>
+          <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e5e5e5;">
+            ${useMinimal ? `
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;" role="group" aria-label="Payment options">
+                <button id="apple-pay-btn" type="button" class="btn-buy" aria-label="Pay with Apple Pay" style="flex: 1; min-width: 140px; background: #000; color: #fff;">
+                  <span aria-hidden="true"></span> Pay
+                </button>
+                <button id="checkout-btn" type="button" class="btn-buy" aria-label="Pay with credit or debit card" style="flex: 1; min-width: 140px; background: #2563eb; color: #fff;">
+                  Pay with Card <span aria-hidden="true">💳</span>
+                </button>
+              </div>
+            ` : `
+              <button id="checkout-btn" type="button" class="btn-buy">
+                <span aria-hidden="true">✅</span> Proceed to Checkout - $${basePrice.toLocaleString()}
+              </button>
+            `}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Render reviews section
+  let reviewsHtml = '';
+  if (reviews.length > 0) {
+    reviewsHtml = `
+      <div class="product-reviews-section">
+        <h3>Customer Reviews</h3>
+        <div class="reviews-list">
+          ${reviews.map(review => `
+            <div class="review-item">
+              <div class="review-header">
+                <div class="review-rating">${renderStars(review.rating)}</div>
+                <div class="review-date">${new Date(review.created_at).toLocaleDateString('en-US')}</div>
+              </div>
+              <div class="review-content">${(review.comment || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Safe content handling
+  const safeTitle = (product.seo_title || product.title || '').replace(/"/g, '&quot;');
+  const safeDesc = (product.seo_description || product.description || '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+  const safeKeywords = (product.seo_keywords || '').replace(/"/g, '&quot;');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>${safeTitle} | WishVideo</title>
+  <meta name="description" content="${safeDesc}">
+  <meta name="keywords" content="${safeKeywords}">
+  <meta name="robots" content="index, follow">
+  
+  <meta property="og:type" content="product">
+  <meta property="og:title" content="${safeTitle}">
+  <meta property="og:description" content="${safeDesc}">
+  <meta property="og:image" content="${product.thumbnail_url || ''}">
+  
+  <!-- Structured Data for SEO -->
+  <script type="application/ld+json" id="product-schema">{}</script>
+
+  <!-- Preconnect to critical origins -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.plyr.io" crossorigin>
+  <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
+  <link rel="preconnect" href="https://archive.org" crossorigin>
+  <link rel="preconnect" href="https://js.whop.com" crossorigin>
+  
+  <!-- DNS prefetch -->
+  <link rel="dns-prefetch" href="https://ia800906.us.archive.org">
+  <link rel="dns-prefetch" href="https://js.whop.com">
+
+  <!-- Critical CSS -->
+  <style>
+    :root{--primary:#4f46e5;--primary-hover:#4338ca;--success:#047857;--text-main:#1f2937;--text-muted:#4b5563;--bg-page:#f9fafb;--bg-card:#fff;--border:#e5e7eb;--radius:12px;--radius-sm:8px}
+    body{margin:0;font-family:'Inter',system-ui,-apple-system,sans-serif;background-color:var(--bg-page);color:var(--text-main);line-height:1.5;-webkit-font-smoothing:antialiased}
+    .site-header{background:#fff;border-bottom:1px solid var(--border);padding:1rem 0;margin-bottom:2rem}
+     .header-inner{max-width:1200px;margin:0 auto;padding:0 1.5rem;display:flex;justify-content:space-between;align-items:center}
+     .logo{font-weight:800;font-size:1.5rem;letter-spacing:-.5px}
+     .site-nav a{margin-left:1.5rem;text-decoration:none;color:var(--text-main);font-weight:500;font-size:.95rem}
+     #global-header-slot{display:flow-root;min-height:112px}
+     @media(max-width:600px){#global-header-slot{min-height:152px}}
+     main{max-width:1200px;margin:0 auto;padding:0 5% 4rem}
+     .breadcrumb{margin-bottom:1.5rem}
+     .breadcrumb a{text-decoration:none;color:var(--text-muted);font-size:.9rem;font-weight:500}
+     .loading-state{text-align:center;padding:4rem 0}
+    .spinner{border:4px solid #f3f3f3;border-top:4px solid var(--primary);border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 1rem}
+    @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+    .video-wrapper{position:relative;width:100%;aspect-ratio:16/9;min-height:200px;background:#000;border-radius:var(--radius);overflow:visible}
+    .video-wrapper video{border-radius:var(--radius)}
+    .video-wrapper img.main-img{width:100%;height:100%;object-fit:cover;display:block;border-radius:var(--radius)}
+    .video-facade{position:relative;width:100%;height:100%;aspect-ratio:16/9}
+    .play-btn-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80px;height:80px;background:rgba(0,0,0,0.7);border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:100}
+    #thumbnails-slider video{pointer-events:none}
+    #thumbnails-slider video::-webkit-media-controls,#thumbnails-slider video::-webkit-media-controls-panel,#thumbnails-slider video::-webkit-media-controls-enclosure{display:none !important;opacity:0 !important;visibility:hidden !important}
+    .site-footer{text-align:center;padding:2rem 0;color:var(--text-muted);border-top:1px solid var(--border);margin-top:3rem}
+    .product-navigation-section{margin-top:2rem;padding-top:2rem;border-top:1px solid #e5e7eb}
+    @media(max-width:600px){.product-navigation-section > div{flex-direction:column !important}.product-navigation-section > div > div{max-width:100% !important;width:100%}}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    :focus-visible{outline:3px solid #667eea;outline-offset:2px}
+    button:focus-visible,a:focus-visible{outline:3px solid #667eea;outline-offset:2px}
+  </style>
+
+  <!-- Non-critical CSS -->
+  <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="/css/whop.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <link rel="preload" href="https://cdn.plyr.io/3.7.8/plyr.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/whop.css">
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
+  </noscript>
+
+  <!-- Google Fonts -->
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
+</head>
+<body>
+  <a href="#main-content" class="sr-only" style="position:absolute;top:-40px;left:0;background:#4f46e5;color:#fff;padding:8px 16px;z-index:100000;text-decoration:none;font-weight:600;" onfocus="this.style.top='0'" onblur="this.style.top='-40px'">Skip to main content</a>
+  
+  <div id="global-header-slot"></div>
+
+  <script defer src="/js/global-components.js"></script>
+
+  <main id="main-content">
+    <nav class="breadcrumb" aria-label="Breadcrumb navigation">
+      <a href="/" aria-label="Go back to home page">&larr; Back to Home</a>
+    </nav>
+
+    <div id="product-container" class="product-page">
+      <div class="product-main-row">
+        ${mediaSectionHtml}
+        ${infoSectionHtml}
+      </div>
+      ${reviewsHtml}
+    </div>
+  </main>
+
+  <!-- Basic scripts for interactivity -->
+  <script>
+    // Simple play button handler
+    document.addEventListener('DOMContentLoaded', function() {
+      const playBtn = document.querySelector('.play-btn-overlay');
+      const facade = document.querySelector('.video-facade');
+      const videoWrapper = document.querySelector('.video-wrapper');
+      
+      if (playBtn && facade && videoWrapper) {
+        const loadVideo = function() {
+          videoWrapper.innerHTML = '';
+          const isMobile = window.innerWidth <= 768;
+          const playerContainer = document.createElement('div');
+          playerContainer.id = 'universal-player-container';
+          playerContainer.style.cssText = 'width: 100%; height: 100%; min-height: ' + (isMobile ? '200px' : '300px') + '; border-radius: 12px; overflow: visible; background: #000;';
+          videoWrapper.appendChild(playerContainer);
+          
+          if (isMobile) {
+            const videoEl = document.createElement('video');
+            videoEl.src = '${product.video_url}';
+            videoEl.controls = true;
+            videoEl.preload = 'metadata';
+            videoEl.autoplay = false;
+            videoEl.playsInline = true;
+            videoEl.setAttribute('playsinline', '');
+            videoEl.setAttribute('webkit-playsinline', '');
+            videoEl.style.cssText = 'width:100%; height:100%; min-height:200px; border-radius:12px; background:#000;';
+            videoEl.controlsList = 'nodownload';
+            playerContainer.appendChild(videoEl);
+          } else {
+            if (typeof window.UniversalVideoPlayer !== 'undefined') {
+              window.UniversalVideoPlayer.render('universal-player-container', '${product.video_url}', {
+                poster: null,
+                thumbnailUrl: null,
+                autoplay: true
+              });
+            } else {
+              playerContainer.innerHTML = '<video src="${product.video_url}" controls autoplay playsinline style="width:100%;height:100%;min-height:200px;"></video>';
+            }
+          }
+        };
+        
+        facade.addEventListener('click', loadVideo);
+        playBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          loadVideo();
+        });
+      }
+
+      // Book now button handler
+      const bookNowBtn = document.getElementById('book-now-trigger');
+      const addonsContainer = document.getElementById('addons-container');
+      if (bookNowBtn && addonsContainer) {
+        let isExpanded = false;
+        bookNowBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          const isMobile = window.matchMedia('(max-width: 600px)').matches;
+          
+          if (!isExpanded) {
+            Array.from(bookNowBtn.parentElement.children).forEach(child => {
+              if (child !== bookNowBtn && child !== addonsContainer) {
+                child.dataset.origDisplay = child.style.display || '';
+                child.style.display = 'none';
+              }
+            });
+            
+            addonsContainer.classList.add('expanding');
+            addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 1000 + 'px';
+            addonsContainer.style.opacity = '1';
+            addonsContainer.style.overflow = 'hidden';
+            bookNowBtn.innerHTML = '<span aria-hidden="true">▲</span> Close Form';
+            bookNowBtn.setAttribute('aria-expanded', 'true');
+            bookNowBtn.style.background = 'linear-gradient(135deg, #D1A20D 0%, #AF8A0E 100%)';
+            bookNowBtn.style.boxShadow = '0 4px 15px rgba(209, 162, 13, 0.4)';
+            bookNowBtn.style.color = '#000';
+            isExpanded = true;
+            
+            setTimeout(() => {
+              addonsContainer.classList.remove('expanding');
+              addonsContainer.classList.add('expanded');
+              addonsContainer.style.maxHeight = 'none';
+              addonsContainer.style.overflow = 'visible';
+            }, 550);
+            
+            setTimeout(() => {
+              document.getElementById('addons-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+          } else {
+            addonsContainer.classList.remove('expanded');
+            addonsContainer.style.overflow = 'hidden';
+            addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 'px';
+            
+            addonsContainer.offsetHeight;
+            addonsContainer.style.maxHeight = '0';
+            addonsContainer.style.opacity = '0';
+            bookNowBtn.innerHTML = '<span aria-hidden="true">🎬</span> Book Now - $${basePrice.toLocaleString()}';
+            bookNowBtn.setAttribute('aria-expanded', 'false');
+            bookNowBtn.style.background = 'linear-gradient(135deg, #FFD700 0%, #FFC107 100%)';
+            bookNowBtn.style.boxShadow = '0 4px 15px rgba(255, 215, 0, 0.4)';
+            bookNowBtn.style.color = '#000';
+            
+            Array.from(bookNowBtn.parentElement.children).forEach(child => {
+              if (child !== bookNowBtn && child !== addonsContainer) {
+                const orig = child.dataset.origDisplay;
+                child.style.display = orig !== undefined ? orig : '';
+              }
+            });
+            
+            isExpanded = false;
+          }
+        });
+      }
+
+      // Thumbnail slider arrows
+      const thumbsDiv = document.getElementById('thumbnails-slider');
+      const leftArrow = document.querySelector('.product-media-col button[aria-label="Previous thumbnails"]');
+      const rightArrow = document.querySelector('.product-media-col button[aria-label="Next thumbnails"]');
+      
+      if (thumbsDiv && leftArrow && rightArrow) {
+        leftArrow.addEventListener('click', () => {
+          thumbsDiv.scrollBy({ left: -160, behavior: 'smooth' });
+        });
+        
+        rightArrow.addEventListener('click', () => {
+          thumbsDiv.scrollBy({ left: 160, behavior: 'smooth' });
+        });
+        
+        setTimeout(() => {
+          if (thumbsDiv.scrollWidth > thumbsDiv.clientWidth) {
+            leftArrow.style.display = 'block';
+            rightArrow.style.display = 'block';
+          }
+        }, 100);
+      }
+
+      // Checkout button handler
+      const checkoutBtn = document.getElementById('checkout-btn');
+      if (checkoutBtn) {
+        checkoutBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (typeof handleCheckout === 'function') {
+            handleCheckout();
+          }
+        });
+      }
+    });
+  </script>
+
+  <!-- Payment methods (only if needed) -->
+  <script src="/js/payment-selector.js?v=28" defer></script>
+  <script src="/js/coupon-widget.js" defer></script>
+  <script src="/js/reviews-widget.js" defer></script>
+  <script src="/js/chat-widget.js" defer></script>
+  <script src="/js/api.js" defer></script>
+  <script src="/js/universal-player.js" defer></script>
+  <script src="/js/instant-upload.js" defer></script>
+  <script src="/js/product/checkout.js?v=28" defer></script>
+
 </body>
 </html>`;
 }
@@ -1720,79 +2326,6 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
           const redirect = await handleProductRouting(env, url, path);
           if (redirect) return redirect;
         }
-
-        // If we are on the canonical product URL, render the page server-side (NO-JS)
-        // Canonical pattern: /product-<id>/<slug>
-        const canonicalMatch = path.match(/^\/product-(\d+)\/(.+)$/);
-        if ((method === 'GET' || method === 'HEAD') && canonicalMatch && env.DB) {
-          const productId = Number(canonicalMatch[1]);
-          if (!Number.isNaN(productId)) {
-            // Cache key for SSR HTML
-            const cacheKey = new Request(req.url, { method: 'GET', headers: { 'Accept': 'text/html' } });
-            if (method === 'GET' && caches && caches.default) {
-              try {
-                const cached = await caches.default.match(cacheKey);
-                if (cached) {
-                  const h = new Headers(cached.headers);
-                  h.set('X-Cache', 'HIT');
-                  h.set('X-Worker-Version', VERSION);
-                  return new Response(cached.body, { status: cached.status, headers: h });
-                }
-              } catch (_) {}
-            }
-
-            // Fetch product + reviews
-            const [productResult, reviewsResult, branding, components] = await Promise.all([
-              env.DB.prepare(`
-                SELECT p.*, 
-                  COUNT(r.id) as review_count, 
-                  AVG(r.rating) as rating_average
-                FROM products p
-                LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
-                WHERE p.id = ?
-                GROUP BY p.id
-              `).bind(productId).first(),
-              env.DB.prepare(
-                'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC LIMIT 5'
-              ).bind(productId, 'approved').all(),
-              readSettingJson(env, 'site_branding', { logo_url: '', favicon_url: '' }),
-              readSettingJson(env, 'site_components', null)
-            ]);
-
-            const product = productResult;
-            if (!product) return new Response('Not found', { status: 404 });
-
-            // Build correct canonical using real product object
-            const seoReal = await getSeoForRequest(env, req, { path, product });
-
-            const html = renderProductSSR({
-              product,
-              reviews: reviewsResult?.results || [],
-              canonicalUrl: seoReal?.canonical || (url.origin + path),
-              robots: seoReal?.robots || 'index, follow',
-              branding,
-              components
-            });
-
-            const headers = new Headers({
-              'Content-Type': 'text/html; charset=utf-8',
-              'Cache-Control': 'public, max-age=300',
-              'X-Worker-Version': VERSION,
-              'X-SSR': 'product-nojs'
-            });
-            headers.set('X-Robots-Tag', seoReal?.robots || 'index, follow');
-
-            const resp = new Response(method === 'HEAD' ? null : html, { status: 200, headers });
-            if (method === 'GET' && caches && caches.default) {
-              try {
-                const toCache = new Response(html, { status: 200, headers });
-                toCache.headers.set('X-Cache', 'MISS');
-                await caches.default.put(cacheKey, toCache);
-              } catch (_) {}
-            }
-            return resp;
-          }
-        }
       }
 
       // ----- BLOG POST PAGES -----
@@ -2293,18 +2826,112 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         let schemaProductId = null;
         let schemaProduct = null;
 
-        // Canonical product URLs: /product-<id>/<slug>
+        // Canonical product URLs: /product-<id>/<slug> - Serve fully rendered HTML
         if ((method === 'GET' || method === 'HEAD')) {
           const canonicalMatch = assetPath.match(/^\/product-(\d+)\/(.+)$/);
           if (canonicalMatch) {
             const pid = Number(canonicalMatch[1]);
-            if (!Number.isNaN(pid)) {
-              schemaProductId = pid;
-              const rewritten = new URL(req.url);
-              rewritten.pathname = '/_product_template.tpl';
-              rewritten.searchParams.set('id', String(schemaProductId));
-              assetReq = new Request(rewritten.toString(), req);
-              assetPath = '/_product_template.tpl';
+            if (!Number.isNaN(pid) && env.DB) {
+              await initDB(env);
+              
+              // OPTIMIZED: Run all queries in parallel
+              const [productResult, reviewsResult] = await Promise.all([
+                env.DB.prepare(`
+                  SELECT p.*, 
+                    COUNT(r.id) as review_count, 
+                    AVG(r.rating) as rating_average
+                  FROM products p
+                  LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
+                  WHERE p.id = ?
+                  GROUP BY p.id
+                `).bind(pid).first(),
+                env.DB.prepare(
+                  'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC LIMIT 5'
+                ).bind(pid, 'approved').all()
+              ]);
+              
+              const product = productResult;
+              if (product) {
+                // Get addons
+                let addons = [];
+                try {
+                  addons = JSON.parse(product.addons_json || '[]');
+                } catch (_) {
+                  addons = [];
+                }
+                
+                const reviews = reviewsResult.results || [];
+                
+                // Generate fully rendered HTML
+                const htmlRaw = generateProductPageHTML(product, addons, reviews);
+                let html = applySeoToHtml(htmlRaw, 'index, follow', url.origin + path);
+                
+                // Inject product schema
+                const schemaJson = generateProductSchema(product, url.origin, reviews);
+                html = html.replace('{"@context":"http://schema.org"}', schemaJson);
+                
+                // Inject VideoObject schema
+                const videoSchemaJson = generateVideoSchema(product, url.origin);
+                if (videoSchemaJson && videoSchemaJson !== '{}') {
+                  const videoSchemaTag = `<script type="application/ld+json" id="video-schema">${videoSchemaJson}</script>`;
+                  html = html.replace('</head>', `${videoSchemaTag}\n</head>`);
+                }
+                
+                // Add video meta tags
+                if (product.video_url || product.preview_video_url) {
+                  const videoUrl = product.video_url || product.preview_video_url;
+                  const videoMetaTags = `
+    <meta property="og:type" content="video.other">
+    <meta property="og:video" content="${videoUrl}">
+    <meta property="og:video:url" content="${videoUrl}">
+    <meta property="og:video:secure_url" content="${videoUrl}">
+    <meta property="og:video:type" content="video/mp4">
+    <meta property="og:video:width" content="1280">
+    <meta property="og:video:height" content="720">
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:player" content="${videoUrl}">
+    <meta name="twitter:player:width" content="1280">
+    <meta name="twitter:player:height" content="720">`;
+                  html = html.replace('</head>', `${videoMetaTags}\n</head>`);
+                }
+                
+                // Add breadcrumb schema
+                try {
+                  const productSeo = await getSeoForRequest(env, req, { product });
+                  const breadcrumbJson = generateBreadcrumbSchema([
+                    { name: 'Home', url: url.origin },
+                    { name: 'Products', url: `${url.origin}/products` },
+                    { name: product.title || '', url: productSeo.canonical }
+                  ]);
+                  html = html.replace('</head>', `<script type="application/ld+json">${breadcrumbJson}</script>\n</head>`);
+                } catch (_) {}
+                
+                // Inject analytics and verification tags
+                try {
+                  html = await injectAnalyticsAndMeta(env, html);
+                } catch (_) {}
+                
+                // Cache the response
+                const resp = new Response(html, {
+                  status: 200,
+                  headers: {
+                    'Content-Type': 'text/html; charset=utf-8',
+                    'X-Worker-Version': VERSION,
+                    'Cache-Control': 'public, max-age=120'
+                  }
+                });
+                
+                if (method === 'GET' && caches && caches.default) {
+                  try {
+                    const cacheKey = new Request(req.url, { method: 'GET' });
+                    await caches.default.put(cacheKey, resp.clone());
+                  } catch (err) {
+                    console.warn('Product cache put error:', err);
+                  }
+                }
+                
+                return resp;
+              }
             }
           }
         }
@@ -2312,7 +2939,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
         const assetResp = await env.ASSETS.fetch(assetReq);
         
         const contentType = assetResp.headers.get('content-type') || '';
-        const isHTML = contentType.includes('text/html') || assetPath === '/_product_template.tpl';
+        const isHTML = contentType.includes('text/html') && assetPath !== '/_product_template.tpl';
         const isSuccess = assetResp.status === 200;
         
         // Caching: Only cache HTML pages, never admin routes
@@ -2345,145 +2972,8 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             const baseUrl = url.origin;
             let html = await assetResp.text();
             
-            // Product detail page - inject individual product schema
-            if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
-              const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
-              if (productId && env.DB) {
-                await initDB(env);
-                
-                // OPTIMIZED: Run both queries in parallel
-                const [productResult, reviewsResult] = await Promise.all([
-                  env.DB.prepare(`
-                    SELECT p.*, 
-                      COUNT(r.id) as review_count, 
-                      AVG(r.rating) as rating_average
-                    FROM products p
-                    LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
-                    WHERE p.id = ?
-                    GROUP BY p.id
-                  `).bind(Number(productId)).first(),
-                  env.DB.prepare(
-                    'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC LIMIT 5'
-                  ).bind(Number(productId), 'approved').all()
-                ]);
-                
-                const product = productResult;
-                  if (product) {
-                    schemaProduct = product;
-                    const reviews = reviewsResult.results || [];
-                    const schemaJson = generateProductSchema(product, baseUrl, reviews);
-                    html = injectSchemaIntoHTML(html, 'product-schema', schemaJson);
-
-                    // Product bootstrap: embed enough data to render without an extra API call.
-                    // This improves LCP on slow networks (product layout is client-rendered).
-                    try {
-                      if (!html.includes('id="product-bootstrap"')) {
-                        let addons = [];
-                        try {
-                          addons = JSON.parse(product.addons_json || '[]');
-                        } catch (_) {
-                          addons = [];
-                        }
-
-                        const deliveryTimeDays = parseInt(product.normal_delivery_text) || 1;
-                        const bootstrap = {
-                          product: {
-                            id: product.id,
-                            title: product.title,
-                            description: product.description || '',
-                            normal_price: product.normal_price,
-                            sale_price: product.sale_price,
-                            instant_delivery: product.instant_delivery,
-                            normal_delivery_text: product.normal_delivery_text,
-                            delivery_time_days: deliveryTimeDays,
-                            thumbnail_url: product.thumbnail_url,
-                            video_url: product.video_url,
-                            gallery_images: product.gallery_images,
-                            review_count: parseInt(product.review_count) || 0,
-                            rating_average: product.rating_average ? Math.round(Number(product.rating_average) * 10) / 10 : 0,
-                            reviews
-                          },
-                          addons
-                        };
-
-                        const bootstrapJson = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
-                        const bootstrapTag = `<script type="application/json" id="product-bootstrap">${bootstrapJson}</script>`;
-                        html = html.replace('</head>', `${bootstrapTag}\n</head>`);
-                      }
-                    } catch (_) {}
-                   
-                    // Inject VideoObject schema for video rich results
-                    const videoSchemaJson = generateVideoSchema(product, baseUrl);
-                    if (videoSchemaJson && videoSchemaJson !== '{}') {
-                      const videoSchemaTag = `<script type="application/ld+json" id="video-schema">${videoSchemaJson}</script>`;
-                    html = html.replace('</head>', `${videoSchemaTag}\n</head>`);
-                  }
-                  
-                  // Add video meta tags for social sharing and SEO
-                  if (product.video_url || product.preview_video_url) {
-                    const videoUrl = product.video_url || product.preview_video_url;
-                    const videoMetaTags = `
-    <meta property="og:type" content="video.other">
-    <meta property="og:video" content="${videoUrl}">
-    <meta property="og:video:url" content="${videoUrl}">
-    <meta property="og:video:secure_url" content="${videoUrl}">
-    <meta property="og:video:type" content="video/mp4">
-    <meta property="og:video:width" content="1280">
-    <meta property="og:video:height" content="720">
-    <meta name="twitter:card" content="player">
-    <meta name="twitter:player" content="${videoUrl}">
-    <meta name="twitter:player:width" content="1280">
-    <meta name="twitter:player:height" content="720">`;
-                    html = html.replace('</head>', `${videoMetaTags}\n</head>`);
-                  }
-                  
-                  // LCP Optimization: Preload hero image for faster rendering
-                  if (product.thumbnail_url) {
-                    let lcpImageUrl = product.thumbnail_url;
-                    // Optimize Cloudinary URLs
-                    if (lcpImageUrl.includes('res.cloudinary.com')) {
-                      lcpImageUrl = lcpImageUrl.replace(
-                        /(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)/,
-                        '$1f_auto,q_auto,w_800/$2'
-                      );
-                    }
-                    const preloadTag = `<link rel="preload" as="image" href="${lcpImageUrl}" fetchpriority="high">`;
-                    html = html.replace('</head>', `${preloadTag}\n</head>`);
-                  }
-                  
-                  // Inject SEO meta tags
-                  // Prefer SEO-specific fields when provided; fall back to generic title/description
-                  const safeTitle = (product.seo_title || product.title || '').replace(/"/g, '&quot;');
-                  const safeDesc = (product.seo_description || product.description || '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
-                  const safeKeywords = (product.seo_keywords || '').replace(/"/g, '&quot;');
-                  // Title tag
-                  html = html.replace('<title>Loading Product... | WishVideo</title>', `<title>${safeTitle} | WishVideo</title>`);
-                  // Open Graph title/description and image
-                  html = html.replace('<meta property="og:title" content="Loading...">', `<meta property="og:title" content="${safeTitle}">`);
-                  html = html.replace('<meta property="og:description" content="">', `<meta property="og:description" content="${safeDesc}">`);
-                  html = html.replace('<meta property="og:image" content="">', `<meta property="og:image" content="${product.thumbnail_url || ''}">`);
-                  // Description tag
-                  html = html.replace('<meta name="description" content="Custom personalized video greetings from Africa.">', `<meta name="description" content="${safeDesc}">`);
-                  // Keywords tag (if provided, override default keywords)
-                  html = html.replace('<meta name="keywords" content="video, greeting, birthday, wish, africa">', `<meta name="keywords" content="${safeKeywords}">`);
-
-                  // Fix 6: Add og:url to product pages
-                  try {
-                    const productSeo = await getSeoForRequest(env, req, { product });
-                    const ogUrlTag = `<meta property="og:url" content="${productSeo.canonical}">`;
-                    html = html.replace('</head>', `${ogUrlTag}\n</head>`);
-
-                    // Fix 9: Add BreadcrumbList schema to product pages
-                    const breadcrumbJson = generateBreadcrumbSchema([
-                      { name: 'Home', url: baseUrl },
-                      { name: 'Products', url: `${baseUrl}/products` },
-                      { name: product.title || '', url: productSeo.canonical }
-                    ]);
-                    html = html.replace('</head>', `<script type="application/ld+json">${breadcrumbJson}</script>\n</head>`);
-                  } catch (_) {}
-                }
-              }
-            }
+            // Collection page - inject product list schema
+            if (assetPath === '/index.html' || assetPath === '/' || assetPath === '/products.html' || assetPath === '/products-grid.html') {
             
             // Collection page - inject product list schema
             if (assetPath === '/index.html' || assetPath === '/' || assetPath === '/products.html' || assetPath === '/products-grid.html') {
