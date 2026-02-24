@@ -30,11 +30,17 @@ binding = "ASSETS"
 # are unnecessary and would be considered redundant by Wrangler.
 run_worker_first = [
   "/",               # Homepage (default home page from DB)
+  "/index.html",     # Canonical home alias redirect + SEO normalization
+  "/home*",          # Legacy home aliases
   "/api/*",          # All API routes
   "/blog*",          # Blog archive + dynamic blog post pages
   "/forum*",         # Forum archive + dynamic forum pages
   "/admin/*",        # Catch-all for all admin routes
   "/product*",       # Product pages and product grid
+  "/checkout*",      # Checkout aliases (force noindex/canonical)
+  "/success*",       # Success aliases (force noindex/canonical)
+  "/buyer-order*",   # Legacy buyer order aliases (force noindex/canonical)
+  "/order-detail*",  # Legacy order detail aliases (force noindex/canonical)
   "/download/*",     # Secure downloads
   "/robots.txt",     # Dynamic robots.txt
   "/sitemap.xml"     # Dynamic sitemap.xml

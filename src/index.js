@@ -133,6 +133,73 @@ function isMalformedNestedSlug(pathname, prefix) {
   return !canLookupDynamicSlug(slug);
 }
 
+const CANONICAL_ALIAS_MAP = new Map([
+  ['/index.html', '/'],
+  ['/home', '/'],
+  ['/home/', '/'],
+  ['/blog/', '/blog'],
+  ['/blog/index.html', '/blog'],
+  ['/blog.html', '/blog'],
+  ['/forum/', '/forum'],
+  ['/forum/index.html', '/forum'],
+  ['/forum.html', '/forum'],
+  ['/products/', '/products'],
+  ['/products/index.html', '/products'],
+  ['/products.html', '/products'],
+  ['/products-grid', '/products'],
+  ['/products-grid.html', '/products'],
+  ['/checkout/', '/checkout'],
+  ['/checkout/index.html', '/checkout'],
+  ['/success.html', '/success'],
+  ['/buyer-order/', '/buyer-order'],
+  ['/buyer-order.html', '/buyer-order'],
+  ['/order-detail/', '/order-detail'],
+  ['/order-detail.html', '/order-detail'],
+  ['/order-success', '/success'],
+  ['/order-success.html', '/success']
+]);
+
+function normalizeCanonicalPath(pathname) {
+  let p = String(pathname || '/').trim() || '/';
+  p = CANONICAL_ALIAS_MAP.get(p) || p;
+
+  // Keep trailing slash only for root and admin/api namespaces.
+  if (
+    p.length > 1 &&
+    p.endsWith('/') &&
+    !p.startsWith('/admin/') &&
+    !p.startsWith('/api/')
+  ) {
+    p = p.slice(0, -1);
+  }
+  return p || '/';
+}
+
+function getCanonicalRedirectPath(pathname) {
+  const raw = String(pathname || '/').trim() || '/';
+  if (raw === '/admin/' || raw === '/api/') return null;
+  if (raw.startsWith('/admin/') || raw.startsWith('/api/')) return null;
+  const normalized = normalizeCanonicalPath(raw);
+  return normalized !== raw ? normalized : null;
+}
+
+function isSensitiveNoindexPath(pathname) {
+  const p = normalizeCanonicalPath(pathname);
+  if (
+    p === '/checkout' ||
+    p === '/success' ||
+    p === '/buyer-order' ||
+    p === '/order-detail'
+  ) {
+    return true;
+  }
+  if (p === '/admin' || p.startsWith('/admin/')) return true;
+  if (p === '/api' || p.startsWith('/api/')) return true;
+  if (p === '/order' || p.startsWith('/order/')) return true;
+  if (p === '/download' || p.startsWith('/download/')) return true;
+  return false;
+}
+
 // -------------------------------
 // SEO helper functions
 // -------------------------------
@@ -151,17 +218,24 @@ function isMalformedNestedSlug(pathname, prefix) {
 async function getSeoForRequest(env, req, opts = {}) {
   const url = new URL(req.url);
   // Determine pathname from opts.path or request
-  const pathname = opts.path || url.pathname || '/';
+  const rawPathname = opts.path || url.pathname || '/';
+  const pathname = normalizeCanonicalPath(rawPathname);
 
   // Default robots directive
   let robots = 'index, follow';
-  // Check noindex patterns
-  try {
-    if (await shouldNoindexUrl(env, pathname)) {
-      robots = 'noindex, nofollow';
+  // Force noindex on sensitive routes, then apply custom noindex patterns.
+  if (isSensitiveNoindexPath(pathname)) {
+    robots = 'noindex, nofollow';
+  } else {
+    try {
+      if (await shouldNoindexUrl(env, pathname)) {
+        robots = 'noindex, nofollow';
+      } else if (rawPathname !== pathname && await shouldNoindexUrl(env, rawPathname)) {
+        robots = 'noindex, nofollow';
+      }
+    } catch (e) {
+      // ignore errors and fall back to default
     }
-  } catch (e) {
-    // ignore errors and fall back to default
   }
 
   // Get site URL from seo_minimal settings; fallback to request origin
@@ -186,11 +260,11 @@ async function getSeoForRequest(env, req, opts = {}) {
       try {
         canonical = baseUrl + canonicalProductPath(product);
       } catch (e) {
-        canonical = baseUrl + pathname;
+        canonical = baseUrl + normalizeCanonicalPath(pathname);
       }
     }
   } else {
-    canonical = baseUrl + pathname;
+    canonical = baseUrl + normalizeCanonicalPath(pathname);
   }
 
   return { robots, canonical };
@@ -1585,6 +1659,16 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
   if (gate) return gate;
 }
 
+// Canonical URL redirect layer to reduce duplicate-content URLs.
+if (method === 'GET' || method === 'HEAD') {
+  const canonicalRedirectPath = getCanonicalRedirectPath(path);
+  if (canonicalRedirectPath) {
+    const to = new URL(req.url);
+    to.pathname = canonicalRedirectPath;
+    return Response.redirect(to.toString(), 301);
+  }
+}
+
     // ----- NO-JS SSR ROUTES (feature-flagged) -----
     // Keep disabled by default to preserve existing frontend layout.
     if (noJsSsrEnabled) {
@@ -2053,7 +2137,8 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                   status: 200,
                   headers: {
                     'Content-Type': 'text/html; charset=utf-8',
-                    'X-Worker-Version': VERSION
+                    'X-Worker-Version': VERSION,
+                    'Cache-Control': 'public, max-age=120'
                   }
                 });
               }
@@ -2093,7 +2178,8 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                   status: 200,
                   headers: { 
                     'Content-Type': 'text/html; charset=utf-8',
-                    'X-Worker-Version': VERSION
+                    'X-Worker-Version': VERSION,
+                    'Cache-Control': 'public, max-age=120'
                   }
                 });
               }
@@ -2131,10 +2217,34 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
             const headers = new Headers(assetResp.headers);
             headers.set('Alt-Svc', 'clear');
             headers.set('X-Worker-Version', VERSION);
-            return new Response(assetResp.body, {
-              status: assetResp.status,
-              headers
-            });
+            const normalizedPath = normalizeCanonicalPath(path);
+            const sensitiveMappedPage = isSensitiveNoindexPath(normalizedPath);
+            if (sensitiveMappedPage) {
+              headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+              headers.set('Pragma', 'no-cache');
+            } else {
+              headers.set('Cache-Control', 'public, max-age=300');
+            }
+
+            const contentType = headers.get('content-type') || headers.get('Content-Type') || '';
+            const isHtmlTarget = contentType.includes('text/html') || target.endsWith('.html');
+            if (assetResp.status === 200 && method === 'GET' && isHtmlTarget) {
+              let html = await assetResp.text();
+              try {
+                const seo = await getSeoForRequest(env, req, { path: normalizedPath });
+                html = applySeoToHtml(html, seo.robots, seo.canonical);
+                headers.set('X-Robots-Tag', seo.robots);
+                const noindexTags = await getNoindexMetaTags(env, normalizedPath);
+                if (noindexTags) {
+                  html = html.replace(/<\/head>/i, `\n    ${noindexTags}\n  </head>`);
+                }
+              } catch (_) {}
+
+              headers.set('Content-Type', 'text/html; charset=utf-8');
+              return new Response(html, { status: 200, headers });
+            }
+
+            return new Response(assetResp.body, { status: assetResp.status, headers });
           }
         }
       }
@@ -2179,14 +2289,15 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               const responseHeaders = {
                 'Content-Type': 'text/html; charset=utf-8',
                 'X-Worker-Version': VERSION,
-                'X-Default-Page': defaultPageType
+                'X-Default-Page': defaultPageType,
+                'Cache-Control': 'public, max-age=120'
               };
               try {
                 const seo = await getSeoForRequest(env, req, { path });
                 html = applySeoToHtml(html, seo.robots, seo.canonical);
                 responseHeaders['X-Robots-Tag'] = seo.robots;
                 // Add noindex tags if needed
-                const noindexTags = await getNoindexMetaTags(env, path);
+                const noindexTags = await getNoindexMetaTags(env, normalizeCanonicalPath(path));
                 if (noindexTags) {
                   html = html.replace(/<\/head>/i, `\n    ${noindexTags}\n  </head>`);
                 }
@@ -2463,10 +2574,18 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
               }
             }
             
+            const normalizedRequestPath = normalizeCanonicalPath(path);
+            const sensitiveHtmlPath = isSensitiveNoindexPath(normalizedRequestPath);
             const headers = new Headers(); headers.set('Alt-Svc', 'clear');
             headers.set('Content-Type', 'text/html; charset=utf-8');
             headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
             headers.set('X-Cache', 'MISS');
+            if (sensitiveHtmlPath) {
+              headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+              headers.set('Pragma', 'no-cache');
+            } else {
+              headers.set('Cache-Control', 'public, max-age=300');
+            }
 
             // Apply Robots + Canonical (admin controlled)
             if (!isAdminUI && !isAdminAPI) {
@@ -2476,7 +2595,7 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
                 headers.set('X-Robots-Tag', seo.robots);
                 
                 // Add noindex tags for hidden pages (user-controlled hiding from search)
-                const noindexTags = await getNoindexMetaTags(env, path);
+                const noindexTags = await getNoindexMetaTags(env, normalizedRequestPath);
                 if (noindexTags) {
                   html = html.replace('</head>', `\n    ${noindexTags}\n  </head>`);
                 }
