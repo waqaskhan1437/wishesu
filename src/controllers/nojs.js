@@ -110,6 +110,7 @@ function renderLayout(opts = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${title}</title>
   <meta name="description" content="${description}">
+  ${opts.head || ''}
   <style>
     :root {
       --bg: #f7f8fc;
@@ -202,14 +203,19 @@ function renderLayout(opts = {}) {
 }
 
 function htmlResponse(html, opts = {}) {
-  const headers = {
+  const headers = new Headers({
     'Content-Type': 'text/html; charset=utf-8'
-  };
+  });
   if (opts.admin) {
-    headers['Cache-Control'] = 'no-store, no-cache, must-revalidate';
-    headers['Pragma'] = 'no-cache';
+    headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    headers.set('Pragma', 'no-cache');
   } else {
-    headers['Cache-Control'] = 'no-store';
+    headers.set('Cache-Control', 'no-store');
+  }
+  if (opts.headers && typeof opts.headers === 'object') {
+    for (const [k, v] of Object.entries(opts.headers)) {
+      if (v !== undefined && v !== null) headers.set(k, String(v));
+    }
   }
   return new Response(html, { status: opts.status || 200, headers });
 }
@@ -241,6 +247,53 @@ async function readJsonResponse(resp) {
     data = {};
   }
   return { ok: resp.ok, status: resp.status, data };
+}
+
+function getCookieValue(cookieHeader, name) {
+  if (!cookieHeader) return '';
+  const parts = String(cookieHeader).split(';');
+  for (const p of parts) {
+    const [k, ...rest] = p.trim().split('=');
+    if (k === name) return rest.join('=') || '';
+  }
+  return '';
+}
+
+function toBase64Url(input) {
+  const b64 = btoa(String(input || ''));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function fromBase64Url(input) {
+  const normalized = String(input || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padLen = (4 - (normalized.length % 4)) % 4;
+  const padded = normalized + '='.repeat(padLen);
+  return atob(padded);
+}
+
+function buildCheckoutHintCookie(url, hint) {
+  const payload = toBase64Url(JSON.stringify(hint || {}));
+  const secure = url.protocol === 'https:' ? '; Secure' : '';
+  return `nojs_checkout_hint=${payload}; Path=/; Max-Age=1800; SameSite=Lax${secure}`;
+}
+
+function clearCheckoutHintCookie(url) {
+  const secure = url.protocol === 'https:' ? '; Secure' : '';
+  return `nojs_checkout_hint=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
+}
+
+function readCheckoutHintFromRequest(req) {
+  try {
+    const cookieHeader = req?.headers?.get('Cookie') || '';
+    const raw = getCookieValue(cookieHeader, 'nojs_checkout_hint');
+    if (!raw) return null;
+    const json = fromBase64Url(raw);
+    const parsed = JSON.parse(json);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch (_) {
+    return null;
+  }
 }
 
 async function resolveProductPath(env, productId) {
@@ -315,7 +368,7 @@ async function createGatewayCheckoutRedirect(env, url, opts = {}) {
     if (!parsed.ok || !parsed.data?.success || !checkoutUrl) {
       return { ok: false, error: parsed.data?.error || 'Failed to initialize PayPal checkout.' };
     }
-    return { ok: true, checkoutUrl };
+    return { ok: true, checkoutUrl, provider: 'paypal', checkoutId: parsed.data?.order_id || '' };
   }
 
   const whopResp = await createPlanCheckout(env, {
@@ -335,7 +388,7 @@ async function createGatewayCheckoutRedirect(env, url, opts = {}) {
   if (!parsed.ok || !parsed.data?.success || !checkoutUrl) {
     return { ok: false, error: parsed.data?.error || 'Failed to initialize checkout.' };
   }
-  return { ok: true, checkoutUrl };
+  return { ok: true, checkoutUrl, provider: 'whop', checkoutId: parsed.data?.checkout_id || '' };
 }
 
 async function renderHome(env, url) {
@@ -546,16 +599,60 @@ async function handleCreateOrder(env, req, url) {
   if (!checkout.ok || !checkout.checkoutUrl) {
     return redirectWithParams(url, backTo, { err: checkout.error || 'Failed to start checkout.' });
   }
-
-  return Response.redirect(checkout.checkoutUrl, 302);
+  const hint = {
+    provider: checkout.provider || paymentMethod,
+    checkout_id: checkout.checkoutId || '',
+    product_id: productId,
+    created_at: Date.now()
+  };
+  return new Response(null, {
+    status: 302,
+    headers: {
+      'Location': checkout.checkoutUrl,
+      'Set-Cookie': buildCheckoutHintCookie(url, hint),
+      'Cache-Control': 'no-store'
+    }
+  });
 }
 
-async function renderSuccess(env, url) {
-  const provider = String(url.searchParams.get('provider') || '').trim().toLowerCase();
+async function lookupOrderDetailsByOrderId(env, orderId) {
+  if (!orderId) return null;
+  return env.DB.prepare(`
+    SELECT o.order_id, o.status, o.created_at, o.delivery_time_minutes, p.title as product_title
+    FROM orders o
+    LEFT JOIN products p ON o.product_id = p.id
+    WHERE o.order_id = ?
+    LIMIT 1
+  `).bind(orderId).first();
+}
+
+async function lookupOrderByWhopCheckoutId(env, checkoutId) {
+  if (!checkoutId) return null;
+  const row = await env.DB.prepare(`
+    SELECT o.order_id
+    FROM orders o
+    WHERE o.encrypted_data LIKE ?
+    ORDER BY o.id DESC
+    LIMIT 1
+  `).bind(`%"whop_checkout_id":"${checkoutId}"%`).first();
+  if (!row?.order_id) return null;
+  return lookupOrderDetailsByOrderId(env, String(row.order_id));
+}
+
+async function renderSuccess(env, url, req) {
+  const queryProvider = String(url.searchParams.get('provider') || '').trim().toLowerCase();
   const paypalToken = String(url.searchParams.get('token') || url.searchParams.get('order_id') || '').trim();
   let orderId = String(url.searchParams.get('order_id') || '').trim();
   let extraNotice = '';
   let extraNoticeType = 'ok';
+  const hint = readCheckoutHintFromRequest(req);
+  const provider = queryProvider || String(hint?.provider || '').trim().toLowerCase();
+  const productParam = String(url.searchParams.get('product') || hint?.product_id || '').trim();
+  let order = null;
+  let pendingAutoRefresh = false;
+  let refreshTarget = '';
+  const attempt = Math.max(0, toNumber(url.searchParams.get('attempt'), 0));
+  const maxAttempts = 25;
 
   if (provider === 'paypal' && paypalToken) {
     const captureResp = await capturePayPalOrder(env, { order_id: paypalToken });
@@ -582,15 +679,69 @@ async function renderSuccess(env, url) {
     }
   }
 
-  let order = null;
   if (orderId) {
-    order = await env.DB.prepare(`
-      SELECT o.order_id, o.status, o.created_at, o.delivery_time_minutes, p.title as product_title
-      FROM orders o
-      LEFT JOIN products p ON o.product_id = p.id
-      WHERE o.order_id = ?
-      LIMIT 1
-    `).bind(orderId).first();
+    order = await lookupOrderDetailsByOrderId(env, orderId);
+  }
+
+  // Whop webhook flow: order may take a short while to appear after redirect.
+  if (!order && provider === 'whop' && hint?.checkout_id) {
+    order = await lookupOrderByWhopCheckoutId(env, String(hint.checkout_id));
+    if (order) {
+      orderId = String(order.order_id);
+      extraNotice = 'Whop payment confirmed and order finalized.';
+    } else {
+      const session = await env.DB.prepare(
+        'SELECT status, created_at, completed_at FROM checkout_sessions WHERE checkout_id = ? LIMIT 1'
+      ).bind(String(hint.checkout_id)).first();
+
+      if (session?.status === 'completed') {
+        extraNotice = 'Payment confirmed. Finalizing order record. Please wait a few seconds.';
+      } else if (session?.status === 'pending') {
+        extraNotice = 'Payment verification in progress. Waiting for gateway confirmation webhook.';
+      } else {
+        extraNotice = 'Checkout session found. Waiting for final order sync.';
+      }
+
+      if (attempt < maxAttempts) {
+        pendingAutoRefresh = true;
+        const refreshUrl = new URL('/success', url.origin);
+        if (productParam) refreshUrl.searchParams.set('product', productParam);
+        if (provider) refreshUrl.searchParams.set('provider', provider);
+        refreshUrl.searchParams.set('attempt', String(attempt + 1));
+        refreshTarget = refreshUrl.pathname + refreshUrl.search;
+      } else {
+        extraNoticeType = 'error';
+        extraNotice = 'Order is still pending. Please wait 1-2 minutes and refresh manually.';
+      }
+    }
+  }
+
+  const statusCard = order
+    ? `
+      <p><strong>Order ID:</strong> ${escapeHtml(order.order_id)}</p>
+      <p><strong>Status:</strong> ${escapeHtml(order.status || 'PAID')}</p>
+      <p><strong>Product:</strong> ${escapeHtml(order.product_title || '-')}</p>
+      <p><strong>Created:</strong> ${escapeHtml(formatDate(order.created_at))}</p>
+      <p><strong>Delivery Window:</strong> ${escapeHtml(order.delivery_time_minutes || 60)} minutes</p>
+      <p><a class="btn" href="/order/${encodeURIComponent(order.order_id)}">Open Order Page</a></p>
+    `
+    : `
+      <p>Your payment was received. Order finalization is running server-side.</p>
+      ${hint?.checkout_id ? `<p><strong>Checkout Ref:</strong> ${escapeHtml(String(hint.checkout_id))}</p>` : ''}
+      ${pendingAutoRefresh
+        ? `<p class="muted">Auto-check attempt ${escapeHtml(attempt + 1)} of ${escapeHtml(maxAttempts)}. Refreshing shortly...</p>`
+        : '<p class="muted">Please refresh this page in a few moments.</p>'
+      }
+      ${refreshTarget ? `<p><a class="btn" href="${escapeHtml(refreshTarget)}">Check Order Now</a></p>` : ''}
+    `;
+
+  const head = pendingAutoRefresh && refreshTarget
+    ? `<meta http-equiv="refresh" content="8;url=${escapeHtml(refreshTarget)}">`
+    : '';
+
+  const responseHeaders = {};
+  if (order) {
+    responseHeaders['Set-Cookie'] = clearCheckoutHintCookie(url);
   }
 
   const content = `
@@ -598,24 +749,17 @@ async function renderSuccess(env, url) {
     ${renderNotice(url)}
     ${extraNotice ? `<div class="notice ${extraNoticeType === 'error' ? 'error' : 'ok'}">${escapeHtml(extraNotice)}</div>` : ''}
     <div class="card">
-      ${order
-        ? `
-          <p><strong>Order ID:</strong> ${escapeHtml(order.order_id)}</p>
-          <p><strong>Status:</strong> ${escapeHtml(order.status || 'PAID')}</p>
-          <p><strong>Product:</strong> ${escapeHtml(order.product_title || '-')}</p>
-          <p><strong>Created:</strong> ${escapeHtml(formatDate(order.created_at))}</p>
-          <p><strong>Delivery Window:</strong> ${escapeHtml(order.delivery_time_minutes || 60)} minutes</p>
-          <p><a class="btn" href="/order/${encodeURIComponent(order.order_id)}">Open Order Page</a></p>
-        `
-        : '<p>Your order request was processed.</p>'
-      }
+      ${statusCard}
       <p><a class="btn secondary" href="/">Back to Home</a></p>
     </div>
   `;
   return htmlResponse(renderLayout({
     title: 'Order Success',
+    head,
     content
-  }));
+  }), {
+    headers: responseHeaders
+  });
 }
 
 async function renderOrder(env, url, orderId) {
@@ -1743,7 +1887,7 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
   }
 
   if (method === 'GET' && (path === '/success' || path === '/success.html')) {
-    return renderSuccess(env, url);
+    return renderSuccess(env, url, req);
   }
 
   const orderMatch = path.match(/^\/order\/([^/]+)$/);

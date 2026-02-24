@@ -39,6 +39,15 @@ function noStoreHeaders(extra = {}) {
   };
 }
 
+function isEnabledFlag(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function isNoJsSsrEnabled(env) {
+  return isEnabledFlag(env?.ENABLE_NOJS_SSR) || isEnabledFlag(env?.NOJS_SSR) || isEnabledFlag(env?.NOJS_MODE);
+}
+
 // Common automated scanner paths (WordPress/PHP/admin probes) that do not
 // exist on this app. Fast-rejecting them avoids unnecessary subrequests and
 // DB warmup work on every probe.
@@ -1475,6 +1484,7 @@ const isAdminUI = (path === '/admin' || path === '/admin/' || path.startsWith('/
 const isAdminAPI = path.startsWith('/api/admin/');
 const isLoginRoute = (path === '/admin/login' || path === '/admin/login/');
 const isLogoutRoute = (path === '/admin/logout' || path === '/admin/logout/');
+const noJsSsrEnabled = isNoJsSsrEnabled(env);
 
 // Some admin-only pages live outside /admin (legacy routes used by dashboard links)
 const isAdminProtectedPage = (
@@ -1503,7 +1513,27 @@ if (isLoginRoute && method === 'GET') {
   if (await isAdminAuthed(req, env)) {
     return Response.redirect(new URL('/admin', req.url).toString(), 302);
   }
-  return renderNoJsAdminLoginPage(url);
+  if (noJsSsrEnabled) {
+    return renderNoJsAdminLoginPage(url);
+  }
+
+  if (env.ASSETS) {
+    const loginAssetReq = new Request(new URL('/admin/login.html', req.url).toString(), { method: 'GET' });
+    const loginAssetResp = await env.ASSETS.fetch(loginAssetReq);
+    if (loginAssetResp.status === 200) {
+      const html = await loginAssetResp.text();
+      const headers = new Headers(loginAssetResp.headers);
+      headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      headers.set('Pragma', 'no-cache');
+      headers.set('X-Worker-Version', VERSION);
+      return new Response(html, { status: 200, headers });
+    }
+  }
+
+  return new Response('Admin login page not found.', {
+    status: 404,
+    headers: noStoreHeaders({ 'Content-Type': 'text/plain; charset=utf-8' })
+  });
 }
 
 // Handle login (POST)
@@ -1533,7 +1563,7 @@ if (isLoginRoute && method === 'POST') {
     status: 302,
     headers: noStoreHeaders({
       'Set-Cookie': createLogoutCookie(),
-      'Location': new URL('/admin/login?err=Invalid%20login', req.url).toString()
+      'Location': new URL(noJsSsrEnabled ? '/admin/login?err=Invalid%20login' : '/admin/login?e=1', req.url).toString()
     })
   });
 }
@@ -1555,11 +1585,12 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
   if (gate) return gate;
 }
 
-    // ----- NO-JS SSR ROUTES -----
-    // Priority route handler that serves complete server-rendered flows for
-    // public storefront and admin without client-side JavaScript.
-    const noJsResponse = await handleNoJsRoutes(req, env, url, path, method);
-    if (noJsResponse) return noJsResponse;
+    // ----- NO-JS SSR ROUTES (feature-flagged) -----
+    // Keep disabled by default to preserve existing frontend layout.
+    if (noJsSsrEnabled) {
+      const noJsResponse = await handleNoJsRoutes(req, env, url, path, method);
+      if (noJsResponse) return noJsResponse;
+    }
 
 
 
