@@ -21,6 +21,7 @@ import { canonicalProductPath } from './utils/formatting.js';
 
 // Inject analytics & verification meta tags (Google Analytics, Facebook Pixel, site verification)
 import { injectAnalyticsAndMeta } from './controllers/analytics.js';
+import { renderProductSSR } from './renderers/product-ssr.js';
 
 // Auth utilities
 import { isAdminAuthed, createAdminSessionCookie, createLogoutCookie } from './utils/auth.js';
@@ -218,6 +219,23 @@ function applySeoToHtml(html, robots, canonical) {
     }
   }
   return html;
+}
+
+// -------------------------------
+// Settings helpers for SSR pages
+// -------------------------------
+async function readSettingJson(env, key, fallback = null) {
+  try {
+    const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind(key).first();
+    if (row?.value) {
+      try {
+        return JSON.parse(row.value);
+      } catch (_) {
+        return fallback;
+      }
+    }
+  } catch (_) {}
+  return fallback;
 }
 
 // Blog post HTML template generator
@@ -1701,6 +1719,79 @@ if ((isAdminUI || isAdminAPI || isAdminProtectedPage) && !isLoginRoute) {
           await initDB(env);
           const redirect = await handleProductRouting(env, url, path);
           if (redirect) return redirect;
+        }
+
+        // If we are on the canonical product URL, render the page server-side (NO-JS)
+        // Canonical pattern: /product-<id>/<slug>
+        const canonicalMatch = path.match(/^\/product-(\d+)\/(.+)$/);
+        if ((method === 'GET' || method === 'HEAD') && canonicalMatch && env.DB) {
+          const productId = Number(canonicalMatch[1]);
+          if (!Number.isNaN(productId)) {
+            // Cache key for SSR HTML
+            const cacheKey = new Request(req.url, { method: 'GET', headers: { 'Accept': 'text/html' } });
+            if (method === 'GET' && caches && caches.default) {
+              try {
+                const cached = await caches.default.match(cacheKey);
+                if (cached) {
+                  const h = new Headers(cached.headers);
+                  h.set('X-Cache', 'HIT');
+                  h.set('X-Worker-Version', VERSION);
+                  return new Response(cached.body, { status: cached.status, headers: h });
+                }
+              } catch (_) {}
+            }
+
+            // Fetch product + reviews
+            const [productResult, reviewsResult, branding, components] = await Promise.all([
+              env.DB.prepare(`
+                SELECT p.*, 
+                  COUNT(r.id) as review_count, 
+                  AVG(r.rating) as rating_average
+                FROM products p
+                LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
+                WHERE p.id = ?
+                GROUP BY p.id
+              `).bind(productId).first(),
+              env.DB.prepare(
+                'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC LIMIT 5'
+              ).bind(productId, 'approved').all(),
+              readSettingJson(env, 'site_branding', { logo_url: '', favicon_url: '' }),
+              readSettingJson(env, 'site_components', null)
+            ]);
+
+            const product = productResult;
+            if (!product) return new Response('Not found', { status: 404 });
+
+            // Build correct canonical using real product object
+            const seoReal = await getSeoForRequest(env, req, { path, product });
+
+            const html = renderProductSSR({
+              product,
+              reviews: reviewsResult?.results || [],
+              canonicalUrl: seoReal?.canonical || (url.origin + path),
+              robots: seoReal?.robots || 'index, follow',
+              branding,
+              components
+            });
+
+            const headers = new Headers({
+              'Content-Type': 'text/html; charset=utf-8',
+              'Cache-Control': 'public, max-age=300',
+              'X-Worker-Version': VERSION,
+              'X-SSR': 'product-nojs'
+            });
+            headers.set('X-Robots-Tag', seoReal?.robots || 'index, follow');
+
+            const resp = new Response(method === 'HEAD' ? null : html, { status: 200, headers });
+            if (method === 'GET' && caches && caches.default) {
+              try {
+                const toCache = new Response(html, { status: 200, headers });
+                toCache.headers.set('X-Cache', 'MISS');
+                await caches.default.put(cacheKey, toCache);
+              } catch (_) {}
+            }
+            return resp;
+          }
         }
       }
 
