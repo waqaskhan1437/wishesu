@@ -133,6 +133,58 @@ function isMalformedNestedSlug(pathname, prefix) {
   return !canLookupDynamicSlug(slug);
 }
 
+function escapeHtmlText(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function replaceLegacyBrandTokens(text, siteTitle) {
+  if (!text) return text;
+  return String(text)
+    .replace(/\bWishVideo\b/gi, siteTitle)
+    .replace(/\bWishesU\b/gi, siteTitle);
+}
+
+function resolveFallbackSiteTitle(urlObj) {
+  const host = String(urlObj?.hostname || '').replace(/^www\./i, '').trim();
+  return host || 'prankwish.com';
+}
+
+async function getSeoSettingsObject(env) {
+  try {
+    const response = await getMinimalSEOSettings(env);
+    if (response && typeof response.json === 'function') {
+      const parsed = await response.json();
+      if (parsed && parsed.settings && typeof parsed.settings === 'object') {
+        return parsed.settings;
+      }
+    } else if (response && response.settings && typeof response.settings === 'object') {
+      return response.settings;
+    }
+  } catch (_) {}
+  return {};
+}
+
+function resolveSiteTitle(seoSettings, urlObj) {
+  const configured = String(seoSettings?.site_title || '').trim();
+  if (configured) return configured;
+  return resolveFallbackSiteTitle(urlObj);
+}
+
+function applySiteTitleToHtml(html, siteTitle) {
+  if (!html || !siteTitle) return html;
+  const safeSiteTitle = escapeHtmlText(siteTitle);
+  return html.replace(/<title>([\s\S]*?)<\/title>/i, (match, currentTitle) => {
+    const rewritten = replaceLegacyBrandTokens(currentTitle, safeSiteTitle);
+    if (rewritten === currentTitle) return match;
+    return `<title>${rewritten}</title>`;
+  });
+}
+
 const CANONICAL_ALIAS_MAP = new Map([
   ['/index.html', '/'],
   ['/home', '/'],
@@ -224,6 +276,8 @@ async function getSeoForRequest(env, req, opts = {}) {
   // Determine pathname from opts.path or request
   const rawPathname = opts.path || url.pathname || '/';
   const pathname = normalizeCanonicalPath(rawPathname);
+  const seoSettings = await getSeoSettingsObject(env);
+  const siteTitle = resolveSiteTitle(seoSettings, url);
 
   // Default robots directive
   let robots = 'index, follow';
@@ -244,13 +298,8 @@ async function getSeoForRequest(env, req, opts = {}) {
 
   // Get site URL from seo_minimal settings; fallback to request origin
   let baseUrl = url.origin;
-  try {
-    const res = await getMinimalSEOSettings(env);
-    if (res && res.settings && res.settings.site_url) {
-      baseUrl = res.settings.site_url;
-    }
-  } catch (e) {
-    // ignore
+  if (seoSettings && seoSettings.site_url && String(seoSettings.site_url).trim()) {
+    baseUrl = String(seoSettings.site_url).trim();
   }
 
   // Build canonical
@@ -271,7 +320,7 @@ async function getSeoForRequest(env, req, opts = {}) {
     canonical = baseUrl + normalizeCanonicalPath(pathname);
   }
 
-  return { robots, canonical };
+  return { robots, canonical, siteTitle };
 }
 
 /**
@@ -1879,6 +1928,7 @@ if (method === 'GET' || method === 'HEAD') {
               const comments = commentsResult.results || [];
               const htmlRaw = generateBlogPostHTML(blog, previousBlogs, comments);
               let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+              html = applySiteTitleToHtml(html, seo.siteTitle);
 
               // Fix 7: Inject BlogPosting JSON-LD schema
               try {
@@ -1995,6 +2045,7 @@ if (method === 'GET' || method === 'HEAD') {
               
               const htmlRaw = generateForumQuestionHTML(question, replies, sidebar);
               let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+              html = applySiteTitleToHtml(html, seo.siteTitle);
 
               // Fix 8: Inject QAPage JSON-LD schema
               try {
@@ -2140,6 +2191,7 @@ if (method === 'GET' || method === 'HEAD') {
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
                   html = applySeoToHtml(html, seo.robots, seo.canonical);
+                  html = applySiteTitleToHtml(html, seo.siteTitle);
                 } catch (e) {}
                 // Inject analytics and verification tags on dynamic pages
                 try {
@@ -2180,6 +2232,7 @@ if (method === 'GET' || method === 'HEAD') {
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
                   html = applySeoToHtml(html, seo.robots, seo.canonical);
+                  html = applySiteTitleToHtml(html, seo.siteTitle);
                 } catch (e) {}
                 // Inject analytics and verification tags on dynamic pages
                 try {
@@ -2254,6 +2307,7 @@ if (method === 'GET' || method === 'HEAD') {
               try {
                 const seo = await getSeoForRequest(env, req, { path: normalizedPath });
                 html = applySeoToHtml(html, seo.robots, seo.canonical);
+                html = applySiteTitleToHtml(html, seo.siteTitle);
                 headers.set('X-Robots-Tag', seo.robots);
                 const noindexTags = await getNoindexMetaTags(env, normalizedPath);
                 if (noindexTags) {
@@ -2316,6 +2370,7 @@ if (method === 'GET' || method === 'HEAD') {
               try {
                 const seo = await getSeoForRequest(env, req, { path });
                 html = applySeoToHtml(html, seo.robots, seo.canonical);
+                html = applySiteTitleToHtml(html, seo.siteTitle);
                 responseHeaders['X-Robots-Tag'] = seo.robots;
                 // Add noindex tags if needed
                 const noindexTags = await getNoindexMetaTags(env, normalizeCanonicalPath(path));
@@ -2618,6 +2673,7 @@ if (method === 'GET' || method === 'HEAD') {
               try {
                 const seo = await getSeoForRequest(env, req, schemaProduct ? { product: schemaProduct } : { path });
                 html = applySeoToHtml(html, seo.robots, seo.canonical);
+                html = applySiteTitleToHtml(html, seo.siteTitle);
                 headers.set('X-Robots-Tag', seo.robots);
                 
                 // Add noindex tags for hidden pages (user-controlled hiding from search)
