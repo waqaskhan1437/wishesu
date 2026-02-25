@@ -2,6 +2,8 @@
   const INTENT_KEY = 'whop_checkout_intent_v1';
   const LEGACY_KEY = 'pendingOrderData';
   const INTENT_MAX_AGE_MS = 45 * 60 * 1000;
+  const WHOP_METADATA_SAFE_MAX = 470;
+  const WHOP_ADDONS_MAX_ITEMS = 8;
 
   let loaderPromise = null;
   let selectedMethodId = '';
@@ -435,24 +437,67 @@
     const output = {};
     if (!metadata || typeof metadata !== 'object') return output;
 
+    const trimValue = (value, maxLength) => {
+      const raw = String(value ?? '');
+      if (raw.length <= maxLength) return raw;
+      if (maxLength <= 3) return raw.slice(0, Math.max(0, maxLength));
+      return `${raw.slice(0, maxLength - 3)}...`;
+    };
+
+    const compactAddons = (addons) => {
+      if (!Array.isArray(addons) || !addons.length) return '[]';
+
+      const normalized = addons.map((addon, index) => ({
+        field: trimValue(addon && addon.field != null ? addon.field : `addon_${index + 1}`, 80),
+        value: trimValue(addon && addon.value != null ? addon.value : '', 160)
+      }));
+
+      let candidate = normalized.slice(0, WHOP_ADDONS_MAX_ITEMS);
+      while (candidate.length > 0) {
+        const serialized = JSON.stringify(candidate);
+        if (serialized.length <= WHOP_METADATA_SAFE_MAX) {
+          return serialized;
+        }
+        candidate = candidate.slice(0, -1);
+      }
+
+      return JSON.stringify([{ field: 'addons_summary', value: `${normalized.length} addon(s) selected` }]);
+    };
+
     Object.keys(metadata).forEach((key) => {
       const rawValue = metadata[key];
       if (rawValue === null || rawValue === undefined) return;
 
+      if (key === 'addons') {
+        if (Array.isArray(rawValue)) {
+          output[key] = compactAddons(rawValue);
+          return;
+        }
+        if (typeof rawValue === 'string') {
+          try {
+            const parsed = JSON.parse(rawValue);
+            if (Array.isArray(parsed)) {
+              output[key] = compactAddons(parsed);
+              return;
+            }
+          } catch (e) {}
+        }
+      }
+
       if (typeof rawValue === 'string') {
-        output[key] = rawValue;
+        output[key] = trimValue(rawValue, WHOP_METADATA_SAFE_MAX);
         return;
       }
 
       if (typeof rawValue === 'number' || typeof rawValue === 'boolean' || typeof rawValue === 'bigint') {
-        output[key] = String(rawValue);
+        output[key] = trimValue(String(rawValue), WHOP_METADATA_SAFE_MAX);
         return;
       }
 
       try {
-        output[key] = JSON.stringify(rawValue);
+        output[key] = trimValue(JSON.stringify(rawValue), WHOP_METADATA_SAFE_MAX);
       } catch (e) {
-        output[key] = String(rawValue);
+        output[key] = trimValue(String(rawValue), WHOP_METADATA_SAFE_MAX);
       }
     });
 

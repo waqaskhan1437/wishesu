@@ -98,9 +98,52 @@
   }
 
   function renderProductMain(container, product, addonGroups) {
-    container.className = '';
-    container.innerHTML = '';
-    
+    const ssrRoot = (() => {
+      try {
+        return container.querySelector('.product-page[data-ssr-step="player"]') ||
+          container.querySelector('.product-page') ||
+          null;
+      } catch (_) {
+        return null;
+      }
+    })();
+
+    const ssrMediaSnapshot = (() => {
+      try {
+        const node = ssrRoot ? ssrRoot.querySelector('.product-media-col') : null;
+        return node ? node.cloneNode(true) : null;
+      } catch (_) {
+        return null;
+      }
+    })();
+
+    const ssrDescSnapshot = (() => {
+      try {
+        const node = ssrRoot ? ssrRoot.querySelector('.product-desc-row') : null;
+        return node ? node.cloneNode(true) : null;
+      } catch (_) {
+        return null;
+      }
+    })();
+
+    const ssrNavSnapshot = (() => {
+      try {
+        const node = ssrRoot ? ssrRoot.querySelector('#product-navigation') : null;
+        return node ? node.cloneNode(true) : null;
+      } catch (_) {
+        return null;
+      }
+    })();
+
+    const ssrInfoSnapshot = (() => {
+      try {
+        const node = ssrRoot ? ssrRoot.querySelector('.product-info-col') : null;
+        return node ? node.cloneNode(true) : null;
+      } catch (_) {
+        return null;
+      }
+    })();
+
     const wrapper = document.createElement('div');
     wrapper.className = 'product-page';
     
@@ -108,7 +151,7 @@
     mainRow.className = 'product-main-row';
     
     // --- Left Column: Media ---
-    const leftCol = document.createElement('div');
+    let leftCol = document.createElement('div');
     leftCol.className = 'product-media-col';
 
     const reviewHighlight = document.createElement('div');
@@ -120,6 +163,441 @@
     videoWrapper.className = 'video-wrapper';
     videoWrapper.style.cssText = 'aspect-ratio: 16/9; width: 100%;';
     let hasVideo = false;
+
+    const hydrateSsrMedia = (mediaCol) => {
+      if (!mediaCol) return;
+
+      const existingHighlight = mediaCol.querySelector('#review-highlight');
+      if (!existingHighlight) {
+        const reviewHighlight = document.createElement('div');
+        reviewHighlight.id = 'review-highlight';
+        reviewHighlight.style.cssText = 'display:none; background:#f0fdf4; padding:10px; margin-bottom:10px; border-radius:8px;';
+        mediaCol.insertBefore(reviewHighlight, mediaCol.firstChild || null);
+      }
+
+      const localVideoWrapper = mediaCol.querySelector('.video-wrapper');
+      const thumbsDiv = mediaCol.querySelector('#thumbnails-slider');
+      if (!localVideoWrapper || !thumbsDiv) return;
+
+      const bindFacadePlayer = (facadeEl) => {
+        if (!facadeEl) return;
+        const playBtn = facadeEl.querySelector('.play-btn-overlay');
+        const loadVideo = () => {
+          localVideoWrapper.innerHTML = '';
+          const isMobile = window.innerWidth <= 768;
+          const playerContainer = document.createElement('div');
+          playerContainer.id = 'universal-player-container';
+          playerContainer.style.cssText = `width: 100%; height: 100%; min-height: ${isMobile ? '200px' : '300px'}; border-radius: 12px; overflow: visible; background: #000;`;
+          localVideoWrapper.appendChild(playerContainer);
+
+          if (isMobile) {
+            const videoEl = document.createElement('video');
+            videoEl.src = product.video_url;
+            videoEl.controls = true;
+            videoEl.preload = 'metadata';
+            videoEl.autoplay = false;
+            videoEl.playsInline = true;
+            videoEl.setAttribute('playsinline', '');
+            videoEl.setAttribute('webkit-playsinline', '');
+            videoEl.style.cssText = 'width:100%; height:100%; min-height:200px; border-radius:12px; background:#000;';
+            videoEl.controlsList = 'nodownload';
+            playerContainer.appendChild(videoEl);
+          } else if (typeof window.UniversalVideoPlayer !== 'undefined') {
+            window.UniversalVideoPlayer.render('universal-player-container', product.video_url, {
+              poster: null,
+              thumbnailUrl: null,
+              autoplay: true
+            });
+          } else {
+            playerContainer.innerHTML = `<video src="${product.video_url}" controls autoplay playsinline style="width:100%;height:100%;min-height:200px;"></video>`;
+          }
+        };
+
+        facadeEl.onclick = loadVideo;
+        if (playBtn) {
+          playBtn.onclick = (e) => {
+            e.stopPropagation();
+            loadVideo();
+          };
+        }
+      };
+
+      const renderMainFacade = () => {
+        localVideoWrapper.innerHTML = '';
+        if (!product.video_url) {
+          const mainImg = createMainImage(product.thumbnail_url || 'https://via.placeholder.com/600');
+          mainImg.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;border-radius:12px;';
+          localVideoWrapper.appendChild(mainImg);
+          return;
+        }
+        const facade = document.createElement('div');
+        facade.className = 'video-facade';
+        facade.style.cssText = 'position: relative; width: 100%; cursor: pointer; background: #000; aspect-ratio: 16/9; border-radius: 12px; overflow: hidden;';
+        const img = createMainImage(product.thumbnail_url || 'https://via.placeholder.com/600');
+        img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; display: block;';
+        facade.appendChild(img);
+        const playBtn = document.createElement('button');
+        playBtn.className = 'play-btn-overlay';
+        playBtn.type = 'button';
+        playBtn.setAttribute('aria-label', 'Play video');
+        playBtn.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);width:80px;height:80px;background:rgba(0,0,0,0.7);border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;color:white;z-index:10;cursor:pointer;';
+        playBtn.innerHTML = `
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false">
+            <path d="M8 5v14l11-7z"></path>
+          </svg>`;
+        facade.appendChild(playBtn);
+        localVideoWrapper.appendChild(facade);
+        bindFacadePlayer(facade);
+      };
+
+      const renderGalleryImage = (src) => {
+        localVideoWrapper.innerHTML = '';
+        const largeImg = createMainImage(src || product.thumbnail_url || '');
+        largeImg.style.width = '100%';
+        largeImg.style.height = '100%';
+        largeImg.style.objectFit = 'contain';
+        localVideoWrapper.appendChild(largeImg);
+      };
+
+      const setActiveThumb = (target) => {
+        thumbsDiv.querySelectorAll('.thumb').forEach((thumb) => {
+          thumb.classList.remove('active');
+          thumb.style.border = '3px solid transparent';
+        });
+        if (target) {
+          target.classList.add('active');
+          target.style.border = '3px solid #667eea';
+        }
+      };
+
+      Array.from(thumbsDiv.querySelectorAll('.thumb')).forEach((thumb, idx) => {
+        if (thumb.dataset.ssrHydrated === '1') return;
+        thumb.dataset.ssrHydrated = '1';
+        thumb.onclick = () => {
+          setActiveThumb(thumb);
+          const mediaKind = (thumb.dataset.mediaKind || '').toLowerCase();
+          const mediaSrc = (thumb.dataset.mediaSrc || thumb.getAttribute('src') || '').trim();
+          if (mediaKind === 'video-main' && product.video_url) {
+            renderMainFacade();
+          } else {
+            renderGalleryImage(mediaSrc || (idx === 0 ? product.thumbnail_url : ''));
+          }
+        };
+      });
+
+      const sliderContainer = thumbsDiv.parentElement;
+      if (sliderContainer) {
+        let leftArrow = sliderContainer.querySelector('[data-ssr-slider-arrow="left"]');
+        let rightArrow = sliderContainer.querySelector('[data-ssr-slider-arrow="right"]');
+
+        const arrowBaseStyle = 'position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.7);color:white;border:none;width:35px;height:35px;border-radius:50%;cursor:pointer;font-size:24px;z-index:10;display:none;';
+
+        if (!leftArrow) {
+          leftArrow = document.createElement('button');
+          leftArrow.type = 'button';
+          leftArrow.setAttribute('aria-label', 'Previous thumbnails');
+          leftArrow.setAttribute('data-ssr-slider-arrow', 'left');
+          leftArrow.textContent = '‹';
+          leftArrow.style.cssText = `left:0;${arrowBaseStyle}`;
+          sliderContainer.appendChild(leftArrow);
+        }
+        if (!rightArrow) {
+          rightArrow = document.createElement('button');
+          rightArrow.type = 'button';
+          rightArrow.setAttribute('aria-label', 'Next thumbnails');
+          rightArrow.setAttribute('data-ssr-slider-arrow', 'right');
+          rightArrow.textContent = '›';
+          rightArrow.style.cssText = `right:0;${arrowBaseStyle}`;
+          sliderContainer.appendChild(rightArrow);
+        }
+
+        const updateArrowVisibility = () => {
+          const canScroll = thumbsDiv.scrollWidth > thumbsDiv.clientWidth + 2;
+          leftArrow.style.display = canScroll ? 'block' : 'none';
+          rightArrow.style.display = canScroll ? 'block' : 'none';
+        };
+
+        // Guard to avoid duplicate listeners/observers if hydration runs again.
+        if (thumbsDiv.dataset.ssrSliderBound !== '1') {
+          thumbsDiv.dataset.ssrSliderBound = '1';
+          leftArrow.onclick = () => thumbsDiv.scrollBy({ left: -160, behavior: 'smooth' });
+          rightArrow.onclick = () => thumbsDiv.scrollBy({ left: 160, behavior: 'smooth' });
+          thumbsDiv.addEventListener('scroll', updateArrowVisibility, { passive: true });
+          window.addEventListener('resize', updateArrowVisibility);
+          try {
+            const observer = new MutationObserver(updateArrowVisibility);
+            observer.observe(thumbsDiv, { childList: true, subtree: false });
+          } catch (_) {}
+        }
+        updateArrowVisibility();
+      }
+
+      const initialFacade = localVideoWrapper.querySelector('.video-facade');
+      if (initialFacade) {
+        bindFacadePlayer(initialFacade);
+      }
+
+      window.productThumbnailsSlider = thumbsDiv;
+    };
+
+    const hydrateSsrInfoColumn = (infoCol) => {
+      if (!infoCol) return;
+      const panel = infoCol.querySelector('.product-info-panel');
+      if (!panel) return;
+
+      // Keep same delivery-badge behavior as client-rendered panel.
+      const getDeliveryText = (isInstant, days) => {
+        if (isInstant) return 'Instant Delivery In 60 Minutes';
+        const dayNum = parseInt(days, 10) || 1;
+        if (dayNum === 1) return '24 Hour Express Delivery';
+        return `${dayNum} Days Delivery`;
+      };
+
+      const computeDeliveryBadge = (label) => {
+        const raw = (label || '').toString();
+        const v = raw.toLowerCase();
+        if (v.includes('instant') || v.includes('60') || v.includes('1 hour')) {
+          return { icon: '&#9889;', text: raw || 'Instant Delivery In 60 Minutes' };
+        }
+        if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) {
+          return { icon: '&#128640;', text: raw || '24 Hour Express Delivery' };
+        }
+        if (v.includes('48') || v.includes('2 day')) {
+          return { icon: '&#128230;', text: raw || '2 Days Delivery' };
+        }
+        if (v.includes('3 day') || v.includes('72')) {
+          return { icon: '&#128197;', text: raw || '3 Days Delivery' };
+        }
+        const daysMatch = v.match(/(\d+)\s*day/i);
+        if (daysMatch) {
+          const numDays = parseInt(daysMatch[1], 10) || 2;
+          return { icon: '&#128230;', text: raw || `${numDays} Days Delivery` };
+        }
+        return { icon: '&#128666;', text: raw || '2 Days Delivery' };
+      };
+
+      const setDeliveryBadge = (label) => {
+        const deliveryBadge = computeDeliveryBadge(label);
+        const iconEl = panel.querySelector('#delivery-badge-icon');
+        const textEl = panel.querySelector('#delivery-badge-text');
+        if (iconEl) iconEl.innerHTML = deliveryBadge.icon;
+        if (textEl) textEl.textContent = deliveryBadge.text;
+      };
+
+      let initialDeliveryLabel = '';
+      const deliveryField = (addonGroups || []).find((g) => (
+        g &&
+        g.id === 'delivery-time' &&
+        (g.type === 'radio' || g.type === 'select') &&
+        Array.isArray(g.options)
+      ));
+      if (deliveryField) {
+        const defaultOption = deliveryField.options.find((o) => o && o.default) || deliveryField.options[0];
+        if (defaultOption) {
+          if (defaultOption.delivery && typeof defaultOption.delivery === 'object') {
+            initialDeliveryLabel = getDeliveryText(
+              !!defaultOption.delivery.instant,
+              parseInt(defaultOption.delivery.days, 10) || 1
+            );
+          } else {
+            initialDeliveryLabel = defaultOption.label || '';
+          }
+        }
+      }
+      if (!initialDeliveryLabel) {
+        initialDeliveryLabel = getDeliveryText(
+          !!product.instant_delivery,
+          parseInt(product.delivery_time_days, 10) || parseInt(product.normal_delivery_text, 10) || 1
+        );
+      }
+      setDeliveryBadge(initialDeliveryLabel);
+      window.updateDeliveryBadge = setDeliveryBadge;
+
+      const bookNowBtn = panel.querySelector('#book-now-trigger');
+      const addonsContainer = panel.querySelector('#addons-container');
+      if (!bookNowBtn || !addonsContainer) return;
+
+      // Keep button text aligned with runtime price.
+      bookNowBtn.innerHTML = '<span aria-hidden="true">&#127916;</span> Book Now - $' + window.basePrice.toLocaleString();
+      bookNowBtn.setAttribute('aria-expanded', 'false');
+      bookNowBtn.setAttribute('aria-controls', 'addons-container');
+      bookNowBtn.style.cssText = `
+        width: 100%;
+        padding: 16px 24px;
+        margin-top: 1.5rem;
+        background: linear-gradient(135deg, #FFD700 0%, #FFC107 100%);
+        color: #000;
+        border: none;
+        border-radius: 12px;
+        font-size: 1.2rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s ease, filter 0.15s ease;
+        box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+      `;
+
+      // Rebuild addon controls with JS-enabled renderer to attach full behavior.
+      let addonsForm = addonsContainer.querySelector('#addons-form');
+      if (typeof window.renderAddonField === 'function') {
+        const nextForm = document.createElement('form');
+        nextForm.id = 'addons-form';
+        nextForm.style.cssText = 'padding-top: 1.5rem; border-top: 1px solid #e5e7eb; margin-top: 1.5rem;';
+
+        if (addonGroups && addonGroups.length > 0) {
+          addonGroups.forEach(group => {
+            if (group.type === 'heading') {
+              const h = document.createElement('h3');
+              h.textContent = group.text || group.label;
+              h.style.marginTop = '1.5rem';
+              h.style.fontSize = '1.1rem';
+              nextForm.appendChild(h);
+            } else {
+              nextForm.appendChild(window.renderAddonField(group));
+            }
+          });
+        }
+
+        if (addonsForm && addonsForm.parentNode) {
+          addonsForm.parentNode.replaceChild(nextForm, addonsForm);
+        } else {
+          addonsContainer.insertBefore(nextForm, addonsContainer.firstChild || null);
+        }
+        addonsForm = nextForm;
+      }
+
+      // Remove any existing checkout footer (SSR or prior client render) to prevent duplicate checkout buttons/IDs.
+      Array.from(addonsContainer.children).forEach((child) => {
+        if (!child || child.id === 'addons-form') return;
+        if (child.getAttribute && child.getAttribute('data-checkout-footer') === '1') {
+          child.remove();
+          return;
+        }
+        const hasCheckoutControls = !!(child.querySelector && (child.querySelector('#checkout-btn') || child.querySelector('#apple-pay-btn')));
+        if (hasCheckoutControls) child.remove();
+      });
+
+      const stickyFooter = document.createElement('div');
+      stickyFooter.dataset.checkoutFooter = '1';
+      stickyFooter.style.marginTop = '2rem';
+      stickyFooter.style.paddingTop = '1rem';
+      stickyFooter.style.borderTop = '1px solid #e5e5e5';
+
+      const useMinimal = window.whopSettings && window.whopSettings.enable_minimal_checkout;
+      if (useMinimal) {
+        const btnContainer = document.createElement('div');
+        btnContainer.style.cssText = 'display: flex; gap: 12px; flex-wrap: wrap;';
+        btnContainer.setAttribute('role', 'group');
+        btnContainer.setAttribute('aria-label', 'Payment options');
+
+        const applePayBtn = document.createElement('button');
+        applePayBtn.id = 'apple-pay-btn';
+        applePayBtn.type = 'button';
+        applePayBtn.className = 'btn-buy';
+        applePayBtn.setAttribute('aria-label', 'Pay with Apple Pay');
+        applePayBtn.style.cssText = 'flex: 1; min-width: 140px; background: #000; color: #fff;';
+        applePayBtn.innerHTML = '<span aria-hidden="true"></span> Pay';
+        applePayBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (typeof handleCheckout === 'function') handleCheckout();
+        });
+
+        const cardBtn = document.createElement('button');
+        cardBtn.id = 'checkout-btn';
+        cardBtn.type = 'button';
+        cardBtn.className = 'btn-buy';
+        cardBtn.setAttribute('aria-label', 'Pay with credit or debit card');
+        cardBtn.style.cssText = 'flex: 1; min-width: 140px; background: #2563eb; color: #fff;';
+        cardBtn.innerHTML = 'Pay with Card <span aria-hidden="true">&#128179;</span>';
+        cardBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (typeof handleCheckout === 'function') handleCheckout();
+        });
+
+        btnContainer.appendChild(applePayBtn);
+        btnContainer.appendChild(cardBtn);
+        stickyFooter.appendChild(btnContainer);
+      } else {
+        const checkoutBtn = document.createElement('button');
+        checkoutBtn.id = 'checkout-btn';
+        checkoutBtn.type = 'button';
+        checkoutBtn.className = 'btn-buy';
+        checkoutBtn.innerHTML = '<span aria-hidden="true">&#9989;</span> Proceed to Checkout - $' + window.currentTotal.toLocaleString();
+        checkoutBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (typeof handleCheckout === 'function') handleCheckout();
+        });
+        stickyFooter.appendChild(checkoutBtn);
+      }
+      addonsContainer.appendChild(stickyFooter);
+
+      if (bookNowBtn.dataset.ssrToggleBound !== '1') {
+        bookNowBtn.dataset.ssrToggleBound = '1';
+        let isExpanded = false;
+
+        bookNowBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (!isExpanded) {
+            Array.from(panel.children).forEach(child => {
+              if (child !== bookNowBtn && child !== addonsContainer) {
+                child.dataset.origDisplay = child.style.display || '';
+                child.style.display = 'none';
+              }
+            });
+
+            addonsContainer.classList.add('expanding');
+            addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 1000 + 'px';
+            addonsContainer.style.opacity = '1';
+            addonsContainer.style.overflow = 'hidden';
+            bookNowBtn.innerHTML = '<span aria-hidden="true">&#9650;</span> Close Form';
+            bookNowBtn.setAttribute('aria-expanded', 'true');
+            bookNowBtn.style.background = 'linear-gradient(135deg, #D1A20D 0%, #AF8A0E 100%)';
+            bookNowBtn.style.boxShadow = '0 4px 15px rgba(209, 162, 13, 0.4)';
+            bookNowBtn.style.color = '#000';
+            isExpanded = true;
+
+            setTimeout(() => {
+              addonsContainer.classList.remove('expanding');
+              addonsContainer.classList.add('expanded');
+              addonsContainer.style.maxHeight = 'none';
+              addonsContainer.style.overflow = 'visible';
+            }, 550);
+
+            setTimeout(() => {
+              if (addonsForm && typeof addonsForm.scrollIntoView === 'function') {
+                addonsForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }, 100);
+          } else {
+            addonsContainer.classList.remove('expanded');
+            addonsContainer.style.overflow = 'hidden';
+            addonsContainer.style.maxHeight = addonsContainer.scrollHeight + 'px';
+            addonsContainer.offsetHeight;
+            addonsContainer.style.maxHeight = '0';
+            addonsContainer.style.opacity = '0';
+            bookNowBtn.innerHTML = '<span aria-hidden="true">&#127916;</span> Book Now - $' + window.basePrice.toLocaleString();
+            bookNowBtn.setAttribute('aria-expanded', 'false');
+            bookNowBtn.style.background = 'linear-gradient(135deg, #FFD700 0%, #FFC107 100%)';
+            bookNowBtn.style.boxShadow = '0 4px 15px rgba(255, 215, 0, 0.4)';
+            bookNowBtn.style.color = '#000';
+
+            Array.from(panel.children).forEach(child => {
+              if (child !== bookNowBtn && child !== addonsContainer) {
+                const orig = child.dataset.origDisplay;
+                child.style.display = orig !== undefined ? orig : '';
+              }
+            });
+            isExpanded = false;
+          }
+        });
+      }
+
+      window.updateCheckoutPrice = function(newTotal) {
+        const checkoutBtn = document.getElementById('checkout-btn');
+        if (checkoutBtn && !useMinimal && !checkoutBtn.classList.contains('btn-loading')) {
+          checkoutBtn.textContent = '✅ Proceed to Checkout - $' + newTotal.toLocaleString();
+        }
+      };
+    };
 
     // Helper to create main image with SEO/LCP optimizations
     const createMainImage = (src) => {
@@ -174,6 +652,37 @@
       img.decoding = 'async';
       return img;
     };
+
+    // Step 7: when full SSR shell already exists, hydrate in place and skip full client rebuild.
+    if (ssrRoot && ssrMediaSnapshot && ssrInfoSnapshot) {
+      const ssrMainRow = ssrRoot.querySelector('.product-main-row');
+      const ssrLeftCol = ssrMainRow ? ssrMainRow.querySelector('.product-media-col') : null;
+      const ssrRightCol = ssrMainRow ? ssrMainRow.querySelector('.product-info-col') : null;
+
+      if (ssrLeftCol) {
+        hasVideo = !!product.video_url;
+        hydrateSsrMedia(ssrLeftCol);
+      }
+
+      if (ssrRightCol) {
+        hydrateSsrInfoColumn(ssrRightCol);
+      }
+
+      if (!ssrRoot.querySelector('.product-desc-row') && ssrDescSnapshot) {
+        ssrRoot.appendChild(ssrDescSnapshot.cloneNode(true));
+      }
+      if (!ssrRoot.querySelector('#product-navigation') && ssrNavSnapshot) {
+        ssrRoot.appendChild(ssrNavSnapshot.cloneNode(true));
+      }
+
+      container.className = '';
+      if (!container.contains(ssrRoot)) {
+        container.innerHTML = '';
+        container.appendChild(ssrRoot);
+      }
+
+      return { wrapper: ssrRoot, hasVideo: hasVideo };
+    }
 
     if (product.video_url) {
       // --- FIX: Manual Facade implementation ---
@@ -492,8 +1001,25 @@
     window.productThumbnailsSlider = thumbsDiv;
     mainRow.appendChild(leftCol);
 
+    if (ssrMediaSnapshot) {
+      try {
+        const renderedLeftCol = mainRow.querySelector('.product-media-col');
+        if (renderedLeftCol && renderedLeftCol.parentNode) {
+          renderedLeftCol.parentNode.replaceChild(ssrMediaSnapshot, renderedLeftCol);
+          leftCol = ssrMediaSnapshot;
+          hasVideo = !!product.video_url;
+          hydrateSsrMedia(leftCol);
+        }
+      } catch (_) {}
+    }
+
     // --- Right Column: Info & Form ---
-    const rightCol = document.createElement('div');
+    let rightCol = null;
+    if (ssrInfoSnapshot) {
+      rightCol = ssrInfoSnapshot;
+      hydrateSsrInfoColumn(rightCol);
+    } else {
+    rightCol = document.createElement('div');
     rightCol.className = 'product-info-col';
     
     const panel = document.createElement('div');
@@ -839,8 +1365,17 @@
     };
     
     rightCol.appendChild(panel);
+    }
     mainRow.appendChild(rightCol);
     wrapper.appendChild(mainRow);
+    if (ssrDescSnapshot && !wrapper.querySelector('.product-desc-row')) {
+      wrapper.appendChild(ssrDescSnapshot);
+    }
+    if (ssrNavSnapshot && !wrapper.querySelector('#product-navigation')) {
+      wrapper.appendChild(ssrNavSnapshot);
+    }
+    container.className = '';
+    container.innerHTML = '';
     container.appendChild(wrapper);
     
     return { wrapper: wrapper, hasVideo: hasVideo };

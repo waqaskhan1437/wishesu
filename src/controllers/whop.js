@@ -11,6 +11,9 @@ import { sendOrderNotificationEmails } from '../utils/order-email-notifier.js';
 
 // API timeout constants
 const WHOP_API_TIMEOUT = 10000; // 10 seconds
+const WHOP_METADATA_VALUE_MAX = 500;
+const WHOP_METADATA_SAFE_MAX = 470;
+const WHOP_ADDONS_MAX_ITEMS = 8;
 
 function normalizeGatewayError(value, fallback = 'Payment gateway error') {
   if (!value) return fallback;
@@ -51,31 +54,128 @@ function normalizeGatewayError(value, fallback = 'Payment gateway error') {
   }
 }
 
+function trimMetadataText(value, maxLength = WHOP_METADATA_SAFE_MAX) {
+  const raw = String(value ?? '');
+  if (raw.length <= maxLength) return raw;
+  if (maxLength <= 3) return raw.slice(0, Math.max(0, maxLength));
+  return `${raw.slice(0, maxLength - 3)}...`;
+}
+
+function serializeAddonsMetadata(addons, maxLength = WHOP_METADATA_SAFE_MAX) {
+  if (!Array.isArray(addons) || addons.length === 0) return '[]';
+
+  const normalized = addons.map((addon, index) => {
+    const safeField = trimMetadataText(
+      addon && addon.field != null ? addon.field : `addon_${index + 1}`,
+      80
+    );
+    const safeValue = trimMetadataText(addon && addon.value != null ? addon.value : '', 160);
+    return { field: safeField, value: safeValue };
+  });
+
+  let candidate = normalized.slice(0, WHOP_ADDONS_MAX_ITEMS);
+
+  while (candidate.length > 0) {
+    const serialized = JSON.stringify(candidate);
+    if (serialized.length <= maxLength) {
+      return serialized;
+    }
+
+    // Reduce longest value first; if still too long, drop tail items.
+    let longestIndex = -1;
+    let longestLength = 0;
+    for (let i = 0; i < candidate.length; i += 1) {
+      const length = String(candidate[i]?.value || '').length;
+      if (length > longestLength) {
+        longestLength = length;
+        longestIndex = i;
+      }
+    }
+
+    if (longestIndex >= 0 && longestLength > 30) {
+      candidate[longestIndex] = {
+        ...candidate[longestIndex],
+        value: trimMetadataText(candidate[longestIndex].value, Math.max(24, Math.floor(longestLength * 0.7)))
+      };
+      continue;
+    }
+
+    candidate = candidate.slice(0, -1);
+  }
+
+  const summary = JSON.stringify([
+    { field: 'addons_summary', value: `${normalized.length} addon(s) selected` }
+  ]);
+  return summary.length <= maxLength ? summary : '[]';
+}
+
+function serializeWhopMetadataValue(key, rawValue) {
+  if (rawValue === undefined || rawValue === null) return null;
+
+  if (key === 'addons') {
+    if (Array.isArray(rawValue)) {
+      return serializeAddonsMetadata(rawValue, WHOP_METADATA_SAFE_MAX);
+    }
+
+    if (typeof rawValue === 'string') {
+      try {
+        const parsed = JSON.parse(rawValue);
+        if (Array.isArray(parsed)) {
+          return serializeAddonsMetadata(parsed, WHOP_METADATA_SAFE_MAX);
+        }
+      } catch (e) {}
+      return trimMetadataText(rawValue, WHOP_METADATA_SAFE_MAX);
+    }
+
+    try {
+      return serializeAddonsMetadata([rawValue], WHOP_METADATA_SAFE_MAX);
+    } catch (e) {
+      return '[]';
+    }
+  }
+
+  if (typeof rawValue === 'string') {
+    return trimMetadataText(rawValue, WHOP_METADATA_SAFE_MAX);
+  }
+
+  if (typeof rawValue === 'number' || typeof rawValue === 'boolean' || typeof rawValue === 'bigint') {
+    return trimMetadataText(String(rawValue), WHOP_METADATA_VALUE_MAX);
+  }
+
+  try {
+    const serialized = JSON.stringify(rawValue);
+    return trimMetadataText(serialized, WHOP_METADATA_SAFE_MAX);
+  } catch (e) {
+    return trimMetadataText(String(rawValue), WHOP_METADATA_SAFE_MAX);
+  }
+}
+
 function serializeWhopMetadata(metadata = {}) {
   const output = {};
   if (!metadata || typeof metadata !== 'object') return output;
 
   for (const [key, rawValue] of Object.entries(metadata)) {
-    if (rawValue === undefined || rawValue === null) continue;
-
-    if (typeof rawValue === 'string') {
-      output[key] = rawValue;
-      continue;
-    }
-
-    if (typeof rawValue === 'number' || typeof rawValue === 'boolean' || typeof rawValue === 'bigint') {
-      output[key] = String(rawValue);
-      continue;
-    }
-
-    try {
-      output[key] = JSON.stringify(rawValue);
-    } catch (e) {
-      output[key] = String(rawValue);
-    }
+    const safeValue = serializeWhopMetadataValue(key, rawValue);
+    if (safeValue === null || safeValue === undefined || safeValue === '') continue;
+    output[key] = safeValue;
   }
 
   return output;
+}
+
+function isWhopMetadataLengthError(errorText = '') {
+  const text = String(errorText || '').toLowerCase();
+  if (!text) return false;
+
+  return (
+    text.includes('metadata') &&
+    (
+      text.includes('exceeds 500') ||
+      text.includes('too long') ||
+      text.includes('max length') ||
+      text.includes('character')
+    )
+  );
 }
 
 function parseWhopMetadata(metadata = {}) {
@@ -518,27 +618,50 @@ export async function createPlanCheckout(env, body, origin) {
       checkoutBody.prefill = { email: email.trim() };
     }
 
-    const checkoutResp = await fetchWithTimeout('https://api.whop.com/api/v2/checkout_sessions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(checkoutBody)
-    }, WHOP_API_TIMEOUT);
+    const sendCheckoutSessionRequest = async (payload) => {
+      const response = await fetchWithTimeout('https://api.whop.com/api/v2/checkout_sessions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }, WHOP_API_TIMEOUT);
 
-    if (!checkoutResp.ok) {
-      const errorText = await checkoutResp.text();
-      console.error('Whop checkout session error:', errorText);
-      let msg = 'Failed to create checkout session';
-      try {
-        const j = JSON.parse(errorText);
-        msg = normalizeGatewayError(j, msg);
-      } catch (_) {}
-      return json({ error: msg }, checkoutResp.status);
+      const responseText = await response.text();
+      return { response, responseText };
+    };
+
+    let { response: checkoutResp, responseText: checkoutErrorText } = await sendCheckoutSessionRequest(checkoutBody);
+
+    if (!checkoutResp.ok && isWhopMetadataLengthError(checkoutErrorText)) {
+      console.warn('Whop metadata too long, retrying checkout with compact fallback metadata');
+      const fallbackMetadata = {
+        ...checkoutMetadata,
+        addons: [],
+        addons_count: Array.isArray(checkoutMetadata.addons) ? checkoutMetadata.addons.length : 0
+      };
+      checkoutBody.metadata = serializeWhopMetadata(fallbackMetadata);
+      ({ response: checkoutResp, responseText: checkoutErrorText } = await sendCheckoutSessionRequest(checkoutBody));
     }
 
-    const checkoutData = await checkoutResp.json();
+    if (!checkoutResp.ok) {
+      console.error('Whop checkout session error:', checkoutErrorText);
+      let msg = 'Failed to create checkout session';
+      try {
+        const j = JSON.parse(checkoutErrorText);
+        msg = normalizeGatewayError(j, msg);
+      } catch (_) {
+        msg = normalizeGatewayError(checkoutErrorText, msg);
+      }
+      return json({ error: msg }, checkoutResp.status);
+    }
+    let checkoutData = {};
+    try {
+      checkoutData = checkoutErrorText ? JSON.parse(checkoutErrorText) : {};
+    } catch (e) {
+      checkoutData = {};
+    }
 
     // Update database record with checkout session ID
     try {
