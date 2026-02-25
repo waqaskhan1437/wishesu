@@ -70,6 +70,94 @@
     return s;
   }
 
+  const ALLOWED_DESCRIPTION_TAGS = new Set([
+    'p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'strong', 'em', 'b', 'i', 'u',
+    'ul', 'ol', 'li',
+    'a', 'blockquote', 'code', 'pre', 'hr', 'span'
+  ]);
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function decodeBasicHtmlEntities(value) {
+    let decoded = String(value || '');
+    for (let i = 0; i < 2; i += 1) {
+      const next = decoded
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'");
+      if (next === decoded) break;
+      decoded = next;
+    }
+    return decoded;
+  }
+
+  function sanitizeProductDescriptionHtml(rawInput) {
+    const raw = String(rawInput || '').trim();
+    if (!raw) return 'No description available.';
+
+    const hasMarkupHint = /<[a-z!/][^>]*>/i.test(raw) || /&lt;[a-z!/]/i.test(raw);
+    if (!hasMarkupHint) {
+      return escapeHtml(raw).replace(/\n/g, '<br>');
+    }
+
+    let html = decodeBasicHtmlEntities(raw)
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+      .replace(/<object[\s\S]*?<\/object>/gi, '')
+      .replace(/<embed[\s\S]*?>/gi, '')
+      .replace(/<link[\s\S]*?>/gi, '')
+      .replace(/<meta[\s\S]*?>/gi, '')
+      .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+
+    html = html.replace(/<[^>]*>/g, (tag) => {
+      if (/^<!--/.test(tag)) return '';
+
+      const closeMatch = tag.match(/^<\s*\/\s*([a-z0-9]+)\s*>$/i);
+      if (closeMatch) {
+        const tagName = String(closeMatch[1] || '').toLowerCase();
+        return ALLOWED_DESCRIPTION_TAGS.has(tagName) ? `</${tagName}>` : '';
+      }
+
+      const openMatch = tag.match(/^<\s*([a-z0-9]+)([^>]*)>$/i);
+      if (!openMatch) return '';
+
+      const tagName = String(openMatch[1] || '').toLowerCase();
+      if (!ALLOWED_DESCRIPTION_TAGS.has(tagName)) return '';
+
+      if (tagName === 'br' || tagName === 'hr') return `<${tagName}>`;
+
+      if (tagName === 'a') {
+        const attrs = String(openMatch[2] || '');
+        const hrefMatch = attrs.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+        const targetMatch = attrs.match(/\btarget\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+        const hrefRaw = String((hrefMatch && (hrefMatch[1] || hrefMatch[2] || hrefMatch[3])) || '#').trim();
+        const safeHref = /^(https?:\/\/|mailto:|tel:|\/|#)/i.test(hrefRaw) ? hrefRaw : '#';
+        const targetRaw = String((targetMatch && (targetMatch[1] || targetMatch[2] || targetMatch[3])) || '').trim().toLowerCase();
+
+        if (targetRaw === '_blank') {
+          return `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer">`;
+        }
+        return `<a href="${escapeHtml(safeHref)}">`;
+      }
+
+      return `<${tagName}>`;
+    });
+
+    const cleaned = html.trim();
+    return cleaned || 'No description available.';
+  }
+
   function renderProductDescription(wrapper, product) {
     let descRow = wrapper.querySelector('.product-desc-row');
     let descBox = descRow ? descRow.querySelector('.product-desc') : null;
@@ -88,7 +176,7 @@
 
     // Keep server-rendered block when available; fallback to client markup only when missing.
     if (!descBox.querySelector('#reviews-container')) {
-      const descText = product.description ? product.description.replace(/\n/g, '<br>') : 'No description available.';
+      const descText = sanitizeProductDescriptionHtml(product.description || '');
       const reviewCount = product.review_count || 0;
       const ratingAverage = product.rating_average || 0;
       descBox.innerHTML = `

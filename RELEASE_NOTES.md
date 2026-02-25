@@ -1,7 +1,9 @@
-﻿Release: SSR + Checkout Metadata Fix + Whop Timeout Stability
+﻿Release: Product Page Stability + Description Render Fix
 Date: 2026-02-25
 
 Included critical fixes:
-- src/controllers/whop.js: metadata cap/compaction + retry + timeout 20s
-- public/js/checkout-page.js: metadata compaction/trim
-- public/checkout.html: checkout-page.js?v=5
+- src/index.js: product description rich-html sanitize (SSR)
+- public/js/product/layout-extra.js: client fallback sanitize
+- public/_product_template.tpl: added critical layout CSS to stop initial thumbnail jump
+- public/_product_template.tpl: layout-extra.js cache bump v=30
+- src/controllers/whop.js: metadata cap/retry + timeout 20s (from previous hotfix)
