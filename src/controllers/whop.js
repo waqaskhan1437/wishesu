@@ -10,7 +10,7 @@ import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-crea
 import { sendOrderNotificationEmails } from '../utils/order-email-notifier.js';
 
 // API timeout constants
-const WHOP_API_TIMEOUT = 10000; // 10 seconds
+const WHOP_API_TIMEOUT = 20000; // 20 seconds
 const WHOP_METADATA_VALUE_MAX = 500;
 const WHOP_METADATA_SAFE_MAX = 470;
 const WHOP_ADDONS_MAX_ITEMS = 8;
