@@ -447,6 +447,91 @@
             }
           };
 
+          const getReviewPayloadFromDataset = (el) => {
+            if (!el || !el.dataset) return null;
+            const videoUrl = (el.dataset.reviewVideoUrl || '').trim();
+            if (!videoUrl) return null;
+            return {
+              videoUrl,
+              posterUrl: (el.dataset.reviewPosterUrl || '').trim(),
+              review: {
+                customer_name: (el.dataset.reviewerName || '').trim(),
+                author_name: (el.dataset.reviewerName || '').trim(),
+                review_text: (el.dataset.reviewText || '').trim(),
+                comment: (el.dataset.reviewText || '').trim()
+              }
+            };
+          };
+
+          const setActiveReviewThumb = (selectedEl) => {
+            const slider = document.getElementById('thumbnails-slider');
+            if (!slider) return;
+            slider.querySelectorAll('.thumb, [data-review-slider-thumb=\"1\"]').forEach((node) => {
+              if (node && node.style) node.style.border = '3px solid transparent';
+            });
+            if (selectedEl && selectedEl.style) {
+              selectedEl.style.border = '3px solid #667eea';
+            }
+          };
+
+          const setActiveReviewThumbByVideo = (videoUrl) => {
+            if (!videoUrl) return;
+            const slider = document.getElementById('thumbnails-slider');
+            if (!slider) return;
+            const target = Array.from(slider.querySelectorAll('[data-review-slider-thumb=\"1\"]'))
+              .find((node) => (node.dataset.reviewVideoUrl || '').trim() === videoUrl);
+            if (target) {
+              setActiveReviewThumb(target);
+            }
+          };
+
+          const bindSsrWatchTarget = (el, isSliderThumb) => {
+            if (!el || el.dataset.reviewBound === '1') return;
+            el.dataset.reviewBound = '1';
+            el.addEventListener('click', (e) => {
+              e.preventDefault();
+              if (isSliderThumb) e.stopPropagation();
+              const payload = getReviewPayloadFromDataset(el);
+              if (!payload || !payload.videoUrl) return;
+              showHighlight(payload.review);
+              scrollToPlayer();
+              setPlayerSource(payload.videoUrl, payload.posterUrl || null);
+              if (isSliderThumb) {
+                setActiveReviewThumb(el);
+              } else {
+                setActiveReviewThumbByVideo(payload.videoUrl);
+              }
+            });
+
+            if (isSliderThumb) {
+              el.addEventListener('mouseenter', () => {
+                el.style.transform = 'scale(1.05)';
+              });
+              el.addEventListener('mouseleave', () => {
+                el.style.transform = 'scale(1)';
+              });
+            }
+          };
+
+          // If SSR reviews already exist, hydrate behavior only and skip full client rebuild.
+          const hasSsrReviewCards = container.querySelector('[data-ssr-review-card=\"1\"]');
+          if (hasSsrReviewCards) {
+            container.querySelectorAll('[data-review-watch=\"1\"]').forEach((el) => {
+              const isSliderThumb = !!el.hasAttribute('data-review-slider-thumb');
+              bindSsrWatchTarget(el, isSliderThumb);
+            });
+            const slider = document.getElementById('thumbnails-slider');
+            if (slider) {
+              slider.querySelectorAll('[data-review-slider-thumb=\"1\"]').forEach((el) => {
+                bindSsrWatchTarget(el, true);
+              });
+            }
+            if (typeof window.ReviewsWidget !== 'undefined' && typeof window.ReviewsWidget.addStyles === 'function') {
+              window.ReviewsWidget.addStyles();
+            }
+            return;
+          }
+
           // Pagination
           let currentPage = 1;
           const reviewsPerPage = 10;
