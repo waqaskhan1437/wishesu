@@ -71,108 +71,130 @@
   }
 
   function renderProductDescription(wrapper, product) {
-    const descRow = document.createElement('div');
-    descRow.className = 'product-desc-row';
-    
-    const descBox = document.createElement('div');
-    descBox.className = 'product-desc';
-    
-    // Convert newlines to breaks for display
-    const descText = product.description ? product.description.replace(/\n/g, '<br>') : 'No description available.';
-    
-    // Get review statistics
-    const reviewCount = product.review_count || 0;
-    const ratingAverage = product.rating_average || 0;
-    
-    // Fix: Changed <h3> to <h2> to maintain correct heading hierarchy
-    // (h1 is Product Title, so next logical level is h2)
-    descBox.innerHTML = `
-      <h2>Description</h2>
-      <div>${descText}</div>
-      <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #eee;">
-      <h2>Customer Reviews</h2>
-      ${reviewCount > 0 ? `
-        <div style="background:#f9fafb; padding:1.5rem; border-radius:8px; text-align:center; color:#6b7280; margin-bottom: 2rem;">
-          <span style="font-size:2rem;">⭐ ${ratingAverage.toFixed(1)}</span>
-          <p style="margin-top: 0.5rem;">Based on ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}</p>
+    let descRow = wrapper.querySelector('.product-desc-row');
+    let descBox = descRow ? descRow.querySelector('.product-desc') : null;
+
+    if (!descRow) {
+      descRow = document.createElement('div');
+      descRow.className = 'product-desc-row';
+      wrapper.appendChild(descRow);
+    }
+
+    if (!descBox) {
+      descBox = document.createElement('div');
+      descBox.className = 'product-desc';
+      descRow.appendChild(descBox);
+    }
+
+    // Keep server-rendered block when available; fallback to client markup only when missing.
+    if (!descBox.querySelector('#reviews-container')) {
+      const descText = product.description ? product.description.replace(/\n/g, '<br>') : 'No description available.';
+      const reviewCount = product.review_count || 0;
+      const ratingAverage = product.rating_average || 0;
+      descBox.innerHTML = `
+        <h2>Description</h2>
+        <div>${descText}</div>
+        <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #eee;">
+        <h2>Customer Reviews</h2>
+        ${reviewCount > 0 ? `
+          <div style="background:#f9fafb; padding:1.5rem; border-radius:8px; text-align:center; color:#6b7280; margin-bottom: 2rem;">
+            <span style="font-size:2rem;">&#11088; ${ratingAverage.toFixed(1)}</span>
+            <p style="margin-top: 0.5rem;">Based on ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}</p>
+          </div>
+        ` : `
+          <div style="background:#f9fafb; padding:1.5rem; border-radius:8px; text-align:center; color:#6b7280; margin-bottom: 2rem;">
+            <div style="font-size:3rem; margin-bottom:15px;">&#11088;</div>
+            <p>No reviews yet. Be the first to leave a review!</p>
+          </div>
+        `}
+        <div id="reviews-container"></div>
+      `;
+    }
+
+    // Add or reuse product navigation (Next/Previous buttons)
+    let navSection = wrapper.querySelector('#product-navigation');
+    if (!navSection) {
+      navSection = document.createElement('div');
+      navSection.id = 'product-navigation';
+      navSection.className = 'product-navigation-section';
+      wrapper.appendChild(navSection);
+    }
+
+    if (!navSection.querySelector('#prev-product-btn') || !navSection.querySelector('#next-product-btn')) {
+      navSection.innerHTML = `
+        <div style="display: flex; justify-content: center; align-items: center; padding: 30px 0; gap: 20px; flex-wrap: wrap;">
+          <div id="prev-product-btn" style="flex: 1; max-width: 300px; min-width: 200px; display: none;"></div>
+          <div id="next-product-btn" style="flex: 1; max-width: 300px; min-width: 200px; display: none;"></div>
         </div>
-      ` : `
-        <div style="background:#f9fafb; padding:1.5rem; border-radius:8px; text-align:center; color:#6b7280; margin-bottom: 2rem;">
-          <div style="font-size:3rem; margin-bottom:15px;">⭐</div>
-          <p>No reviews yet. Be the first to leave a review!</p>
-        </div>
-      `}
-      <div id="reviews-container"></div>
-    `;
-    
-    descRow.appendChild(descBox);
-    wrapper.appendChild(descRow);
-    
-    // Add product navigation (Next/Previous buttons)
-    const navSection = document.createElement('div');
-    navSection.id = 'product-navigation';
-    navSection.className = 'product-navigation-section';
-    navSection.innerHTML = `
-      <div style="display: flex; justify-content: center; align-items: center; padding: 30px 0; gap: 20px; flex-wrap: wrap;">
-        <div id="prev-product-btn" style="flex: 1; max-width: 300px; min-width: 200px; display: none;"></div>
-        <div id="next-product-btn" style="flex: 1; max-width: 300px; min-width: 200px; display: none;"></div>
-      </div>
-    `;
-    wrapper.appendChild(navSection);
-    
-    // Load adjacent products
-    if (product.id && typeof window.getAdjacentProducts === 'function') {
+      `;
+    }
+
+    const renderAdjacentProducts = (data) => {
+      const prevContainer = navSection.querySelector('#prev-product-btn');
+      const nextContainer = navSection.querySelector('#next-product-btn');
+      if (!prevContainer || !nextContainer) return;
+
+      prevContainer.style.display = 'none';
+      nextContainer.style.display = 'none';
+      prevContainer.innerHTML = '';
+      nextContainer.innerHTML = '';
+
+      if (data && data.previous) {
+        prevContainer.style.display = 'block';
+        prevContainer.innerHTML = `
+          <a href="${data.previous.url}" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border: 2px solid #e5e7eb; border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.05);" 
+             onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
+             onmouseleave="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)';">
+            <div style="width: 60px; height: 60px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: #f3f4f6;">
+              ${data.previous.thumbnail_url ? `<img src="${optimizeNavThumbUrl(data.previous.thumbnail_url)}" alt="" loading="lazy" decoding="async" width="60" height="60" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">&#128230;</div>'}
+            </div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px;">&#8592; Previous</div>
+              <div style="font-weight: 600; font-size: 14px; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${data.previous.title}</div>
+            </div>
+          </a>
+        `;
+      }
+
+      if (data && data.next) {
+        nextContainer.style.display = 'block';
+        nextContainer.innerHTML = `
+          <a href="${data.next.url}" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border: 2px solid #e5e7eb; border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-direction: row-reverse; text-align: right;" 
+             onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
+             onmouseleave="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)';">
+            <div style="width: 60px; height: 60px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: #f3f4f6;">
+              ${data.next.thumbnail_url ? `<img src="${optimizeNavThumbUrl(data.next.thumbnail_url)}" alt="" loading="lazy" decoding="async" width="60" height="60" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">&#128230;</div>'}
+            </div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px;">Next &#8594;</div>
+              <div style="font-weight: 600; font-size: 14px; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${data.next.title}</div>
+            </div>
+          </a>
+        `;
+      }
+
+      if (!data || (!data.previous && !data.next)) {
+        navSection.style.display = 'none';
+      } else {
+        navSection.style.display = '';
+      }
+    };
+
+    // Step 8: prefer bootstrap adjacent products to avoid extra API call on product page.
+    if (product && product.adjacent && typeof product.adjacent === 'object') {
+      renderAdjacentProducts(product.adjacent);
+    } else if (product.id && typeof window.getAdjacentProducts === 'function') {
       window.getAdjacentProducts(product.id).then(function(data) {
-        const prevContainer = document.getElementById('prev-product-btn');
-        const nextContainer = document.getElementById('next-product-btn');
-        
-        if (data.previous && prevContainer) {
-          prevContainer.style.display = 'block';
-          prevContainer.innerHTML = `
-            <a href="${data.previous.url}" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border: 2px solid #e5e7eb; border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.05);" 
-               onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
-               onmouseleave="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)';">
-              <div style="width: 60px; height: 60px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: #f3f4f6;">
-                ${data.previous.thumbnail_url ? `<img src="${optimizeNavThumbUrl(data.previous.thumbnail_url)}" alt="" loading="lazy" decoding="async" width="60" height="60" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">📦</div>'}
-              </div>
-              <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px;">← Previous</div>
-                <div style="font-weight: 600; font-size: 14px; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${data.previous.title}</div>
-              </div>
-            </a>
-          `;
-        }
-        
-        if (data.next && nextContainer) {
-          nextContainer.style.display = 'block';
-          nextContainer.innerHTML = `
-            <a href="${data.next.url}" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #fff; border: 2px solid #e5e7eb; border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-direction: row-reverse; text-align: right;" 
-               onmouseenter="this.style.borderColor='#667eea'; this.style.boxShadow='0 4px 12px rgba(102,126,234,0.15)';"
-               onmouseleave="this.style.borderColor='#e5e7eb'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.05)';">
-              <div style="width: 60px; height: 60px; flex-shrink: 0; border-radius: 8px; overflow: hidden; background: #f3f4f6;">
-                ${data.next.thumbnail_url ? `<img src="${optimizeNavThumbUrl(data.next.thumbnail_url)}" alt="" loading="lazy" decoding="async" width="60" height="60" style="width: 100%; height: 100%; object-fit: cover;">` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">📦</div>'}
-              </div>
-              <div style="flex: 1; min-width: 0;">
-                <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; margin-bottom: 4px;">Next →</div>
-                <div style="font-weight: 600; font-size: 14px; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${data.next.title}</div>
-              </div>
-            </a>
-          `;
-        }
-        
-        // Hide entire section if no navigation available
-        if (!data.previous && !data.next) {
-          navSection.style.display = 'none';
-        }
+        renderAdjacentProducts(data);
       }).catch(function(err) {
         console.warn('Failed to load adjacent products:', err);
         navSection.style.display = 'none';
       });
     }
-    
+
     // Load reviews - first try from existing product data, then fallback to widget
     setTimeout(() => {
-      const container = document.getElementById('reviews-container');
+      const container = descBox.querySelector('#reviews-container') || document.getElementById('reviews-container');
       if (!container) return;
       
       // Always try to render reviews, either from embedded data or by fetching.

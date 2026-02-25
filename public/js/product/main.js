@@ -7,6 +7,9 @@
  */
 
 ;(function(){
+  if (window.__productPageInitBound) return;
+  window.__productPageInitBound = true;
+
   window.basePrice = 0;
   window.currentTotal = 0;
   window.productData = null;
@@ -25,13 +28,9 @@
   }
 
   async function initProductPage() {
-    // Load global Whop settings early so checkout can use them.
-    try {
-      const whopResp = await (typeof window.getWhopSettings === 'function' ? window.getWhopSettings() : Promise.resolve(null));
-      window.whopSettings = whopResp && whopResp.settings ? whopResp.settings : {};
-    } catch (e) {
-      window.whopSettings = {};
-    }
+    if (window.__productPageInitialized || window.__productPageInitInProgress) return;
+    window.__productPageInitInProgress = true;
+
     const params = new URLSearchParams(location.search);
     let productId = params.get('id');
     // Canonical URLs are /product-<id>/<slug>. If the worker forgets to
@@ -48,8 +47,22 @@
       container.innerHTML = '<div class="loading-state"><p>Product link is invalid.</p><a href="/" class="btn">Go Home</a></div>';
       return;
     }
+
+    const boot = readProductBootstrap(productId);
+
+    // Step 8: prefer server-embedded Whop settings to avoid extra API call on product page.
+    if (boot && boot.whopSettings && typeof boot.whopSettings === 'object') {
+      window.whopSettings = boot.whopSettings;
+    } else {
+      try {
+        const whopResp = await (typeof window.getWhopSettings === 'function' ? window.getWhopSettings() : Promise.resolve(null));
+        window.whopSettings = whopResp && whopResp.settings ? whopResp.settings : {};
+      } catch (e) {
+        window.whopSettings = {};
+      }
+    }
+
     try {
-      const boot = readProductBootstrap(productId);
       const data = boot || await getProduct(productId);
       const product = data.product;
       const addons = data.addons || product?.addons || [];
@@ -66,8 +79,12 @@
       window.renderProductDescription(result.wrapper, product);
       if (typeof updateTotal === 'function') updateTotal();
       window.initializePlayer(result.hasVideo);
+      window.__productPageInitialized = true;
     } catch (err) {
+      window.__productPageInitialized = false;
       container.innerHTML = '<div class="loading-state"><p>Error loading product.</p><a href="/" class="btn">Go Home</a></div>';
+    } finally {
+      window.__productPageInitInProgress = false;
     }
   }
   document.addEventListener('DOMContentLoaded', initProductPage);

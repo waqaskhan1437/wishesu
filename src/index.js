@@ -142,6 +142,604 @@ function escapeHtmlText(value) {
     .replace(/'/g, '&#39;');
 }
 
+const PRODUCT_INITIAL_CONTENT_MARKER_RE = /<!--PRODUCT_INITIAL_CONTENT_START-->[\s\S]*?<!--PRODUCT_INITIAL_CONTENT_END-->/i;
+const PRODUCT_CONTAINER_LOADING_RE = /id="product-container"\s+class="loading-state"/i;
+
+function stripUrlQueryHash(value) {
+  const s = String(value || '').trim();
+  if (!s) return '';
+  return s.split('#')[0].split('?')[0];
+}
+
+function isLikelyVideoMediaUrl(value) {
+  const s = stripUrlQueryHash(value).toLowerCase();
+  if (!s) return false;
+  if (s.includes('youtube.com') || s.includes('youtu.be')) return true;
+  return /\.(mp4|webm|mov|mkv|avi|m4v|flv|wmv|m3u8|mpd)(?:$)/i.test(s);
+}
+
+function isLikelyImageMediaUrl(value) {
+  const s = String(value || '').trim().toLowerCase();
+  if (!s) return false;
+  if (s.startsWith('data:image/')) return true;
+  if (s.startsWith('/')) return true;
+  if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('//')) return true;
+  return false;
+}
+
+function toGalleryArray(value) {
+  if (Array.isArray(value)) return value;
+  const s = String(value || '').trim();
+  if (!s) return [];
+  if (s.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(s);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  if (s.includes(',')) {
+    return s.split(',').map((item) => item.trim()).filter(Boolean);
+  }
+  return [s];
+}
+
+function normalizeGalleryForPlayerSsr(galleryValue, thumbnailUrl, videoUrl) {
+  const input = toGalleryArray(galleryValue);
+  const normalizedMain = stripUrlQueryHash(thumbnailUrl);
+  const normalizedVideo = stripUrlQueryHash(videoUrl);
+  const seen = new Set();
+  const out = [];
+
+  for (const item of input) {
+    const raw = String(item || '').trim();
+    if (!raw) continue;
+    if (!isLikelyImageMediaUrl(raw)) continue;
+    if (isLikelyVideoMediaUrl(raw)) continue;
+    const normalized = stripUrlQueryHash(raw);
+    if (!normalized) continue;
+    if (normalizedMain && normalized === normalizedMain) continue;
+    if (normalizedVideo && normalized === normalizedVideo) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    out.push(raw);
+    if (out.length >= 8) break;
+  }
+
+  return out;
+}
+
+function optimizeThumbUrlForSsr(src, width = 280) {
+  const raw = String(src || '').trim();
+  if (!raw) return raw;
+  if (!raw.includes('res.cloudinary.com')) return raw;
+  const cloudinaryRegex = /(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)/;
+  const match = raw.match(cloudinaryRegex);
+  if (!match) return raw;
+  return `${match[1]}f_auto,q_auto,w_${width}/${match[2]}`;
+}
+
+function parseAddonGroupsForSsr(addonsInput) {
+  if (Array.isArray(addonsInput)) return addonsInput;
+  const s = String(addonsInput || '').trim();
+  if (!s) return [];
+  try {
+    const parsed = JSON.parse(s);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function formatPriceForSsr(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '0';
+  const hasFraction = Math.abs(amount - Math.round(amount)) > 0.0001;
+  if (hasFraction) {
+    return amount.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+  return amount.toLocaleString('en-US');
+}
+
+function getDeliveryTextFromInstantDaysForSsr(isInstant, days) {
+  if (isInstant) return 'Instant Delivery In 60 Minutes';
+  const dayNum = parseInt(days, 10) || 1;
+  if (dayNum === 1) return '24 Hour Express Delivery';
+  return `${dayNum} Days Delivery`;
+}
+
+function computeInitialDeliveryLabelForSsr(product, addonGroups) {
+  const deliveryField = (addonGroups || []).find((g) => (
+    g &&
+    g.id === 'delivery-time' &&
+    (g.type === 'radio' || g.type === 'select') &&
+    Array.isArray(g.options)
+  ));
+
+  if (deliveryField) {
+    const defaultOption = deliveryField.options.find((o) => o && o.default) || deliveryField.options[0];
+    if (defaultOption) {
+      if (defaultOption.delivery && typeof defaultOption.delivery === 'object') {
+        return getDeliveryTextFromInstantDaysForSsr(
+          !!defaultOption.delivery.instant,
+          parseInt(defaultOption.delivery.days, 10) || 1
+        );
+      }
+      if (defaultOption.label) return String(defaultOption.label);
+    }
+  }
+
+  return getDeliveryTextFromInstantDaysForSsr(
+    !!product?.instant_delivery,
+    parseInt(product?.delivery_time_days, 10) || parseInt(product?.normal_delivery_text, 10) || 1
+  );
+}
+
+function computeDeliveryBadgeForSsr(label) {
+  const raw = String(label || '');
+  const v = raw.toLowerCase();
+
+  if (v.includes('instant') || v.includes('60') || v.includes('1 hour')) {
+    return { icon: '&#9889;', text: raw || 'Instant Delivery In 60 Minutes' };
+  }
+  if (v.includes('24') || v.includes('express') || v.includes('1 day') || v.includes('24 hour')) {
+    return { icon: '&#128640;', text: raw || '24 Hour Express Delivery' };
+  }
+  if (v.includes('48') || v.includes('2 day')) {
+    return { icon: '&#128230;', text: raw || '2 Days Delivery' };
+  }
+  if (v.includes('3 day') || v.includes('72')) {
+    return { icon: '&#128197;', text: raw || '3 Days Delivery' };
+  }
+  const daysMatch = v.match(/(\d+)\s*day/i);
+  if (daysMatch) {
+    const numDays = parseInt(daysMatch[1], 10) || 2;
+    return { icon: '&#128230;', text: raw || `${numDays} Days Delivery` };
+  }
+  return { icon: '&#128666;', text: raw || '2 Days Delivery' };
+}
+
+function renderStarsForSsr(ratingAverage) {
+  const rating = Number.isFinite(Number(ratingAverage)) ? Number(ratingAverage) : 5;
+  const fullStars = Math.max(0, Math.min(5, Math.floor(rating)));
+  const halfStar = rating % 1 >= 0.5 ? 1 : 0;
+  const emptyStars = Math.max(0, 5 - fullStars - halfStar);
+  return '★'.repeat(fullStars) + (halfStar ? '☆' : '') + '☆'.repeat(emptyStars);
+}
+
+function formatReviewDateForSsr(value) {
+  if (!value) return '';
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-US');
+  } catch (_) {
+    return '';
+  }
+}
+
+function renderSsrReviewCards(reviewsInput = []) {
+  const reviews = Array.isArray(reviewsInput) ? reviewsInput.slice(0, 5) : [];
+  if (reviews.length === 0) return '';
+
+  return reviews.map((review) => {
+    const reviewerName = escapeHtmlText(
+      String(review?.customer_name || review?.author_name || 'Anonymous')
+    );
+    const reviewText = escapeHtmlText(
+      String(review?.review_text || review?.comment || '')
+    ).replace(/\n/g, '<br>');
+    const rating = Math.max(1, Math.min(5, parseInt(review?.rating, 10) || 5));
+    const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+    const dateText = escapeHtmlText(formatReviewDateForSsr(review?.created_at));
+
+    return `
+      <article style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:6px;">
+          <strong style="font-size:0.95rem;color:#1f2937;">${reviewerName}</strong>
+          ${dateText ? `<span style="font-size:0.78rem;color:#6b7280;">${dateText}</span>` : ''}
+        </div>
+        <div style="color:#fbbf24;margin-bottom:8px;font-size:0.95rem;" aria-label="${rating} out of 5 stars">${stars}</div>
+        <div style="font-size:0.92rem;color:#4b5563;line-height:1.5;">${reviewText || 'No review text provided.'}</div>
+      </article>`;
+  }).join('');
+}
+
+function sanitizeAddonIdForSsr(raw, fallback = 'addon') {
+  const source = String(raw || '').trim() || String(fallback || 'addon');
+  const normalized = source
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return normalized || String(fallback || 'addon');
+}
+
+function renderAddonDataAttrsForSsr(optionInput = {}) {
+  const option = optionInput && typeof optionInput === 'object' ? optionInput : {};
+  const attrs = [];
+  const price = Number(option.price);
+  attrs.push(`data-price="${escapeHtmlText(Number.isFinite(price) ? String(price) : '0')}"`);
+
+  if (option.file) {
+    attrs.push('data-needs-file="true"');
+    attrs.push(`data-file-qty="${escapeHtmlText(String(parseInt(option.fileQuantity, 10) || 1))}"`);
+  }
+  if (option.textField) {
+    attrs.push('data-needs-text="true"');
+  }
+  if (option.delivery && typeof option.delivery === 'object') {
+    attrs.push(`data-delivery-instant="${option.delivery.instant ? 'true' : 'false'}"`);
+    attrs.push(`data-delivery-days="${escapeHtmlText(String(parseInt(option.delivery.days, 10) || 1))}"`);
+  }
+
+  return attrs.length > 0 ? ` ${attrs.join(' ')}` : '';
+}
+
+function renderSsrAddonField(fieldInput, index) {
+  const field = fieldInput && typeof fieldInput === 'object' ? fieldInput : {};
+  const type = String(field.type || 'text').trim().toLowerCase();
+  const fallbackId = `addon-${index + 1}`;
+  const baseId = sanitizeAddonIdForSsr(field.id || fallbackId, fallbackId);
+  const labelText = escapeHtmlText(String(field.label || field.text || '').trim());
+  const required = !!field.required;
+  const requiredHtml = required
+    ? ' <span style="color:red" aria-hidden="true">*</span><span class="sr-only"> (required)</span>'
+    : '';
+
+  if (type === 'heading') {
+    const headingText = escapeHtmlText(String(field.text || field.label || '').trim());
+    if (!headingText) return '';
+    return `
+      <h3 style="margin-top:1.5rem;font-size:1.1rem;">${headingText}</h3>`;
+  }
+
+  const options = Array.isArray(field.options) ? field.options : [];
+
+  if (type === 'select') {
+    const optionsHtml = options.map((optInput, idx) => {
+      const opt = optInput && typeof optInput === 'object' ? optInput : {};
+      const optLabel = escapeHtmlText(String(opt.label || `Option ${idx + 1}`));
+      const optPrice = Number(opt.price);
+      const priceSuffix = Number.isFinite(optPrice) && optPrice > 0 ? ` (+$${formatPriceForSsr(optPrice)})` : '';
+      const selectedAttr = opt.default ? ' selected' : '';
+      return `
+          <option value="${optLabel}"${renderAddonDataAttrsForSsr(opt)}${selectedAttr}>${optLabel}${priceSuffix}</option>`;
+    }).join('');
+
+    return `
+      <div class="addon-group" role="group" aria-label="${labelText || escapeHtmlText(baseId)}">
+        ${labelText ? `<label class="addon-group-label" id="${escapeHtmlText(baseId)}-label" for="${escapeHtmlText(baseId)}">${labelText}${requiredHtml}</label>` : ''}
+        <select class="form-select" name="${escapeHtmlText(baseId)}" id="${escapeHtmlText(baseId)}"${required ? ' required' : ''}>
+${optionsHtml}
+        </select>
+        <div class="addon-extras"></div>
+      </div>`;
+  }
+
+  if (type === 'radio' || type === 'checkbox_group') {
+    const isRadio = type === 'radio';
+    const optionCards = options.map((optInput, idx) => {
+      const opt = optInput && typeof optInput === 'object' ? optInput : {};
+      const optLabel = escapeHtmlText(String(opt.label || `Option ${idx + 1}`));
+      const optPrice = Number(opt.price);
+      const priceHtml = Number.isFinite(optPrice) && optPrice > 0
+        ? `<span class="opt-price">+$${formatPriceForSsr(optPrice)}</span>`
+        : '';
+      const checkedAttr = opt.default ? ' checked' : '';
+      const selectedClass = opt.default ? ' selected' : '';
+      const requiredAttr = isRadio && required && idx === 0 ? ' required' : '';
+
+      if (isRadio) {
+        return `
+          <label class="addon-option-card${selectedClass}">
+            <input type="radio"
+                   name="${escapeHtmlText(baseId)}"
+                   value="${optLabel}"
+                   class="addon-radio"${renderAddonDataAttrsForSsr(opt)}${checkedAttr}${requiredAttr}>
+            ${optLabel}
+            ${priceHtml}
+          </label>`;
+      }
+
+      return `
+          <div>
+            <label class="addon-option-card${selectedClass}">
+              <input type="checkbox"
+                     name="${escapeHtmlText(baseId)}"
+                     value="${optLabel}"
+                     class="addon-checkbox"${renderAddonDataAttrsForSsr(opt)}${checkedAttr}>
+              ${optLabel}
+              ${priceHtml}
+            </label>
+            <div style="margin-left:1.5rem;"></div>
+          </div>`;
+    }).join('');
+
+    return `
+      <div class="addon-group" role="group" aria-label="${labelText || escapeHtmlText(baseId)}">
+        ${labelText ? `<label class="addon-group-label" id="${escapeHtmlText(baseId)}-label">${labelText}${requiredHtml}</label>` : ''}
+        <div>${optionCards}</div>
+        ${isRadio ? '<div class="addon-extras"></div>' : ''}
+      </div>`;
+  }
+
+  const isTextarea = type === 'textarea';
+  const safeType = isTextarea ? '' : escapeHtmlText(type || 'text');
+  const placeholder = String(field.placeholder || '').trim();
+  const placeholderAttr = placeholder ? ` placeholder="${escapeHtmlText(placeholder)}"` : '';
+  const requiredAttr = required ? ' required' : '';
+  const maxLength = isTextarea ? 2000 : (safeType === 'email' ? 100 : (safeType === 'text' ? 200 : 0));
+  const maxLengthAttr = maxLength > 0 ? ` maxlength="${maxLength}"` : '';
+  const acceptAttr = safeType === 'file' ? ' accept="image/*"' : '';
+
+  if (isTextarea) {
+    return `
+      <div class="addon-group" role="group" aria-label="${labelText || escapeHtmlText(baseId)}">
+        ${labelText ? `<label class="addon-group-label" id="${escapeHtmlText(baseId)}-label" for="${escapeHtmlText(baseId)}">${labelText}${requiredHtml}</label>` : ''}
+        <textarea class="form-textarea" name="${escapeHtmlText(baseId)}" id="${escapeHtmlText(baseId)}"${placeholderAttr}${requiredAttr}${maxLengthAttr}></textarea>
+        <div class="addon-extras"></div>
+      </div>`;
+  }
+
+  return `
+      <div class="addon-group" role="group" aria-label="${labelText || escapeHtmlText(baseId)}">
+        ${labelText ? `<label class="addon-group-label" id="${escapeHtmlText(baseId)}-label" for="${escapeHtmlText(baseId)}">${labelText}${requiredHtml}</label>` : ''}
+        <input class="form-input" type="${safeType || 'text'}" name="${escapeHtmlText(baseId)}" id="${escapeHtmlText(baseId)}"${placeholderAttr}${requiredAttr}${maxLengthAttr}${acceptAttr}>
+        <div class="addon-extras"></div>
+      </div>`;
+}
+
+function renderSsrAddonsForm(addonGroupsInput, basePriceText) {
+  const addonGroups = Array.isArray(addonGroupsInput) ? addonGroupsInput : [];
+  const fieldsHtml = addonGroups.map((field, idx) => renderSsrAddonField(field, idx)).join('');
+  const fallbackHtml = fieldsHtml
+    ? fieldsHtml
+    : '<div class="addon-group" style="color:#6b7280;">No add-ons configured for this product.</div>';
+
+  return `
+                <form id="addons-form" style="padding-top:1.5rem;border-top:1px solid #e5e7eb;margin-top:1.5rem;">
+${fallbackHtml}
+                </form>
+                <div data-checkout-footer="1" style="margin-top:2rem;padding-top:1rem;border-top:1px solid #e5e5e5;">
+                  <button id="checkout-btn" type="button" class="btn-buy">Proceed to Checkout - $${basePriceText}</button>
+                </div>`;
+}
+
+function renderProductStep1PlayerShell(product, addonsInput = [], reviewsInput = []) {
+  if (!product || typeof product !== 'object') return '';
+
+  const addonGroups = parseAddonGroupsForSsr(addonsInput);
+  const title = String(product.title || 'Product');
+  const safeTitle = escapeHtmlText(title);
+  const thumbSrcRaw = String(product.thumbnail_url || '').trim() || 'https://via.placeholder.com/1280x720?text=Preview';
+  const thumbSrc = escapeHtmlText(thumbSrcRaw);
+  const hasVideo = !!String(product.video_url || '').trim();
+  const safeVideoUrl = escapeHtmlText(String(product.video_url || '').trim());
+  const reviewCount = Math.max(0, parseInt(product.review_count, 10) || 0);
+  const ratingAverage = Number(product.rating_average);
+  const normalizedRating = Number.isFinite(ratingAverage) && ratingAverage > 0 ? ratingAverage : 5.0;
+  const stars = renderStarsForSsr(normalizedRating);
+  const reviewText = reviewCount === 0
+    ? 'No reviews yet'
+    : `${normalizedRating.toFixed(1)} (${reviewCount} ${reviewCount === 1 ? 'Review' : 'Reviews'})`;
+
+  const normalPrice = Number(product.normal_price) || 0;
+  const salePrice = Number(product.sale_price) || 0;
+  const basePrice = salePrice > 0 ? salePrice : normalPrice;
+  const basePriceText = formatPriceForSsr(basePrice);
+  const normalPriceText = formatPriceForSsr(normalPrice);
+  const discountOff = normalPrice > 0 && basePrice < normalPrice
+    ? Math.round(((normalPrice - basePrice) / normalPrice) * 100)
+    : 0;
+
+  const initialDeliveryLabel = computeInitialDeliveryLabelForSsr(product, addonGroups);
+  const deliveryBadge = computeDeliveryBadgeForSsr(initialDeliveryLabel);
+
+  const mainImageTag = `
+        <img
+          src="${thumbSrc}"
+          class="main-img"
+          alt="${safeTitle || 'Product Image'}"
+          fetchpriority="high"
+          loading="eager"
+          decoding="async"
+          width="800"
+          height="450"
+          style="width:100%;height:100%;object-fit:cover;display:block;border-radius:12px;"
+        >`;
+
+  const playerHtml = hasVideo
+    ? `
+        <div class="video-facade"
+             data-ssr-player-facade="1"
+             data-video-url="${safeVideoUrl}"
+             style="position:relative;width:100%;cursor:pointer;background:#000;aspect-ratio:16/9;border-radius:12px;overflow:hidden;">
+          ${mainImageTag}
+          <button class="play-btn-overlay"
+                  type="button"
+                  aria-label="Play video"
+                  style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:80px;height:80px;background:rgba(0,0,0,0.7);border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;color:white;z-index:10;cursor:pointer;">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="white" aria-hidden="true" focusable="false">
+              <path d="M8 5v14l11-7z"></path>
+            </svg>
+          </button>
+        </div>`
+    : mainImageTag;
+
+  const galleryImages = normalizeGalleryForPlayerSsr(product.gallery_images, thumbSrcRaw, product.video_url);
+  const galleryThumbHtml = galleryImages.map((src, idx) => {
+    const optimizedSrc = optimizeThumbUrlForSsr(src, 280);
+    const safeSrc = escapeHtmlText(optimizedSrc);
+    const safeFullSrc = escapeHtmlText(src);
+    return `
+          <img
+            src="${safeSrc}"
+            class="thumb"
+            alt="${safeTitle} - Gallery Image ${idx + 1}"
+            data-media-kind="image"
+            data-media-src="${safeFullSrc}"
+            loading="lazy"
+            decoding="async"
+            width="140"
+            height="100"
+            style="min-width:140px;width:140px;height:100px;object-fit:cover;border-radius:10px;border:3px solid transparent;flex-shrink:0;"
+          >`;
+  }).join('');
+
+  const mainThumbHtml = hasVideo
+    ? `
+                <div class="thumb-wrapper" style="position:relative;display:inline-block;">
+                  <img
+                    src="${escapeHtmlText(optimizeThumbUrlForSsr(thumbSrcRaw, 280))}"
+                    class="thumb active"
+                    alt="${safeTitle} - Thumbnail"
+                    data-media-kind="video-main"
+                    data-media-src="${thumbSrc}"
+                    loading="lazy"
+                    decoding="async"
+                    width="140"
+                    height="100"
+                    style="min-width:140px;width:140px;height:100px;object-fit:cover;border-radius:10px;border:3px solid #667eea;flex-shrink:0;"
+                  >
+                  <div class="thumb-play-btn"
+                       aria-hidden="true"
+                       style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);color:white;width:35px;height:35px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;padding-left:2px;pointer-events:none;opacity:1;visibility:visible;z-index:100;">▶</div>
+                </div>`
+    : `
+                <img
+                  src="${escapeHtmlText(optimizeThumbUrlForSsr(thumbSrcRaw, 280))}"
+                  class="thumb active"
+                  alt="${safeTitle} - Thumbnail"
+                  data-media-kind="image"
+                  data-media-src="${thumbSrc}"
+                  loading="lazy"
+                  decoding="async"
+                  width="140"
+                  height="100"
+                  style="min-width:140px;width:140px;height:100px;object-fit:cover;border-radius:10px;border:3px solid #667eea;flex-shrink:0;"
+                >`;
+
+  const safeDescriptionHtml = escapeHtmlText(
+    String(product.description || 'No description available.')
+  ).replace(/\n/g, '<br>');
+
+  const reviewSummaryHtml = reviewCount > 0
+    ? `
+      <div style="background:#f9fafb;padding:1.5rem;border-radius:8px;text-align:center;color:#6b7280;margin-bottom:2rem;">
+        <span style="font-size:2rem;">&#11088; ${normalizedRating.toFixed(1)}</span>
+        <p style="margin-top:0.5rem;">Based on ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}</p>
+      </div>`
+    : `
+      <div style="background:#f9fafb;padding:1.5rem;border-radius:8px;text-align:center;color:#6b7280;margin-bottom:2rem;">
+        <div style="font-size:3rem;margin-bottom:15px;">&#11088;</div>
+        <p>No reviews yet. Be the first to leave a review!</p>
+      </div>`;
+
+  const reviewCardsHtml = renderSsrReviewCards(reviewsInput);
+  const reviewsContentHtml = reviewCardsHtml
+    ? `<div style="display:grid;grid-template-columns:1fr;gap:14px;">${reviewCardsHtml}</div>`
+    : '';
+  const addonsFormShellHtml = renderSsrAddonsForm(addonGroups, basePriceText);
+
+  return `
+      <div class="product-page" data-ssr-step="player">
+        <div class="product-main-row">
+          <div class="product-media-col" data-ssr-player-col="1">
+          <div id="review-highlight" style="display:none;background:#f0fdf4;padding:10px;margin-bottom:10px;border-radius:8px;"></div>
+            <div class="video-wrapper" data-video-src="${safeVideoUrl}" style="aspect-ratio:16/9;width:100%;">
+${playerHtml}
+            </div>
+            <div style="position:relative;margin-top:15px;" data-ssr-slider-state="pending">
+              <div class="thumbnails" id="thumbnails-slider" style="display:flex;gap:12px;overflow-x:auto;scroll-behavior:smooth;padding:8px 0;scrollbar-width:thin;">
+${mainThumbHtml}
+${galleryThumbHtml}
+              </div>
+              <button type="button"
+                      data-ssr-slider-arrow="left"
+                      aria-label="Previous thumbnails"
+                      style="position:absolute;left:0;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.7);color:white;border:none;width:35px;height:35px;border-radius:50%;cursor:pointer;font-size:24px;z-index:10;display:none;">‹</button>
+              <button type="button"
+                      data-ssr-slider-arrow="right"
+                      aria-label="Next thumbnails"
+                      style="position:absolute;right:0;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.7);color:white;border:none;width:35px;height:35px;border-radius:50%;cursor:pointer;font-size:24px;z-index:10;display:none;">›</button>
+            </div>
+          </div>
+          <div class="product-info-col" data-ssr-info-col="1">
+            <div class="product-info-panel">
+              <h1 class="product-title">${safeTitle}</h1>
+              <div class="rating-row" role="img" aria-label="Rating: ${normalizedRating.toFixed(1)} out of 5 stars, ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}">
+                <span class="stars" aria-hidden="true">${stars}</span>
+                <span class="review-count">${escapeHtmlText(reviewText)}</span>
+              </div>
+              <div class="badges-row">
+                <div class="badge-box badge-delivery" id="delivery-badge">
+                  <div class="icon" id="delivery-badge-icon">${deliveryBadge.icon}</div>
+                  <span id="delivery-badge-text">${escapeHtmlText(deliveryBadge.text)}</span>
+                </div>
+                <div class="badge-box badge-price">
+                  <div class="price-final">$${basePriceText}</div>
+                  ${discountOff > 0
+                    ? `<div style="font-size:0.9rem"><span class="price-original">$${normalPriceText}</span></div><div class="discount-tag">${discountOff}% OFF</div>`
+                    : ''}
+                </div>
+              </div>
+              <div class="digital-note" role="note">
+                <span aria-hidden="true">&#128233;</span>
+                <span><strong>Digital Delivery:</strong> Receive via WhatsApp/Email.</span>
+              </div>
+              <button id="book-now-trigger" type="button" class="btn-book-now" aria-expanded="false" aria-controls="addons-container">
+                <span aria-hidden="true">&#127916;</span> Book Now - $${basePriceText}
+              </button>
+              <div id="addons-container" style="max-height:0;overflow:hidden;transition:max-height 0.4s ease-out, opacity 0.25s ease;opacity:0;" data-ssr-addons="1">
+${addonsFormShellHtml}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="product-desc-row" data-ssr-desc="1">
+          <div class="product-desc">
+            <h2>Description</h2>
+            <div>${safeDescriptionHtml}</div>
+            <hr style="margin:2rem 0;border:0;border-top:1px solid #eee;">
+            <h2>Customer Reviews</h2>
+            ${reviewSummaryHtml}
+            <div id="reviews-container" data-ssr-reviews="1">
+              ${reviewsContentHtml}
+            </div>
+          </div>
+        </div>
+        <div id="product-navigation" class="product-navigation-section" data-ssr-nav="1">
+          <div style="display:flex;justify-content:center;align-items:center;padding:30px 0;gap:20px;flex-wrap:wrap;">
+            <div id="prev-product-btn" style="flex:1;max-width:300px;min-width:200px;display:none;"></div>
+            <div id="next-product-btn" style="flex:1;max-width:300px;min-width:200px;display:none;"></div>
+          </div>
+        </div>
+      </div>`;
+}
+
+function injectProductInitialContent(html, contentHtml, removeLoadingState = false) {
+  if (!html || !contentHtml) return html;
+  let out = String(html);
+
+  if (PRODUCT_INITIAL_CONTENT_MARKER_RE.test(out)) {
+    out = out.replace(
+      PRODUCT_INITIAL_CONTENT_MARKER_RE,
+      `<!--PRODUCT_INITIAL_CONTENT_START-->\n${contentHtml}\n      <!--PRODUCT_INITIAL_CONTENT_END-->`
+    );
+  }
+
+  if (removeLoadingState) {
+    out = out.replace(PRODUCT_CONTAINER_LOADING_RE, 'id="product-container"');
+  }
+
+  return out;
+}
+
 function replaceLegacyBrandTokens(text, siteTitle) {
   if (!text) return text;
   return String(text)
@@ -195,10 +793,8 @@ const CANONICAL_ALIAS_MAP = new Map([
   ['/landing-builder', '/admin/landing-builder.html'],
   ['/landing-builder/', '/admin/landing-builder.html'],
   ['/landing-builder.html', '/admin/landing-builder.html'],
-  ['/blog/', '/blog'],
   ['/blog/index.html', '/blog'],
   ['/blog.html', '/blog'],
-  ['/forum/', '/forum'],
   ['/forum/index.html', '/forum'],
   ['/forum.html', '/forum'],
   ['/products/index.html', '/products-grid.html'],
@@ -235,8 +831,14 @@ function getCanonicalRedirectPath(pathname) {
   const raw = String(pathname || '/').trim() || '/';
   if (raw === '/admin/' || raw === '/api/') return null;
   if (raw.startsWith('/admin/') || raw.startsWith('/api/')) return null;
+  if (raw === '/blog/' || raw === '/forum/') return null;
   const normalized = normalizeCanonicalPath(raw);
   return normalized !== raw ? normalized : null;
+}
+
+function isLocalDevHost(hostname) {
+  const h = String(hostname || '').trim().toLowerCase();
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1';
 }
 
 function isSensitiveNoindexPath(pathname) {
@@ -355,6 +957,223 @@ function applySeoToHtml(html, robots, canonical) {
     }
   }
   return html;
+}
+
+function formatBlogArchiveDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
+function truncateBlogArchiveText(value, maxLength = 120) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength).trimEnd() + '...';
+}
+
+function buildBlogArchivePageHref(pageNumber, limit) {
+  const n = Math.max(1, parseInt(pageNumber, 10) || 1);
+  const l = Math.max(1, parseInt(limit, 10) || 30);
+  const params = new URLSearchParams();
+  if (n > 1) params.set('page', String(n));
+  if (l !== 30) params.set('limit', String(l));
+  const q = params.toString();
+  return q ? `?${q}` : '?';
+}
+
+function renderBlogArchivePaginationSsr(pagination) {
+  const page = Math.max(1, parseInt(pagination?.page, 10) || 1);
+  const totalPages = Math.max(0, parseInt(pagination?.totalPages, 10) || 0);
+  const hasNext = !!pagination?.hasNext;
+  const hasPrev = !!pagination?.hasPrev;
+  const limit = Math.max(1, parseInt(pagination?.limit, 10) || 30);
+
+  if (totalPages <= 1) return '';
+
+  let pageLinks = '';
+  const startPage = Math.max(1, page - 2);
+  const endPage = Math.min(totalPages, page + 2);
+
+  if (startPage > 1) {
+    pageLinks += `<a href="${buildBlogArchivePageHref(1, limit)}" class="page-link">1</a>`;
+    if (startPage > 2) {
+      pageLinks += '<span class="page-dots">...</span>';
+    }
+  }
+
+  for (let i = startPage; i <= endPage; i += 1) {
+    if (i === page) {
+      pageLinks += `<span class="page-link active">${i}</span>`;
+    } else {
+      pageLinks += `<a href="${buildBlogArchivePageHref(i, limit)}" class="page-link">${i}</a>`;
+    }
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      pageLinks += '<span class="page-dots">...</span>';
+    }
+    pageLinks += `<a href="${buildBlogArchivePageHref(totalPages, limit)}" class="page-link">${totalPages}</a>`;
+  }
+
+  return `
+    <div class="blog-pagination">
+      ${hasPrev ? `<a href="${buildBlogArchivePageHref(page - 1, limit)}" class="page-link page-prev">Previous</a>` : ''}
+      <div class="page-numbers">${pageLinks}</div>
+      ${hasNext ? `<a href="${buildBlogArchivePageHref(page + 1, limit)}" class="page-link page-next">Next</a>` : ''}
+    </div>
+  `;
+}
+
+function renderBlogArchiveCardsSsr(blogs = [], pagination = {}) {
+  const safeBlogs = Array.isArray(blogs) ? blogs : [];
+  const cardsHtml = safeBlogs.map((blog) => {
+    const slugOrId = String(blog.slug || blog.id || '').trim();
+    if (!slugOrId) return '';
+
+    const blogUrl = `/blog/${encodeURIComponent(slugOrId)}`;
+    const title = escapeHtmlText(blog.title || 'Untitled');
+    const description = escapeHtmlText(truncateBlogArchiveText(blog.description || '', 120));
+    const dateText = escapeHtmlText(formatBlogArchiveDate(blog.created_at));
+    const thumb = escapeHtmlText(
+      String(blog.thumbnail_url || '').trim() || 'https://via.placeholder.com/400x225?text=No+Image'
+    );
+
+    return `
+      <article class="blog-card">
+        <a class="blog-card-link" href="${blogUrl}">
+          <div class="blog-thumbnail">
+            <img src="${thumb}" alt="${title}" loading="lazy">
+          </div>
+          <div class="blog-content">
+            <h3 class="blog-title">${title}</h3>
+            ${dateText ? `<div class="blog-date">${dateText}</div>` : ''}
+            <p class="blog-description">${description}</p>
+            <span class="blog-read-more">Read More -></span>
+          </div>
+        </a>
+      </article>
+    `;
+  }).join('');
+
+  const styles = `
+    <style id="blog-archive-ssr-style">
+      #blog-archive .blog-cards-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 30px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      #blog-archive .blog-card {
+        background: #fff;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      }
+      #blog-archive .blog-card-link {
+        display: block;
+        color: inherit;
+        text-decoration: none;
+      }
+      #blog-archive .blog-thumbnail {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #eef2ff;
+      }
+      #blog-archive .blog-thumbnail img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      #blog-archive .blog-content {
+        padding: 18px;
+      }
+      #blog-archive .blog-title {
+        margin: 0 0 8px;
+        font-size: 1.1rem;
+        color: #111827;
+        line-height: 1.35;
+      }
+      #blog-archive .blog-date {
+        margin-bottom: 10px;
+        color: #6b7280;
+        font-size: 0.88rem;
+      }
+      #blog-archive .blog-description {
+        margin: 0 0 14px;
+        color: #374151;
+        line-height: 1.6;
+        font-size: 0.95rem;
+      }
+      #blog-archive .blog-read-more {
+        color: #1d4ed8;
+        font-size: 0.92rem;
+        font-weight: 600;
+      }
+      #blog-archive .blog-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 32px;
+        flex-wrap: wrap;
+      }
+      #blog-archive .page-numbers {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      #blog-archive .page-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        border: 1px solid #d1d5db;
+        background: #fff;
+        color: #111827;
+        text-decoration: none;
+        font-weight: 600;
+        padding: 0 12px;
+      }
+      #blog-archive .page-link.active {
+        background: #111827;
+        border-color: #111827;
+        color: #fff;
+      }
+      #blog-archive .page-dots {
+        color: #9ca3af;
+      }
+      @media (max-width: 1024px) {
+        #blog-archive .blog-cards-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 20px;
+        }
+      }
+      @media (max-width: 680px) {
+        #blog-archive .blog-cards-grid {
+          grid-template-columns: 1fr;
+          gap: 16px;
+        }
+      }
+    </style>
+  `;
+
+  if (!cardsHtml) {
+    return `${styles}<p style="text-align:center;padding:60px 20px;color:#6b7280;font-size:1.05rem;">No blog posts found.</p>`;
+  }
+
+  return `${styles}<div class="blog-cards-grid">${cardsHtml}</div>${renderBlogArchivePaginationSsr(pagination)}`;
 }
 
 // Blog post HTML template generator
@@ -2434,6 +3253,22 @@ if (method === 'GET' || method === 'HEAD') {
               assetPath = '/_product_template.tpl';
             }
           }
+
+          // Archive aliases: resolve folder URLs to concrete index assets to avoid
+          // asset-layer redirect loops and allow SSR injection in one code path.
+          const archiveAssetAliases = {
+            '/blog': '/blog/',
+            '/blog/': '/blog/',
+            '/forum': '/forum/',
+            '/forum/': '/forum/'
+          };
+          const archiveTarget = archiveAssetAliases[assetPath];
+          if (archiveTarget) {
+            const rewritten = new URL(req.url);
+            rewritten.pathname = archiveTarget;
+            assetReq = new Request(rewritten.toString(), req);
+            assetPath = archiveTarget;
+          }
         }
 
         const assetResp = await env.ASSETS.fetch(assetReq);
@@ -2444,8 +3279,10 @@ if (method === 'GET' || method === 'HEAD') {
         
         // Caching: Only cache public, non-sensitive HTML pages.
         const normalizedAssetPathForCache = normalizeCanonicalPath(path);
+        const localDevRequest = isLocalDevHost(url.hostname);
         const shouldCache = isHTML &&
           isSuccess &&
+          !localDevRequest &&
           !path.startsWith('/admin') &&
           !path.includes('/admin/') &&
           !isSensitiveNoindexPath(normalizedAssetPathForCache);
@@ -2476,6 +3313,88 @@ if (method === 'GET' || method === 'HEAD') {
           try {
             const baseUrl = url.origin;
             let html = await assetResp.text();
+
+            // Blog archive page - render first-page content on server so layout
+            // remains visible with JS disabled and avoids client fetch churn.
+            if ((assetPath === '/blog/' || assetPath === '/blog/index.html') && env.DB) {
+              try {
+                await initDB(env);
+
+                const pageRaw = parseInt(url.searchParams.get('page') || '1', 10);
+                const limitRaw = parseInt(url.searchParams.get('limit') || '30', 10);
+                const pageNumber = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+                const limitNumber = Number.isFinite(limitRaw) ? Math.max(1, Math.min(60, limitRaw)) : 30;
+                const offset = (pageNumber - 1) * limitNumber;
+
+                const [countResult, blogsResult] = await Promise.all([
+                  env.DB.prepare(`SELECT COUNT(*) as total FROM blogs WHERE status = 'published'`).first(),
+                  env.DB.prepare(`
+                    SELECT id, title, slug, description, thumbnail_url, created_at
+                    FROM blogs
+                    WHERE status = 'published'
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ? OFFSET ?
+                  `).bind(limitNumber, offset).all()
+                ]);
+
+                const total = Number(countResult?.total || 0);
+                const totalPages = total > 0 ? Math.ceil(total / limitNumber) : 0;
+                const pagination = {
+                  page: pageNumber,
+                  limit: limitNumber,
+                  total,
+                  totalPages,
+                  hasNext: offset + limitNumber < total,
+                  hasPrev: pageNumber > 1
+                };
+                const blogs = Array.isArray(blogsResult?.results) ? blogsResult.results : [];
+                const archiveMarkup = renderBlogArchiveCardsSsr(blogs, pagination);
+
+                const archiveContainerRe = /<div id="blog-archive"([^>]*)>[\s\S]*?<\/div>/i;
+                if (archiveContainerRe.test(html)) {
+                  html = html.replace(archiveContainerRe, (_full, attrs = '') => {
+                    const cleanAttrs = String(attrs || '').replace(/\sdata-ssr="[^"]*"/gi, '');
+                    return `<div id="blog-archive"${cleanAttrs} data-ssr="1">${archiveMarkup}</div>`;
+                  });
+                }
+
+                if (!html.includes('id="blog-archive-bootstrap"')) {
+                  const bootstrapData = {
+                    blogs,
+                    pagination
+                  };
+                  const bootstrapJson = JSON.stringify(bootstrapData).replace(/</g, '\\u003c');
+                  const bootstrapTag = `<script type="application/json" id="blog-archive-bootstrap">${bootstrapJson}</script>`;
+                  html = html.replace('</head>', `${bootstrapTag}\n</head>`);
+                }
+
+                if (blogs.length > 0) {
+                  const itemListSchema = {
+                    '@context': 'https://schema.org',
+                    '@type': 'CollectionPage',
+                    name: 'Blog',
+                    url: `${baseUrl}/blog`,
+                    mainEntity: {
+                      '@type': 'ItemList',
+                      itemListOrder: 'https://schema.org/ItemListOrderDescending',
+                      numberOfItems: blogs.length,
+                      itemListElement: blogs.map((blog, idx) => ({
+                        '@type': 'ListItem',
+                        position: idx + 1,
+                        url: `${baseUrl}/blog/${encodeURIComponent(String(blog.slug || blog.id || '').trim())}`,
+                        name: String(blog.title || '')
+                      }))
+                    }
+                  };
+                  html = html.replace(
+                    '</head>',
+                    `<script type="application/ld+json">${JSON.stringify(itemListSchema)}</script>\n</head>`
+                  );
+                }
+              } catch (archiveErr) {
+                console.warn('Blog archive SSR injection error:', archiveErr);
+              }
+            }
             
             // Product detail page - inject individual product schema
             if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
@@ -2503,6 +3422,114 @@ if (method === 'GET' || method === 'HEAD') {
                   if (product) {
                     schemaProduct = product;
                     const reviews = reviewsResult.results || [];
+                    let adjacent = { previous: null, next: null };
+                    let siteBranding = { logo_url: '', favicon_url: '' };
+                    let siteComponents = {};
+                    let whopSettingsBootstrap = {};
+
+                    // Step 8: preload product-page runtime dependencies to reduce follow-up API calls.
+                    try {
+                      const [settingsRowsResult, whopGateway, prev, next] = await Promise.all([
+                        env.DB.prepare(
+                          'SELECT key, value FROM settings WHERE key IN (?, ?, ?)'
+                        ).bind('site_branding', 'site_components', 'whop').all(),
+                        env.DB.prepare(`
+                          SELECT whop_product_id, whop_theme, webhook_secret, whop_api_key
+                          FROM payment_gateways
+                          WHERE gateway_type = 'whop'
+                          ORDER BY is_enabled DESC, id DESC
+                          LIMIT 1
+                        `).first().catch(() => null),
+                        env.DB.prepare(`
+                          SELECT id, title, slug, thumbnail_url
+                          FROM products
+                          WHERE status = 'active'
+                          AND (
+                            sort_order < ?
+                            OR (sort_order = ? AND id > ?)
+                          )
+                          ORDER BY sort_order DESC, id ASC
+                          LIMIT 1
+                        `).bind(product.sort_order, product.sort_order, product.id).first(),
+                        env.DB.prepare(`
+                          SELECT id, title, slug, thumbnail_url
+                          FROM products
+                          WHERE status = 'active'
+                          AND (
+                            sort_order > ?
+                            OR (sort_order = ? AND id < ?)
+                          )
+                          ORDER BY sort_order ASC, id DESC
+                          LIMIT 1
+                        `).bind(product.sort_order, product.sort_order, product.id).first()
+                      ]);
+
+                      const settingsRows = settingsRowsResult && Array.isArray(settingsRowsResult.results)
+                        ? settingsRowsResult.results
+                        : [];
+                      const settingsMap = new Map(settingsRows.map((row) => [String(row.key || ''), row.value]));
+
+                      try {
+                        const brandingRaw = settingsMap.get('site_branding');
+                        if (brandingRaw) {
+                          const parsed = JSON.parse(brandingRaw);
+                          if (parsed && typeof parsed === 'object') {
+                            siteBranding = {
+                              logo_url: parsed.logo_url || '',
+                              favicon_url: parsed.favicon_url || ''
+                            };
+                          }
+                        }
+                      } catch (_) {}
+
+                      try {
+                        const componentsRaw = settingsMap.get('site_components');
+                        if (componentsRaw) {
+                          const parsed = JSON.parse(componentsRaw);
+                          if (parsed && typeof parsed === 'object') {
+                            siteComponents = parsed;
+                          }
+                        }
+                      } catch (_) {}
+
+                      try {
+                        const whopLegacyRaw = settingsMap.get('whop');
+                        if (whopLegacyRaw) {
+                          const parsed = JSON.parse(whopLegacyRaw);
+                          if (parsed && typeof parsed === 'object') {
+                            whopSettingsBootstrap = { ...parsed };
+                          }
+                        }
+                      } catch (_) {}
+
+                      if (whopGateway) {
+                        whopSettingsBootstrap.default_product_id = whopGateway.whop_product_id || whopSettingsBootstrap.default_product_id || '';
+                        whopSettingsBootstrap.product_id = whopGateway.whop_product_id || whopSettingsBootstrap.product_id || '';
+                        whopSettingsBootstrap.theme = whopGateway.whop_theme || whopSettingsBootstrap.theme || 'light';
+                        whopSettingsBootstrap.webhook_secret = whopGateway.webhook_secret || whopSettingsBootstrap.webhook_secret || '';
+                        if (env.WHOP_API_KEY || whopGateway.whop_api_key) {
+                          whopSettingsBootstrap.api_key = '********';
+                        }
+                      }
+
+                      adjacent = {
+                        previous: prev ? {
+                          id: prev.id,
+                          title: prev.title,
+                          slug: prev.slug,
+                          thumbnail_url: prev.thumbnail_url,
+                          url: `/product-${prev.id}/${encodeURIComponent(prev.slug || '')}`
+                        } : null,
+                        next: next ? {
+                          id: next.id,
+                          title: next.title,
+                          slug: next.slug,
+                          thumbnail_url: next.thumbnail_url,
+                          url: `/product-${next.id}/${encodeURIComponent(next.slug || '')}`
+                        } : null
+                      };
+                    } catch (_) {}
+
                     const schemaJson = generateProductSchema(product, baseUrl, reviews);
                     html = injectSchemaIntoHTML(html, 'product-schema', schemaJson);
 
@@ -2533,14 +3560,31 @@ if (method === 'GET' || method === 'HEAD') {
                             gallery_images: product.gallery_images,
                             review_count: parseInt(product.review_count) || 0,
                             rating_average: product.rating_average ? Math.round(Number(product.rating_average) * 10) / 10 : 0,
-                            reviews
+                            reviews,
+                            adjacent
                           },
-                          addons
+                          addons,
+                          whopSettings: whopSettingsBootstrap,
+                          siteBranding,
+                          siteComponents
                         };
 
                         const bootstrapJson = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
                         const bootstrapTag = `<script type="application/json" id="product-bootstrap">${bootstrapJson}</script>`;
                         html = html.replace('</head>', `${bootstrapTag}\n</head>`);
+                      }
+                    } catch (_) {}
+
+                    // SSR step (media + slider + info shell): render above-the-fold
+                    // product layout on server so first visible content is not JS-blocked.
+                    try {
+                      const playerShellHtml = renderProductStep1PlayerShell(
+                        product,
+                        product.addons_json || '[]',
+                        reviews
+                      );
+                      if (playerShellHtml) {
+                        html = injectProductInitialContent(html, playerShellHtml, true);
                       }
                     } catch (_) {}
                    

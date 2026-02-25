@@ -661,15 +661,14 @@
     await loadPaymentMethods();
 
     if (paymentMethods.length === 0) {
-      alert('No payment methods configured. Please contact support.');
-      if (onCloseCallback) {
-        onCloseCallback();
-        onCloseCallback = null;
-      }
-      if (typeof window.restoreCheckoutButtons === 'function') {
-        window.restoreCheckoutButtons();
-      }
-      return;
+      // Do not block checkout when API returns empty list.
+      // Checkout page has its own fallback resolver and can still open safely.
+      paymentMethods = [{
+        id: 'whop',
+        name: 'Card Payment',
+        icon: '💳',
+        enabled: true
+      }];
     }
 
     const compactMethods = paymentMethods.map((method) => ({

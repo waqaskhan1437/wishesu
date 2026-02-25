@@ -81,6 +81,11 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      const archive = document.getElementById('blog-archive');
+      if (archive && archive.dataset && archive.dataset.ssr === '1') {
+        return;
+      }
+
       if (window.BlogCards) {
         BlogCards.render('blog-archive', {
           limit: 30,

@@ -9,6 +9,19 @@
   const STORAGE_KEY = 'siteComponents';
   const BRANDING_KEY = 'siteBranding';
   const BRANDING_CACHE_TTL = 600000; // 10 minutes (reduced API calls)
+
+  function readProductBootstrap() {
+    try {
+      const el = document.getElementById('product-bootstrap');
+      if (!el) return null;
+      const parsed = JSON.parse(el.textContent || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  const productBootstrap = readProductBootstrap();
   
   // Don't run on admin pages
   if (window.location.pathname.startsWith('/admin')) {
@@ -18,6 +31,21 @@
   // Load branding from cache or fetch
   async function loadBranding() {
     try {
+      // Step 8: on product page, prefer worker-embedded branding to avoid API call.
+      if (
+        productBootstrap &&
+        productBootstrap.siteBranding &&
+        typeof productBootstrap.siteBranding === 'object'
+      ) {
+        const branding = productBootstrap.siteBranding;
+        localStorage.setItem(BRANDING_KEY, JSON.stringify({
+          branding,
+          timestamp: Date.now()
+        }));
+        applyBranding(branding);
+        return;
+      }
+
       // Check cache
       const cached = localStorage.getItem(BRANDING_KEY);
       if (cached) {
@@ -90,6 +118,19 @@
 
   // Load component data
   async function loadData() {
+    // Step 8: on product page, prefer worker-embedded components to avoid API call.
+    if (
+      productBootstrap &&
+      productBootstrap.siteComponents &&
+      typeof productBootstrap.siteComponents === 'object'
+    ) {
+      const components = { ...productBootstrap.siteComponents, _timestamp: Date.now() };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(components));
+      } catch (e) {}
+      return components;
+    }
+
     // 1. Try LocalStorage first (fastest)
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
