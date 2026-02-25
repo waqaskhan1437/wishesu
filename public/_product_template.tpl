@@ -89,6 +89,16 @@
     <link rel="stylesheet" href="/css/whop.css">
     <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
   </noscript>
+  <noscript>
+    <style>
+      #book-now-trigger { display: none !important; }
+      #addons-container {
+        max-height: none !important;
+        opacity: 1 !important;
+        overflow: visible !important;
+      }
+    </style>
+  </noscript>
 
   <!-- Google Fonts loaded async with swap -->
   <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -109,6 +119,7 @@
     </nav>
 
     <div id="product-container" class="loading-state">
+      <!--PRODUCT_INITIAL_CONTENT_START-->
       <!-- Skeleton placeholder matching final layout to prevent CLS -->
       <div class="skeleton-container">
         <div>
@@ -129,6 +140,7 @@
           <div class="skeleton-btn"></div>
         </div>
       </div>
+      <!--PRODUCT_INITIAL_CONTENT_END-->
     </div>
   </main>
 
@@ -143,23 +155,21 @@
     };
   </script>
 
-  <!-- Core scripts with defer for non-blocking load -->
+  <!-- Product core first: keep rendering independent from payment/chat extras -->
   <script src="/js/api.js" defer></script>
+  <script src="/js/product/addon-ui.js?v=29" defer></script>
+  <script src="/js/product/seo-utils.js?v=29" defer></script>
+  <script src="/js/product/layout-main.js?v=29" defer></script>
+  <script src="/js/product/layout-extra.js?v=29" defer></script>
+  <script src="/js/product/checkout.js?v=29" defer></script>
+  <script src="/js/product/main.js?v=29" defer></script>
+
+  <!-- Non-critical runtime modules -->
   <script src="/js/universal-player.js" defer></script>
   <script src="/js/instant-upload.js" defer></script>
-  <!-- Payment methods -->
-  <script src="/js/payment-selector.js?v=28" defer></script>
-  <!-- Coupon widget -->
+  <script src="/js/payment-selector.js?v=29" defer></script>
   <script src="/js/coupon-widget.js" defer></script>
-  <!-- Reviews widget -->
   <script src="/js/reviews-widget.js" defer></script>
-  <!-- load product modules in dependency order -->
-  <script src="/js/product/addon-ui.js" defer></script>
-  <script src="/js/product/seo-utils.js" defer></script>
-  <script src="/js/product/layout-main.js" defer></script>
-  <script src="/js/product/layout-extra.js" defer></script>
-  <script src="/js/product/checkout.js?v=28" defer></script>
-  <script src="/js/product/main.js" defer></script>
   <script src="/js/chat-widget.js" defer></script>
 
 </body>

@@ -5,6 +5,7 @@ Prepared: 2026-02-25
 ## Included Production Files
 
 - `src/index.js`
+- `public/_product_template.tpl`
 - `public/js/product/main.js`
 - `public/js/product/layout-extra.js`
 - `public/js/global-components.js`
@@ -19,6 +20,10 @@ Prepared: 2026-02-25
 4. Blog archive redirect loop fixed (`/blog` and `/blog/` now both 200).
 5. Blog archive now server-renders first paint (`data-ssr="1"` + bootstrap payload).
 6. Blog detail route remains SSR.
+7. Product loading-stuck hardening:
+   - init no longer depends on a single DOMContentLoaded race
+   - product/settings fetch has guard timeout path
+   - non-critical scripts moved after product core for faster first render
 
 ## Local Verification Snapshot
 

@@ -27,47 +27,96 @@
     }
   }
 
-  async function initProductPage() {
-    if (window.__productPageInitialized || window.__productPageInitInProgress) return;
-    window.__productPageInitInProgress = true;
+  function withTimeout(promise, timeoutMs, fallbackValue) {
+    const ms = Number(timeoutMs) > 0 ? Number(timeoutMs) : 10000;
+    let done = false;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        if (arguments.length >= 3) {
+          resolve(fallbackValue);
+        } else {
+          reject(new Error('timeout'));
+        }
+      }, ms);
 
-    const params = new URLSearchParams(location.search);
-    let productId = params.get('id');
-    // Canonical URLs are /product-<id>/<slug>. If the worker forgets to
-    // inject ?id=, we can still recover the numeric id from the path.
-    if (!productId) {
-      const m = (location.pathname || '').match(/^\/product-(\d+)\//);
-      if (m && m[1]) {
-        productId = m[1];
-      }
+      Promise.resolve(promise)
+        .then((value) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch((err) => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+  }
+
+  async function getProductWithTimeout(productId, timeoutMs = 12000) {
+    if (typeof getProduct !== 'function') {
+      throw new Error('getProduct helper is unavailable');
     }
-    const container = document.getElementById('product-container');
-    if (!container) return;
-    if (!productId) {
-      container.innerHTML = '<div class="loading-state"><p>Product link is invalid.</p><a href="/" class="btn">Go Home</a></div>';
+    return withTimeout(getProduct(productId), timeoutMs);
+  }
+
+  function loadWhopSettingsNonBlocking(boot) {
+    if (boot && boot.whopSettings && typeof boot.whopSettings === 'object') {
+      window.whopSettings = boot.whopSettings;
       return;
     }
 
-    const boot = readProductBootstrap(productId);
+    const resolver = (typeof window.getWhopSettings === 'function')
+      ? window.getWhopSettings()
+      : Promise.resolve(null);
 
-    // Step 8: prefer server-embedded Whop settings to avoid extra API call on product page.
-    if (boot && boot.whopSettings && typeof boot.whopSettings === 'object') {
-      window.whopSettings = boot.whopSettings;
-    } else {
-      try {
-        const whopResp = await (typeof window.getWhopSettings === 'function' ? window.getWhopSettings() : Promise.resolve(null));
+    withTimeout(resolver, 2500, null)
+      .then((whopResp) => {
         window.whopSettings = whopResp && whopResp.settings ? whopResp.settings : {};
-      } catch (e) {
+      })
+      .catch(() => {
         window.whopSettings = {};
-      }
-    }
+      });
+  }
 
+  async function initProductPage() {
+    if (window.__productPageInitialized || window.__productPageInitInProgress) return;
+    window.__productPageInitInProgress = true;
     try {
-      const data = boot || await getProduct(productId);
+      const params = new URLSearchParams(location.search);
+      let productId = params.get('id');
+      // Canonical URLs are /product-<id>/<slug>. If the worker forgets to
+      // inject ?id=, we can still recover the numeric id from the path.
+      if (!productId) {
+        const m = (location.pathname || '').match(/^\/product-(\d+)\//);
+        if (m && m[1]) {
+          productId = m[1];
+        }
+      }
+
+      const container = document.getElementById('product-container');
+      if (!container) return;
+
+      if (!productId) {
+        container.innerHTML = '<div class="loading-state"><p>Product link is invalid.</p><a href="/" class="btn">Go Home</a></div>';
+        window.__productPageInitialized = false;
+        return;
+      }
+
+      const boot = readProductBootstrap(productId);
+      // Do not block rendering on settings API.
+      loadWhopSettingsNonBlocking(boot);
+
+      const data = boot || await getProductWithTimeout(productId, 12000);
       const product = data.product;
       const addons = data.addons || product?.addons || [];
       if (!product) {
         container.innerHTML = '<div class="loading-state"><p>Product not found.</p><a href="/" class="btn">Go Home</a></div>';
+        window.__productPageInitialized = false;
         return;
       }
       window.productData = product;
@@ -82,10 +131,37 @@
       window.__productPageInitialized = true;
     } catch (err) {
       window.__productPageInitialized = false;
-      container.innerHTML = '<div class="loading-state"><p>Error loading product.</p><a href="/" class="btn">Go Home</a></div>';
+      const container = document.getElementById('product-container');
+      if (container) {
+        container.innerHTML = '<div class="loading-state"><p>Error loading product.</p><a href="/" class="btn">Go Home</a></div>';
+      }
     } finally {
       window.__productPageInitInProgress = false;
     }
   }
-  document.addEventListener('DOMContentLoaded', initProductPage);
+
+  function scheduleInit() {
+    const runInit = () => { initProductPage(); };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', runInit, { once: true });
+    } else {
+      setTimeout(runInit, 0);
+    }
+    // BFCache/back-forward navigation safety.
+    window.addEventListener('pageshow', runInit);
+    // If any late script stalls DOMContentLoaded, retry once after load.
+    window.addEventListener('load', () => {
+      if (!window.__productPageInitialized && !window.__productPageInitInProgress) {
+        runInit();
+      }
+    }, { once: true });
+    // Final guard: avoid permanent skeleton on intermittent script/network issues.
+    setTimeout(() => {
+      if (!window.__productPageInitialized && !window.__productPageInitInProgress) {
+        runInit();
+      }
+    }, 4000);
+  }
+
+  scheduleInit();
 })();
