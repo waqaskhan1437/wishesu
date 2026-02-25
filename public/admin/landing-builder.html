@@ -211,6 +211,8 @@ fetch('${API}/api/product/${firstProd?.id||1}').then(r=>r.json()).then(d=>{
       a.click();
     }
 
+    let currentPageId = null;
+
     async function loadPages() {
       try {
         const res = await fetch('/api/pages');
@@ -227,19 +229,28 @@ fetch('${API}/api/product/${firstProd?.id||1}').then(r=>r.json()).then(d=>{
       if (!title || !slug) { alert('Enter title and slug'); return; }
 
       try {
+        const payload = { title, slug, content: JSON.stringify(sections) };
+        if (currentPageId) payload.id = currentPageId;
+
         const res = await fetch('/api/page/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, slug, content: JSON.stringify(sections) })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
-        if (data.success) { alert('✅ Saved!'); loadPages(); }
-        else alert('Error: ' + data.error);
+        if (data.success) {
+          currentPageId = data.id ? Number(data.id) : currentPageId;
+          alert('✅ Saved!');
+          loadPages();
+        } else {
+          alert('Error: ' + data.error);
+        }
       } catch (e) { alert('Error: ' + e.message); }
     }
 
     document.getElementById('page-select').onchange = async function() {
       if (!this.value) {
+        currentPageId = null;
         sections = [];
         document.getElementById('page-title').value = '';
         document.getElementById('page-slug').value = '';
@@ -248,6 +259,7 @@ fetch('${API}/api/product/${firstProd?.id||1}').then(r=>r.json()).then(d=>{
       }
       const page = pages.find(p => p.id == this.value);
       if (page) {
+        currentPageId = Number(page.id) || null;
         document.getElementById('page-title').value = page.title;
         document.getElementById('page-slug').value = page.slug;
         try {
@@ -261,3 +273,4 @@ fetch('${API}/api/product/${firstProd?.id||1}').then(r=>r.json()).then(d=>{
   </script>
 </body>
 </html>
+

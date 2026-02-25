@@ -1029,7 +1029,7 @@ function getCanonicalRedirectPath(pathname) {
   const raw = String(pathname || '/').trim() || '/';
   if (raw === '/admin/' || raw === '/api/') return null;
   if (raw.startsWith('/admin/') || raw.startsWith('/api/')) return null;
-  if (raw === '/blog/' || raw === '/forum/') return null;
+  if (raw === '/blog/' || raw === '/forum/' || raw === '/products/') return null;
   const normalized = normalizeCanonicalPath(raw);
   return normalized !== raw ? normalized : null;
 }
@@ -3357,7 +3357,14 @@ if (method === 'GET' || method === 'HEAD') {
           defaultPageType = 'forum_archive';
         }
         // Product grid
-        else if (path === '/products-grid' || path === '/products-grid/' || path === '/products-grid.html') {
+        else if (
+          path === '/products' ||
+          path === '/products/' ||
+          path === '/products.html' ||
+          path === '/products-grid' ||
+          path === '/products-grid/' ||
+          path === '/products-grid.html'
+        ) {
           defaultPageType = 'product_grid';
         }
         
@@ -3456,9 +3463,7 @@ if (method === 'GET' || method === 'HEAD') {
             '/blog': '/blog/',
             '/blog/': '/blog/',
             '/forum': '/forum/',
-            '/forum/': '/forum/',
-            '/products': '/products.html',
-            '/products/': '/products.html'
+            '/forum/': '/forum/'
           };
           const archiveTarget = archiveAssetAliases[assetPath];
           if (archiveTarget) {
@@ -3469,7 +3474,26 @@ if (method === 'GET' || method === 'HEAD') {
           }
         }
 
-        const assetResp = await env.ASSETS.fetch(assetReq);
+        let assetResp = await env.ASSETS.fetch(assetReq);
+
+        // Defensive fallback for product listing route: if the asset layer
+        // responds with a redirect for `/products`, serve the concrete grid
+        // file directly to avoid browser-side redirect loops.
+        if (
+          (method === 'GET' || method === 'HEAD') &&
+          (assetPath === '/products' || assetPath === '/products/') &&
+          [301, 302, 307, 308].includes(assetResp.status)
+        ) {
+          try {
+            const fallbackUrl = new URL('/products-grid.html', req.url);
+            assetReq = new Request(fallbackUrl.toString(), req);
+            assetPath = '/products-grid.html';
+            const fallbackResp = await env.ASSETS.fetch(assetReq);
+            if (fallbackResp.status === 200) {
+              assetResp = fallbackResp;
+            }
+          } catch (_) {}
+        }
         
         const contentType = assetResp.headers.get('content-type') || '';
         const isHTML = contentType.includes('text/html') || assetPath === '/_product_template.tpl';
@@ -3860,7 +3884,14 @@ if (method === 'GET' || method === 'HEAD') {
             }
             
             // Collection page - inject product list schema
-            if (assetPath === '/index.html' || assetPath === '/' || assetPath === '/products.html' || assetPath === '/products-grid.html') {
+            if (
+              assetPath === '/index.html' ||
+              assetPath === '/' ||
+              assetPath === '/products' ||
+              assetPath === '/products/' ||
+              assetPath === '/products.html' ||
+              assetPath === '/products-grid.html'
+            ) {
               if (env.DB) {
                 await initDB(env);
                 const productsResult = await env.DB.prepare(`

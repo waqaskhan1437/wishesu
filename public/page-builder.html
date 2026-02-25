@@ -669,6 +669,8 @@
     // State
     let currentPageType = 'custom';
     let editingSection = null;
+    let editingPageId = null;
+    let originalPageSlug = '';
     
     // Get hero section with optional feature image
     function getHeroSection() {
@@ -1708,20 +1710,27 @@ document.addEventListener('DOMContentLoaded', function() {
 </html>`;
 
       try {
+        const payload = {
+          title: title,
+          slug: slug,
+          content: fullHTML,
+          meta_description: desc,
+          page_type: currentPageType,
+          is_default: isDefault && currentPageType !== 'custom',
+          feature_image_url: featureImageUrl,
+          status: 'published'
+        };
+        if (editingPageId) {
+          payload.id = editingPageId;
+        } else if (originalPageSlug) {
+          payload.original_slug = originalPageSlug;
+        }
+
         // Save full page using /api/page/save so that title and meta description are persisted
         const res = await fetch('/api/page/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: title,
-            slug: slug,
-            content: fullHTML,
-            meta_description: desc,
-            page_type: currentPageType,
-            is_default: isDefault && currentPageType !== 'custom',
-            feature_image_url: featureImageUrl,
-            status: 'published'
-          })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         // Restore button state regardless of outcome
@@ -1730,6 +1739,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.success) {
           // Use slug returned from API if available (handles uniqueness)
           const savedSlug = data.slug || slug;
+          if (data.id) editingPageId = Number(data.id);
+          originalPageSlug = savedSlug;
           document.getElementById('seo-slug').value = savedSlug;
           alert(`✅ Page saved!\n\nURL: ${window.location.origin}/${savedSlug}`);
           loadCurrentDefaults();
@@ -1794,6 +1805,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const data = await res.json();
         
         if (data.content) {
+          editingPageId = data.id ? Number(data.id) : null;
+          originalPageSlug = (data.slug || name || '').toString().trim();
+
           const canvas = document.getElementById('builder-canvas');
           const parser = new DOMParser();
           const doc = parser.parseFromString(data.content, 'text/html');
@@ -1804,7 +1818,7 @@ document.addEventListener('DOMContentLoaded', function() {
           const metaDesc = doc.querySelector('meta[name="description"]');
           if (metaDesc) document.getElementById('seo-desc').value = metaDesc.getAttribute('content') || '';
           
-          document.getElementById('seo-slug').value = name;
+          document.getElementById('seo-slug').value = data.slug || name;
           if (data.page_type) setPageType(data.page_type);
           document.getElementById('is-default').checked = data.is_default === 1;
 

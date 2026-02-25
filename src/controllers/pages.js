@@ -15,6 +15,15 @@ const PAGE_TYPES = {
   PRODUCT_GRID: 'product_grid'
 };
 
+function sanitizePageSlug(input) {
+  return String(input || '')
+    .toLowerCase()
+    .replace(/['"`]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-+/g, '-');
+}
+
 /**
  * Get active pages (public - cached)
  */
@@ -176,20 +185,11 @@ export async function savePage(env, body) {
   // hyphens for separators, and trim leading/trailing hyphens. This prevents
   // invalid characters from being stored in the database and ensures URLs
   // remain SEO‑friendly.
-  let finalSlug;
-  if (body.slug && typeof body.slug === 'string' && body.slug.trim().length > 0) {
-    finalSlug = body.slug.toLowerCase()
-      .replace(/['"`]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .replace(/-+/g, '-');
-  } else {
-    finalSlug = (body.title || '').toLowerCase()
-      .replace(/['"`]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .replace(/-+/g, '-');
-  }
+  const finalSlug = sanitizePageSlug(
+    body.slug && typeof body.slug === 'string' && body.slug.trim().length > 0
+      ? body.slug
+      : (body.title || '')
+  );
   if (!finalSlug) {
     return json({ error: 'slug could not be generated from title' }, 400);
   }
@@ -205,26 +205,68 @@ export async function savePage(env, body) {
     body.is_default === 'true';
   const isDefault = wantsDefault && pageType !== 'custom' ? 1 : 0;
 
-  // If setting as default, clear other defaults first
-  if (isDefault && pageType !== 'custom') {
-    await env.DB.prepare(
-      'UPDATE pages SET is_default = 0 WHERE page_type = ?'
-    ).bind(pageType).run();
+  const clearDefaultsIfNeeded = async () => {
+    if (isDefault && pageType !== 'custom') {
+      await env.DB.prepare(
+        'UPDATE pages SET is_default = 0 WHERE page_type = ?'
+      ).bind(pageType).run();
+    }
+  };
+
+  const bodyId = Number(body.id);
+  const hasValidBodyId = Number.isInteger(bodyId) && bodyId > 0;
+  const originalSlug = sanitizePageSlug(body.original_slug || '');
+
+  let updateId = hasValidBodyId ? bodyId : null;
+  if (!updateId && originalSlug) {
+    const existingByOriginalSlug = await env.DB.prepare(
+      'SELECT id FROM pages WHERE slug = ? LIMIT 1'
+    ).bind(originalSlug).first();
+    if (existingByOriginalSlug && existingByOriginalSlug.id) {
+      updateId = Number(existingByOriginalSlug.id);
+    }
   }
 
-  // When updating existing page, use the sanitized slug. When creating a new
-  // page, check for slug uniqueness and append a numeric suffix if needed.
-  if (body.id) {
+  // When updating existing page, use the sanitized slug.
+  if (updateId) {
+    const existingPage = await env.DB.prepare(
+      'SELECT id FROM pages WHERE id = ? LIMIT 1'
+    ).bind(updateId).first();
+    if (!existingPage) {
+      return json({ error: 'page not found' }, 404);
+    }
+
+    const slugOwner = await env.DB.prepare(
+      'SELECT id FROM pages WHERE slug = ? LIMIT 1'
+    ).bind(finalSlug).first();
+    if (slugOwner && Number(slugOwner.id) !== updateId) {
+      return json({ error: 'slug already exists' }, 409);
+    }
+
+    await clearDefaultsIfNeeded();
+
     await env.DB.prepare(
       'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, feature_image_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-    ).bind(finalSlug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published', Number(body.id)).run();
-    return json({ success: true, id: body.id, slug: finalSlug });
+    ).bind(
+      finalSlug,
+      body.title,
+      body.content || '',
+      body.meta_description || '',
+      pageType,
+      isDefault,
+      body.feature_image_url || '',
+      body.status || 'published',
+      updateId
+    ).run();
+    return json({ success: true, id: updateId, slug: finalSlug });
   }
 
   // If no ID but a page with the same slug exists, update it instead of creating a duplicate
   try {
     const existingBySlug = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(finalSlug).first();
     if (existingBySlug) {
+      await clearDefaultsIfNeeded();
+
       await env.DB.prepare(
         'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, feature_image_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
       ).bind(
@@ -252,6 +294,9 @@ export async function savePage(env, body) {
     if (!exists) break;
     uniqueSlug = `${finalSlug}-${idx++}`;
   }
+
+  await clearDefaultsIfNeeded();
+
   const r = await env.DB.prepare(
     'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(uniqueSlug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published').run();
@@ -262,7 +307,7 @@ export async function savePage(env, body) {
  * Save page builder (simplified endpoint)
  */
 export async function savePageBuilder(env, body) {
-  const name = (body.name || '').trim();
+  const name = sanitizePageSlug((body.name || '').trim());
   const content = body.content || '';
   const pageType = body.page_type || 'custom';
   // Only set as default when explicitly requested by the client UI.
@@ -275,46 +320,70 @@ export async function savePageBuilder(env, body) {
 
   if (!name) return json({ error: 'name required' }, 400);
 
-  // If setting as default, clear other defaults first
-  if (isDefault && pageType !== 'custom') {
-    try {
-      await env.DB.prepare(
-        'UPDATE pages SET is_default = 0 WHERE page_type = ?'
-      ).bind(pageType).run();
-    } catch (e) {
-      // Column might not exist yet, ignore
+  const clearDefaultsIfNeeded = async () => {
+    if (isDefault && pageType !== 'custom') {
+      try {
+        await env.DB.prepare(
+          'UPDATE pages SET is_default = 0 WHERE page_type = ?'
+        ).bind(pageType).run();
+      } catch (e) {
+        // Column might not exist yet, ignore
+      }
     }
+  };
+
+  const bodyId = Number(body.id);
+  const hasValidBodyId = Number.isInteger(bodyId) && bodyId > 0;
+  const originalSlug = sanitizePageSlug(body.original_slug || '');
+  let existing = null;
+
+  if (hasValidBodyId) {
+    existing = await env.DB.prepare('SELECT id FROM pages WHERE id = ?').bind(bodyId).first();
+  }
+  if (!existing && originalSlug) {
+    existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(originalSlug).first();
+  }
+  if (!existing) {
+    existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(name).first();
   }
 
-  const existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(name).first();
-  
   if (existing) {
+    const slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(name).first();
+    if (slugOwner && Number(slugOwner.id) !== Number(existing.id)) {
+      return json({ error: 'slug already exists' }, 409);
+    }
+
+    await clearDefaultsIfNeeded();
+
     // Try with new columns first, fallback to old schema
     try {
       await env.DB.prepare(
-        'UPDATE pages SET content=?, page_type=?, is_default=?, feature_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-      ).bind(content, pageType, isDefault, body.feature_image_url || '', existing.id).run();
+        'UPDATE pages SET slug=?, content=?, page_type=?, is_default=?, feature_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(name, content, pageType, isDefault, body.feature_image_url || '', existing.id).run();
     } catch (e) {
       // Fallback: columns don't exist, use basic update
       await env.DB.prepare(
-        'UPDATE pages SET content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-      ).bind(content, existing.id).run();
+        'UPDATE pages SET slug=?, content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+      ).bind(name, content, existing.id).run();
     }
-    return json({ success: true, id: existing.id });
+    return json({ success: true, id: existing.id, slug: name });
   }
-  
+
+  // If setting as default, clear other defaults first
+  await clearDefaultsIfNeeded();
+
   // Try with new columns first, fallback to old schema
   try {
     const r = await env.DB.prepare(
       'INSERT INTO pages (slug, title, content, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).bind(name, name, content, pageType, isDefault, body.feature_image_url || '', 'published').run();
-    return json({ success: true, id: r.meta?.last_row_id });
+    return json({ success: true, id: r.meta?.last_row_id, slug: name });
   } catch (e) {
     // Fallback: columns don't exist, use basic insert
     const r = await env.DB.prepare(
       'INSERT INTO pages (slug, title, content, status) VALUES (?, ?, ?, ?)'
     ).bind(name, name, content, 'published').run();
-    return json({ success: true, id: r.meta?.last_row_id });
+    return json({ success: true, id: r.meta?.last_row_id, slug: name });
   }
 }
 
@@ -484,10 +553,12 @@ export async function duplicatePage(env, body) {
 export async function loadPageBuilder(env, name) {
   if (!name) return json({ error: 'name required' }, 400);
   
-  const row = await env.DB.prepare('SELECT content, page_type, is_default, feature_image_url FROM pages WHERE slug = ?').bind(name).first();
-  if (!row) return json({ content: '', page_type: 'custom', is_default: 0, feature_image_url: '' });
+  const row = await env.DB.prepare('SELECT id, slug, content, page_type, is_default, feature_image_url FROM pages WHERE slug = ?').bind(name).first();
+  if (!row) return json({ id: null, slug: name, content: '', page_type: 'custom', is_default: 0, feature_image_url: '' });
 
   return json({
+    id: row.id || null,
+    slug: row.slug || name,
     content: row.content || '',
     page_type: row.page_type || 'custom',
     is_default: row.is_default || 0,
