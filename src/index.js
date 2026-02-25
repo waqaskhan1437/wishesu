@@ -993,9 +993,11 @@ const CANONICAL_ALIAS_MAP = new Map([
   ['/blog.html', '/blog'],
   ['/forum/index.html', '/forum'],
   ['/forum.html', '/forum'],
-  ['/products/index.html', '/products-grid.html'],
-  ['/products.html', '/products-grid.html'],
-  ['/products-grid', '/products-grid.html'],
+  ['/products/index.html', '/products'],
+  ['/products.html', '/products'],
+  ['/products-grid', '/products'],
+  ['/products-grid/', '/products'],
+  ['/products-grid.html', '/products'],
   ['/checkout/', '/checkout'],
   ['/checkout/index.html', '/checkout'],
   ['/success.html', '/success'],
@@ -3184,7 +3186,7 @@ if (method === 'GET' || method === 'HEAD') {
       // Support both clean URLs (/forum) and .html URLs (/forum.html)
       // Instead of redirecting .html to clean URLs, we attempt to serve
       // dynamic pages directly when a matching slug exists in the database.
-      const coreStaticPages = ['index', 'products-grid', 'product', 'buyer-order', 'order-detail', 'order-success', 'success', 'checkout', 'page-builder'];
+      const coreStaticPages = ['index', 'products', 'products-grid', 'product', 'buyer-order', 'order-detail', 'order-success', 'success', 'checkout', 'page-builder'];
       
       // Check for .html extension and attempt to serve a dynamic page when a slug exists.
       if (path.endsWith('.html') && !path.includes('/admin/') && !path.startsWith('/admin') && !path.startsWith('/blog/') && !path.startsWith('/forum/')) {
@@ -3276,9 +3278,7 @@ if (method === 'GET' || method === 'HEAD') {
       // is configured and eliminates unnecessary redirects for end users.
       if (method === 'GET' || method === 'HEAD') {
         const htmlAssetTargets = {
-          // Map `/products.html` to the existing grid file; this file lives in
-          // the static assets folder and can be served without DB access.
-          '/products.html': '/products-grid.html',
+          // Checkout and order flows are always served from static assets.
           '/checkout': '/checkout.html',
           '/checkout/': '/checkout.html',
           '/checkout/index.html': '/checkout.html',
@@ -3357,7 +3357,7 @@ if (method === 'GET' || method === 'HEAD') {
           defaultPageType = 'forum_archive';
         }
         // Product grid
-        else if (path === '/products/' || path === '/products/index.html' || path === '/products' || path === '/products-grid.html' || path === '/products.html') {
+        else if (path === '/products-grid' || path === '/products-grid/' || path === '/products-grid.html') {
           defaultPageType = 'product_grid';
         }
         
@@ -3456,7 +3456,9 @@ if (method === 'GET' || method === 'HEAD') {
             '/blog': '/blog/',
             '/blog/': '/blog/',
             '/forum': '/forum/',
-            '/forum/': '/forum/'
+            '/forum/': '/forum/',
+            '/products': '/products.html',
+            '/products/': '/products.html'
           };
           const archiveTarget = archiveAssetAliases[assetPath];
           if (archiveTarget) {

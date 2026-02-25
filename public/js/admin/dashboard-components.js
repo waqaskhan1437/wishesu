@@ -112,7 +112,7 @@
     <a href="/" style="font-size:1.5rem;font-weight:800;color:#4f46e5;text-decoration:none;">WISHVIDEO</a>
     <nav style="display:flex;gap:25px;flex-wrap:wrap;">
       <a href="/" style="color:#374151;text-decoration:none;font-weight:500;">Home</a>
-      <a href="/products-grid" style="color:#374151;text-decoration:none;font-weight:500;">Products</a>
+      <a href="/products" style="color:#374151;text-decoration:none;font-weight:500;">Products</a>
       <a href="/blog" style="color:#374151;text-decoration:none;font-weight:500;">Blog</a>
       <a href="/forum" style="color:#374151;text-decoration:none;font-weight:500;">Forum</a>
     </nav>
@@ -135,8 +135,8 @@
     <a href="/" style="font-size:1.5rem;font-weight:800;color:#fff;text-decoration:none;">WISHVIDEO</a>
     <nav style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
       <a href="/" style="color:#d1d5db;text-decoration:none;">Home</a>
-      <a href="/products-grid" style="color:#d1d5db;text-decoration:none;">Products</a>
-      <a href="/products-grid" style="background:#4f46e5;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Book Now</a>
+      <a href="/products" style="color:#d1d5db;text-decoration:none;">Products</a>
+      <a href="/products" style="background:#4f46e5;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Book Now</a>
     </nav>
   </div>
 </header>`
@@ -148,7 +148,7 @@
     <a href="/" style="font-size:1.5rem;font-weight:800;color:#1f2937;text-decoration:none;">WISHVIDEO</a>
     <nav style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
       <a href="/" style="color:#374151;text-decoration:none;font-weight:500;">Home</a>
-      <a href="/products-grid" style="color:#374151;text-decoration:none;font-weight:500;">Products</a>
+      <a href="/products" style="color:#374151;text-decoration:none;font-weight:500;">Products</a>
       <a href="/blog" style="color:#374151;text-decoration:none;font-weight:500;">Blog</a>
     </nav>
   </div>
@@ -176,7 +176,7 @@
       <h4 style="color:#fff;margin:0 0 15px;font-size:1.1rem;">Quick Links</h4>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <a href="/" style="color:#d1d5db;text-decoration:none;font-size:0.9rem;">Home</a>
-        <a href="/products-grid" style="color:#d1d5db;text-decoration:none;font-size:0.9rem;">Products</a>
+        <a href="/products" style="color:#d1d5db;text-decoration:none;font-size:0.9rem;">Products</a>
         <a href="/blog" style="color:#d1d5db;text-decoration:none;font-size:0.9rem;">Blog</a>
       </div>
     </div>
@@ -196,7 +196,7 @@
   <div style="max-width:800px;margin:0 auto;">
     <h3 style="margin:0 0 10px;font-size:1.5rem;">Ready to create something special?</h3>
     <p style="margin:0 0 20px;opacity:0.9;">Order your personalized video greeting today!</p>
-    <a href="/products-grid" style="display:inline-block;background:white;color:#667eea;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:700;">Browse Products</a>
+    <a href="/products" style="display:inline-block;background:white;color:#667eea;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:700;">Browse Products</a>
   </div>
   <p style="margin:30px 0 0;font-size:0.85rem;opacity:0.8;">&copy; 2025 WishVideo</p>
 </footer>`
@@ -210,7 +210,7 @@
     </div>
     <nav style="display:flex;gap:25px;flex-wrap:wrap;">
       <a href="/" style="color:#6b7280;text-decoration:none;font-size:0.9rem;">Home</a>
-      <a href="/products-grid" style="color:#6b7280;text-decoration:none;font-size:0.9rem;">Products</a>
+      <a href="/products" style="color:#6b7280;text-decoration:none;font-size:0.9rem;">Products</a>
       <a href="/blog" style="color:#6b7280;text-decoration:none;font-size:0.9rem;">Blog</a>
       <a href="/forum" style="color:#6b7280;text-decoration:none;font-size:0.9rem;">Forum</a>
     </nav>
@@ -223,7 +223,7 @@
   // Common page paths for exclusion
   const commonPages = [
     { path: '/', label: 'Home Page' },
-    { path: '/products-grid', label: 'Products Grid' },
+    { path: '/products', label: 'Products' },
     { path: '/product/', label: 'Product Pages (all)' },
     { path: '/blog', label: 'Blog' },
     { path: '/blog/', label: 'Blog Posts (all)' },
