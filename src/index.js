@@ -1056,6 +1056,189 @@ function isSensitiveNoindexPath(pathname) {
   return false;
 }
 
+const SITE_COMPONENTS_SSR_TTL_MS = 10 * 1000;
+const siteComponentsSsrCache = {
+  value: null,
+  fetchedAt: 0,
+  hasValue: false
+};
+
+function ensureGlobalComponentsRuntimeScript(html) {
+  if (!html) return html;
+  const source = String(html);
+  if (!/<body[^>]*>/i.test(source)) return source;
+  if (/global-components\.js/i.test(source)) return source;
+  return source.replace(
+    /<body([^>]*)>/i,
+    '<body$1>\n<script defer src="/js/global-components.js"></script>'
+  );
+}
+
+function upsertBodyDataAttribute(html, attrName, attrValue = '1') {
+  if (!html || !attrName) return html;
+  return String(html).replace(/<body([^>]*)>/i, (match, attrs = '') => {
+    const attrRe = new RegExp(`\\s${attrName}=(["']).*?\\1`, 'i');
+    if (attrRe.test(attrs)) {
+      return `<body${attrs.replace(attrRe, ` ${attrName}="${attrValue}"`)}>`;
+    }
+    return `<body${attrs} ${attrName}="${attrValue}">`;
+  });
+}
+
+function hasGlobalHeaderMarkup(html) {
+  const source = String(html || '');
+  if (/id=["']global-header["']/i.test(source)) return true;
+  return /class=["'][^"']*\bsite-header\b[^"']*["']/i.test(source);
+}
+
+function hasGlobalFooterMarkup(html) {
+  const source = String(html || '');
+  if (/id=["']global-footer["']/i.test(source)) return true;
+  return /class=["'][^"']*\bsite-footer\b[^"']*["']/i.test(source);
+}
+
+function injectMarkupIntoSlot(html, slotId, markup) {
+  if (!html || !slotId || !markup) return html;
+  const slotRe = new RegExp(
+    `<([a-zA-Z0-9:-]+)([^>]*)\\bid=["']${slotId}["']([^>]*)>[\\s\\S]*?<\\/\\1>`,
+    'i'
+  );
+  if (!slotRe.test(html)) return html;
+  return String(html).replace(slotRe, (_full, tagName, before = '', after = '') => {
+    const attrsBase = `${before} id="${slotId}"${after}`;
+    const attrs = /\bdata-injected\s*=/.test(attrsBase)
+      ? attrsBase
+      : `${attrsBase} data-injected="1"`;
+    return `<${tagName}${attrs}>${markup}</${tagName}>`;
+  });
+}
+
+function injectGlobalHeaderSsr(html, headerCode) {
+  if (!html || !headerCode || hasGlobalHeaderMarkup(html)) return html;
+  const withSlot = injectMarkupIntoSlot(html, 'global-header-slot', headerCode);
+  if (withSlot !== html) return withSlot;
+  if (!/<body[^>]*>/i.test(html)) return html;
+  return String(html).replace(
+    /<body([^>]*)>/i,
+    `<body$1>\n<div id="global-header">${headerCode}</div>`
+  );
+}
+
+function injectGlobalFooterSsr(html, footerCode) {
+  if (!html || !footerCode || hasGlobalFooterMarkup(html)) return html;
+  const withSlot = injectMarkupIntoSlot(html, 'global-footer-slot', footerCode);
+  if (withSlot !== html) return withSlot;
+  const source = String(html);
+  if (/<\/body>/i.test(source)) {
+    return source.replace(/<\/body>/i, `<div id="global-footer">${footerCode}</div>\n</body>`);
+  }
+  return `${source}\n<div id="global-footer">${footerCode}</div>`;
+}
+
+function isExcludedFromGlobalComponents(excludedPages, pathname) {
+  if (!Array.isArray(excludedPages) || excludedPages.length === 0) return false;
+  const path = String(pathname || '/');
+  for (const item of excludedPages) {
+    const excluded = String(item || '').trim();
+    if (!excluded) continue;
+    if (excluded === path) return true;
+    if (excluded.endsWith('/') && path.startsWith(excluded)) return true;
+    if (path.startsWith(excluded + '/')) return true;
+  }
+  return false;
+}
+
+function resolveDefaultComponentCode(components, type) {
+  if (!components || typeof components !== 'object') return '';
+  const isHeader = type === 'header';
+  const list = Array.isArray(isHeader ? components.headers : components.footers)
+    ? (isHeader ? components.headers : components.footers)
+    : [];
+  const defaultId = isHeader ? components.defaultHeaderId : components.defaultFooterId;
+  if (!defaultId) return '';
+  const match = list.find((entry) => String(entry?.id || '') === String(defaultId));
+  return String(match?.code || '').trim();
+}
+
+async function getSiteComponentsForSsr(env) {
+  if (!env?.DB) return null;
+  const now = Date.now();
+  if (siteComponentsSsrCache.hasValue && (now - siteComponentsSsrCache.fetchedAt) < SITE_COMPONENTS_SSR_TTL_MS) {
+    return siteComponentsSsrCache.value;
+  }
+  try {
+    await initDB(env);
+    const row = await env.DB.prepare(
+      'SELECT value FROM settings WHERE key = ?'
+    ).bind('site_components').first();
+
+    let parsed = null;
+    if (row && row.value) {
+      try {
+        const candidate = JSON.parse(row.value);
+        if (candidate && typeof candidate === 'object') {
+          parsed = candidate;
+        }
+      } catch (_) {}
+    }
+
+    siteComponentsSsrCache.value = parsed;
+    siteComponentsSsrCache.fetchedAt = now;
+    siteComponentsSsrCache.hasValue = true;
+    return parsed;
+  } catch (error) {
+    console.warn('Failed to load site components for SSR:', error);
+    if (siteComponentsSsrCache.hasValue) return siteComponentsSsrCache.value;
+    siteComponentsSsrCache.value = null;
+    siteComponentsSsrCache.fetchedAt = now;
+    siteComponentsSsrCache.hasValue = true;
+    return null;
+  }
+}
+
+async function applyGlobalComponentsSsr(env, html, pathname) {
+  let out = ensureGlobalComponentsRuntimeScript(html);
+  if (!out || !env?.DB) return out;
+  if (!/<body[^>]*>/i.test(out)) return out;
+
+  const currentPath = String(pathname || '/');
+  if (currentPath === '/admin' || currentPath.startsWith('/admin/')) {
+    return out;
+  }
+
+  const components = await getSiteComponentsForSsr(env);
+  if (!components || typeof components !== 'object') return out;
+  if (isExcludedFromGlobalComponents(components.excludedPages, currentPath)) return out;
+
+  const enableHeader = components?.settings?.enableGlobalHeader !== false;
+  const enableFooter = components?.settings?.enableGlobalFooter !== false;
+  const headerCode = enableHeader ? resolveDefaultComponentCode(components, 'header') : '';
+  const footerCode = enableFooter ? resolveDefaultComponentCode(components, 'footer') : '';
+
+  let injectedHeader = false;
+  let injectedFooter = false;
+
+  if (headerCode && !hasGlobalHeaderMarkup(out)) {
+    const withHeader = injectGlobalHeaderSsr(out, headerCode);
+    injectedHeader = withHeader !== out;
+    out = withHeader;
+  }
+
+  if (footerCode && !hasGlobalFooterMarkup(out)) {
+    const withFooter = injectGlobalFooterSsr(out, footerCode);
+    injectedFooter = withFooter !== out;
+    out = withFooter;
+  }
+
+  if (injectedHeader || injectedFooter) {
+    out = upsertBodyDataAttribute(out, 'data-components-ssr', '1');
+    if (injectedHeader) out = upsertBodyDataAttribute(out, 'data-global-header-ssr', '1');
+    if (injectedFooter) out = upsertBodyDataAttribute(out, 'data-global-footer-ssr', '1');
+  }
+
+  return out;
+}
+
 // -------------------------------
 // SEO helper functions
 // -------------------------------
@@ -2973,6 +3156,7 @@ if (method === 'GET' || method === 'HEAD') {
               try {
                 html = await injectAnalyticsAndMeta(env, html);
               } catch (e) {}
+              html = await applyGlobalComponentsSsr(env, html, path);
 
               const resp = new Response(html, {
                 status: 200,
@@ -3105,6 +3289,7 @@ if (method === 'GET' || method === 'HEAD') {
               try {
                 html = await injectAnalyticsAndMeta(env, html);
               } catch (e) {}
+              html = await applyGlobalComponentsSsr(env, html, path);
 
               const resp = new Response(html, {
                 status: 200,
@@ -3199,11 +3384,7 @@ if (method === 'GET' || method === 'HEAD') {
               const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
               if (row && row.content) {
                 // Serve the dynamic page content directly instead of redirecting.
-                let html = row.content;
-                // Inject global components script for header/footer if missing.
-                if (html.includes('<body') && !html.includes('global-components.js')) {
-                  html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script defer src="/js/global-components.js"></script>');
-                }
+                let html = await applyGlobalComponentsSsr(env, row.content, path);
                 // Apply SEO tags if available.
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
@@ -3239,11 +3420,7 @@ if (method === 'GET' || method === 'HEAD') {
               await initDB(env);
               const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
               if (row && row.content) {
-                // Inject global components script for header/footer
-                let html = row.content;
-                if (html.includes('<body') && !html.includes('global-components.js')) {
-                  html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script defer src="/js/global-components.js"></script>');
-                }
+                let html = await applyGlobalComponentsSsr(env, row.content, path);
 
                 // Apply SEO
                 try {
@@ -3319,6 +3496,7 @@ if (method === 'GET' || method === 'HEAD') {
             const isHtmlTarget = contentType.includes('text/html') || target.endsWith('.html');
             if (assetResp.status === 200 && method === 'GET' && isHtmlTarget) {
               let html = await assetResp.text();
+              html = await applyGlobalComponentsSsr(env, html, path);
               try {
                 const seo = await getSeoForRequest(env, req, { path: normalizedPath });
                 html = applySeoToHtml(html, seo.robots, seo.canonical);
@@ -3376,11 +3554,7 @@ if (method === 'GET' || method === 'HEAD') {
             ).bind(defaultPageType, 'published').first();
             
             if (defaultPage && defaultPage.content) {
-              // Inject global components script for header/footer
-              let html = defaultPage.content;
-              if (html.includes('<body') && !html.includes('global-components.js')) {
-                html = html.replace(/<body([^>]*)>/i, '<body$1>\n<script defer src="/js/global-components.js"></script>');
-              }
+              let html = await applyGlobalComponentsSsr(env, defaultPage.content, path);
 
               // Apply SEO tags (robots, canonical)
               const responseHeaders = {
@@ -3928,6 +4102,8 @@ if (method === 'GET' || method === 'HEAD') {
               }
             }
             
+            html = await applyGlobalComponentsSsr(env, html, path);
+
             const normalizedRequestPath = normalizeCanonicalPath(path);
             const sensitiveHtmlPath = isSensitiveNoindexPath(normalizedRequestPath);
             const headers = new Headers(); headers.set('Alt-Svc', 'clear');

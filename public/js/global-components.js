@@ -28,6 +28,32 @@
     return;
   }
 
+  function readSsrFlags() {
+    const body = document.body;
+    const ds = body && body.dataset ? body.dataset : {};
+    return {
+      enabled: ds.componentsSsr === '1',
+      header: ds.globalHeaderSsr === '1',
+      footer: ds.globalFooterSsr === '1'
+    };
+  }
+
+  function hasRenderedHeader() {
+    return !!(
+      document.querySelector('#global-header') ||
+      document.querySelector('.site-header') ||
+      document.querySelector('#global-header-slot[data-injected="1"]')
+    );
+  }
+
+  function hasRenderedFooter() {
+    return !!(
+      document.querySelector('#global-footer') ||
+      document.querySelector('.site-footer') ||
+      document.querySelector('#global-footer-slot[data-injected="1"]')
+    );
+  }
+
   // Load branding from cache or fetch
   async function loadBranding() {
     try {
@@ -258,18 +284,23 @@
     // Always load branding
     loadBranding();
 
+    const ssr = readSsrFlags();
+    const skipHeaderInjection = ssr.header || hasRenderedHeader();
+    const skipFooterInjection = ssr.footer || hasRenderedFooter();
+    if (skipHeaderInjection && skipFooterInjection) return;
+
     const data = await loadData();
     if (!data) return;
     if (isExcluded(data.excludedPages)) return;
 
     // Inject header if enabled
-    if (data.settings?.enableGlobalHeader !== false && data.defaultHeaderId) {
+    if (!skipHeaderInjection && data.settings?.enableGlobalHeader !== false && data.defaultHeaderId) {
       const header = (data.headers || []).find(h => h.id === data.defaultHeaderId);
       if (header && header.code) injectHeader(header.code);
     }
 
     // Inject footer if enabled
-    if (data.settings?.enableGlobalFooter !== false && data.defaultFooterId) {
+    if (!skipFooterInjection && data.settings?.enableGlobalFooter !== false && data.defaultFooterId) {
       const footer = (data.footers || []).find(f => f.id === data.defaultFooterId);
       if (footer && footer.code) injectFooter(footer.code);
     }
