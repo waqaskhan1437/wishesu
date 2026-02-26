@@ -174,8 +174,7 @@ import {
   getCobaltSettings,
   saveCobaltSettings,
   getSiteComponents,
-  saveSiteComponents,
-  uploadCustomerFile
+  saveSiteComponents
 } from './controllers/admin.js';
 
 // SEO (Minimal 2025 - Google Requirements Only)
@@ -290,15 +289,10 @@ export async function routeApiRequest(req, env, url, path, method) {
     return uploadTempFile(env, req, url);
   }
 
-// Archive.org credentials for direct browser upload (Zero CPU)
-    if (method === 'POST' && path === '/api/upload/archive-credentials') {
-      return getArchiveCredentials(env);
-    }
-
-    // R2 upload endpoint for admin interface
-    if (method === 'POST' && path === '/api/admin/r2-upload') {
-      return uploadCustomerFile(env, req, url);
-    }
+  // Archive.org credentials for direct browser upload (Zero CPU)
+  if (method === 'POST' && path === '/api/upload/archive-credentials') {
+    return getArchiveCredentials(env);
+  }
 
   // ----- ALL OTHER API ROUTES REQUIRE DB -----
   // Consolidated DB check - performed once for all routes below

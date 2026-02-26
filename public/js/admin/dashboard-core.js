@@ -179,8 +179,8 @@ window.AD = window.AdminDashboard;
       case 'components':
         if (AD.loadComponents) await AD.loadComponents(panel);
         break;
-      case 'r2-upload':
-        if (AD.loadR2Upload) AD.loadR2Upload(panel); 
+      case 'payment':
+        if (window.initPaymentTab) await window.initPaymentTab();
         break;
       case 'webhooks':
         if (window.loadWebhooks) await window.loadWebhooks(panel);
