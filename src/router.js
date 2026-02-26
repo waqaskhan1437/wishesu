@@ -221,6 +221,13 @@ import {
   saveCleanSettingsApi
 } from './controllers/settings-clean.js';
 
+// Emergency Uploads (R2 public links)
+import {
+  uploadEmergencyFileApi,
+  listEmergencyUploadsApi,
+  getEmergencyDownloadApi
+} from './controllers/emergency-uploads.js';
+
 // Webhooks (New Universal System v3.0)
 import {
   getWebhooksSettings,
@@ -289,6 +296,14 @@ export async function routeApiRequest(req, env, url, path, method) {
     return uploadTempFile(env, req, url);
   }
 
+  // Public downloads for emergency uploads (stored in R2)
+  // This makes the link public without making the whole bucket public.
+  // Example: /api/public-download/abc123
+  if (method === 'GET' && path.startsWith('/api/public-download/')) {
+    const id = path.split('/').pop();
+    return getEmergencyDownloadApi(env, id);
+  }
+
   // Archive.org credentials for direct browser upload (Zero CPU)
   if (method === 'POST' && path === '/api/upload/archive-credentials') {
     return getArchiveCredentials(env);
@@ -332,6 +347,35 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (path === '/api/admin/chats/block' && method === 'POST') {
     const body = await req.json().catch(() => ({}));
     return blockSession(env, body);
+  }
+
+  // ----- CLEAN SETTINGS (Admin) -----
+  if (method === 'GET' && path === '/api/admin/settings/clean') {
+    const auth = await requireAdminOrApiKey(req, env, 'settings:read');
+    if (auth) return auth;
+    return getCleanSettingsApi(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/settings/clean') {
+    const auth = await requireAdminOrApiKey(req, env, 'settings:update');
+    if (auth) return auth;
+    const body = await req.json().catch(() => ({}));
+    return saveCleanSettingsApi(env, body);
+  }
+
+  // ----- EMERGENCY UPLOADS (Admin) -----
+  // Upload any file to R2 and get a public download link
+  if (method === 'POST' && path === '/api/admin/emergency-uploads') {
+    const auth = await requireAdminOrApiKey(req, env, 'settings:update');
+    if (auth) return auth;
+    return uploadEmergencyFileApi(env, req);
+  }
+
+  // List uploaded files (latest first)
+  if (method === 'GET' && path === '/api/admin/emergency-uploads') {
+    const auth = await requireAdminOrApiKey(req, env, 'settings:read');
+    if (auth) return auth;
+    return listEmergencyUploadsApi(env, url);
   }
 
   if (path === '/api/admin/chats/delete' && method === 'DELETE') {
