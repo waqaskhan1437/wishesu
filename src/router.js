@@ -221,6 +221,14 @@ import {
   saveCleanSettingsApi
 } from './controllers/settings-clean.js';
 
+// Settings Media (R2 MP4 links)
+import {
+  uploadSettingsMediaFile,
+  listSettingsMediaFiles,
+  deleteSettingsMediaFile,
+  getPublicSettingsMediaFile
+} from './controllers/settings-media.js';
+
 // Webhooks (New Universal System v3.0)
 import {
   getWebhooksSettings,
@@ -479,6 +487,27 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/admin/settings/clean') {
     const body = await req.json().catch(() => ({}));
     return saveCleanSettingsApi(env, body);
+  }
+
+  if (method === 'POST' && path === '/api/admin/settings/media/upload') {
+    return uploadSettingsMediaFile(env, req, url);
+  }
+
+  if (method === 'GET' && path === '/api/admin/settings/media/list') {
+    return listSettingsMediaFiles(env, req, url);
+  }
+
+  if (method === 'DELETE' && path === '/api/admin/settings/media/delete') {
+    return deleteSettingsMediaFile(env, req, url);
+  }
+
+  if (method === 'GET' && path.startsWith('/api/r2/settings-media/')) {
+    const parts = path.split('/');
+    const mediaId = parseInt(parts[4] || '', 10);
+    if (!Number.isFinite(mediaId) || mediaId <= 0) {
+      return json({ error: 'Invalid media id' }, 400);
+    }
+    return getPublicSettingsMediaFile(env, mediaId);
   }
 
   // ----- CACHE PURGE -----
