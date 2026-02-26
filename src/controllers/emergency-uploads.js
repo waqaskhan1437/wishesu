@@ -137,7 +137,7 @@ export async function listEmergencyUploadsApi(env, url) {
  * GET /api/public-download/:id
  * Public endpoint.
  */
-export async function getEmergencyDownloadApi(env, id) {
+export async function getEmergencyDownloadApi(env, req, id) {
   try {
     if (!env?.R2_BUCKET) {
       return json({ error: 'R2_BUCKET not configured' }, 500);
@@ -145,22 +145,61 @@ export async function getEmergencyDownloadApi(env, id) {
 
     await ensureTable(env);
 
+    // IMPORTANT:
+    // - For <video> playback, browsers often require Range requests.
+    // - Do NOT force attachment for video/audio/images.
+    // - Still allow "force download" via ?download=1
+
     const row = await env.DB.prepare(
-      'SELECT r2_key, filename, content_type, created_at FROM emergency_uploads WHERE id = ?'
+      'SELECT r2_key, filename, content_type, size, created_at FROM emergency_uploads WHERE id = ?'
     ).bind(id).first();
 
     if (!row?.r2_key) {
       return json({ error: 'Not found' }, 404);
     }
 
-    const obj = await env.R2_BUCKET.get(row.r2_key);
+    const url = new URL(req.url);
+    const forceDownload = url.searchParams.get('download') === '1';
+
+    const rangeHeader = req.headers.get('Range');
+
+    const obj = await env.R2_BUCKET.get(row.r2_key, rangeHeader ? { range: rangeHeader } : undefined);
     if (!obj) {
       return json({ error: 'File missing from storage' }, 404);
     }
 
     const headers = new Headers();
-    headers.set('Content-Type', row.content_type || 'application/octet-stream');
-    headers.set('Content-Disposition', `attachment; filename="${row.filename || 'file'}"`);
+
+    // Content type
+    const contentType = row.content_type || obj.httpMetadata?.contentType || 'application/octet-stream';
+    headers.set('Content-Type', contentType);
+
+    // Disposition
+    // Inline for video/audio/image so product video can play.
+    const isInlineType = /^(video\/|audio\/|image\/)/i.test(contentType);
+    const disposition = (forceDownload || !isInlineType)
+      ? `attachment; filename="${row.filename || 'file'}"`
+      : `inline; filename="${row.filename || 'file'}"`;
+    headers.set('Content-Disposition', disposition);
+
+    // Range support
+    headers.set('Accept-Ranges', 'bytes');
+
+    // If R2 returned a range response, it includes Content-Range and a 206 status.
+    if (obj.range) {
+      headers.set('Content-Range', `bytes ${obj.range.offset}-${obj.range.end}/${obj.range.length}`);
+      headers.set('Content-Length', String(obj.range.end - obj.range.offset + 1));
+      return new Response(obj.body, { status: 206, headers });
+    }
+
+    // Normal response
+    if (obj.size != null) {
+      headers.set('Content-Length', String(obj.size));
+    } else if (row.size != null) {
+      headers.set('Content-Length', String(row.size));
+    }
+
+    // Cache
     headers.set('Cache-Control', 'public, max-age=31536000, immutable');
 
     return new Response(obj.body, { status: 200, headers });

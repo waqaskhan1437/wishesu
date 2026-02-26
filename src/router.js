@@ -301,7 +301,7 @@ export async function routeApiRequest(req, env, url, path, method) {
   // Example: /api/public-download/abc123
   if (method === 'GET' && path.startsWith('/api/public-download/')) {
     const id = path.split('/').pop();
-    return getEmergencyDownloadApi(env, id);
+    return getEmergencyDownloadApi(env, req, id);
   }
 
   // Archive.org credentials for direct browser upload (Zero CPU)
