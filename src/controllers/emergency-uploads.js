@@ -21,6 +21,8 @@ function randomId() {
 
 async function ensureTable(env) {
   if (!env?.DB) return;
+
+  // 1) Ensure table exists
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS emergency_uploads (
       id TEXT PRIMARY KEY,
@@ -31,6 +33,42 @@ async function ensureTable(env) {
       created_at INTEGER NOT NULL
     )
   `).run();
+
+  // 2) Migration for older deployments where emergency_uploads had wrong column types
+  // This fixes: D1_ERROR: datatype mismatch: SQLITE_MISMATCH
+  try {
+    const info = await env.DB.prepare('PRAGMA table_info(emergency_uploads)').all();
+    const cols = (info.results || []).map(r => ({ name: r.name, type: String(r.type || '').toUpperCase() }));
+    const idCol = cols.find(c => c.name === 'id');
+
+    // If id isn't TEXT, rebuild the table.
+    if (idCol && idCol.type && idCol.type !== 'TEXT') {
+      const backup = `emergency_uploads_old_${Date.now()}`;
+
+      await env.DB.prepare(`ALTER TABLE emergency_uploads RENAME TO ${backup}`).run();
+
+      await env.DB.prepare(`
+        CREATE TABLE emergency_uploads (
+          id TEXT PRIMARY KEY,
+          r2_key TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          content_type TEXT,
+          size INTEGER,
+          created_at INTEGER NOT NULL
+        )
+      `).run();
+
+      // Copy what we can from old table. Cast id to TEXT.
+      await env.DB.prepare(`
+        INSERT INTO emergency_uploads (id, r2_key, filename, content_type, size, created_at)
+        SELECT CAST(id AS TEXT), r2_key, filename, content_type, size, created_at
+        FROM ${backup}
+      `).run();
+    }
+  } catch (e) {
+    // If PRAGMA isn't allowed or migration fails, don't block requests.
+    // The next request may still work if schema is already correct.
+  }
 }
 
 /**

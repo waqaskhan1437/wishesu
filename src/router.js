@@ -304,6 +304,18 @@ export async function routeApiRequest(req, env, url, path, method) {
     return getEmergencyDownloadApi(env, req, id);
   }
 
+  // Direct link for product video_url (looks like a real mp4 URL)
+  // Examples:
+  //  - /emergency/abc123.mp4
+  //  - /emergency/abc123
+  if (method === 'GET' && path.startsWith('/emergency/')) {
+    let tail = path.slice('/emergency/'.length);
+    if (!tail) return json({ error: 'Not found' }, 404);
+    if (tail.endsWith('.mp4')) tail = tail.slice(0, -4);
+    const id = tail.split('/')[0];
+    return getEmergencyDownloadApi(env, req, id);
+  }
+
   // Archive.org credentials for direct browser upload (Zero CPU)
   if (method === 'POST' && path === '/api/upload/archive-credentials') {
     return getArchiveCredentials(env);
