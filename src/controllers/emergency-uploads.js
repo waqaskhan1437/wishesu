@@ -8,7 +8,7 @@
  */
 
 import { json } from '../utils/response.js';
-import { resolveContentType, sanitizeFilename } from '../utils/upload-helper.js';
+import { getMimeTypeFromFilename, sanitizeFilename } from '../utils/upload-helper.js';
 
 function randomId() {
   // URL-safe id
@@ -99,7 +99,11 @@ export async function uploadEmergencyFileApi(env, req) {
     // Cloudflare File object
     const filenameRaw = file?.name || 'file';
     const filename = sanitizeFilename(filenameRaw);
-    const contentType = resolveContentType(req, filename) || file.type || 'application/octet-stream';
+    // IMPORTANT: do NOT use request content-type here because it is multipart/form-data.
+    // Prefer the uploaded file's mime type, then infer from filename.
+    const contentType = (file.type && file.type !== 'application/octet-stream')
+      ? file.type
+      : (getMimeTypeFromFilename(filename) || 'application/octet-stream');
     const size = Number(file.size || 0);
 
     // Basic size limit (adjust if you want)
@@ -114,10 +118,14 @@ export async function uploadEmergencyFileApi(env, req) {
     // Keep files under a dedicated prefix
     const r2Key = `emergency/${createdAt}-${id}-${filename}`;
 
+    const isInlineType = /^(video\/|audio\/|image\/)/i.test(contentType);
+
     await env.R2_BUCKET.put(r2Key, file.stream(), {
       httpMetadata: {
         contentType,
-        contentDisposition: `attachment; filename="${filename}"`
+        // Inline for media so it can be embedded/played on product pages.
+        // Force download still possible via /api/public-download/:id?download=1
+        contentDisposition: `${isInlineType ? 'inline' : 'attachment'}; filename="${filename}"`
       }
     });
 
