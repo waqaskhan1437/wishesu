@@ -2905,9 +2905,26 @@ if (isLoginRoute && method === 'GET') {
 
 // Handle login (POST)
 if (isLoginRoute && method === 'POST') {
-  const form = await req.formData();
-  const email = (form.get('email') || '').toString().trim();
-  const password = (form.get('password') || '').toString();
+  let email = '';
+  let password = '';
+  try {
+    // Prefer formData for standard login form submissions.
+    const form = await req.formData();
+    email = (form.get('email') || '').toString().trim();
+    password = (form.get('password') || '').toString();
+  } catch (_) {
+    // Some bots send malformed/unsupported payloads to /admin/login.
+    // Fall back to parsing URL-encoded raw body and otherwise treat as invalid login.
+    try {
+      const raw = await req.text();
+      const params = new URLSearchParams(raw || '');
+      email = (params.get('email') || '').toString().trim();
+      password = (params.get('password') || '').toString();
+    } catch (_) {
+      email = '';
+      password = '';
+    }
+  }
 
   if (!env.ADMIN_EMAIL || !env.ADMIN_PASSWORD || !env.ADMIN_SESSION_SECRET) {
     return new Response('Admin login is not configured (missing secrets).', { status: 500, headers: noStoreHeaders() });
