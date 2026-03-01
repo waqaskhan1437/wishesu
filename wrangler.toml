@@ -80,3 +80,4 @@ crons = ["*/5 * * * *", "0 2 * * *"]
 # help confirm that you are receiving the latest build.
 [vars]
 VERSION = "22"
+CANONICAL_HOST = "prankwish.com"

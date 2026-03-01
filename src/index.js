@@ -39,6 +39,25 @@ function noStoreHeaders(extra = {}) {
   };
 }
 
+function isLocalHostname(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.localhost');
+}
+
+function getCanonicalHostname(url, env) {
+  const configured = String(env?.CANONICAL_HOST || '').trim().toLowerCase();
+  if (configured) return configured;
+  const current = String(url?.hostname || '').toLowerCase();
+  if (current.startsWith('www.')) return current.slice(4);
+  return current;
+}
+
+function isInsecureRequest(url, req) {
+  const forwardedProto = String(req.headers.get('x-forwarded-proto') || '').toLowerCase();
+  if (forwardedProto) return forwardedProto !== 'https';
+  return url.protocol !== 'https:';
+}
+
 function isEnabledFlag(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
@@ -2733,12 +2752,27 @@ export default {
   async fetch(req, env, ctx) {
     setVersion(env.VERSION);
     const url = new URL(req.url);
+    const method = req.method;
+
+    // Enforce HTTPS + canonical host to prevent duplicate HTTP/www indexing.
+    if ((method === 'GET' || method === 'HEAD') && !isLocalHostname(url.hostname)) {
+      const canonicalHostname = getCanonicalHostname(url, env);
+      const needsHttpsRedirect = isInsecureRequest(url, req);
+      const needsHostRedirect = canonicalHostname && url.hostname.toLowerCase() !== canonicalHostname;
+      if (needsHttpsRedirect || needsHostRedirect) {
+        const target = new URL(req.url);
+        target.protocol = 'https:';
+        if (needsHostRedirect) target.hostname = canonicalHostname;
+        if (target.port === '80' || target.port === '443') target.port = '';
+        return Response.redirect(target.toString(), 301);
+      }
+    }
+
     // Normalize the request path
     let path = url.pathname.replace(/\/+/g, '/');
     if (!path.startsWith('/')) {
       path = '/' + path;
     }
-    const method = req.method;
 
     // Fast reject obvious scanner/bot probes before any expensive work.
     if ((method === 'GET' || method === 'HEAD' || method === 'POST') && isLikelyScannerPath(path)) {
