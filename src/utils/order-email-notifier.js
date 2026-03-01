@@ -10,6 +10,7 @@ import { fetchWithTimeout } from './fetch-timeout.js';
 
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const BREVO_TIMEOUT_MS = 10000;
+const URL_RE = /https?:\/\/[^\s<>"'`]+/gi;
 
 function normalizeEmail(value) {
   const email = String(value || '').trim().toLowerCase();
@@ -90,11 +91,100 @@ function formatTimestamp(ts) {
   return date.toISOString();
 }
 
-function toMultilineHtml(value) {
-  return escapeHtml(String(value || ''))
+function splitUrlAndTrailingPunctuation(input) {
+  let url = String(input || '').trim();
+  let trailing = '';
+  while (/[),.;!?]$/.test(url)) {
+    trailing = url.slice(-1) + trailing;
+    url = url.slice(0, -1);
+  }
+  return { url, trailing };
+}
+
+function normalizeUrlList(value) {
+  const text = String(value || '');
+  const out = [];
+  let m;
+  while ((m = URL_RE.exec(text)) !== null) {
+    const match = String(m[0] || '');
+    if (!match) continue;
+    const { url } = splitUrlAndTrailingPunctuation(match);
+    if (url) out.push(url);
+  }
+  URL_RE.lastIndex = 0;
+  return Array.from(new Set(out));
+}
+
+function isLikelyImageUrl(url) {
+  const value = String(url || '').toLowerCase();
+  if (!value) return false;
+  if (/\.(png|jpe?g|gif|webp|bmp|svg)(?:[\?#].*)?$/i.test(value)) return true;
+  if (value.includes('res.cloudinary.com') && value.includes('/image/')) return true;
+  return false;
+}
+
+function isLikelyDownloadableUrl(url) {
+  const value = String(url || '').toLowerCase();
+  if (!value) return false;
+  if (isLikelyImageUrl(value)) return true;
+  if (/(\/download\/|[?&]download=1)/i.test(value)) return true;
+  return /\.(mp4|mov|webm|mkv|avi|m3u8|mp3|wav|pdf|zip|rar|7z|docx?|xlsx?|pptx?)(?:[\?#].*)?$/i.test(value);
+}
+
+function linkifyPlainText(text) {
+  const source = String(text || '');
+  if (!source) return '-';
+
+  let out = '';
+  let cursor = 0;
+  let m;
+  while ((m = URL_RE.exec(source)) !== null) {
+    const raw = String(m[0] || '');
+    const start = m.index;
+    out += escapeHtml(source.slice(cursor, start));
+
+    const { url, trailing } = splitUrlAndTrailingPunctuation(raw);
+    if (url) {
+      const safeUrl = escapeHtml(url);
+      const extraAttrs = isLikelyDownloadableUrl(url) ? ' download' : '';
+      out += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer"${extraAttrs} style="color:#1d4ed8;text-decoration:underline;word-break:break-all;">${safeUrl}</a>`;
+    } else {
+      out += escapeHtml(raw);
+    }
+
+    if (trailing) out += escapeHtml(trailing);
+    cursor = start + raw.length;
+  }
+
+  out += escapeHtml(source.slice(cursor));
+  URL_RE.lastIndex = 0;
+  return out;
+}
+
+function addonValueHtml(value) {
+  const normalized = String(value || '')
     .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/\n/g, '<br>');
+    .replace(/\r/g, '\n');
+  const lines = normalized ? normalized.split('\n') : ['-'];
+  const linkedLines = lines.map((line) => linkifyPlainText(line)).join('<br>');
+
+  const imagePreviews = normalizeUrlList(normalized)
+    .filter(isLikelyImageUrl)
+    .slice(0, 3)
+    .map((url) => {
+      const safe = escapeHtml(url);
+      return `
+        <div style="margin-top:8px;">
+          <a href="${safe}" target="_blank" rel="noopener noreferrer" download style="color:#1d4ed8;text-decoration:underline;font-size:12px;">Open image</a>
+          <br>
+          <img src="${safe}" alt="Uploaded media" style="margin-top:6px;max-width:220px;max-height:160px;border:1px solid #e2e8f0;border-radius:8px;display:block;">
+        </div>
+      `.trim();
+    })
+    .join('');
+
+  if (!imagePreviews) return linkedLines;
+  return `${linkedLines}<div style="margin-top:6px;">${imagePreviews}</div>`;
 }
 
 function normalizeAddons(addonsInput) {
@@ -130,7 +220,7 @@ function addonsTableHtml(addons) {
   const rows = addons.map((addon, idx) => `
     <tr>
       <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0f172a;width:30%;">${escapeHtml(addon.field || `Addon ${idx + 1}`)}</td>
-      <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#334155;line-height:1.5;">${toMultilineHtml(addon.value || '-')}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#334155;line-height:1.5;">${addonValueHtml(addon.value || '-')}</td>
     </tr>
   `).join('');
 
