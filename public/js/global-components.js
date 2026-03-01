@@ -10,6 +10,29 @@
   const BRANDING_KEY = 'siteBranding';
   const BRANDING_CACHE_TTL = 600000; // 10 minutes (reduced API calls)
 
+  function normalizePath(pathname) {
+    let p = String(pathname || '/').trim() || '/';
+    p = p.replace(/\/+/g, '/');
+    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+    return p || '/';
+  }
+
+  function isTransactionalPage(pathname) {
+    const p = normalizePath(pathname);
+    return (
+      p === '/checkout' ||
+      p === '/success' ||
+      p === '/buyer-order' ||
+      p === '/order-detail' ||
+      p === '/order-success' ||
+      p === '/checkout.html' ||
+      p === '/success.html' ||
+      p === '/buyer-order.html' ||
+      p === '/order-detail.html' ||
+      p === '/order-success.html'
+    );
+  }
+
   function readProductBootstrap() {
     try {
       const el = document.getElementById('product-bootstrap');
@@ -23,8 +46,9 @@
 
   const productBootstrap = readProductBootstrap();
   
-  // Don't run on admin pages
-  if (window.location.pathname.startsWith('/admin')) {
+  // Don't run on admin/transactional pages.
+  const currentPath = window.location.pathname || '/';
+  if (currentPath.startsWith('/admin') || isTransactionalPage(currentPath)) {
     return;
   }
 

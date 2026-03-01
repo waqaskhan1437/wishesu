@@ -1167,6 +1167,16 @@ function isExcludedFromGlobalComponents(excludedPages, pathname) {
   return false;
 }
 
+function isTransactionalGlobalComponentsPath(pathname) {
+  const normalized = normalizeCanonicalPath(pathname || '/');
+  return (
+    normalized === '/checkout' ||
+    normalized === '/success' ||
+    normalized === '/buyer-order' ||
+    normalized === '/order-detail'
+  );
+}
+
 function resolveDefaultComponentCode(components, type) {
   if (!components || typeof components !== 'object') return '';
   const isHeader = type === 'header';
@@ -1216,18 +1226,29 @@ async function getSiteComponentsForSsr(env) {
 }
 
 async function applyGlobalComponentsSsr(env, html, pathname) {
-  let out = ensureGlobalComponentsRuntimeScript(html);
-  if (!out || !env?.DB) return out;
-  if (!/<body[^>]*>/i.test(out)) return out;
-
   const currentPath = String(pathname || '/');
-  if (currentPath === '/admin' || currentPath.startsWith('/admin/')) {
-    return out;
+  const normalizedPath = normalizeCanonicalPath(currentPath);
+  if (
+    !html ||
+    !/<body[^>]*>/i.test(html) ||
+    normalizedPath === '/admin' ||
+    normalizedPath.startsWith('/admin/') ||
+    isTransactionalGlobalComponentsPath(normalizedPath)
+  ) {
+    return html;
   }
+
+  let out = ensureGlobalComponentsRuntimeScript(html);
+  if (!env?.DB) return out;
 
   const components = await getSiteComponentsForSsr(env);
   if (!components || typeof components !== 'object') return out;
-  if (isExcludedFromGlobalComponents(components.excludedPages, currentPath)) return out;
+  if (
+    isExcludedFromGlobalComponents(components.excludedPages, currentPath) ||
+    isExcludedFromGlobalComponents(components.excludedPages, normalizedPath)
+  ) {
+    return out;
+  }
 
   const enableHeader = components?.settings?.enableGlobalHeader !== false;
   const enableFooter = components?.settings?.enableGlobalFooter !== false;
