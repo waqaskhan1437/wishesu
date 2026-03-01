@@ -1356,6 +1356,12 @@ function applySeoToHtml(html, robots, canonical) {
       html = html.replace(/<\/head>/i, `${canonicalTag}\n</head>`);
     }
   }
+  // Ensure a default favicon is present for pages that don't define one.
+  const faviconRegex = /<link\s+rel=["'](?:icon|shortcut icon)["'][^>]*>/i;
+  if (!faviconRegex.test(html)) {
+    const faviconTags = `<link rel="icon" type="image/svg+xml" href="/favicon.svg">\n<link rel="icon" href="/favicon.ico" sizes="any">`;
+    html = html.replace(/<\/head>/i, `${faviconTags}\n</head>`);
+  }
   return html;
 }
 
