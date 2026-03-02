@@ -3585,6 +3585,9 @@ if (method === 'GET' || method === 'HEAD') {
                   html = html.replace(/<\/head>/i, `\n    ${noindexTags}\n  </head>`);
                 }
               } catch (_) {}
+              try {
+                html = await injectAnalyticsAndMeta(env, html);
+              } catch (_) {}
 
               headers.set('Content-Type', 'text/html; charset=utf-8');
               return new Response(html, { status: 200, headers });

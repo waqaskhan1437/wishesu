@@ -45,6 +45,73 @@
     }
   }
 
+  function normalizeAmount(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) return 0;
+    return Math.round(num * 100) / 100;
+  }
+
+  function dispatchWithRetry(dispatcher, maxAttempts = 18, delayMs = 500) {
+    let attempt = 0;
+    const run = () => {
+      attempt += 1;
+      let sent = false;
+      try {
+        sent = dispatcher() === true;
+      } catch (e) {
+        sent = false;
+      }
+      if (!sent && attempt < maxAttempts) {
+        setTimeout(run, delayMs);
+      }
+    };
+    run();
+  }
+
+  function trackBeginCheckoutEvent(details) {
+    const amount = normalizeAmount(details && details.amount);
+    if (!amount) return;
+
+    const productId = String((details && details.productId) || '').trim();
+    const productTitle = String((details && details.productTitle) || '').trim();
+    const couponCode = String((details && details.couponCode) || '').trim();
+
+    const gaPayload = {
+      currency: 'USD',
+      value: amount,
+      items: [
+        {
+          item_id: productId || 'unknown',
+          item_name: productTitle || 'Product',
+          price: amount,
+          quantity: 1
+        }
+      ]
+    };
+    if (couponCode) gaPayload.coupon = couponCode;
+
+    const fbPayload = {
+      value: amount,
+      currency: 'USD',
+      content_type: 'product',
+      num_items: 1
+    };
+    if (productId) fbPayload.content_ids = [productId];
+    if (productTitle) fbPayload.content_name = productTitle;
+
+    dispatchWithRetry(() => {
+      if (typeof window.gtag !== 'function') return false;
+      window.gtag('event', 'begin_checkout', gaPayload);
+      return true;
+    });
+
+    dispatchWithRetry(() => {
+      if (typeof window.fbq !== 'function') return false;
+      window.fbq('track', 'InitiateCheckout', fbPayload);
+      return true;
+    });
+  }
+
   function syncEmailToWhop(email) {
     cachedAddonEmail = email || '';
     window.cachedAddonEmail = cachedAddonEmail;
@@ -341,6 +408,13 @@
         appliedCoupon.discounted_price = finalAmount;
       }
     }
+
+    trackBeginCheckoutEvent({
+      productId: window.productData && window.productData.id,
+      productTitle: (window.productData && window.productData.title) || '',
+      amount: finalAmount,
+      couponCode: (appliedCoupon && appliedCoupon.code) || ''
+    });
 
     // Store order data in localStorage as backup
     const orderData = {

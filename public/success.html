@@ -513,8 +513,102 @@
         paypal_direct: 'PayPal Smart Buttons',
         whop: 'Whop Checkout'
       };
+      const PURCHASE_TRACK_KEY = 'analytics_purchase_tracked_v1';
 
       providerPill.textContent = providerLabels[provider] || 'Secure Checkout';
+
+      const readPendingOrderData = () => {
+        try {
+          const raw = localStorage.getItem('pendingOrderData');
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === 'object' ? parsed : null;
+        } catch (e) {
+          return null;
+        }
+      };
+
+      const pendingOrderSnapshot = readPendingOrderData();
+
+      const normalizeAmount = (value) => {
+        const amount = Number(value);
+        if (!Number.isFinite(amount) || amount <= 0) return 0;
+        return Math.round(amount * 100) / 100;
+      };
+
+      const dispatchWithRetry = (dispatcher, maxAttempts = 18, delayMs = 500) => {
+        let attempt = 0;
+        const run = () => {
+          attempt += 1;
+          let sent = false;
+          try {
+            sent = dispatcher() === true;
+          } catch (e) {
+            sent = false;
+          }
+          if (!sent && attempt < maxAttempts) {
+            setTimeout(run, delayMs);
+          }
+        };
+        run();
+      };
+
+      const trackPurchaseEvent = (orderId, fallbackAmount) => {
+        const cleanOrderId = String(orderId || '').trim();
+        if (!cleanOrderId) return;
+
+        const amount = normalizeAmount(fallbackAmount || (pendingOrderSnapshot && pendingOrderSnapshot.amount));
+        if (!amount) return;
+
+        const productIdValue = String(productId || (pendingOrderSnapshot && pendingOrderSnapshot.productId) || '').trim();
+        const productTitleValue = String((pendingOrderSnapshot && pendingOrderSnapshot.productTitle) || '').trim();
+        const couponCode = String((pendingOrderSnapshot && pendingOrderSnapshot.coupon && pendingOrderSnapshot.coupon.code) || '').trim();
+        const purchaseKey = `${cleanOrderId}|${productIdValue}|${amount}`;
+
+        try {
+          const seenSession = sessionStorage.getItem(PURCHASE_TRACK_KEY);
+          const seenLocal = localStorage.getItem(PURCHASE_TRACK_KEY);
+          if (seenSession === purchaseKey || seenLocal === purchaseKey) return;
+          sessionStorage.setItem(PURCHASE_TRACK_KEY, purchaseKey);
+          localStorage.setItem(PURCHASE_TRACK_KEY, purchaseKey);
+        } catch (e) {}
+
+        const gaPayload = {
+          transaction_id: cleanOrderId,
+          value: amount,
+          currency: 'USD',
+          items: [
+            {
+              item_id: productIdValue || 'unknown',
+              item_name: productTitleValue || 'Product',
+              price: amount,
+              quantity: 1
+            }
+          ]
+        };
+        if (couponCode) gaPayload.coupon = couponCode;
+
+        const fbPayload = {
+          value: amount,
+          currency: 'USD',
+          content_type: 'product',
+          num_items: 1
+        };
+        if (productIdValue) fbPayload.content_ids = [productIdValue];
+        if (productTitleValue) fbPayload.content_name = productTitleValue;
+
+        dispatchWithRetry(() => {
+          if (typeof window.gtag !== 'function') return false;
+          window.gtag('event', 'purchase', gaPayload);
+          return true;
+        });
+
+        dispatchWithRetry(() => {
+          if (typeof window.fbq !== 'function') return false;
+          window.fbq('track', 'Purchase', fbPayload);
+          return true;
+        });
+      };
 
       const paymentRef = paymentId || receiptId || paypalToken;
       if (paymentRef) {
@@ -571,6 +665,7 @@
       // Direct PayPal Smart Button flow (already captured server-side)
       if (provider === 'paypal_direct' && directOrderId) {
         setReady(directOrderId);
+        trackPurchaseEvent(directOrderId, pendingOrderSnapshot && pendingOrderSnapshot.amount);
         return;
       }
 
@@ -587,6 +682,7 @@
 
           if (captureData.success && captureData.order_id) {
             setReady(captureData.order_id);
+            trackPurchaseEvent(captureData.order_id, pendingOrderSnapshot && pendingOrderSnapshot.amount);
             window.history.replaceState({}, '', `/success.html?product=${encodeURIComponent(productId || '')}`);
             return;
           }
@@ -643,6 +739,7 @@
 
           if (res.ok && data && data.orderId) {
             setReady(data.orderId);
+            trackPurchaseEvent(data.orderId, payload.amount);
             return;
           }
         } catch (err) {}
