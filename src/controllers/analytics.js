@@ -172,16 +172,14 @@ export async function injectAnalyticsAndMeta(env, html) {
           `<script>\n` +
           `window.addEventListener('load', function() {\n` +
           `  function initGA() {\n` +
+          `    window.dataLayer = window.dataLayer || [];\n` +
+          `    window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };\n` +
+          `    window.gtag('js', new Date());\n` +
+          `    window.gtag('config', '${gaId}');\n` +
           `    var s = document.createElement('script');\n` +
           `    s.src = 'https://www.googletagmanager.com/gtag/js?id=${gaId}';\n` +
           `    s.async = true;\n` +
           `    document.head.appendChild(s);\n` +
-          `    s.onload = function() {\n` +
-          `      window.dataLayer = window.dataLayer || [];\n` +
-          `      function gtag(){dataLayer.push(arguments);}\n` +
-          `      gtag('js', new Date());\n` +
-          `      gtag('config', '${gaId}');\n` +
-          `    };\n` +
           `  }\n` +
           `  if ('requestIdleCallback' in window) {\n` +
           `    requestIdleCallback(initGA, { timeout: 2000 });\n` +
