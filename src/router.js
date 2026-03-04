@@ -396,7 +396,7 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   // ----- NOINDEX PAGES (Hide from search results) -----
   if (method === 'GET' && path === '/api/admin/noindex/list') {
-    return getNoindexList(env);
+    return getNoindexList(env, req);
   }
 
   if (method === 'POST' && path === '/api/admin/noindex/add') {

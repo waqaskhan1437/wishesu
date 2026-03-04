@@ -6,9 +6,12 @@
  */
 
 import { json } from '../utils/response.js';
+import { buildMinimalSitemapXml } from './seo-minimal.js';
+import { canonicalProductPath } from '../utils/formatting.js';
 
 const CACHE_TTL = 60000;
 const EMPTY_RULES = Object.freeze({ noindex: [], index: [] });
+const PREVIEW_LIMIT = 250;
 
 let rulesCache = null;
 let cacheTime = 0;
@@ -25,6 +28,225 @@ function normalizePath(value) {
   p = p.replace(/\/+/g, '/');
   if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
   return p || '/';
+}
+
+function normalizeComparableUrl(rawUrl) {
+  try {
+    const u = new URL(String(rawUrl || '').trim());
+    const protocol = String(u.protocol || '').toLowerCase() || 'https:';
+    const host = String(u.host || '').toLowerCase();
+    const pathname = normalizePath(u.pathname || '/');
+    return `${protocol}//${host}${pathname}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+function decodeXmlEntities(value) {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function isSensitiveNoindexPath(pathname) {
+  const p = normalizePath(pathname);
+  if (p === '/admin' || p.startsWith('/admin/')) return true;
+  if (p === '/api' || p.startsWith('/api/')) return true;
+  if (p === '/checkout' || p === '/success' || p === '/buyer-order' || p === '/order-detail') return true;
+  if (p === '/order' || p.startsWith('/order/')) return true;
+  if (p === '/download' || p.startsWith('/download/')) return true;
+  return false;
+}
+
+function pushCandidate(list, seen, url, source) {
+  const normalized = normalizeComparableUrl(url);
+  if (!normalized || seen.has(normalized)) return;
+  seen.add(normalized);
+  list.push({
+    url: normalized,
+    source: String(source || 'detected')
+  });
+}
+
+async function buildSitemapIndex(env, req) {
+  const index = new Set();
+  const sitemapUrls = [];
+  try {
+    const sm = await buildMinimalSitemapXml(env, req);
+    const xml = String(sm?.body || '');
+    const locRe = /<loc>([\s\S]*?)<\/loc>/gi;
+    let m;
+    while ((m = locRe.exec(xml)) !== null) {
+      const decoded = decodeXmlEntities(m[1] || '');
+      const normalized = normalizeComparableUrl(decoded);
+      if (!normalized) continue;
+      index.add(normalized);
+      sitemapUrls.push(normalized);
+    }
+  } catch (_) {}
+  return { index, sitemapUrls };
+}
+
+async function collectPreviewCandidates(env, req, sitemapUrls) {
+  const reqUrl = new URL(req?.url || 'https://example.com');
+  const baseOrigin = sitemapUrls[0]
+    ? new URL(sitemapUrls[0]).origin
+    : `${reqUrl.protocol}//${reqUrl.host}`;
+
+  const candidates = [];
+  const seen = new Set();
+
+  const corePaths = [
+    '/',
+    '/products',
+    '/blog',
+    '/forum',
+    '/contact',
+    '/privacy',
+    '/refund',
+    '/terms',
+    '/checkout',
+    '/success',
+    '/buyer-order',
+    '/order-detail',
+    '/admin'
+  ];
+  for (const path of corePaths) {
+    pushCandidate(candidates, seen, `${baseOrigin}${path}`, 'core');
+  }
+
+  for (const url of sitemapUrls || []) {
+    pushCandidate(candidates, seen, url, 'sitemap');
+  }
+
+  if (!env.DB) return candidates;
+
+  try {
+    const products = await env.DB.prepare(`
+      SELECT id, title, slug, status
+      FROM products
+      ORDER BY id DESC
+      LIMIT 300
+    `).all();
+    for (const p of products.results || []) {
+      const path = canonicalProductPath({
+        id: p.id,
+        slug: p.slug,
+        title: p.title || `product-${p.id}`
+      });
+      pushCandidate(candidates, seen, `${baseOrigin}${path}`, `product:${String(p.status || '') || 'unknown'}`);
+    }
+  } catch (_) {}
+
+  try {
+    const blogs = await env.DB.prepare(`
+      SELECT slug, status
+      FROM blogs
+      ORDER BY id DESC
+      LIMIT 200
+    `).all();
+    for (const b of blogs.results || []) {
+      const slug = String(b.slug || '').trim();
+      if (!slug) continue;
+      pushCandidate(candidates, seen, `${baseOrigin}/blog/${encodeURIComponent(slug)}`, `blog:${String(b.status || '') || 'unknown'}`);
+    }
+  } catch (_) {}
+
+  try {
+    const pages = await env.DB.prepare(`
+      SELECT slug, status
+      FROM pages
+      ORDER BY id DESC
+      LIMIT 200
+    `).all();
+    for (const p of pages.results || []) {
+      const slug = String(p.slug || '').trim();
+      if (!slug) continue;
+      const path = slug.startsWith('/') ? slug : `/${slug}`;
+      pushCandidate(candidates, seen, `${baseOrigin}${normalizePath(path)}`, `page:${String(p.status || '') || 'unknown'}`);
+    }
+  } catch (_) {}
+
+  try {
+    const forum = await env.DB.prepare(`
+      SELECT slug, status
+      FROM forum_questions
+      ORDER BY id DESC
+      LIMIT 200
+    `).all();
+    for (const q of forum.results || []) {
+      const slug = String(q.slug || '').trim();
+      if (!slug) continue;
+      pushCandidate(candidates, seen, `${baseOrigin}/forum/${encodeURIComponent(slug)}`, `forum:${String(q.status || '') || 'unknown'}`);
+    }
+  } catch (_) {}
+
+  return candidates;
+}
+
+async function buildEffectivePreview(env, req) {
+  const { index: sitemapIndex, sitemapUrls } = await buildSitemapIndex(env, req);
+  const candidates = await collectPreviewCandidates(env, req, sitemapUrls);
+
+  const indexed = [];
+  const noindexed = [];
+
+  for (const item of candidates) {
+    let pathname = '/';
+    try {
+      pathname = normalizePath(new URL(item.url).pathname || '/');
+    } catch (_) {}
+
+    let visibility = 'none';
+    try {
+      visibility = await getSeoVisibilityRuleMatch(env, {
+        pathname,
+        rawPathname: pathname,
+        url: item.url,
+        requestUrl: item.url
+      });
+    } catch (_) {
+      visibility = 'none';
+    }
+
+    let reason = '';
+    let finalStatus = 'index';
+
+    if (isSensitiveNoindexPath(pathname)) {
+      finalStatus = 'noindex';
+      reason = 'sensitive_path';
+    } else if (visibility === 'index') {
+      finalStatus = 'index';
+      reason = 'force_index_rule';
+    } else if (visibility === 'noindex') {
+      finalStatus = 'noindex';
+      reason = 'noindex_rule';
+    } else if (sitemapIndex.has(item.url)) {
+      finalStatus = 'index';
+      reason = 'in_sitemap';
+    } else {
+      finalStatus = 'noindex';
+      reason = 'outside_sitemap';
+    }
+
+    const row = {
+      url: item.url,
+      source: item.source,
+      reason
+    };
+    if (finalStatus === 'index') indexed.push(row);
+    else noindexed.push(row);
+  }
+
+  return {
+    indexedTotal: indexed.length,
+    noindexedTotal: noindexed.length,
+    indexed: indexed.slice(0, PREVIEW_LIMIT),
+    noindexed: noindexed.slice(0, PREVIEW_LIMIT)
+  };
 }
 
 function normalizeRuleInput(value) {
@@ -194,14 +416,16 @@ async function getRulePatterns(env) {
 /**
  * API: Get rules list
  */
-export async function getNoindexList(env) {
+export async function getNoindexList(env, req) {
   try {
     const rules = await getRulePatterns(env);
+    const preview = await buildEffectivePreview(env, req);
     return json({
       success: true,
       urls: rules.noindex, // backward compatibility with old dashboard
       noindexUrls: rules.noindex,
-      indexUrls: rules.index
+      indexUrls: rules.index,
+      preview
     });
   } catch (e) {
     return json({ error: e.message }, 500);

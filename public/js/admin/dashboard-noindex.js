@@ -7,6 +7,16 @@
 (function (AD) {
   let currentNoindexRules = [];
 
+  function formatReason(reason) {
+    const key = String(reason || '');
+    if (key === 'in_sitemap') return 'In sitemap';
+    if (key === 'outside_sitemap') return 'Outside sitemap';
+    if (key === 'force_index_rule') return 'Force-index rule';
+    if (key === 'noindex_rule') return 'Noindex rule';
+    if (key === 'sensitive_path') return 'Sensitive path';
+    return key || 'detected';
+  }
+
   function escapeHtml(value) {
     return String(value || '')
       .replace(/&/g, '&amp;')
@@ -84,6 +94,35 @@
     `;
   }
 
+  function renderEffectiveList(container, items, mode) {
+    const list = Array.isArray(items) ? items : [];
+    if (list.length === 0) {
+      container.innerHTML = `
+        <div style="padding:14px;border:1px dashed #d1d5db;border-radius:8px;color:#6b7280;background:#f9fafb;">
+          No URLs in preview.
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <div style="display:grid;gap:8px;max-height:360px;overflow:auto;padding-right:4px;">
+        ${list.map((item) => `
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fff;">
+            <div style="min-width:0;flex:1;">
+              <div style="font-size:12px;color:#111827;word-break:break-all;">${escapeHtml(item.url || '')}</div>
+              <div style="margin-top:3px;font-size:11px;color:#6b7280;">${escapeHtml(formatReason(item.reason))} • ${escapeHtml(item.source || 'detected')}</div>
+            </div>
+            ${mode === 'noindex'
+              ? `<button onclick="AdminDashboard.forceIndexUrlFromPreview('${encodeURIComponent(String(item.url || ''))}')" style="border:0;background:#2563eb;color:#fff;padding:5px 8px;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;">Force Index</button>`
+              : ''
+            }
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
   async function loadRulesLists() {
     const panel = document.getElementById('main-panel');
     if (!panel) return;
@@ -92,23 +131,38 @@
     const indexContainer = panel.querySelector('#seo-index-list');
     const countNoindex = panel.querySelector('#seo-noindex-count');
     const countIndex = panel.querySelector('#seo-index-count');
+    const effectiveIndexContainer = panel.querySelector('#seo-effective-index-list');
+    const effectiveNoindexContainer = panel.querySelector('#seo-effective-noindex-list');
+    const effectiveIndexCount = panel.querySelector('#seo-effective-index-count');
+    const effectiveNoindexCount = panel.querySelector('#seo-effective-noindex-count');
 
     try {
       const data = await jfetch('/api/admin/noindex/list');
       const noindexUrls = Array.isArray(data.noindexUrls) ? data.noindexUrls : (Array.isArray(data.urls) ? data.urls : []);
       const indexUrls = Array.isArray(data.indexUrls) ? data.indexUrls : [];
+      const preview = data.preview || {};
+      const effectiveIndexed = Array.isArray(preview.indexed) ? preview.indexed : [];
+      const effectiveNoindexed = Array.isArray(preview.noindexed) ? preview.noindexed : [];
       currentNoindexRules = noindexUrls.slice();
 
       renderRulesList(noindexContainer, noindexUrls, 'noindex');
       renderRulesList(indexContainer, indexUrls, 'index');
+      renderEffectiveList(effectiveIndexContainer, effectiveIndexed, 'index');
+      renderEffectiveList(effectiveNoindexContainer, effectiveNoindexed, 'noindex');
 
       countNoindex.textContent = String(noindexUrls.length);
       countIndex.textContent = String(indexUrls.length);
+      effectiveIndexCount.textContent = `${effectiveIndexed.length}${preview.indexedTotal > effectiveIndexed.length ? ` / ${preview.indexedTotal}` : ''}`;
+      effectiveNoindexCount.textContent = `${effectiveNoindexed.length}${preview.noindexedTotal > effectiveNoindexed.length ? ` / ${preview.noindexedTotal}` : ''}`;
     } catch (e) {
       noindexContainer.innerHTML = `<div style="color:#dc2626;">Failed to load rules.</div>`;
       indexContainer.innerHTML = `<div style="color:#dc2626;">Failed to load rules.</div>`;
+      if (effectiveIndexContainer) effectiveIndexContainer.innerHTML = `<div style="color:#dc2626;">Failed to load preview.</div>`;
+      if (effectiveNoindexContainer) effectiveNoindexContainer.innerHTML = `<div style="color:#dc2626;">Failed to load preview.</div>`;
       countNoindex.textContent = '-';
       countIndex.textContent = '-';
+      if (effectiveIndexCount) effectiveIndexCount.textContent = '-';
+      if (effectiveNoindexCount) effectiveNoindexCount.textContent = '-';
       toast(e.message || 'Failed to load rules', false);
     }
   }
@@ -188,6 +242,21 @@
     }
   }
 
+  async function forceIndexUrlFromPreview(encodedUrl) {
+    let url = '';
+    try {
+      url = decodeURIComponent(String(encodedUrl || ''));
+    } catch (_) {
+      url = String(encodedUrl || '');
+    }
+    url = url.trim();
+    if (!url) {
+      toast('Invalid URL', false);
+      return;
+    }
+    await addNoindexUrl(url, 'index');
+  }
+
   function bindQuickButtons(panel) {
     panel.querySelectorAll('[data-seo-rule]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -252,6 +321,24 @@
             <div id="seo-index-list"></div>
           </section>
         </div>
+
+        <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <section style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <h3 style="margin:0;font-size:16px;color:#111827;">Effective Indexed (Preview)</h3>
+              <span style="font-size:12px;color:#6b7280;">Showing: <strong id="seo-effective-index-count">0</strong></span>
+            </div>
+            <div id="seo-effective-index-list"></div>
+          </section>
+
+          <section style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <h3 style="margin:0;font-size:16px;color:#111827;">Effective Noindexed (Preview)</h3>
+              <span style="font-size:12px;color:#6b7280;">Showing: <strong id="seo-effective-noindex-count">0</strong></span>
+            </div>
+            <div id="seo-effective-noindex-list"></div>
+          </section>
+        </div>
       </div>
     `;
 
@@ -263,4 +350,5 @@
   AD.addNoindexUrl = addNoindexUrl;
   AD.removeNoindexUrl = removeNoindexUrl;
   AD.promoteNoindexRule = promoteNoindexRule;
+  AD.forceIndexUrlFromPreview = forceIndexUrlFromPreview;
 })(window.AdminDashboard);
