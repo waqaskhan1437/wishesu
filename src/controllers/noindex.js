@@ -273,19 +273,28 @@ export async function removeNoindexUrl(env, body) {
  * - object: { pathname, rawPathname, url }
  */
 export async function shouldNoindexUrl(env, target) {
+  const visibility = await getSeoVisibilityRuleMatch(env, target);
+  return visibility === 'noindex';
+}
+
+/**
+ * Evaluate explicit SEO visibility rules for a URL target.
+ * Returns one of: 'index' | 'noindex' | 'none'
+ */
+export async function getSeoVisibilityRuleMatch(env, target) {
   const rules = await getRulePatterns(env);
   const candidates = buildCandidates(target);
 
   // Force-index rules take precedence (useful to override wildcard noindex rules)
   for (const rule of rules.index || []) {
-    if (matchesRule(candidates, rule)) return false;
+    if (matchesRule(candidates, rule)) return 'index';
   }
 
   for (const rule of rules.noindex || []) {
-    if (matchesRule(candidates, rule)) return true;
+    if (matchesRule(candidates, rule)) return 'noindex';
   }
 
-  return false;
+  return 'none';
 }
 
 /**

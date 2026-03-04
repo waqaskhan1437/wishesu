@@ -16,7 +16,7 @@ import { generateBackupData, sendBackupEmail, createBackup as createBackupApi } 
 import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML, generateBlogPostingSchema, generateQAPageSchema, generateBreadcrumbSchema, generateOrganizationSchema, generateWebSiteSchema } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildMinimalRobotsTxt, buildMinimalSitemapXml, getMinimalSEOSettings } from './controllers/seo-minimal.js';
-import { getNoindexMetaTags, shouldNoindexUrl } from './controllers/noindex.js';
+import { getNoindexMetaTags, getSeoVisibilityRuleMatch } from './controllers/noindex.js';
 import { canonicalProductPath } from './utils/formatting.js';
 import { handleNoJsRoutes, renderNoJsAdminLoginPage } from './controllers/nojs.js';
 
@@ -1282,6 +1282,77 @@ async function applyGlobalComponentsSsr(env, html, pathname) {
 // -------------------------------
 // SEO helper functions
 // -------------------------------
+const SITEMAP_MEMBERSHIP_TTL_MS = 2 * 60 * 1000;
+const sitemapMembershipCache = {
+  fetchedAt: 0,
+  urls: null
+};
+
+function decodeXmlEntities(value) {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function normalizeUrlForSitemapCompare(rawUrl) {
+  try {
+    const u = new URL(String(rawUrl || '').trim());
+    const protocol = String(u.protocol || '').toLowerCase() || 'https:';
+    const host = String(u.hostname || '').toLowerCase();
+    if (!host) return '';
+
+    const includePort = Boolean(
+      u.port &&
+      !((protocol === 'https:' && u.port === '443') || (protocol === 'http:' && u.port === '80'))
+    );
+    const port = includePort ? `:${u.port}` : '';
+    const path = normalizeCanonicalPath(u.pathname || '/');
+    return `${protocol}//${host}${port}${path}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+async function getSitemapMembershipSet(env, req) {
+  const now = Date.now();
+  if (sitemapMembershipCache.urls && (now - sitemapMembershipCache.fetchedAt) < SITEMAP_MEMBERSHIP_TTL_MS) {
+    return sitemapMembershipCache.urls;
+  }
+
+  const out = new Set();
+  try {
+    const sitemap = await buildMinimalSitemapXml(env, req);
+    const xml = String(sitemap?.body || '');
+    const re = /<loc>([\s\S]*?)<\/loc>/gi;
+    let m;
+    while ((m = re.exec(xml)) !== null) {
+      const decoded = decodeXmlEntities(m[1]);
+      const normalized = normalizeUrlForSitemapCompare(decoded);
+      if (normalized) out.add(normalized);
+    }
+  } catch (_) {
+    // On failure, keep set empty and fallback-safe behavior in caller.
+  }
+
+  sitemapMembershipCache.urls = out;
+  sitemapMembershipCache.fetchedAt = now;
+  return out;
+}
+
+async function isCanonicalInSitemap(env, req, canonicalUrl) {
+  const normalizedCanonical = normalizeUrlForSitemapCompare(canonicalUrl);
+  if (!normalizedCanonical) return true;
+
+  const sitemapUrls = await getSitemapMembershipSet(env, req);
+  // Safety guard: if sitemap is empty/unavailable, do not mass-noindex pages.
+  if (!sitemapUrls || sitemapUrls.size === 0) return true;
+
+  return sitemapUrls.has(normalizedCanonical);
+}
+
 /**
  * Determine robots and canonical values for a given request.
  * - If a URL is marked as noindex via noindex patterns, robots is set to 'noindex, nofollow'.
@@ -1301,21 +1372,6 @@ async function getSeoForRequest(env, req, opts = {}) {
   const pathname = normalizeCanonicalPath(rawPathname);
   const seoSettings = await getSeoSettingsObject(env);
   const siteTitle = resolveSiteTitle(seoSettings, url);
-
-  // Default robots directive
-  let robots = 'index, follow';
-  // Force noindex on sensitive routes, then apply custom noindex patterns.
-  if (isSensitiveNoindexPath(pathname)) {
-    robots = 'noindex, nofollow';
-  } else {
-    try {
-      if (await shouldNoindexUrl(env, { pathname, rawPathname, url })) {
-        robots = 'noindex, nofollow';
-      }
-    } catch (e) {
-      // ignore errors and fall back to default
-    }
-  }
 
   // Get site URL from seo_minimal settings; fallback to request origin
   let baseUrl = url.origin;
@@ -1339,6 +1395,32 @@ async function getSeoForRequest(env, req, opts = {}) {
     }
   } else {
     canonical = baseUrl + normalizeCanonicalPath(pathname);
+  }
+
+  // Default robots directive
+  let robots = 'index, follow';
+  if (isSensitiveNoindexPath(pathname)) {
+    robots = 'noindex, nofollow';
+  } else {
+    try {
+      const explicitRule = await getSeoVisibilityRuleMatch(env, {
+        pathname,
+        rawPathname,
+        url,
+        requestUrl: req.url
+      });
+
+      if (explicitRule === 'index') {
+        robots = 'index, follow';
+      } else if (explicitRule === 'noindex') {
+        robots = 'noindex, nofollow';
+      } else {
+        const inSitemap = await isCanonicalInSitemap(env, req, canonical);
+        robots = inSitemap ? 'index, follow' : 'noindex, nofollow';
+      }
+    } catch (e) {
+      // ignore errors and fall back to default
+    }
   }
 
   return { robots, canonical, siteTitle };

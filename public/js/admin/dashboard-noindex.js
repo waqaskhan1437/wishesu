@@ -5,6 +5,8 @@
  */
 
 (function (AD) {
+  let currentNoindexRules = [];
+
   function escapeHtml(value) {
     return String(value || '')
       .replace(/&/g, '&amp;')
@@ -69,7 +71,13 @@
         ${list.map((rule, idx) => `
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;background:white;">
             <code style="font-size:13px;color:#111827;word-break:break-all;flex:1;">${escapeHtml(rule)}</code>
-            <button onclick="AdminDashboard.removeNoindexUrl(${idx}, '${mode}')" style="border:0;background:#ef4444;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;">Remove</button>
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+              ${mode === 'noindex'
+                ? `<button onclick="AdminDashboard.promoteNoindexRule(${idx})" style="border:0;background:#2563eb;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;">Index 1-Click</button>`
+                : ''
+              }
+              <button onclick="AdminDashboard.removeNoindexUrl(${idx}, '${mode}')" style="border:0;background:#ef4444;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;cursor:pointer;">Remove</button>
+            </div>
           </div>
         `).join('')}
       </div>
@@ -89,6 +97,7 @@
       const data = await jfetch('/api/admin/noindex/list');
       const noindexUrls = Array.isArray(data.noindexUrls) ? data.noindexUrls : (Array.isArray(data.urls) ? data.urls : []);
       const indexUrls = Array.isArray(data.indexUrls) ? data.indexUrls : [];
+      currentNoindexRules = noindexUrls.slice();
 
       renderRulesList(noindexContainer, noindexUrls, 'noindex');
       renderRulesList(indexContainer, indexUrls, 'index');
@@ -146,6 +155,39 @@
     }
   }
 
+  async function promoteNoindexRule(index) {
+    const idx = Number(index);
+    if (!Number.isFinite(idx) || idx < 0 || idx >= currentNoindexRules.length) {
+      toast('Rule not found', false);
+      return;
+    }
+
+    const rule = String(currentNoindexRules[idx] || '').trim();
+    if (!rule) {
+      toast('Rule is empty', false);
+      return;
+    }
+
+    try {
+      // 1) add force-index rule
+      await jfetch('/api/admin/noindex/add', {
+        method: 'POST',
+        body: JSON.stringify({ url: rule, mode: 'index' })
+      });
+
+      // 2) remove noindex rule
+      await jfetch('/api/admin/noindex/remove', {
+        method: 'POST',
+        body: JSON.stringify({ index: idx, mode: 'noindex' })
+      });
+
+      await loadRulesLists();
+      toast('Rule moved to Force Index', true);
+    } catch (e) {
+      toast(e.message || 'Failed to move rule', false);
+    }
+  }
+
   function bindQuickButtons(panel) {
     panel.querySelectorAll('[data-seo-rule]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -163,7 +205,7 @@
 
         <div style="margin-bottom:20px;">
           <h2 style="margin:0;font-size:28px;color:#111827;">SEO Index / Noindex Rules</h2>
-          <p style="margin:8px 0 0;color:#6b7280;">Control which URLs should be indexed and which should be hidden from Google.</p>
+          <p style="margin:8px 0 0;color:#6b7280;">Default behavior: URLs found in sitemap are indexed, URLs outside sitemap are noindexed (unless Force Index rule exists).</p>
         </div>
 
         <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:18px;">
@@ -220,4 +262,5 @@
   AD.loadNoindex = loadNoindex;
   AD.addNoindexUrl = addNoindexUrl;
   AD.removeNoindexUrl = removeNoindexUrl;
+  AD.promoteNoindexRule = promoteNoindexRule;
 })(window.AdminDashboard);
