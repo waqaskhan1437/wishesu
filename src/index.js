@@ -1309,9 +1309,7 @@ async function getSeoForRequest(env, req, opts = {}) {
     robots = 'noindex, nofollow';
   } else {
     try {
-      if (await shouldNoindexUrl(env, pathname)) {
-        robots = 'noindex, nofollow';
-      } else if (rawPathname !== pathname && await shouldNoindexUrl(env, rawPathname)) {
+      if (await shouldNoindexUrl(env, { pathname, rawPathname, url })) {
         robots = 'noindex, nofollow';
       }
     } catch (e) {
@@ -2791,7 +2789,16 @@ export default {
         target.protocol = 'https:';
         if (needsHostRedirect) target.hostname = canonicalHostname;
         if (target.port === '80' || target.port === '443') target.port = '';
-        return Response.redirect(target.toString(), 301);
+        return new Response(null, {
+          status: 301,
+          headers: {
+            'Location': target.toString(),
+            'Cache-Control': 'public, max-age=3600',
+            // Ensure duplicate host/protocol URLs are explicitly deindexed.
+            'X-Robots-Tag': 'noindex, nofollow',
+            'Link': `<${target.toString()}>; rel="canonical"`
+          }
+        });
       }
     }
 
@@ -3580,7 +3587,11 @@ if (method === 'GET' || method === 'HEAD') {
                 html = applySeoToHtml(html, seo.robots, seo.canonical);
                 html = applySiteTitleToHtml(html, seo.siteTitle);
                 headers.set('X-Robots-Tag', seo.robots);
-                const noindexTags = await getNoindexMetaTags(env, normalizedPath);
+                const noindexTags = await getNoindexMetaTags(env, {
+                  pathname: normalizedPath,
+                  rawPathname: path,
+                  url
+                });
                 if (noindexTags) {
                   html = html.replace(/<\/head>/i, `\n    ${noindexTags}\n  </head>`);
                 }
@@ -3650,7 +3661,11 @@ if (method === 'GET' || method === 'HEAD') {
                 html = applySiteTitleToHtml(html, seo.siteTitle);
                 responseHeaders['X-Robots-Tag'] = seo.robots;
                 // Add noindex tags if needed
-                const noindexTags = await getNoindexMetaTags(env, normalizeCanonicalPath(path));
+                const noindexTags = await getNoindexMetaTags(env, {
+                  pathname: normalizeCanonicalPath(path),
+                  rawPathname: path,
+                  url
+                });
                 if (noindexTags) {
                   html = html.replace(/<\/head>/i, `\n    ${noindexTags}\n  </head>`);
                 }
@@ -4207,7 +4222,11 @@ if (method === 'GET' || method === 'HEAD') {
                 headers.set('X-Robots-Tag', seo.robots);
                 
                 // Add noindex tags for hidden pages (user-controlled hiding from search)
-                const noindexTags = await getNoindexMetaTags(env, normalizedRequestPath);
+                const noindexTags = await getNoindexMetaTags(env, {
+                  pathname: normalizedRequestPath,
+                  rawPathname: path,
+                  url
+                });
                 if (noindexTags) {
                   html = html.replace('</head>', `\n    ${noindexTags}\n  </head>`);
                 }

@@ -10,6 +10,7 @@
  */
 
 import { json } from '../utils/response.js';
+import { canonicalProductPath } from '../utils/formatting.js';
 
 // Simple cache
 let cache = null;
@@ -25,6 +26,23 @@ const DEFAULT = {
   og_enabled: 0,
   og_image: ''
 };
+
+function toAbsoluteUrl(base, value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('/')) return `${base}${raw}`;
+  return `${base}/${raw}`;
+}
+
+function escapeXml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
 
 /**
  * Ensure table
@@ -183,15 +201,27 @@ export async function buildMinimalSitemapXml(env, req) {
 
   // Products (max 10,000)
   try {
-    const products = await env.DB.prepare(
-      'SELECT id, slug, seo_canonical, updated_at, created_at FROM products WHERE status = ? ORDER BY id DESC LIMIT 10000'
-    ).bind('active').all();
+    // Include user-visible statuses. Some imports use published/live instead of active.
+    const productsQuery = await env.DB.prepare(`
+      SELECT id, title, slug, seo_canonical, updated_at, created_at, status
+      FROM products
+      WHERE status IS NULL
+         OR TRIM(status) = ''
+         OR LOWER(TRIM(status)) IN ('active', 'published', 'live', 'public')
+         OR LOWER(TRIM(status)) NOT IN ('draft', 'inactive', 'archived', 'deleted')
+      ORDER BY id DESC
+      LIMIT 10000
+    `).all();
+    const productRows = productsQuery.results || [];
 
-    for (const p of products.results || []) {
-      // Fix 11: Use seo_canonical if set, otherwise construct path
+    for (const p of productRows) {
       const loc = (p.seo_canonical && String(p.seo_canonical).trim())
-        ? String(p.seo_canonical).trim()
-        : `${base}/product-${p.id}/${p.slug || p.id}`;
+        ? toAbsoluteUrl(base, p.seo_canonical)
+        : `${base}${canonicalProductPath({
+          id: p.id,
+          slug: p.slug,
+          title: p.title || `product-${p.id}`
+        })}`;
       const lastmod = (p.updated_at || p.created_at)
         ? new Date(p.updated_at || p.created_at).toISOString().split('T')[0]
         : undefined;
@@ -272,7 +302,7 @@ export async function buildMinimalSitemapXml(env, req) {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.slice(0, 50000).map(u => `  <url>
-    <loc>${u.loc}</loc>
+    <loc>${escapeXml(u.loc)}</loc>
     ${u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ''}
     <changefreq>${u.changefreq}</changefreq>
     <priority>${u.priority}</priority>
