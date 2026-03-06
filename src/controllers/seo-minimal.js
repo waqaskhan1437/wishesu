@@ -27,10 +27,16 @@ const DEFAULT = {
   og_image: ''
 };
 
+function normalizeSiteBase(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return raw.replace(/\/+$/, '');
+}
+
 function toAbsoluteUrl(base, value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
-  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, '') || raw;
   if (raw.startsWith('/')) return `${base}${raw}`;
   return `${base}/${raw}`;
 }
@@ -154,7 +160,7 @@ export async function buildMinimalRobotsTxt(env, req) {
   }
 
   const url = new URL(req.url);
-  const sitemap = s.site_url || url.origin;
+  const sitemap = normalizeSiteBase(s.site_url || url.origin);
 
   return `# Robots.txt - Auto-generated
 User-agent: *
@@ -188,12 +194,12 @@ export async function buildMinimalSitemapXml(env, req) {
   }
 
   const url = new URL(req.url);
-  const base = s.site_url || url.origin;
+  const base = normalizeSiteBase(s.site_url || url.origin);
   const urls = [];
 
   // Homepage (priority 1.0)
   urls.push({
-    loc: base,
+    loc: `${base}/`,
     lastmod: new Date().toISOString().split('T')[0],
     changefreq: 'daily',
     priority: 1.0
@@ -203,7 +209,7 @@ export async function buildMinimalSitemapXml(env, req) {
   try {
     // Include user-visible statuses. Some imports use published/live instead of active.
     const productsQuery = await env.DB.prepare(`
-      SELECT id, title, slug, seo_canonical, updated_at, created_at, status
+      SELECT id, title, slug, seo_canonical, status
       FROM products
       WHERE status IS NULL
          OR TRIM(status) = ''
@@ -222,12 +228,8 @@ export async function buildMinimalSitemapXml(env, req) {
           slug: p.slug,
           title: p.title || `product-${p.id}`
         })}`;
-      const lastmod = (p.updated_at || p.created_at)
-        ? new Date(p.updated_at || p.created_at).toISOString().split('T')[0]
-        : undefined;
       urls.push({
         loc,
-        lastmod,
         changefreq: 'weekly',
         priority: 0.8
       });

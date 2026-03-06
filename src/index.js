@@ -1053,6 +1053,10 @@ function getCanonicalRedirectPath(pathname) {
   return normalized !== raw ? normalized : null;
 }
 
+function normalizeCanonicalBaseUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
 function isLocalDevHost(hostname) {
   const h = String(hostname || '').trim().toLowerCase();
   return h === 'localhost' || h === '127.0.0.1' || h === '::1';
@@ -1374,9 +1378,9 @@ async function getSeoForRequest(env, req, opts = {}) {
   const siteTitle = resolveSiteTitle(seoSettings, url);
 
   // Get site URL from seo_minimal settings; fallback to request origin
-  let baseUrl = url.origin;
+  let baseUrl = normalizeCanonicalBaseUrl(url.origin);
   if (seoSettings && seoSettings.site_url && String(seoSettings.site_url).trim()) {
-    baseUrl = String(seoSettings.site_url).trim();
+    baseUrl = normalizeCanonicalBaseUrl(String(seoSettings.site_url).trim());
   }
 
   // Build canonical
