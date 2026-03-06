@@ -195,7 +195,8 @@ import {
 import {
   getEmailTemplatesApi,
   saveEmailTemplateApi,
-  addLeadApi
+  addLeadApi,
+  sendManualEmailApi
 } from './controllers/email.js';
 
 // Noindex (Hide pages from search results)
@@ -385,6 +386,13 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/admin/email-templates') {
     const body = await req.json().catch(() => ({}));
     return saveEmailTemplateApi(env, body);
+  }
+
+  // ----- SEND MANUAL EMAIL (Admin to User) -----
+  // Admin can send custom emails to specific recipients
+  if (method === 'POST' && path === '/api/admin/send-email') {
+    const body = await req.json().catch(() => ({}));
+    return sendManualEmailApi(env, body);
   }
 
   // ----- LEAD CAPTURE (Abandoned Checkout, Forms) -----
