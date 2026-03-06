@@ -4,16 +4,6 @@
 
 import { canonicalProductPath } from './formatting.js';
 
-function normalizeSchemaBaseUrl(value) {
-  return String(value || '').trim().replace(/\/+$/, '');
-}
-
-function toRootUrl(baseUrl) {
-  const base = normalizeSchemaBaseUrl(baseUrl);
-  return base ? `${base}/` : '';
-}
-
-
 /**
  * Generate Offer object for Product schemas
  * @param {Object} product - Product data
@@ -429,12 +419,12 @@ export function generateBreadcrumbSchema(items) {
  * @returns {string} JSON-LD schema as string
  */
 export function generateOrganizationSchema(settings) {
-  const baseUrl = normalizeSchemaBaseUrl(settings.site_url || '');
+  const baseUrl = settings.site_url || '';
   const schema = {
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": settings.site_title || 'WishVideo',
-    "url": toRootUrl(baseUrl),
+    "url": baseUrl,
     "logo": `${baseUrl}/favicon.ico`
   };
   return JSON.stringify(schema);
@@ -446,12 +436,17 @@ export function generateOrganizationSchema(settings) {
  * @returns {string} JSON-LD schema as string
  */
 export function generateWebSiteSchema(settings) {
-  const baseUrl = normalizeSchemaBaseUrl(settings.site_url || '');
+  const baseUrl = settings.site_url || '';
   const schema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
     "name": settings.site_title || 'WishVideo',
-    "url": toRootUrl(baseUrl)
+    "url": baseUrl,
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": `${baseUrl}/products?q={search_term_string}`,
+      "query-input": "required name=search_term_string"
+    }
   };
   return JSON.stringify(schema);
 }

@@ -79,10 +79,3 @@ Aapko sirf yeh **`wishesu_fixed_latest.zip`** file Cloudflare Workers & Pages pa
 **Last Updated:** 2026-01-23
 **Applied By:** Manus AI
 **Status:** ✅ Ready for Deployment
-
-
-## 2026-03-06 Search Console cleanup pass
-- Collapsed protocol + host + legacy-path redirects into a single 301 hop.
-- Homepage/root URLs normalized to the trailing-slash canonical form in structured data.
-- Removed SearchAction schema that produced `/products?q={search_term_string}` crawl noise.
-- Preserved sitemap homepage as canonical root and product URL generation fixes from prior pass.

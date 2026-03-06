@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-labelledby="title desc">
+  <title id="title">Product preview placeholder</title>
+  <desc id="desc">Prankwish personalized video gift placeholder image</desc>
+  <rect width="800" height="450" fill="#e2e8f0"/>
+  <rect x="40" y="40" width="720" height="370" rx="24" fill="#f8fafc" stroke="#cbd5e1"/>
+  <circle cx="250" cy="190" r="70" fill="#cbd5e1"/>
+  <rect x="360" y="135" width="240" height="22" rx="11" fill="#94a3b8"/>
+  <rect x="360" y="180" width="180" height="18" rx="9" fill="#cbd5e1"/>
+  <rect x="360" y="218" width="210" height="18" rx="9" fill="#cbd5e1"/>
+  <rect x="360" y="278" width="150" height="44" rx="22" fill="#0f766e"/>
+  <text x="393" y="307" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="18">View Product</text>
+</svg>
