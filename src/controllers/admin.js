@@ -537,7 +537,10 @@ export async function getR2File(env, key) {
   if (!key) return json({ error: 'key required' }, 400);
 
   const obj = await env.R2_BUCKET.get(key);
-  if (!obj) return json({ error: 'File not found' }, 404);
+  if (!obj) {
+    console.log(`[404-R2] Key not found: ${key}`);
+    return json({ error: 'File not found' }, 404);
+  }
 
   return new Response(obj.body, {
     headers: {
@@ -706,6 +709,7 @@ export async function handleSecureDownload(env, orderId, baseUrl) {
   ).bind(orderId).first();
 
   if (!order) {
+    console.log(`[404-Download] Order not found: ${orderId}`);
     return new Response('File not found', { status: 404 });
   }
 

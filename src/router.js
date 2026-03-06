@@ -1872,6 +1872,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     return deleteApiKey(env, id);
   }
 
-  // API endpoint not found
+  // API endpoint not found - log for debugging
+  console.log(`[API-404] Path: ${path} | Method: ${method} | Referer: ${req.headers.get('referer') || 'none'}`);
   return json({ error: 'API endpoint not found', path, method }, 404);
 }

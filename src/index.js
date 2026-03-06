@@ -3235,6 +3235,7 @@ if (method === 'GET' || method === 'HEAD') {
           /^\/product-\d+(\/.*)?$/.test(path);
 
         if (!isValidFormat) {
+          console.log(`[404-Product] Invalid format: ${path} | Referer: ${req.headers.get('referer') || 'none'}`);
           return new Response('Not found', { status: 404 });
         }
 
@@ -4360,6 +4361,9 @@ if (method === 'GET' || method === 'HEAD') {
         return new Response(assetResp.body, { status: assetResp.status, headers });
       }
 
+      // Log 404 details for debugging
+      console.log(`[404] Path: ${path} | Method: ${method} | Referer: ${req.headers.get('referer') || 'none'} | UA: ${req.headers.get('user-agent')?.substring(0, 50) || 'none'}`);
+      
       return new Response('Not found', {
         status: 404,
         headers: {
