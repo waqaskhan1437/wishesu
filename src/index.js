@@ -1688,6 +1688,29 @@ function renderBlogArchiveCardsSsr(blogs = [], pagination = {}) {
 }
 
 // Blog post HTML template generator
+
+function transformBlogEmbedsForSeo(html) {
+  const raw = String(html || '');
+  return raw.replace(/<iframe\b([^>]*?)src=["']([^"']*(?:youtube\.com\/embed\/|youtu\.be\/|youtube-nocookie\.com\/embed\/)[^"']*)["']([^>]*)><\/iframe>/gi, (match, before, src, after) => {
+    const safeSrc = String(src || '').trim();
+    const ytMatch = safeSrc.match(/(?:youtube\.com\/(?:embed\/|watch\?v=)|youtu\.be\/|youtube-nocookie\.com\/embed\/)([a-zA-Z0-9_-]{6,})/i);
+    const videoId = ytMatch ? ytMatch[1] : '';
+    const thumb = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '/favicon.ico';
+    const watchUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : safeSrc;
+    const escapedSrc = safeSrc.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const escapedWatch = watchUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const escapedThumb = thumb.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    return `
+      <div class="blog-video-embed" data-nosnippet>
+        <button class="blog-video-play" type="button" data-embed-src="${escapedSrc}" aria-label="Play embedded video">
+          <img src="${escapedThumb}" alt="Video preview" loading="lazy">
+          <span class="blog-video-play-icon" aria-hidden="true">▶</span>
+        </button>
+        <p class="blog-video-meta"><a href="${escapedWatch}" rel="nofollow noopener" target="_blank">Watch on YouTube</a></p>
+      </div>`;
+  });
+}
+
 function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
   const date = blog.created_at ? new Date(blog.created_at).toLocaleDateString('en-US', { 
     year: 'numeric', month: 'long', day: 'numeric' 
@@ -1735,6 +1758,7 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
 
   const safeTitle = (blog.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const safeDesc = (blog.seo_description || blog.description || '').substring(0, 160).replace(/"/g, '&quot;');
+  const blogContentHtml = transformBlogEmbedsForSeo(blog.content || '');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1749,6 +1773,7 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
   <meta property="og:image" content="${blog.thumbnail_url || ''}">
   <meta property="og:type" content="article">
   <link rel="stylesheet" href="/css/style.css">
+  <meta name="robots" content="max-image-preview:large, max-snippet:-1, max-video-preview:0">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; line-height: 1.6; }
@@ -1834,6 +1859,11 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
       margin: 20px 0;
     }
     .blog-content a { color: #667eea; }
+    .blog-video-embed { margin: 24px 0; }
+    .blog-video-play { position: relative; display: block; width: 100%; border: 0; padding: 0; background: #111827; border-radius: 12px; overflow: hidden; cursor: pointer; }
+    .blog-video-play img { width: 100%; height: auto; display: block; aspect-ratio: 16/9; object-fit: cover; }
+    .blog-video-play-icon { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 999px; background: rgba(0,0,0,0.7); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; }
+    .blog-video-meta { margin-top: 10px; font-size: 0.95rem; color: #6b7280; }
     .blog-content ul, .blog-content ol {
       margin: 15px 0;
       padding-left: 25px;
@@ -2126,7 +2156,7 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
       ${blog.thumbnail_url ? `<img src="${blog.thumbnail_url}" alt="${safeTitle}" class="blog-featured-image">` : ''}
       <div class="blog-body">
         <div class="blog-content">
-          ${blog.content || ''}
+          ${blogContentHtml}
         </div>
         
         <!-- Comments Section -->
@@ -2281,6 +2311,27 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
     }
   </script>
   ${blog.custom_js ? `<script>${blog.custom_js}</script>` : ''}
+  <script>
+    document.addEventListener('click', function (event) {
+      const button = event.target.closest('.blog-video-play');
+      if (!button) return;
+      const src = button.getAttribute('data-embed-src');
+      if (!src) return;
+      const wrapper = button.closest('.blog-video-embed');
+      if (!wrapper) return;
+      const iframe = document.createElement('iframe');
+      iframe.src = src;
+      iframe.width = '100%';
+      iframe.height = '450';
+      iframe.loading = 'lazy';
+      iframe.setAttribute('allowfullscreen', '');
+      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+      iframe.style.aspectRatio = '16 / 9';
+      iframe.style.border = '0';
+      iframe.style.borderRadius = '12px';
+      button.replaceWith(iframe);
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -2344,6 +2395,7 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
   <title>${safeTitle} - Forum - WishesU</title>
   <meta name="description" content="${safeTitle}">
   <link rel="stylesheet" href="/css/style.css">
+  <meta name="robots" content="max-image-preview:large, max-snippet:-1, max-video-preview:0">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; line-height: 1.6; }
@@ -2854,6 +2906,27 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
         setTimeout(() => { formMessage.style.display = 'none'; }, 5000);
       }
     }
+  </script>
+  <script>
+    document.addEventListener('click', function (event) {
+      const button = event.target.closest('.blog-video-play');
+      if (!button) return;
+      const src = button.getAttribute('data-embed-src');
+      if (!src) return;
+      const wrapper = button.closest('.blog-video-embed');
+      if (!wrapper) return;
+      const iframe = document.createElement('iframe');
+      iframe.src = src;
+      iframe.width = '100%';
+      iframe.height = '450';
+      iframe.loading = 'lazy';
+      iframe.setAttribute('allowfullscreen', '');
+      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+      iframe.style.aspectRatio = '16 / 9';
+      iframe.style.border = '0';
+      iframe.style.borderRadius = '12px';
+      button.replaceWith(iframe);
+    });
   </script>
 </body>
 </html>`;
