@@ -2865,33 +2865,37 @@ export default {
     const url = new URL(req.url);
     const method = req.method;
 
-    // Enforce HTTPS + canonical host to prevent duplicate HTTP/www indexing.
+    // Normalize the request path early so redirect logic can reuse it.
+    let path = url.pathname.replace(/\/+/g, '/');
+    if (!path.startsWith('/')) {
+      path = '/' + path;
+    }
+
+    // Enforce HTTPS + canonical host + canonical path in a single hop
+    // to reduce redirect chains reported by Search Console.
     if ((method === 'GET' || method === 'HEAD') && !isLocalHostname(url.hostname)) {
       const canonicalHostname = getCanonicalHostname(url, env);
       const needsHttpsRedirect = isInsecureRequest(url, req);
       const needsHostRedirect = canonicalHostname && url.hostname.toLowerCase() !== canonicalHostname;
-      if (needsHttpsRedirect || needsHostRedirect) {
+      const canonicalRedirectPath = getCanonicalRedirectPath(path);
+      const needsPathRedirect = Boolean(canonicalRedirectPath);
+      if (needsHttpsRedirect || needsHostRedirect || needsPathRedirect) {
         const target = new URL(req.url);
         target.protocol = 'https:';
         if (needsHostRedirect) target.hostname = canonicalHostname;
+        if (needsPathRedirect) target.pathname = canonicalRedirectPath;
         if (target.port === '80' || target.port === '443') target.port = '';
         return new Response(null, {
           status: 301,
           headers: {
             'Location': target.toString(),
             'Cache-Control': 'public, max-age=3600',
-            // Ensure duplicate host/protocol URLs are explicitly deindexed.
+            // Ensure duplicate host/protocol/path URLs are explicitly deindexed.
             'X-Robots-Tag': 'noindex, nofollow',
             'Link': `<${target.toString()}>; rel="canonical"`
           }
         });
       }
-    }
-
-    // Normalize the request path
-    let path = url.pathname.replace(/\/+/g, '/');
-    if (!path.startsWith('/')) {
-      path = '/' + path;
     }
 
     // Fast reject obvious scanner/bot probes before any expensive work.
