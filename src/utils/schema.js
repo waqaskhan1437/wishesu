@@ -441,12 +441,7 @@ export function generateWebSiteSchema(settings) {
     "@context": "https://schema.org",
     "@type": "WebSite",
     "name": settings.site_title || 'WishVideo',
-    "url": baseUrl,
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": `${baseUrl}/products?q={search_term_string}`,
-      "query-input": "required name=search_term_string"
-    }
+    "url": baseUrl
   };
   return JSON.stringify(schema);
 }

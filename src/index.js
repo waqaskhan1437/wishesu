@@ -1353,6 +1353,29 @@ async function isCanonicalInSitemap(env, req, canonicalUrl) {
   return sitemapUrls.has(normalizedCanonical);
 }
 
+function normalizeSeoBaseUrl(rawBaseUrl, reqUrl, env) {
+  let base = null;
+  try {
+    const raw = String(rawBaseUrl || '').trim();
+    base = raw ? new URL(raw) : new URL(reqUrl.toString());
+  } catch (_) {
+    base = new URL(reqUrl.toString());
+  }
+
+  const canonicalHost = getCanonicalHostname(base, env) || getCanonicalHostname(reqUrl, env) || base.hostname;
+  if (canonicalHost) base.hostname = canonicalHost;
+
+  if (!isLocalHostname(base.hostname)) {
+    base.protocol = 'https:';
+    if (base.port === '80' || base.port === '443') base.port = '';
+  }
+
+  base.pathname = '';
+  base.search = '';
+  base.hash = '';
+  return base.origin;
+}
+
 /**
  * Determine robots and canonical values for a given request.
  * - If a URL is marked as noindex via noindex patterns, robots is set to 'noindex, nofollow'.
@@ -1373,11 +1396,12 @@ async function getSeoForRequest(env, req, opts = {}) {
   const seoSettings = await getSeoSettingsObject(env);
   const siteTitle = resolveSiteTitle(seoSettings, url);
 
-  // Get site URL from seo_minimal settings; fallback to request origin
-  let baseUrl = url.origin;
-  if (seoSettings && seoSettings.site_url && String(seoSettings.site_url).trim()) {
-    baseUrl = String(seoSettings.site_url).trim();
-  }
+  // Get canonical base URL from seo_minimal settings and normalize it to the
+  // canonical host/protocol so rel=canonical stays stable.
+  const configuredBaseUrl = (seoSettings && seoSettings.site_url && String(seoSettings.site_url).trim())
+    ? String(seoSettings.site_url).trim()
+    : url.origin;
+  const baseUrl = normalizeSeoBaseUrl(configuredBaseUrl, url, env);
 
   // Build canonical
   let canonical = '';
@@ -1437,33 +1461,51 @@ async function getSeoForRequest(env, req, opts = {}) {
  */
 function applySeoToHtml(html, robots, canonical) {
   if (!html) return html;
+  let out = String(html);
+  if (!/<head[\s>]/i.test(out)) {
+    if (/<html[^>]*>/i.test(out)) {
+      out = out.replace(/<html([^>]*)>/i, '<html$1>\n<head>\n</head>');
+    } else if (/<body[^>]*>/i.test(out)) {
+      out = out.replace(/<body([^>]*)>/i, '<head>\n</head>\n<body$1>');
+    } else {
+      out = `<head>\n</head>\n${out}`;
+    }
+  }
+  if (!/<\/head>/i.test(out)) {
+    if (/<body[^>]*>/i.test(out)) {
+      out = out.replace(/<body([^>]*)>/i, '</head>\n<body$1>');
+    } else {
+      out = `${out}\n</head>`;
+    }
+  }
+
   // Inject robots meta tag
   if (robots) {
     const robotsRegex = /<meta\s+name=["']robots["'][^>]*>/i;
     const robotsTag = `<meta name="robots" content="${robots}">`;
-    if (robotsRegex.test(html)) {
-      html = html.replace(robotsRegex, robotsTag);
+    if (robotsRegex.test(out)) {
+      out = out.replace(robotsRegex, robotsTag);
     } else {
-      html = html.replace(/<\/head>/i, `${robotsTag}\n</head>`);
+      out = out.replace(/<\/head>/i, `${robotsTag}\n</head>`);
     }
   }
   // Inject canonical link
   if (canonical) {
     const canonicalRegex = /<link\s+rel=["']canonical["'][^>]*>/i;
     const canonicalTag = `<link rel="canonical" href="${canonical}">`;
-    if (canonicalRegex.test(html)) {
-      html = html.replace(canonicalRegex, canonicalTag);
+    if (canonicalRegex.test(out)) {
+      out = out.replace(canonicalRegex, canonicalTag);
     } else {
-      html = html.replace(/<\/head>/i, `${canonicalTag}\n</head>`);
+      out = out.replace(/<\/head>/i, `${canonicalTag}\n</head>`);
     }
   }
   // Ensure a default favicon is present for pages that don't define one.
   const faviconRegex = /<link\s+rel=["'](?:icon|shortcut icon)["'][^>]*>/i;
-  if (!faviconRegex.test(html)) {
+  if (!faviconRegex.test(out)) {
     const faviconTags = `<link rel="icon" type="image/svg+xml" href="/favicon.svg">\n<link rel="icon" href="/favicon.ico" sizes="any">`;
-    html = html.replace(/<\/head>/i, `${faviconTags}\n</head>`);
+    out = out.replace(/<\/head>/i, `${faviconTags}\n</head>`);
   }
-  return html;
+  return out;
 }
 
 function formatBlogArchiveDate(value) {
@@ -2862,14 +2904,19 @@ export default {
     const method = req.method;
 
     // Enforce HTTPS + canonical host to prevent duplicate HTTP/www indexing.
+    // If we are already redirecting for host/protocol, fold in canonical path
+    // normalization to avoid multi-hop redirect chains (better for crawlers).
     if ((method === 'GET' || method === 'HEAD') && !isLocalHostname(url.hostname)) {
       const canonicalHostname = getCanonicalHostname(url, env);
       const needsHttpsRedirect = isInsecureRequest(url, req);
       const needsHostRedirect = canonicalHostname && url.hostname.toLowerCase() !== canonicalHostname;
+      const collapsedPathname = (url.pathname || '/').replace(/\/+/g, '/');
+      const canonicalPathForPrimaryRedirect = getCanonicalRedirectPath(collapsedPathname);
       if (needsHttpsRedirect || needsHostRedirect) {
         const target = new URL(req.url);
         target.protocol = 'https:';
         if (needsHostRedirect) target.hostname = canonicalHostname;
+        if (canonicalPathForPrimaryRedirect) target.pathname = canonicalPathForPrimaryRedirect;
         if (target.port === '80' || target.port === '443') target.port = '';
         return new Response(null, {
           status: 301,
@@ -3091,7 +3138,16 @@ if (method === 'GET' || method === 'HEAD') {
   if (canonicalRedirectPath) {
     const to = new URL(req.url);
     to.pathname = canonicalRedirectPath;
-    return Response.redirect(to.toString(), 301);
+    return new Response(null, {
+      status: 301,
+      headers: {
+        'Location': to.toString(),
+        'Cache-Control': 'public, max-age=3600',
+        // Old aliases (/home, *.html, etc.) should not be indexed.
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Link': `<${to.toString()}>; rel="canonical"`
+      }
+    });
   }
 }
 
@@ -3129,6 +3185,10 @@ if (method === 'GET' || method === 'HEAD') {
           headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         } else if (!headers.has('Cache-Control')) {
           headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+        if (path === '/favicon.ico') {
+          // Favicon is a UI asset, not a search landing page.
+          headers.set('X-Robots-Tag', 'noindex, nofollow');
         }
         headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
         return new Response(assetResp.body, { status: 200, headers });
@@ -3829,12 +3889,12 @@ if (method === 'GET' || method === 'HEAD') {
         let assetResp = await env.ASSETS.fetch(assetReq);
 
         // Defensive fallback for product listing route: if the asset layer
-        // responds with a redirect for `/products`, serve the concrete grid
-        // file directly to avoid browser-side redirect loops.
+        // responds with a redirect or not-found for `/products`, serve the
+        // concrete grid file directly to avoid loops and 404 indexing issues.
         if (
           (method === 'GET' || method === 'HEAD') &&
           (assetPath === '/products' || assetPath === '/products/') &&
-          [301, 302, 307, 308].includes(assetResp.status)
+          [301, 302, 307, 308, 404].includes(assetResp.status)
         ) {
           try {
             const fallbackUrl = new URL('/products-grid.html', req.url);

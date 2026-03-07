@@ -188,12 +188,12 @@ export async function buildMinimalSitemapXml(env, req) {
   }
 
   const url = new URL(req.url);
-  const base = s.site_url || url.origin;
+  const base = String(s.site_url || url.origin).replace(/\/+$/, '');
   const urls = [];
 
   // Homepage (priority 1.0)
   urls.push({
-    loc: base,
+    loc: `${base}/`,
     lastmod: new Date().toISOString().split('T')[0],
     changefreq: 'daily',
     priority: 1.0

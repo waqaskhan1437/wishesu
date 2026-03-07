@@ -45,6 +45,7 @@ run_worker_first = [
   "/buyer-order*",   # Legacy buyer order aliases (force noindex/canonical)
   "/order-detail*",  # Legacy order detail aliases (force noindex/canonical)
   "/download/*",     # Secure downloads
+  "/favicon.ico",    # Explicit noindex header for favicon asset
   "/robots.txt",     # Dynamic robots.txt
   "/sitemap.xml"     # Dynamic sitemap.xml
 ]
