@@ -18,6 +18,7 @@ import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildMinimalRobotsTxt, buildMinimalSitemapXml, getMinimalSEOSettings } from './controllers/seo-minimal.js';
 import { getNoindexMetaTags, getSeoVisibilityRuleMatch } from './controllers/noindex.js';
 import { canonicalProductPath } from './utils/formatting.js';
+import { buildPublicProductStatusWhere } from './utils/product-visibility.js';
 import { handleNoJsRoutes, renderNoJsAdminLoginPage } from './controllers/nojs.js';
 
 // Inject analytics & verification meta tags (Google Analytics, Facebook Pixel, site verification)
@@ -3449,7 +3450,7 @@ if (method === 'GET' || method === 'HEAD') {
                 env.DB.prepare(`
                   SELECT id, title, slug, thumbnail_url, sale_price, normal_price
                   FROM products 
-                  WHERE status = 'active'
+                  WHERE ${buildPublicProductStatusWhere('status')}
                   ORDER BY id DESC
                   LIMIT 2 OFFSET ?
                 `).bind(Math.max(0, question.id - 1)).all(),
@@ -4044,7 +4045,7 @@ if (method === 'GET' || method === 'HEAD') {
                       AVG(r.rating) as rating_average
                     FROM products p
                     LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
-                    WHERE p.id = ?
+                    WHERE p.id = ? AND ${buildPublicProductStatusWhere('p.status')}
                     GROUP BY p.id
                   `).bind(Number(productId)).first(),
                   env.DB.prepare(
@@ -4077,7 +4078,7 @@ if (method === 'GET' || method === 'HEAD') {
                         env.DB.prepare(`
                           SELECT id, title, slug, thumbnail_url
                           FROM products
-                          WHERE status = 'active'
+                          WHERE ${buildPublicProductStatusWhere('status')}
                           AND (
                             sort_order < ?
                             OR (sort_order = ? AND id > ?)
@@ -4088,7 +4089,7 @@ if (method === 'GET' || method === 'HEAD') {
                         env.DB.prepare(`
                           SELECT id, title, slug, thumbnail_url
                           FROM products
-                          WHERE status = 'active'
+                          WHERE ${buildPublicProductStatusWhere('status')}
                           AND (
                             sort_order > ?
                             OR (sort_order = ? AND id < ?)
@@ -4311,7 +4312,7 @@ if (method === 'GET' || method === 'HEAD') {
                     (SELECT COUNT(*) FROM reviews WHERE product_id = p.id AND status = 'approved') as review_count,
                     (SELECT AVG(rating) FROM reviews WHERE product_id = p.id AND status = 'approved') as rating_average
                   FROM products p
-                  WHERE p.status = 'active'
+                  WHERE ${buildPublicProductStatusWhere('p.status')}
                   ORDER BY p.sort_order ASC, p.id DESC
                 `).all();
                 
@@ -4492,7 +4493,7 @@ if (method === 'GET' || method === 'HEAD') {
         // Added more tables for comprehensive warming
         await Promise.all([
           env.DB.prepare('SELECT 1 as warm').first(),
-          env.DB.prepare('SELECT COUNT(*) as count FROM products WHERE status = ?').bind('active').first(),
+          env.DB.prepare(`SELECT COUNT(*) as count FROM products WHERE ${buildPublicProductStatusWhere('status')}`).first(),
           env.DB.prepare('SELECT COUNT(*) as count FROM orders').first(),
           env.DB.prepare('SELECT COUNT(*) as count FROM reviews').first(),
           env.DB.prepare('SELECT COUNT(*) as count FROM blogs WHERE status = ?').bind('published').first().catch(() => null),

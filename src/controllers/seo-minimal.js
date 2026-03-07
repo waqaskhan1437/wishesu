@@ -11,6 +11,8 @@
 
 import { json } from '../utils/response.js';
 import { canonicalProductPath } from '../utils/formatting.js';
+import { initDB } from '../config/db.js';
+import { buildPublicProductStatusWhere, getProductTableColumns } from '../utils/product-visibility.js';
 
 // Simple cache
 let cache = null;
@@ -42,6 +44,14 @@ function escapeXml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+function toSitemapDate(value) {
+  if (value == null || value === '') return undefined;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString().split('T')[0];
 }
 
 /**
@@ -178,6 +188,12 @@ Sitemap: ${sitemap}/sitemap.xml
  * Max 50,000 URLs, UTF-8 encoded, canonical URLs only
  */
 export async function buildMinimalSitemapXml(env, req) {
+  if (env.DB) {
+    try {
+      await initDB(env);
+    } catch (_) {}
+  }
+
   const s = await getSettings(env);
   
   if (!s.sitemap_enabled) {
@@ -200,15 +216,16 @@ export async function buildMinimalSitemapXml(env, req) {
   });
 
   // Products (max 10,000)
-  try {
-    // Include user-visible statuses. Some imports use published/live instead of active.
+  if (env.DB) try {
+    const productColumns = await getProductTableColumns(env);
+    const productSelect = ['id', 'title', 'slug', 'seo_canonical', 'status'];
+    if (productColumns.has('updated_at')) productSelect.push('updated_at');
+    if (productColumns.has('created_at')) productSelect.push('created_at');
+
     const productsQuery = await env.DB.prepare(`
-      SELECT id, title, slug, seo_canonical, updated_at, created_at, status
+      SELECT ${productSelect.join(', ')}
       FROM products
-      WHERE status IS NULL
-         OR TRIM(status) = ''
-         OR LOWER(TRIM(status)) IN ('active', 'published', 'live', 'public')
-         OR LOWER(TRIM(status)) NOT IN ('draft', 'inactive', 'archived', 'deleted')
+      WHERE ${buildPublicProductStatusWhere('status')}
       ORDER BY id DESC
       LIMIT 10000
     `).all();
@@ -222,9 +239,7 @@ export async function buildMinimalSitemapXml(env, req) {
           slug: p.slug,
           title: p.title || `product-${p.id}`
         })}`;
-      const lastmod = (p.updated_at || p.created_at)
-        ? new Date(p.updated_at || p.created_at).toISOString().split('T')[0]
-        : undefined;
+      const lastmod = toSitemapDate(p.updated_at || p.created_at);
       urls.push({
         loc,
         lastmod,
@@ -232,7 +247,9 @@ export async function buildMinimalSitemapXml(env, req) {
         priority: 0.8
       });
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Sitemap products query failed:', e);
+  }
 
   // Blog posts (max 10,000)
   try {
@@ -242,7 +259,7 @@ export async function buildMinimalSitemapXml(env, req) {
 
     for (const b of blogs.results || []) {
       const lastmod = (b.updated_at || b.created_at)
-        ? new Date(b.updated_at || b.created_at).toISOString().split('T')[0]
+        ? toSitemapDate(b.updated_at || b.created_at)
         : undefined;
       urls.push({
         loc: `${base}/blog/${b.slug}`,
@@ -261,7 +278,7 @@ export async function buildMinimalSitemapXml(env, req) {
 
     for (const p of pages.results || []) {
       const lastmod = (p.updated_at || p.created_at)
-        ? new Date(p.updated_at || p.created_at).toISOString().split('T')[0]
+        ? toSitemapDate(p.updated_at || p.created_at)
         : undefined;
       urls.push({
         loc: `${base}/${p.slug}`,
@@ -280,7 +297,7 @@ export async function buildMinimalSitemapXml(env, req) {
 
     for (const q of questions.results || []) {
       const lastmod = (q.updated_at || q.created_at)
-        ? new Date(q.updated_at || q.created_at).toISOString().split('T')[0]
+        ? toSitemapDate(q.updated_at || q.created_at)
         : undefined;
       urls.push({
         loc: `${base}/forum/${q.slug}`,

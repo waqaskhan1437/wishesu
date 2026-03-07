@@ -5,6 +5,7 @@
 
 import { json } from './utils/response.js';
 import { initDB } from './config/db.js';
+import { isAdminAuthed } from './utils/auth.js';
 
 // Products
 import {
@@ -554,7 +555,7 @@ export async function routeApiRequest(req, env, url, path, method) {
     }
     // Single product - cache for 30s
     const id = path.split('/').pop();
-    const response = await getProduct(env, id);
+    const response = await getProduct(env, id, { includeHidden: await isAdminAuthed(req, env) });
     const newHeaders = new Headers(response.headers);
     newHeaders.set('Cache-Control', 'public, max-age=15, s-maxage=30');
     return new Response(response.body, { status: response.status, headers: newHeaders });

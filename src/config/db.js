@@ -11,6 +11,8 @@
  * - Warmup initialization prevents cold start delays
  */
 
+import { clearProductTableColumnsCache } from '../utils/product-visibility.js';
+
 let dbReady = false;
 let migrationsDone = false;
 let pagesMigrationDone = false;
@@ -59,7 +61,9 @@ export async function initDB(env) {
             whop_product_id TEXT,
             status TEXT DEFAULT 'active',
             featured INTEGER DEFAULT 0,
-            sort_order INTEGER DEFAULT 0
+            sort_order INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
           )
         `),
         // Orders table
@@ -331,6 +335,8 @@ async function runMigrations(env) {
   const migrations = [
     { table: 'products', column: 'gallery_images', type: 'TEXT' },
     { table: 'products', column: 'featured', type: 'INTEGER DEFAULT 0' },
+    { table: 'products', column: 'created_at', type: 'DATETIME' },
+    { table: 'products', column: 'updated_at', type: 'DATETIME' },
     { table: 'orders', column: 'delivered_video_metadata', type: 'TEXT' },
     { table: 'orders', column: 'tip_paid', type: 'INTEGER DEFAULT 0' },
     { table: 'orders', column: 'tip_amount', type: 'REAL' },
@@ -349,6 +355,24 @@ async function runMigrations(env) {
       env.DB.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`).run().catch(() => { })
     )
   );
+
+  try {
+    await env.DB.prepare(`
+      UPDATE products
+      SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+      WHERE created_at IS NULL
+    `).run();
+  } catch (_) {}
+
+  try {
+    await env.DB.prepare(`
+      UPDATE products
+      SET updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+      WHERE updated_at IS NULL
+    `).run();
+  } catch (_) {}
+
+  clearProductTableColumnsCache();
 }
 
 /**

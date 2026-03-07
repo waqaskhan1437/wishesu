@@ -6,6 +6,7 @@
 
 import { json, cachedJson } from '../utils/response.js';
 import { slugifyStr, toISO8601 } from '../utils/formatting.js';
+import { buildPublicProductStatusWhere, getProductTableColumns } from '../utils/product-visibility.js';
 
 // In-memory cache for products list (reduces DB queries)
 let productsCache = null;
@@ -15,6 +16,14 @@ const PRODUCTS_CACHE_TTL = 30000; // 30 seconds
 // Product slug cache for fast redirects (reduces cold start DB queries)
 const productSlugCache = new Map();
 const SLUG_CACHE_TTL = 300000; // 5 minutes
+
+async function getProductTimestampSupport(env) {
+  const columns = await getProductTableColumns(env);
+  return {
+    hasCreatedAt: columns.has('created_at'),
+    hasUpdatedAt: columns.has('updated_at')
+  };
+}
 
 function toCleanString(value) {
   if (typeof value !== 'string') return '';
@@ -130,7 +139,7 @@ export async function getProducts(env, url) {
   }
 
   // Build Query
-  let whereClause = "WHERE p.status = 'active'";
+  let whereClause = `WHERE ${buildPublicProductStatusWhere('p.status')}`;
   if (filter === 'featured') {
     whereClause += " AND p.featured = 1";
   }
@@ -197,12 +206,14 @@ export async function getProductsList(env) {
  * Get single product by ID or slug
  * OPTIMIZED: Uses Promise.all for parallel queries
  */
-export async function getProduct(env, id) {
+export async function getProduct(env, id, opts = {}) {
+  const includeHidden = !!opts.includeHidden;
+  const visibilitySql = includeHidden ? '' : ` AND ${buildPublicProductStatusWhere('status')}`;
   let row;
   if (isNaN(Number(id))) {
-    row = await env.DB.prepare('SELECT * FROM products WHERE slug = ?').bind(id).first();
+    row = await env.DB.prepare(`SELECT * FROM products WHERE slug = ?${visibilitySql}`).bind(id).first();
   } else {
-    row = await env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(Number(id)).first();
+    row = await env.DB.prepare(`SELECT * FROM products WHERE id = ?${visibilitySql}`).bind(Number(id)).first();
   }
   if (!row) return json({ error: 'Product not found' }, 404);
   
@@ -272,6 +283,7 @@ export async function saveProduct(env, body) {
   const slug = (body.slug || '').trim() || slugifyStr(title);
   const addonsJson = JSON.stringify(body.addons || []);
   const galleryJson = JSON.stringify(normalizeGalleryImages(body));
+  const { hasCreatedAt, hasUpdatedAt } = await getProductTimestampSupport(env);
   
   if (body.id) {
     // Store delivery_time_days in normal_delivery_text field as days number
@@ -281,7 +293,7 @@ export async function saveProduct(env, body) {
       UPDATE products SET title=?, slug=?, description=?, normal_price=?, sale_price=?,
       instant_delivery=?, normal_delivery_text=?, thumbnail_url=?, video_url=?,
       gallery_images=?, addons_json=?, seo_title=?, seo_description=?, seo_keywords=?, seo_canonical=?,
-      whop_plan=?, whop_price_map=?, whop_product_id=? WHERE id=?
+      whop_plan=?, whop_price_map=?, whop_product_id=?${hasUpdatedAt ? ', updated_at=CURRENT_TIMESTAMP' : ''} WHERE id=?
     `).bind(
       title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
       body.instant_delivery ? 1 : 0, String(deliveryDays),
@@ -299,8 +311,8 @@ export async function saveProduct(env, body) {
     INSERT INTO products (title, slug, description, normal_price, sale_price,
     instant_delivery, normal_delivery_text, thumbnail_url, video_url,
     gallery_images, addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
-    whop_plan, whop_price_map, whop_product_id, status, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0)
+    whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''})
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})
   `).bind(
     title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
     body.instant_delivery ? 1 : 0, String(deliveryDays),
@@ -358,8 +370,11 @@ export async function updateProductStatus(env, body) {
   // Invalidate products cache
   productsCache = null;
   productsCacheTime = 0;
+  const { hasUpdatedAt } = await getProductTimestampSupport(env);
   
-  await env.DB.prepare('UPDATE products SET status = ? WHERE id = ?').bind(status, Number(id)).run();
+  await env.DB.prepare(
+    `UPDATE products SET status = ?${hasUpdatedAt ? ', updated_at = CURRENT_TIMESTAMP' : ''} WHERE id = ?`
+  ).bind(status, Number(id)).run();
   return json({ success: true });
 }
 
@@ -384,14 +399,15 @@ export async function duplicateProduct(env, body) {
     idx++;
     exists = await env.DB.prepare('SELECT slug FROM products WHERE slug = ?').bind(newSlug).first();
   }
+  const { hasCreatedAt, hasUpdatedAt } = await getProductTimestampSupport(env);
   
   const r = await env.DB.prepare(
     `INSERT INTO products (
       title, slug, description, normal_price, sale_price,
       instant_delivery, normal_delivery_text, thumbnail_url, video_url,
       addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
-      whop_plan, whop_price_map, whop_product_id, status, sort_order
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''}
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})`
   ).bind(
     (row.title || '') + ' Copy',
     newSlug,
@@ -426,8 +442,8 @@ export async function getAdjacentProducts(env, id) {
   
   // Get current product's sort_order
   const current = await env.DB.prepare(
-    'SELECT id, sort_order FROM products WHERE id = ? AND status = ?'
-  ).bind(productId, 'active').first();
+    `SELECT id, sort_order FROM products WHERE id = ? AND ${buildPublicProductStatusWhere('status')}`
+  ).bind(productId).first();
   
   if (!current) return json({ error: 'Product not found' }, 404);
   
@@ -437,7 +453,7 @@ export async function getAdjacentProducts(env, id) {
     env.DB.prepare(`
       SELECT id, title, slug, thumbnail_url 
       FROM products 
-      WHERE status = 'active' 
+      WHERE ${buildPublicProductStatusWhere('status')} 
       AND (
         sort_order < ? 
         OR (sort_order = ? AND id > ?)
@@ -449,7 +465,7 @@ export async function getAdjacentProducts(env, id) {
     env.DB.prepare(`
       SELECT id, title, slug, thumbnail_url 
       FROM products 
-      WHERE status = 'active' 
+      WHERE ${buildPublicProductStatusWhere('status')} 
       AND (
         sort_order > ? 
         OR (sort_order = ? AND id < ?)

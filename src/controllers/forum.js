@@ -4,6 +4,7 @@
  */
 
 import { json, cachedJson } from '../utils/response.js';
+import { buildPublicProductStatusWhere } from '../utils/product-visibility.js';
 import { 
   notifyForumQuestion, 
   notifyForumReply,
@@ -746,7 +747,7 @@ export async function getForumSidebar(env, questionId) {
     const products = await env.DB.prepare(`
       SELECT id, title, slug, thumbnail_url, sale_price, normal_price
       FROM products 
-      WHERE status = 'active'
+      WHERE ${buildPublicProductStatusWhere('status')}
       ORDER BY id DESC
       LIMIT 2 OFFSET ?
     `).bind(Math.max(0, questionId - 1)).all();

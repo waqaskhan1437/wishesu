@@ -1,4 +1,5 @@
 import { canonicalProductPath, escapeHtml, slugifyStr } from '../utils/formatting.js';
+import { buildPublicProductStatusWhere } from '../utils/product-visibility.js';
 import {
   updateOrder,
   deliverOrder,
@@ -395,7 +396,7 @@ async function renderHome(env, url) {
   const r = await env.DB.prepare(`
     SELECT id, title, slug, description, normal_price, sale_price, thumbnail_url, normal_delivery_text, instant_delivery
     FROM products
-    WHERE status = 'active'
+    WHERE ${buildPublicProductStatusWhere('status')}
     ORDER BY sort_order ASC, id DESC
     LIMIT 120
   `).all();
@@ -424,7 +425,7 @@ async function renderHome(env, url) {
     <h1>Server-rendered Storefront (Level 1)</h1>
     ${renderNotice(url)}
     <p class="muted">This storefront is rendered fully on server with plain HTML forms and no client JS.</p>
-    <section class="grid grid-3">${cards || '<div class="card">No active products.</div>'}</section>
+    <section class="grid grid-3">${cards || '<div class="card">No products available.</div>'}</section>
   `;
   return htmlResponse(renderLayout({
     title: 'WishVideo Store',
@@ -456,7 +457,7 @@ async function renderProduct(env, url, productId) {
   const product = await env.DB.prepare(`
     SELECT *
     FROM products
-    WHERE id = ? AND status = 'active'
+    WHERE id = ? AND ${buildPublicProductStatusWhere('status')}
     LIMIT 1
   `).bind(Number(productId)).first();
 
