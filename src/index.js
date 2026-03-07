@@ -3756,8 +3756,8 @@ if (method === 'GET' || method === 'HEAD') {
       if ((method === 'GET' || method === 'HEAD') && env.DB) {
         let defaultPageType = null;
         
-        // Home page — serve default home from DB at both / and /home
-        if (path === '/' || path === '/index.html' || path === '/home' || path === '/home/') {
+        // Home page — serve default home from DB only at the canonical root URL.
+        if (path === '/' || path === '/index.html') {
           defaultPageType = 'home';
         }
         // Blog archive

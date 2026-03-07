@@ -671,6 +671,7 @@
     let editingSection = null;
     let editingPageId = null;
     let originalPageSlug = '';
+    let previousEditableSlug = '';
     
     // Get hero section with optional feature image
     function getHeroSection() {
@@ -1244,7 +1245,23 @@
     document.addEventListener('DOMContentLoaded', () => {
       updateCanvasEmptyState();
       loadCurrentDefaults();
-      
+
+      const slugInput = document.getElementById('seo-slug');
+      const defaultCheckbox = document.getElementById('is-default');
+      if (slugInput) {
+        slugInput.addEventListener('input', () => {
+          if (!slugInput.readOnly) {
+            previousEditableSlug = slugInput.value.trim();
+          }
+        });
+      }
+      if (defaultCheckbox) {
+        defaultCheckbox.addEventListener('change', () => {
+          syncSlugField();
+        });
+      }
+      syncSlugField();
+
       const params = new URLSearchParams(window.location.search);
       const editPage = params.get('edit');
       if (editPage) loadExistingPage(editPage);
@@ -1552,6 +1569,38 @@
     }
 
     // Page Type
+    function shouldUseRootHomepageUrl() {
+      return currentPageType === 'home' && document.getElementById('is-default').checked;
+    }
+
+    function syncSlugField() {
+      const slugInput = document.getElementById('seo-slug');
+      if (!slugInput) return;
+
+      if (shouldUseRootHomepageUrl()) {
+        const currentValue = slugInput.value.trim();
+        if (currentValue && currentValue !== '/') {
+          previousEditableSlug = currentValue;
+        }
+        slugInput.value = '/';
+        slugInput.readOnly = true;
+        slugInput.placeholder = '/';
+        slugInput.title = 'Default Home page always publishes at root URL /';
+        slugInput.style.background = '#f3f4f6';
+      } else {
+        const wasLocked = slugInput.readOnly;
+        slugInput.readOnly = false;
+        slugInput.placeholder = 'my-awesome-page';
+        slugInput.title = '';
+        slugInput.style.background = '';
+
+        if (wasLocked && slugInput.value.trim() === '/') {
+          const fallbackSlug = previousEditableSlug || (originalPageSlug && originalPageSlug !== 'home' ? originalPageSlug : 'home');
+          slugInput.value = fallbackSlug;
+        }
+      }
+    }
+
     function setPageType(type) {
       currentPageType = type;
       document.querySelectorAll('.type-option').forEach(opt => {
@@ -1567,6 +1616,7 @@
         info.textContent = `When set as default, this page will be used as the main ${type.replace('_', ' ')} page.`;
         document.getElementById('is-default').disabled = false;
       }
+      syncSlugField();
     }
 
     // Load Current Defaults
@@ -1581,9 +1631,10 @@
           const label = type.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
           const icon = type === 'home' ? '🏠' : type === 'blog_archive' ? '📝' : type === 'forum_archive' ? '💬' : '🛒';
           if (data.page) {
+            const publicUrl = data.page.public_url || (type === 'home' ? '/' : `/${data.page.slug}`);
             html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
               <span>${icon}</span><span style="flex:1;font-weight:600;">${label}</span>
-              <span style="color:var(--success);font-size:0.8rem;">${data.page.slug}</span>
+              <span style="color:var(--success);font-size:0.8rem;">${publicUrl}</span>
             </div>`;
           } else {
             html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
@@ -1639,6 +1690,7 @@
       let slug = document.getElementById('seo-slug').value.trim();
       const desc = document.getElementById('seo-desc').value.trim();
       const isDefault = document.getElementById('is-default').checked;
+      const useRootHomepageUrl = currentPageType === 'home' && isDefault;
 
       const saveBtn = document.getElementById('save-btn');
       const originalText = saveBtn.textContent; saveBtn.textContent = '⏳ Saving...'; saveBtn.disabled = true;
@@ -1655,7 +1707,10 @@
         saveBtn.disabled = false;
         return;
       }
-      if (!slug) {
+      if (useRootHomepageUrl) {
+        slug = '/';
+        document.getElementById('seo-slug').value = '/';
+      } else if (!slug) {
         slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
         document.getElementById('seo-slug').value = slug;
       }
@@ -1739,10 +1794,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.success) {
           // Use slug returned from API if available (handles uniqueness)
           const savedSlug = data.slug || slug;
+          const publicUrl = data.public_url || (useRootHomepageUrl ? '/' : `/${savedSlug}`);
           if (data.id) editingPageId = Number(data.id);
           originalPageSlug = savedSlug;
-          document.getElementById('seo-slug').value = savedSlug;
-          alert(`✅ Page saved!\n\nURL: ${window.location.origin}/${savedSlug}`);
+          previousEditableSlug = savedSlug;
+          document.getElementById('seo-slug').value = useRootHomepageUrl ? '/' : savedSlug;
+          syncSlugField();
+          alert(`✅ Page saved!
+
+URL: ${window.location.origin}${publicUrl}`);
           loadCurrentDefaults();
         } else {
           alert('❌ Save failed: ' + (data.error || 'Unknown error'));
@@ -1807,6 +1867,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.content) {
           editingPageId = data.id ? Number(data.id) : null;
           originalPageSlug = (data.slug || name || '').toString().trim();
+          previousEditableSlug = originalPageSlug && originalPageSlug !== 'home' ? originalPageSlug : '';
 
           const canvas = document.getElementById('builder-canvas');
           const parser = new DOMParser();
@@ -1818,9 +1879,10 @@ document.addEventListener('DOMContentLoaded', function() {
           const metaDesc = doc.querySelector('meta[name="description"]');
           if (metaDesc) document.getElementById('seo-desc').value = metaDesc.getAttribute('content') || '';
           
-          document.getElementById('seo-slug').value = data.slug || name;
           if (data.page_type) setPageType(data.page_type);
           document.getElementById('is-default').checked = data.is_default === 1;
+          document.getElementById('seo-slug').value = (data.page_type === 'home' && data.is_default === 1) ? '/' : (data.slug || name);
+          syncSlugField();
 
           // Load feature image
           const featureImageUrl = data.feature_image_url || '';

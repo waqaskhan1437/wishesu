@@ -159,10 +159,11 @@
         const info = PAGE_TYPE_LABELS[type];
         
         if (data.page) {
+          const publicUrl = data.page.public_url || (type === 'home' ? '/' : `/${data.page.slug}`);
           html += `<div style="background:white;border-radius:8px;padding:12px;text-align:center;">
             <div style="font-size:1.5rem;margin-bottom:5px;">${info.icon}</div>
             <div style="font-weight:600;color:#1f2937;font-size:0.85rem;">${info.label}</div>
-            <div style="color:#10b981;font-size:0.75rem;margin-top:3px;">✓ ${data.page.slug}</div>
+            <div style="color:#10b981;font-size:0.75rem;margin-top:3px;">✓ ${publicUrl}</div>
           </div>`;
         } else {
           html += `<div style="background:white;border-radius:8px;padding:12px;text-align:center;opacity:0.6;">

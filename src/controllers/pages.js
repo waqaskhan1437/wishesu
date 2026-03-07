@@ -24,6 +24,45 @@ function sanitizePageSlug(input) {
     .replace(/-+/g, '-');
 }
 
+function isTruthyDefault(value) {
+  return value === true || value === 1 || value === '1' || value === 'true';
+}
+
+function isRootHomePage(pageType, isDefault) {
+  return String(pageType || '') === PAGE_TYPES.HOME && Number(isDefault) === 1;
+}
+
+async function getUniquePageSlug(env, baseSlug, excludeId = null) {
+  let base = sanitizePageSlug(baseSlug || 'page');
+  if (!base || base === 'home') base = 'page';
+
+  let candidate = base;
+  let counter = 1;
+  while (true) {
+    const row = excludeId
+      ? await env.DB.prepare('SELECT id FROM pages WHERE slug = ? AND id != ? LIMIT 1').bind(candidate, Number(excludeId)).first()
+      : await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(candidate).first();
+    if (!row) return candidate;
+    candidate = `${base}-${counter++}`;
+  }
+}
+
+async function freeHomeSlugForPage(env, targetId = null) {
+  const query = targetId
+    ? 'SELECT id, title FROM pages WHERE slug = ? AND id != ? ORDER BY id DESC'
+    : 'SELECT id, title FROM pages WHERE slug = ? ORDER BY id DESC';
+  const bind = targetId ? [ 'home', Number(targetId) ] : [ 'home' ];
+  const rows = await env.DB.prepare(query).bind(...bind).all();
+
+  for (const row of rows.results || []) {
+    const base = sanitizePageSlug(row.title || '') || 'home-page';
+    const nextSlug = await getUniquePageSlug(env, `${base}-previous`, row.id);
+    await env.DB.prepare(
+      'UPDATE pages SET slug = ?, is_default = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).bind(nextSlug, Number(row.id)).run();
+  }
+}
+
 /**
  * Get active pages (public - cached)
  */
@@ -81,16 +120,20 @@ export async function getPagesList(env) {
       ? toISO8601(page.updated_at) 
       : (page.created_at ? toISO8601(page.created_at) : new Date().toISOString());
     
+    const pageType = hasNewColumns ? (page.page_type || 'custom') : 'custom';
+    const isDefault = hasNewColumns ? (page.is_default || 0) : 0;
+    const publicUrl = isRootHomePage(pageType, isDefault) ? '/' : `/${page.slug}`;
+
     return {
       id: page.id,
       name: page.slug || page.title || 'Untitled',
       title: page.title || page.slug || 'Untitled',
-      url: `/${page.slug}`,
+      url: publicUrl,
       size: sizeStr,
       uploaded: uploaded,
       status: page.status || 'draft',
-      page_type: hasNewColumns ? (page.page_type || 'custom') : 'custom',
-      is_default: hasNewColumns ? (page.is_default || 0) : 0
+      page_type: pageType,
+      is_default: isDefault
     };
   });
 
@@ -123,7 +166,8 @@ export async function getDefaultPage(env, pageType) {
     
     if (row.created_at) row.created_at = toISO8601(row.created_at);
     if (row.updated_at) row.updated_at = toISO8601(row.updated_at);
-    
+    row.public_url = isRootHomePage(row.page_type, row.is_default) ? '/' : `/${row.slug}`;
+
     return json({ page: row });
   } catch (e) {
     // Columns might not exist yet
@@ -136,22 +180,29 @@ export async function getDefaultPage(env, pageType) {
  */
 export async function setDefaultPage(env, body) {
   const { id, page_type } = body;
-  
+
   if (!id || !page_type) {
     return json({ error: 'id and page_type required' }, 400);
   }
-  
+
   try {
     // First, unset any existing default for this type
     await env.DB.prepare(
       'UPDATE pages SET is_default = 0 WHERE page_type = ?'
     ).bind(page_type).run();
-    
-    // Then set the new default
-    await env.DB.prepare(
-      'UPDATE pages SET is_default = 1, page_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).bind(page_type, Number(id)).run();
-    
+
+    if (String(page_type) === PAGE_TYPES.HOME) {
+      await freeHomeSlugForPage(env, Number(id));
+      await env.DB.prepare(
+        'UPDATE pages SET slug = ?, is_default = 1, page_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).bind('home', page_type, Number(id)).run();
+    } else {
+      // Then set the new default
+      await env.DB.prepare(
+        'UPDATE pages SET is_default = 1, page_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).bind(page_type, Number(id)).run();
+    }
+
     return json({ success: true });
   } catch (e) {
     return json({ error: 'Columns not available. Please redeploy to add page_type support.' }, 500);
@@ -181,29 +232,28 @@ export async function clearDefaultPage(env, body) {
 export async function savePage(env, body) {
   if (!body.title) return json({ error: 'title required' }, 400);
 
-  // Sanitize or generate slug from provided slug or title. Enforce lower case,
-  // hyphens for separators, and trim leading/trailing hyphens. This prevents
-  // invalid characters from being stored in the database and ensures URLs
-  // remain SEO‑friendly.
-  const finalSlug = sanitizePageSlug(
-    body.slug && typeof body.slug === 'string' && body.slug.trim().length > 0
-      ? body.slug
-      : (body.title || '')
-  );
-  if (!finalSlug) {
-    return json({ error: 'slug could not be generated from title' }, 400);
-  }
-
   const pageType = body.page_type || 'custom';
   // Only set as default when explicitly requested by the client UI.
   // Previously, any non-custom page_type would auto-become default, which caused
   // the latest-saved page to overwrite the existing default unexpectedly.
-  const wantsDefault =
-    body.is_default === true ||
-    body.is_default === 1 ||
-    body.is_default === '1' ||
-    body.is_default === 'true';
+  const wantsDefault = isTruthyDefault(body.is_default);
   const isDefault = wantsDefault && pageType !== 'custom' ? 1 : 0;
+  const forcedHomeSlug = isRootHomePage(pageType, isDefault);
+
+  // Sanitize or generate slug from provided slug or title. Enforce lower case,
+  // hyphens for separators, and trim leading/trailing hyphens. This prevents
+  // invalid characters from being stored in the database and ensures URLs
+  // remain SEO-friendly.
+  const finalSlug = forcedHomeSlug
+    ? 'home'
+    : sanitizePageSlug(
+        body.slug && typeof body.slug === 'string' && body.slug.trim().length > 0
+          ? body.slug
+          : (body.title || '')
+      );
+  if (!finalSlug) {
+    return json({ error: 'slug could not be generated from title' }, 400);
+  }
 
   const clearDefaultsIfNeeded = async () => {
     if (isDefault && pageType !== 'custom') {
@@ -225,6 +275,10 @@ export async function savePage(env, body) {
     if (existingByOriginalSlug && existingByOriginalSlug.id) {
       updateId = Number(existingByOriginalSlug.id);
     }
+  }
+
+  if (forcedHomeSlug) {
+    await freeHomeSlugForPage(env, updateId);
   }
 
   // When updating existing page, use the sanitized slug.
@@ -258,7 +312,7 @@ export async function savePage(env, body) {
       body.status || 'published',
       updateId
     ).run();
-    return json({ success: true, id: updateId, slug: finalSlug });
+    return json({ success: true, id: updateId, slug: finalSlug, public_url: forcedHomeSlug ? '/' : `/${finalSlug}` });
   }
 
   // If no ID but a page with the same slug exists, update it instead of creating a duplicate
@@ -280,7 +334,7 @@ export async function savePage(env, body) {
         body.status || 'published',
         existingBySlug.id
       ).run();
-      return json({ success: true, id: existingBySlug.id, slug: finalSlug });
+      return json({ success: true, id: existingBySlug.id, slug: finalSlug, public_url: forcedHomeSlug ? '/' : `/${finalSlug}` });
     }
   } catch (e) {
     // ignore errors from lookup; fall through to insert below
@@ -288,11 +342,18 @@ export async function savePage(env, body) {
 
   // Ensure slug uniqueness for new pages
   let uniqueSlug = finalSlug;
-  let idx = 1;
-  while (true) {
-    const exists = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(uniqueSlug).first();
-    if (!exists) break;
-    uniqueSlug = `${finalSlug}-${idx++}`;
+  if (!forcedHomeSlug) {
+    let idx = 1;
+    while (true) {
+      const exists = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(uniqueSlug).first();
+      if (!exists) break;
+      uniqueSlug = `${finalSlug}-${idx++}`;
+    }
+  } else {
+    const existingHome = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind('home').first();
+    if (existingHome) {
+      return json({ error: 'default home page could not claim the home slug' }, 409);
+    }
   }
 
   await clearDefaultsIfNeeded();
@@ -300,23 +361,20 @@ export async function savePage(env, body) {
   const r = await env.DB.prepare(
     'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
   ).bind(uniqueSlug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published').run();
-  return json({ success: true, id: r.meta?.last_row_id, slug: uniqueSlug });
+  return json({ success: true, id: r.meta?.last_row_id, slug: uniqueSlug, public_url: forcedHomeSlug ? '/' : `/${uniqueSlug}` });
 }
 
 /**
  * Save page builder (simplified endpoint)
  */
 export async function savePageBuilder(env, body) {
-  const name = sanitizePageSlug((body.name || '').trim());
   const content = body.content || '';
   const pageType = body.page_type || 'custom';
   // Only set as default when explicitly requested by the client UI.
-  const wantsDefault =
-    body.is_default === true ||
-    body.is_default === 1 ||
-    body.is_default === '1' ||
-    body.is_default === 'true';
+  const wantsDefault = isTruthyDefault(body.is_default);
   const isDefault = wantsDefault && pageType !== 'custom' ? 1 : 0;
+  const forcedHomeSlug = isRootHomePage(pageType, isDefault);
+  const name = forcedHomeSlug ? 'home' : sanitizePageSlug((body.name || '').trim());
 
   if (!name) return json({ error: 'name required' }, 400);
 
@@ -343,8 +401,12 @@ export async function savePageBuilder(env, body) {
   if (!existing && originalSlug) {
     existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(originalSlug).first();
   }
-  if (!existing) {
+  if (!existing && !forcedHomeSlug) {
     existing = await env.DB.prepare('SELECT id FROM pages WHERE slug = ?').bind(name).first();
+  }
+
+  if (forcedHomeSlug) {
+    await freeHomeSlugForPage(env, existing?.id || null);
   }
 
   if (existing) {
@@ -366,7 +428,7 @@ export async function savePageBuilder(env, body) {
         'UPDATE pages SET slug=?, content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
       ).bind(name, content, existing.id).run();
     }
-    return json({ success: true, id: existing.id, slug: name });
+    return json({ success: true, id: existing.id, slug: name, public_url: forcedHomeSlug ? '/' : `/${name}` });
   }
 
   // If setting as default, clear other defaults first
@@ -377,13 +439,13 @@ export async function savePageBuilder(env, body) {
     const r = await env.DB.prepare(
       'INSERT INTO pages (slug, title, content, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).bind(name, name, content, pageType, isDefault, body.feature_image_url || '', 'published').run();
-    return json({ success: true, id: r.meta?.last_row_id, slug: name });
+    return json({ success: true, id: r.meta?.last_row_id, slug: name, public_url: forcedHomeSlug ? '/' : `/${name}` });
   } catch (e) {
     // Fallback: columns don't exist, use basic insert
     const r = await env.DB.prepare(
       'INSERT INTO pages (slug, title, content, status) VALUES (?, ?, ?, ?)'
     ).bind(name, name, content, 'published').run();
-    return json({ success: true, id: r.meta?.last_row_id, slug: name });
+    return json({ success: true, id: r.meta?.last_row_id, slug: name, public_url: forcedHomeSlug ? '/' : `/${name}` });
   }
 }
 
