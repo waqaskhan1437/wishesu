@@ -195,8 +195,7 @@ import {
 import {
   getEmailTemplatesApi,
   saveEmailTemplateApi,
-  addLeadApi,
-  sendManualEmailApi
+  addLeadApi
 } from './controllers/email.js';
 
 // Noindex (Hide pages from search results)
@@ -386,13 +385,6 @@ export async function routeApiRequest(req, env, url, path, method) {
   if (method === 'POST' && path === '/api/admin/email-templates') {
     const body = await req.json().catch(() => ({}));
     return saveEmailTemplateApi(env, body);
-  }
-
-  // ----- SEND MANUAL EMAIL (Admin to User) -----
-  // Admin can send custom emails to specific recipients
-  if (method === 'POST' && path === '/api/admin/send-email') {
-    const body = await req.json().catch(() => ({}));
-    return sendManualEmailApi(env, body);
   }
 
   // ----- LEAD CAPTURE (Abandoned Checkout, Forms) -----
@@ -1872,7 +1864,6 @@ export async function routeApiRequest(req, env, url, path, method) {
     return deleteApiKey(env, id);
   }
 
-  // API endpoint not found - log for debugging
-  console.log(`[API-404] Path: ${path} | Method: ${method} | Referer: ${req.headers.get('referer') || 'none'}`);
+  // API endpoint not found
   return json({ error: 'API endpoint not found', path, method }, 404);
 }
