@@ -316,6 +316,78 @@ function toHeadResponse(response) {
   });
 }
 
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isNonEmptyObject(value) {
+  return isPlainObject(value) && Object.keys(value).length > 0;
+}
+
+function getWebhookKindForPath(path) {
+  if (path === '/api/whop/webhook') return 'whop';
+  if (path === '/api/paypal/webhook') return 'paypal';
+  if (path === '/api/payment/universal/webhook') return 'universal';
+  return null;
+}
+
+export function validateWebhookRequestPayload(kind, body) {
+  if (!isNonEmptyObject(body)) {
+    return 'Webhook payload must be a non-empty JSON object';
+  }
+
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  const hasWhopShape = normalizedKind === 'whop' || (normalizedKind === 'universal' && ('type' in body || 'event' in body || 'data' in body));
+  if (hasWhopShape) {
+    const eventType = String(body.type || body.event || '').trim();
+    if (!eventType) {
+      return 'Whop webhook event type required';
+    }
+    if (!isNonEmptyObject(body.data)) {
+      return 'Whop webhook data required';
+    }
+    return null;
+  }
+
+  const hasPayPalShape = normalizedKind === 'paypal' || (normalizedKind === 'universal' && ('event_type' in body || 'resource' in body));
+  if (hasPayPalShape) {
+    const eventType = String(body.event_type || '').trim();
+    if (!eventType) {
+      return 'PayPal webhook event_type required';
+    }
+    if (!isNonEmptyObject(body.resource)) {
+      return 'PayPal webhook resource required';
+    }
+    return null;
+  }
+
+  return null;
+}
+
+async function parseWebhookRequestPayload(req, path) {
+  const kind = getWebhookKindForPath(path);
+  if (!kind) return null;
+
+  const rawBody = await req.text();
+  let body;
+  try {
+    body = JSON.parse(rawBody || '{}');
+  } catch (e) {
+    return {
+      errorResponse: json({ error: 'Invalid JSON' }, 400)
+    };
+  }
+
+  const validationError = validateWebhookRequestPayload(kind, body);
+  if (validationError) {
+    return {
+      errorResponse: json({ error: validationError }, 400)
+    };
+  }
+
+  return { kind, body, rawBody };
+}
+
 /**
  * Route API requests to appropriate handlers
  * @param {Request} req - Request object
@@ -333,6 +405,14 @@ export async function routeApiRequest(req, env, url, path, method) {
     });
     const getResponse = await routeApiRequest(getRequest, env, url, path, 'GET');
     return toHeadResponse(getResponse);
+  }
+
+  let parsedWebhookPayload = null;
+  if (method === 'POST') {
+    parsedWebhookPayload = await parseWebhookRequestPayload(req, path);
+    if (parsedWebhookPayload?.errorResponse) {
+      return parsedWebhookPayload.errorResponse;
+    }
   }
 
   // ----- NON-DB ROUTES (health checks, debug) -----
@@ -663,13 +743,8 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/whop/webhook') {
-    const rawBody = await req.text();
-    let body;
-    try {
-      body = JSON.parse(rawBody);
-    } catch (e) {
-      return json({ error: 'Invalid JSON' }, 400);
-    }
+    const rawBody = parsedWebhookPayload?.rawBody || '';
+    const body = parsedWebhookPayload?.body || {};
     return handleWebhook(env, body, req.headers, rawBody);
   }
 
@@ -693,9 +768,8 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/paypal/webhook') {
-    const rawBody = await req.text();
-    let body;
-    try { body = JSON.parse(rawBody); } catch (e) { return json({ error: 'Invalid JSON' }, 400); }
+    const rawBody = parsedWebhookPayload?.rawBody || '';
+    const body = parsedWebhookPayload?.body || {};
     return handlePayPalWebhook(env, body, req.headers, rawBody);
   }
 
@@ -765,9 +839,8 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/payment/universal/webhook') {
-    const rawBody = await req.text();
-    let body;
-    try { body = JSON.parse(rawBody); } catch (e) { return json({ error: 'Invalid JSON' }, 400); }
+    const rawBody = parsedWebhookPayload?.rawBody || '';
+    const body = parsedWebhookPayload?.body || {};
     return handleUniversalWebhook(env, body, req.headers, rawBody);
   }
 
