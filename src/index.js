@@ -58,6 +58,21 @@ function noStoreHeaders(extra = {}) {
   };
 }
 
+function buildVersionedCacheKey(req, accept = 'text/html') {
+  const cacheUrl = new URL(req.url);
+  cacheUrl.searchParams.set('__cv', VERSION || '0');
+
+  const headers = new Headers();
+  if (accept) {
+    headers.set('Accept', accept);
+  }
+
+  return new Request(cacheUrl.toString(), {
+    method: 'GET',
+    headers
+  });
+}
+
 function isLocalHostname(hostname) {
   const h = String(hostname || '').toLowerCase();
   return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.localhost');
@@ -3926,7 +3941,7 @@ if (method === 'GET' || method === 'HEAD') {
         // still hit the cache API to return headers quickly without body.
         if (method === 'GET' && caches && caches.default) {
           try {
-            const cacheKey = new Request(req.url, { method: 'GET' });
+            const cacheKey = buildVersionedCacheKey(req);
             const cachedResp = await caches.default.match(cacheKey);
             if (cachedResp) {
               return cachedResp;
@@ -4012,7 +4027,7 @@ if (method === 'GET' || method === 'HEAD') {
               // Store in caches.default only for GET requests
               if (method === 'GET' && caches && caches.default) {
                 try {
-                  const cacheKey = new Request(req.url, { method: 'GET' });
+                  const cacheKey = buildVersionedCacheKey(req);
                   // We clone to avoid the body being locked
                   await caches.default.put(cacheKey, resp.clone());
                 } catch (err) {
@@ -4067,7 +4082,7 @@ if (method === 'GET' || method === 'HEAD') {
         // Try to serve from cache for GET requests
         if (method === 'GET' && caches && caches.default) {
           try {
-            const cacheKey = new Request(req.url, { method: 'GET' });
+            const cacheKey = buildVersionedCacheKey(req);
             const cachedResp = await caches.default.match(cacheKey);
             if (cachedResp) {
               return cachedResp;
@@ -4178,7 +4193,7 @@ if (method === 'GET' || method === 'HEAD') {
               // Put into cache for GET requests
               if (method === 'GET' && caches && caches.default) {
                 try {
-                  const cacheKey = new Request(req.url, { method: 'GET' });
+                  const cacheKey = buildVersionedCacheKey(req);
                   await caches.default.put(cacheKey, resp.clone());
                 } catch (err) {
                   console.warn('Forum cache put error:', err);
@@ -4602,10 +4617,7 @@ if (method === 'GET' || method === 'HEAD') {
           !path.startsWith('/admin') &&
           !path.includes('/admin/') &&
           !isSensitiveNoindexPath(normalizedAssetPathForCache);
-        const cacheKey = new Request(req.url, { 
-          method: 'GET',
-          headers: { 'Accept': 'text/html' }
-        });
+        const cacheKey = buildVersionedCacheKey(req, 'text/html');
 
         if (shouldCache) {
           try {
