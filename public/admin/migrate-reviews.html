@@ -167,7 +167,7 @@
       result.style.display = 'none';
       
       try {
-        const response = await fetch('/api/reviews/migrate', {
+        const response = await fetch('/api/admin/reviews/migrate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         });
@@ -202,15 +202,15 @@
       statsDiv.style.display = 'none';
       
       try {
-        // Get reviews statistics
-        const response = await fetch('/api/reviews');
+        const response = await fetch('/api/admin/reviews/migrate/status');
         const data = await response.json();
-        const reviews = data.reviews || [];
+        const stats = data.stats || {};
         
-        const totalReviews = reviews.length;
-        const reviewsWithVideos = reviews.filter(r => r.delivered_video_url).length;
-        const reviewsWithoutVideos = totalReviews - reviewsWithVideos;
-        const reviewsWithOrders = reviews.filter(r => r.order_id).length;
+        const totalReviews = Number(stats.totalReviews || 0);
+        const reviewsWithVideos = Number(stats.reviewsWithVideos || 0);
+        const reviewsWithoutVideos = Number(stats.reviewsWithoutVideos || 0);
+        const reviewsWithOrders = Number(stats.reviewsWithOrders || 0);
+        const eligibleForMigration = Number(stats.eligibleForMigration || 0);
         
         result.className = 'result info';
         result.textContent = `📊 System analysis complete. Found ${totalReviews} total reviews in the database.`;
@@ -232,6 +232,10 @@
           <div class="stat-card">
             <div class="stat-number">${reviewsWithOrders}</div>
             <div class="stat-label">Linked to Orders</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">${eligibleForMigration}</div>
+            <div class="stat-label">Can Be Migrated</div>
           </div>
         `;
         statsDiv.style.display = 'grid';

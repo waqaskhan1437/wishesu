@@ -41,6 +41,8 @@ import {
 import {
   getReviews,
   getProductReviews,
+  getReviewMigrationStatus,
+  migrateReviewMediaFromOrders,
   addReview,
   updateReview,
   deleteReview
@@ -842,6 +844,14 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   // ----- REVIEWS -----
+  if (method === 'GET' && path === '/api/admin/reviews/migrate/status') {
+    return getReviewMigrationStatus(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/reviews/migrate') {
+    return migrateReviewMediaFromOrders(env);
+  }
+
   // Public reviews - cache for 60s
   if (method === 'GET' && path === '/api/reviews') {
     const response = await getReviews(env, url);
@@ -856,8 +866,11 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   // Product reviews - cache for 60s
-  if (method === 'GET' && path.startsWith('/api/reviews/')) {
+  if (method === 'GET' && (/^\/api\/reviews\/\d+$/.test(path) || path.startsWith('/api/reviews/product/'))) {
     const productId = path.split('/').pop();
+    if (!/^\d+$/.test(String(productId || '').trim())) {
+      return json({ error: 'Not found' }, 404);
+    }
     const response = await getProductReviews(env, productId);
     const newHeaders = new Headers(response.headers);
     newHeaders.set('Cache-Control', 'public, max-age=30, s-maxage=60');

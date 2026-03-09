@@ -101,6 +101,80 @@ export async function getProductReviews(env, productId) {
   return json({ reviews });
 }
 
+export async function getReviewMigrationStatus(env) {
+  const row = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS total_reviews,
+      SUM(CASE WHEN delivered_video_url IS NOT NULL AND TRIM(delivered_video_url) != '' THEN 1 ELSE 0 END) AS reviews_with_videos,
+      SUM(CASE WHEN delivered_video_url IS NULL OR TRIM(delivered_video_url) = '' THEN 1 ELSE 0 END) AS reviews_without_videos,
+      SUM(CASE WHEN order_id IS NOT NULL AND TRIM(order_id) != '' THEN 1 ELSE 0 END) AS reviews_with_orders,
+      SUM(CASE
+            WHEN order_id IS NOT NULL AND TRIM(order_id) != '' AND (
+              delivered_video_url IS NULL OR TRIM(delivered_video_url) = '' OR
+              delivered_thumbnail_url IS NULL OR TRIM(delivered_thumbnail_url) = ''
+            )
+            THEN 1
+            ELSE 0
+          END) AS eligible_for_migration
+    FROM reviews
+  `).first();
+
+  return json({
+    success: true,
+    stats: {
+      totalReviews: Number(row?.total_reviews || 0),
+      reviewsWithVideos: Number(row?.reviews_with_videos || 0),
+      reviewsWithoutVideos: Number(row?.reviews_without_videos || 0),
+      reviewsWithOrders: Number(row?.reviews_with_orders || 0),
+      eligibleForMigration: Number(row?.eligible_for_migration || 0)
+    }
+  });
+}
+
+export async function migrateReviewMediaFromOrders(env) {
+  const result = await env.DB.prepare(`
+    UPDATE reviews
+       SET delivered_video_url = COALESCE(
+             NULLIF(TRIM(delivered_video_url), ''),
+             (
+               SELECT NULLIF(TRIM(o.delivered_video_url), '')
+                 FROM orders o
+                WHERE o.order_id = reviews.order_id
+                LIMIT 1
+             )
+           ),
+           delivered_thumbnail_url = COALESCE(
+             NULLIF(TRIM(delivered_thumbnail_url), ''),
+             (
+               SELECT NULLIF(TRIM(o.delivered_thumbnail_url), '')
+                 FROM orders o
+                WHERE o.order_id = reviews.order_id
+                LIMIT 1
+             )
+           )
+     WHERE order_id IS NOT NULL
+       AND TRIM(order_id) != ''
+       AND EXISTS (
+             SELECT 1
+               FROM orders o
+              WHERE o.order_id = reviews.order_id
+                AND (
+                  NULLIF(TRIM(o.delivered_video_url), '') IS NOT NULL OR
+                  NULLIF(TRIM(o.delivered_thumbnail_url), '') IS NOT NULL
+                )
+           )
+       AND (
+             delivered_video_url IS NULL OR TRIM(delivered_video_url) = '' OR
+             delivered_thumbnail_url IS NULL OR TRIM(delivered_thumbnail_url) = ''
+           )
+  `).run();
+
+  return json({
+    success: true,
+    rowsUpdated: Number(result?.meta?.changes || result?.changes || 0)
+  });
+}
+
 /**
  * Add review
  */
