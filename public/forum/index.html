@@ -90,6 +90,9 @@
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
       overflow: hidden;
       transition: all 0.2s;
+      display: block;
+      color: inherit;
+      text-decoration: none;
     }
 
     .question-card:hover {
@@ -830,6 +833,32 @@
 
       btn.disabled = false;
       btn.textContent = 'Submit Reply';
+    }
+
+    function renderQuestionCard(q) {
+      const date = q.created_at ? new Date(q.created_at).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric'
+      }) : '';
+      const initial = (q.name || 'A').charAt(0).toUpperCase();
+      const href = '/forum/' + encodeURIComponent(q.slug || q.id);
+
+      return `
+        <a class="question-card question-link-card" id="qcard-${q.id}" href="${href}">
+          <div class="question-header">
+            <div class="q-avatar">${initial}</div>
+            <div class="q-content">
+              <div class="q-title">${escapeHtml(q.title)}</div>
+              <div class="q-preview">${escapeHtml(q.content)}</div>
+              <div class="q-meta">
+                <span>&#128100; ${escapeHtml(q.name)}</span>
+                <span>&#128197; ${date}</span>
+                <span class="reply-count">&#128172; ${q.reply_count || 0} replies</span>
+              </div>
+            </div>
+            <div class="expand-icon">&rarr;</div>
+          </div>
+        </a>
+      `;
     }
 
     function renderPagination(p) {

@@ -2028,9 +2028,10 @@ function renderForumArchiveCardsSsr(questions = []) {
       ? new Date(question.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       : '';
     const initial = escapeHtmlText(String(question.name || 'A').charAt(0).toUpperCase());
+    const href = `/forum/${encodeURIComponent(String(question.slug || question.id || ''))}`;
     return `
-      <div class="question-card" id="qcard-${escapeHtmlText(question.id)}">
-        <div class="question-header" onclick="toggleQuestion(${Number(question.id) || 0})">
+      <a class="question-card question-link-card" id="qcard-${escapeHtmlText(question.id)}" href="${href}" style="display:block;text-decoration:none;color:inherit;">
+        <div class="question-header">
           <div class="q-avatar">${initial}</div>
           <div class="q-content">
             <div class="q-title">${escapeHtmlText(question.title || '')}</div>
@@ -2038,37 +2039,12 @@ function renderForumArchiveCardsSsr(questions = []) {
             <div class="q-meta">
               <span>&#128100; ${escapeHtmlText(question.name || '')}</span>
               <span>&#128197; ${escapeHtmlText(date)}</span>
-              <span class="reply-count">&#128172; ${escapeHtmlText(question.reply_count || 0)}</span>
+              <span class="reply-count">&#128172; ${escapeHtmlText(question.reply_count || 0)} replies</span>
             </div>
           </div>
-          <div class="expand-icon">&#9660;</div>
+          <div class="expand-icon">&rarr;</div>
         </div>
-        <div class="question-expanded">
-          <div class="expanded-content" id="expanded-${escapeHtmlText(question.id)}">
-            <div class="full-question">${escapeHtmlText(question.content || '')}</div>
-            <div id="replies-${escapeHtmlText(question.id)}"><div class="loading"><div class="loading-spinner"></div></div></div>
-            <div class="reply-form">
-              <h4>&#128172; Write a Reply</h4>
-              <div id="reply-msg-${escapeHtmlText(question.id)}" class="reply-message"></div>
-              <form onsubmit="submitReply(event, ${Number(question.id) || 0})">
-                <div class="form-row">
-                  <div class="form-group">
-                    <input type="text" id="rname-${escapeHtmlText(question.id)}" placeholder="Your name (max 50)" required maxlength="50">
-                  </div>
-                  <div class="form-group">
-                    <input type="email" id="remail-${escapeHtmlText(question.id)}" placeholder="Email (max 100)" required maxlength="100">
-                  </div>
-                </div>
-                <div class="form-group">
-                  <textarea id="rcontent-${escapeHtmlText(question.id)}" placeholder="Write your reply (5-2000 chars)..." required minlength="5" maxlength="2000" oninput="document.getElementById('rcount-${escapeHtmlText(question.id)}').textContent=this.value.length"></textarea>
-                  <div style="text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px"><span id="rcount-${escapeHtmlText(question.id)}">0</span>/2000</div>
-                </div>
-                <button type="submit" class="reply-submit" id="rbtn-${escapeHtmlText(question.id)}">Submit Reply</button>
-              </form>
-            </div>
-          </div>
-        </div>
-      </div>
+      </a>
     `;
   }).join('');
 
@@ -4002,6 +3978,27 @@ if (method === 'GET' || method === 'HEAD') {
             console.error('Blog fetch error:', e);
           }
         }
+      }
+
+      // ----- LEGACY FORUM QUESTION PAGE REDIRECT -----
+      if ((method === 'GET' || method === 'HEAD') && (path === '/forum/question.html' || path === '/forum/question')) {
+        const questionId = parseInt(url.searchParams.get('id') || '', 10);
+        if (Number.isFinite(questionId) && env.DB) {
+          try {
+            await initDB(env);
+            const question = await env.DB.prepare(`
+              SELECT slug
+              FROM forum_questions
+              WHERE id = ? AND status = 'approved'
+            `).bind(questionId).first();
+            if (question?.slug) {
+              return Response.redirect(new URL(`/forum/${encodeURIComponent(String(question.slug))}`, req.url).toString(), 301);
+            }
+          } catch (err) {
+            console.warn('Legacy forum question redirect failed:', err);
+          }
+        }
+        return Response.redirect(new URL('/forum/', req.url).toString(), 302);
       }
 
       // ----- FORUM QUESTION PAGES -----

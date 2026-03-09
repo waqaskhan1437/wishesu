@@ -315,7 +315,7 @@
   <!-- Load global components asynchronously -->
   <script defer src="/js/global-components.js"></script>
   <header class="forum-header">
-    <a href="/forum.html" class="back-link">← Back to Forum</a>
+    <a href="/forum/" class="back-link">← Back to Forum</a>
     <h1>💬 Community Forum</h1>
   </header>
 
@@ -376,7 +376,7 @@
     questionId = params.get('id');
 
     if (!questionId) {
-      document.getElementById('question-container').innerHTML = '<div class="no-replies">Question not found. <a href="/forum.html">Go back to forum</a></div>';
+      document.getElementById('question-container').innerHTML = '<div class="no-replies">Question not found. <a href="/forum/">Go back to forum</a></div>';
     } else {
       loadQuestion();
     }
@@ -408,10 +408,10 @@
 
           loadReplies();
         } else {
-          document.getElementById('question-container').innerHTML = '<div class="no-replies">Question not found. <a href="/forum.html">Go back to forum</a></div>';
+          document.getElementById('question-container').innerHTML = '<div class="no-replies">Question not found. <a href="/forum/">Go back to forum</a></div>';
         }
       } catch (err) {
-        document.getElementById('question-container').innerHTML = '<div class="no-replies">Error loading question. <a href="/forum.html">Go back to forum</a></div>';
+        document.getElementById('question-container').innerHTML = '<div class="no-replies">Error loading question. <a href="/forum/">Go back to forum</a></div>';
       }
     }
 

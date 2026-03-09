@@ -4,6 +4,7 @@
  */
 
 import { json, cachedJson } from '../utils/response.js';
+import { slugifyStr } from '../utils/formatting.js';
 import { buildPublicProductStatusWhere } from '../utils/product-visibility.js';
 import { 
   notifyForumQuestion, 
@@ -13,6 +14,53 @@ import {
 
 // Cache for schema validation - avoids repeated checks per request
 let forumSchemaValidated = false;
+
+function buildForumQuestionBaseSlug(title, fallbackSeed = Date.now()) {
+  const baseSlug = slugifyStr(String(title || '')).slice(0, 80).replace(/^-+|-+$/g, '');
+  return baseSlug || `question-${String(fallbackSeed)}`;
+}
+
+function isForumSlugUniqueConstraintError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.includes('unique') && message.includes('forum_questions.slug');
+}
+
+async function normalizeExistingForumQuestionSlugs(env) {
+  const rows = await env.DB.prepare(`
+    SELECT id, title, slug
+    FROM forum_questions
+    ORDER BY created_at ASC, id ASC
+  `).all();
+
+  const questions = rows.results || [];
+  const used = new Set();
+
+  for (const question of questions) {
+    const stableSeed = question?.id || Date.now();
+    const preferredBase = buildForumQuestionBaseSlug(question?.slug || question?.title || '', stableSeed);
+    let candidate = preferredBase;
+    let suffix = 1;
+
+    while (used.has(candidate)) {
+      candidate = `${preferredBase}-${suffix++}`;
+    }
+
+    if (String(question?.slug || '') !== candidate) {
+      await env.DB.prepare(`
+        UPDATE forum_questions
+        SET slug = ?, updated_at = ?
+        WHERE id = ?
+      `).bind(candidate, Date.now(), question.id).run();
+    }
+
+    used.add(candidate);
+  }
+
+  await env.DB.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_forum_questions_slug_unique
+    ON forum_questions(slug)
+  `).run();
+}
 
 /**
  * Ensure forum tables exist with proper schema
@@ -39,6 +87,7 @@ async function ensureForumTables(env) {
     
     // If both tables are OK, cache and return
     if (repliesOk && questionsOk) {
+      await normalizeExistingForumQuestionSlugs(env);
       forumSchemaValidated = true;
       return;
     }
@@ -91,7 +140,7 @@ async function ensureForumTables(env) {
         CREATE TABLE forum_questions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL DEFAULT '',
-          slug TEXT,
+          slug TEXT UNIQUE,
           content TEXT NOT NULL DEFAULT '',
           name TEXT NOT NULL DEFAULT '',
           email TEXT DEFAULT '',
@@ -104,15 +153,28 @@ async function ensureForumTables(env) {
 
       // Batch insert for better performance
       if (existingQuestions.length > 0) {
+        const usedForumSlugs = new Set();
+        const buildRestoredForumSlug = (question, fallbackIndex) => {
+          const baseSlug = buildForumQuestionBaseSlug(question?.slug || question?.title || '', fallbackIndex);
+          let candidate = baseSlug;
+          let suffix = 1;
+          while (usedForumSlugs.has(candidate)) {
+            candidate = `${baseSlug}-${suffix++}`;
+          }
+          usedForumSlugs.add(candidate);
+          return candidate;
+        };
         const batch = existingQuestions.map(q =>
           env.DB.prepare(`INSERT INTO forum_questions (id, title, slug, content, name, email, status, reply_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-            .bind(q.id || null, q.title || '', q.slug || '', q.content || '', q.name || '', q.email || '', q.status || 'pending', q.reply_count || 0, q.created_at || Date.now(), q.updated_at || Date.now())
+            .bind(q.id || null, q.title || '', buildRestoredForumSlug(q, q.id || Date.now()), q.content || '', q.name || '', q.email || '', q.status || 'pending', q.reply_count || 0, q.created_at || Date.now(), q.updated_at || Date.now())
         );
         for (let i = 0; i < batch.length; i += 10) {
           await Promise.all(batch.slice(i, i + 10).map(stmt => stmt.run().catch(() => {})));
         }
       }
     }
+
+    await normalizeExistingForumQuestionSlugs(env);
 
     // Mark as validated
     forumSchemaValidated = true;
@@ -361,31 +423,25 @@ export async function submitQuestion(env, body) {
     // We avoid appending a timestamp so that the slug remains human readable.
     // Instead, we create a base slug from the title (lowercase, hyphenated) and
     // ensure uniqueness by appending an incrementing counter if needed.
-    let baseSlug = trimmedTitle.toLowerCase()
-      .replace(/['"`]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .replace(/-+/g, '-')
-      .substring(0, 80);
-    if (!baseSlug) {
-      // Fallback: use a portion of the current timestamp if title yields no slug
-      baseSlug = String(Date.now());
-    }
+    const now = Date.now();
+    const baseSlug = buildForumQuestionBaseSlug(trimmedTitle, now);
     let finalSlug = baseSlug;
     let suffix = 1;
-    // Check for existing slug and append a numeric suffix until unique.
+
     while (true) {
-      const existing = await env.DB.prepare('SELECT id FROM forum_questions WHERE slug = ? LIMIT 1').bind(finalSlug).first();
-      if (!existing) break;
-      finalSlug = `${baseSlug}-${suffix++}`;
+      try {
+        await env.DB.prepare(`
+          INSERT INTO forum_questions (title, slug, content, name, email, status, reply_count, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
+        `).bind(trimmedTitle, finalSlug, trimmedContent, trimmedName, trimmedEmail, now, now).run();
+        break;
+      } catch (err) {
+        if (!isForumSlugUniqueConstraintError(err)) {
+          throw err;
+        }
+        finalSlug = `${baseSlug}-${suffix++}`;
+      }
     }
-
-    const now = Date.now();
-
-    await env.DB.prepare(`
-      INSERT INTO forum_questions (title, slug, content, name, email, status, reply_count, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
-    `).bind(trimmedTitle, finalSlug, trimmedContent, trimmedName, trimmedEmail, now, now).run();
 
     // Notify admin about new question (async)
     notifyForumQuestion(env, { 

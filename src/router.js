@@ -6,6 +6,7 @@
 import { json } from './utils/response.js';
 import { initDB } from './config/db.js';
 import { isAdminAuthed } from './utils/auth.js';
+import { slugifyStr } from './utils/formatting.js';
 
 // Products
 import {
@@ -1422,7 +1423,7 @@ export async function routeApiRequest(req, env, url, path, method) {
         CREATE TABLE forum_questions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           title TEXT NOT NULL DEFAULT '',
-          slug TEXT,
+          slug TEXT UNIQUE,
           content TEXT NOT NULL DEFAULT '',
           name TEXT NOT NULL DEFAULT '',
           email TEXT DEFAULT '',
@@ -1434,16 +1435,27 @@ export async function routeApiRequest(req, env, url, path, method) {
       `).run();
 
       // Batch restore questions in parallel batches of 10
+      const usedForumSlugs = new Set();
+      const buildMigratedForumSlug = (question, fallbackIndex) => {
+        const baseSlug = slugifyStr(String(question?.slug || question?.title || '')).slice(0, 80).replace(/^-+|-+$/g, '') || `question-${fallbackIndex}`;
+        let candidate = baseSlug;
+        let suffix = 1;
+        while (usedForumSlugs.has(candidate)) {
+          candidate = `${baseSlug}-${suffix++}`;
+        }
+        usedForumSlugs.add(candidate);
+        return candidate;
+      };
       let restoredQuestions = 0;
       for (let i = 0; i < existingQuestions.length; i += batchSize) {
         const batch = existingQuestions.slice(i, i + batchSize);
-        const results = await Promise.allSettled(batch.map(q =>
+        const results = await Promise.allSettled(batch.map((q, batchIndex) =>
           env.DB.prepare(`
             INSERT INTO forum_questions (title, slug, content, name, email, status, reply_count, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(
             q.title || '',
-            q.slug || '',
+            buildMigratedForumSlug(q, i + batchIndex + 1),
             q.content || '',
             q.name || '',
             q.email || '',
