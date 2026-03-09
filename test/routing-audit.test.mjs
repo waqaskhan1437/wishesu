@@ -1,22 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getCanonicalRedirectPath, shouldServeCanonicalAliasDirectly } from '../src/index.js';
+import worker, { getCanonicalRedirectPath, shouldServeCanonicalAliasDirectly } from '../src/index.js';
 import { isHeadCompatibleApiPath, routeApiRequest } from '../src/router.js';
 
 test('direct aliases bypass canonical redirects', () => {
   assert.equal(shouldServeCanonicalAliasDirectly('/index.html'), true);
+  assert.equal(shouldServeCanonicalAliasDirectly('/home'), true);
   assert.equal(shouldServeCanonicalAliasDirectly('/products-grid'), true);
   assert.equal(shouldServeCanonicalAliasDirectly('/blog.html'), true);
+  assert.equal(shouldServeCanonicalAliasDirectly('/terms'), true);
 
   assert.equal(getCanonicalRedirectPath('/index.html'), null);
+  assert.equal(getCanonicalRedirectPath('/home'), null);
   assert.equal(getCanonicalRedirectPath('/products-grid'), null);
   assert.equal(getCanonicalRedirectPath('/blog.html'), null);
+  assert.equal(getCanonicalRedirectPath('/terms.html'), null);
   assert.equal(getCanonicalRedirectPath('/order-success'), null);
 });
 
 test('non-direct aliases still canonicalize', () => {
-  assert.equal(getCanonicalRedirectPath('/home'), '/');
   assert.equal(getCanonicalRedirectPath('/page-builder'), '/admin/page-builder.html');
 });
 
@@ -40,4 +43,15 @@ test('HEAD on safe API path returns GET metadata without body', async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type') || '', /application\/json/i);
   assert.equal(await response.text(), '');
+});
+
+test('terms fallback page renders without redirect', async () => {
+  const request = new Request('https://example.com/terms');
+  const response = await worker.fetch(request, {}, { waitUntil() {} });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-worker-version') ? true : false, true);
+  const html = await response.text();
+  assert.match(html, /Terms of Service/);
+  assert.match(html, /Contact Support/);
 });

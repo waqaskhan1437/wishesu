@@ -37,6 +37,7 @@ import {
   renderHomepageProductGridSsr,
   renderReviewsWidgetSsrMarkup
 } from './utils/homepage-ssr.js';
+import { renderTermsFallbackPageHtml } from './utils/legal-pages.js';
 
 // Inject analytics & verification meta tags (Google Analytics, Facebook Pixel, site verification)
 import { injectAnalyticsAndMeta } from './controllers/analytics.js';
@@ -1030,6 +1031,9 @@ const CANONICAL_ALIAS_MAP = new Map([
   ['/blog.html', '/blog'],
   ['/forum/index.html', '/forum'],
   ['/forum.html', '/forum'],
+  ['/terms/', '/terms'],
+  ['/terms/index.html', '/terms'],
+  ['/terms.html', '/terms'],
   ['/products/index.html', '/products'],
   ['/products.html', '/products'],
   ['/products-grid', '/products'],
@@ -1048,10 +1052,16 @@ const CANONICAL_ALIAS_MAP = new Map([
 
 const DIRECT_INTERNAL_ALIAS_PATHS = new Set([
   '/index.html',
+  '/home',
+  '/home/',
   '/blog/index.html',
   '/blog.html',
   '/forum/index.html',
   '/forum.html',
+  '/terms',
+  '/terms/',
+  '/terms/index.html',
+  '/terms.html',
   '/products.html',
   '/products-grid',
   '/products-grid/',
@@ -4320,6 +4330,35 @@ if (method === 'GET' || method === 'HEAD') {
       // Certain `.html` routes should serve a different static file directly
       // rather than redirecting.  This avoids broken links when no database
       // is configured and eliminates unnecessary redirects for end users.
+      if ((method === 'GET' || method === 'HEAD') && path === '/terms') {
+        let html = renderTermsFallbackPageHtml();
+        let robots = 'index, follow';
+        let canonical = new URL('/terms', req.url).toString();
+        let siteTitle = '';
+        try {
+          const seo = await getSeoForRequest(env, req, { path: '/terms' });
+          robots = seo.robots || robots;
+          canonical = seo.canonical || canonical;
+          siteTitle = seo.siteTitle || '';
+        } catch (_) {}
+        html = applySeoToHtml(html, robots, canonical);
+        html = applySiteTitleToHtml(html, siteTitle);
+        html = await applyGlobalComponentsSsr(env, html, '/terms');
+        try {
+          html = await injectAnalyticsAndMeta(env, html);
+        } catch (_) {}
+        const headers = new Headers({
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'public, max-age=300',
+          'X-Worker-Version': VERSION
+        });
+        headers.set('X-Robots-Tag', robots);
+        if (method === 'HEAD') {
+          return new Response(null, { status: 200, headers });
+        }
+        return new Response(html, { status: 200, headers });
+      }
+
       if (method === 'GET' || method === 'HEAD') {
         const htmlAssetTargets = {
           // Checkout and order flows are always served from static assets.
