@@ -96,6 +96,27 @@ test('replaceSimpleContainerById injects markup and attrs', () => {
   assert.match(updated, /bootstrap/);
 });
 
+test('replaceSimpleContainerById replaces full nested container content', () => {
+  const html = `
+    <div id="questions-container">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <p>Loading...</p>
+      </div>
+    </div>
+    <div id="pagination"></div>
+  `;
+  const updated = replaceSimpleContainerById(
+    html,
+    'questions-container',
+    '<div class="questions-list"><a class="question-link-card">Question</a></div>'
+  );
+
+  assert.match(updated, /questions-list/);
+  assert.doesNotMatch(updated, /Loading\.\.\./);
+  assert.match(updated, /<div id="pagination"><\/div>/);
+});
+
 test('ensureStyleTag injects styles once', () => {
   const html = '<html><head></head><body><div id="all-products"></div></body></html>';
   const once = ensureStyleTag(html, PRODUCT_CARDS_STYLE_TAG, 'product-cards-styles');

@@ -348,20 +348,65 @@ export function ensureStyleTag(html, styleTag, styleId) {
 }
 
 export function replaceSimpleContainerById(html, containerId, innerHtml, attrs = {}, afterHtml = '') {
+  const input = String(html || '');
   const escapedId = String(containerId || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`<(div|section)([^>]*\\bid=["']${escapedId}["'][^>]*)>([\\s\\S]*?)</\\1>`, 'i');
+  const pattern = new RegExp(`<(div|section)([^>]*\\bid=["']${escapedId}["'][^>]*)>`, 'i');
+  const match = pattern.exec(input);
+  if (!match) {
+    return input;
+  }
 
-  return String(html || '').replace(pattern, (full, tagName, rawAttrs) => {
-    let nextAttrs = rawAttrs;
-    Object.entries(attrs || {}).forEach(([key, value]) => {
-      const attrPattern = new RegExp(`\\s${key}=["'][^"']*["']`, 'i');
-      const serialized = ` ${key}="${escapeHtml(String(value))}"`;
-      nextAttrs = attrPattern.test(nextAttrs)
-        ? nextAttrs.replace(attrPattern, serialized)
-        : `${nextAttrs}${serialized}`;
-    });
-    return `<${tagName}${nextAttrs}>${innerHtml}</${tagName}>${afterHtml}`;
+  const tagName = String(match[1] || 'div').toLowerCase();
+  const rawAttrs = match[2] || '';
+  const openingTagIndex = match.index;
+  const openingTagEnd = openingTagIndex + match[0].length;
+  const closingTagIndex = findMatchingContainerCloseIndex(input, tagName, openingTagEnd);
+
+  if (closingTagIndex < 0) {
+    return input;
+  }
+
+  let nextAttrs = rawAttrs;
+  Object.entries(attrs || {}).forEach(([key, value]) => {
+    const attrPattern = new RegExp(`\\s${key}=["'][^"']*["']`, 'i');
+    const serialized = ` ${key}="${escapeHtml(String(value))}"`;
+    nextAttrs = attrPattern.test(nextAttrs)
+      ? nextAttrs.replace(attrPattern, serialized)
+      : `${nextAttrs}${serialized}`;
   });
+
+  const closeTag = `</${tagName}>`;
+  const replacement = `<${tagName}${nextAttrs}>${innerHtml}</${tagName}>${afterHtml}`;
+
+  return `${input.slice(0, openingTagIndex)}${replacement}${input.slice(closingTagIndex + closeTag.length)}`;
+}
+
+function findMatchingContainerCloseIndex(html, tagName, searchFrom) {
+  const tokenPattern = new RegExp(`<\\/?${tagName}\\b[^>]*>`, 'gi');
+  tokenPattern.lastIndex = searchFrom;
+
+  let depth = 1;
+  let tokenMatch;
+
+  while ((tokenMatch = tokenPattern.exec(html))) {
+    const token = tokenMatch[0];
+    const isClosing = /^<\//.test(token);
+    const isSelfClosing = /\/>$/.test(token);
+
+    if (isClosing) {
+      depth -= 1;
+      if (depth === 0) {
+        return tokenMatch.index;
+      }
+      continue;
+    }
+
+    if (!isSelfClosing) {
+      depth += 1;
+    }
+  }
+
+  return -1;
 }
 
 export function replaceDataEmbedContainers(html, renderer) {
