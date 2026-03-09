@@ -55,6 +55,13 @@ function formatDate(value) {
   return d.toLocaleString('en-US');
 }
 
+function extractBodyFragment(raw) {
+  const input = String(raw || '');
+  const bodyMatch = input.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch) return bodyMatch[1] || '';
+  return input;
+}
+
 function sanitizeRichHtml(raw) {
   const input = String(raw || '');
   return input
@@ -80,6 +87,28 @@ function renderNotice(url) {
   }
   return `<div class="notice ok">${escapeHtml(ok)}</div>`;
 }
+
+const NOJS_RESERVED_PUBLIC_SLUGS = new Set([
+  '',
+  'admin',
+  'api',
+  'blog',
+  'buyer-order',
+  'checkout',
+  'download',
+  'favicon.ico',
+  'favicon.svg',
+  'forum',
+  'order',
+  'order-detail',
+  'order-success',
+  'product',
+  'products',
+  'products-grid',
+  'robots.txt',
+  'sitemap.xml',
+  'success'
+]);
 
 function renderLayout(opts = {}) {
   const title = escapeHtml(opts.title || 'WishVideo');
@@ -305,6 +334,92 @@ async function resolveProductPath(env, productId) {
   return canonicalProductPath(row);
 }
 
+async function getPublishedPageBySlug(env, slug) {
+  if (!env?.DB || !slug) return null;
+  return env.DB.prepare(`
+    SELECT id, slug, title, meta_description, content, page_type, is_default
+    FROM pages
+    WHERE slug = ? AND status = 'published'
+    LIMIT 1
+  `).bind(String(slug)).first();
+}
+
+async function getDefaultPublishedPage(env, pageType) {
+  if (!env?.DB || !pageType) return null;
+  return env.DB.prepare(`
+    SELECT id, slug, title, meta_description, content, page_type, is_default
+    FROM pages
+    WHERE page_type = ? AND is_default = 1 AND status = 'published'
+    ORDER BY id DESC
+    LIMIT 1
+  `).bind(String(pageType)).first();
+}
+
+function renderStoreProductCards(products = []) {
+  return products.map((p) => {
+    const productUrl = canonicalProductPath(p);
+    const price = p.sale_price && Number(p.sale_price) > 0
+      ? `<div><strong>${formatMoney(p.sale_price)}</strong> <span class="muted"><s>${formatMoney(p.normal_price)}</s></span></div>`
+      : `<div><strong>${formatMoney(p.normal_price)}</strong></div>`;
+    const thumb = p.thumbnail_url
+      ? `<img class="thumb" src="${escapeHtml(p.thumbnail_url)}" alt="${escapeHtml(p.title || 'Product')}" loading="lazy">`
+      : `<div class="card muted">No image</div>`;
+    return `
+      <article class="card">
+        ${thumb}
+        <h3>${escapeHtml(p.title || 'Untitled')}</h3>
+        <p class="muted">${escapeHtml((p.description || '').slice(0, 220))}</p>
+        ${price}
+        <p class="small muted">Delivery: ${p.instant_delivery ? 'Instant' : (escapeHtml(p.normal_delivery_text || '1') + ' day(s)')}</p>
+        <a class="btn" href="${productUrl}">Open Product</a>
+      </article>
+    `;
+  }).join('');
+}
+
+async function renderStorefront(env, url, opts = {}) {
+  const pageType = opts.pageType || '';
+  const page = pageType ? await getDefaultPublishedPage(env, pageType) : null;
+  const productsResult = await env.DB.prepare(`
+    SELECT id, title, slug, description, normal_price, sale_price, thumbnail_url, normal_delivery_text, instant_delivery
+    FROM products
+    WHERE ${buildPublicProductStatusWhere('status')}
+    ORDER BY sort_order ASC, id DESC
+    LIMIT 120
+  `).all();
+  const products = productsResult.results || [];
+  const introHtml = page?.content
+    ? `<section class="card">${sanitizeRichHtml(extractBodyFragment(page.content))}</section>`
+    : '';
+  const content = `
+    <h1>${escapeHtml(page?.title || opts.heading || 'Server-rendered Storefront')}</h1>
+    ${renderNotice(url)}
+    <p class="muted">${escapeHtml(opts.introText || 'This storefront is rendered fully on server with plain HTML forms and no client JS.')}</p>
+    ${introHtml}
+    <section class="grid grid-3">${renderStoreProductCards(products) || '<div class="card">No products available.</div>'}</section>
+  `;
+
+  return htmlResponse(renderLayout({
+    title: page?.title || opts.title || 'WishVideo Store',
+    description: page?.meta_description || opts.description || 'Server-rendered storefront',
+    content
+  }));
+}
+
+async function renderCustomPage(env, url, slug) {
+  const page = await getPublishedPageBySlug(env, slug);
+  if (!page) return null;
+  const bodyHtml = sanitizeRichHtml(extractBodyFragment(page.content || ''));
+  return htmlResponse(renderLayout({
+    title: page.title || slug,
+    description: page.meta_description || `${page.title || slug} - server-rendered page`,
+    content: `
+      ${renderNotice(url)}
+      ${bodyHtml || `<section class="card"><h1>${escapeHtml(page.title || slug)}</h1></section>`}
+    `
+  }));
+}
+
 async function getNoJsPaymentMethods(env) {
   try {
     const response = await getPaymentMethods(env);
@@ -393,45 +508,23 @@ async function createGatewayCheckoutRedirect(env, url, opts = {}) {
 }
 
 async function renderHome(env, url) {
-  const r = await env.DB.prepare(`
-    SELECT id, title, slug, description, normal_price, sale_price, thumbnail_url, normal_delivery_text, instant_delivery
-    FROM products
-    WHERE ${buildPublicProductStatusWhere('status')}
-    ORDER BY sort_order ASC, id DESC
-    LIMIT 120
-  `).all();
-  const products = r.results || [];
-  const cards = products.map((p) => {
-    const productUrl = canonicalProductPath(p);
-    const price = p.sale_price && Number(p.sale_price) > 0
-      ? `<div><strong>${formatMoney(p.sale_price)}</strong> <span class="muted"><s>${formatMoney(p.normal_price)}</s></span></div>`
-      : `<div><strong>${formatMoney(p.normal_price)}</strong></div>`;
-    const thumb = p.thumbnail_url
-      ? `<img class="thumb" src="${escapeHtml(p.thumbnail_url)}" alt="${escapeHtml(p.title || 'Product')}" loading="lazy">`
-      : `<div class="card muted">No image</div>`;
-    return `
-      <article class="card">
-        ${thumb}
-        <h3>${escapeHtml(p.title || 'Untitled')}</h3>
-        <p class="muted">${escapeHtml((p.description || '').slice(0, 220))}</p>
-        ${price}
-        <p class="small muted">Delivery: ${p.instant_delivery ? 'Instant' : (escapeHtml(p.normal_delivery_text || '1') + ' day(s)')}</p>
-        <a class="btn" href="${productUrl}">Open Product</a>
-      </article>
-    `;
-  }).join('');
-
-  const content = `
-    <h1>Server-rendered Storefront (Level 1)</h1>
-    ${renderNotice(url)}
-    <p class="muted">This storefront is rendered fully on server with plain HTML forms and no client JS.</p>
-    <section class="grid grid-3">${cards || '<div class="card">No products available.</div>'}</section>
-  `;
-  return htmlResponse(renderLayout({
+  return renderStorefront(env, url, {
+    pageType: 'home',
     title: 'WishVideo Store',
-    description: 'No-JS store',
-    content
-  }));
+    description: 'Server-rendered home page',
+    heading: 'Server-rendered Storefront',
+    introText: 'This storefront is rendered fully on server with plain HTML forms and no client JS.'
+  });
+}
+
+async function renderProductsArchive(env, url) {
+  return renderStorefront(env, url, {
+    pageType: 'product_grid',
+    title: 'All Products',
+    description: 'Server-rendered product archive',
+    heading: 'All Products',
+    introText: 'Every product card on this page is rendered server-side.'
+  });
 }
 
 function parseAddonDefinitions(raw) {
@@ -1314,6 +1407,7 @@ async function handleAdminProductStatus(env, req, url) {
 }
 
 async function renderAdminOrders(env, url) {
+  const selectedOrderId = String(url.searchParams.get('view') || '').trim();
   const rows = await env.DB.prepare(`
     SELECT o.order_id, o.status, o.created_at, o.delivery_time_minutes, o.delivered_video_url, o.encrypted_data, p.title as product_title
     FROM orders o
@@ -1322,6 +1416,9 @@ async function renderAdminOrders(env, url) {
     LIMIT 300
   `).all();
   const orders = rows.results || [];
+  const selectedOrder = selectedOrderId
+    ? orders.find((o) => String(o.order_id || '') === selectedOrderId)
+    : null;
 
   const tableRows = orders.map((o) => {
     const data = parseOrderEncryptedData(o.encrypted_data || '{}');
@@ -1357,14 +1454,40 @@ async function renderAdminOrders(env, url) {
             <input type="hidden" name="order_id" value="${escapeHtml(o.order_id)}">
             <button class="btn danger small" type="submit">Delete</button>
           </form>
+          <p style="margin-top:8px;"><a class="btn secondary small" href="/admin/orders?view=${encodeURIComponent(String(o.order_id || ''))}">View Details</a></p>
         </td>
       </tr>
     `;
   }).join('');
 
+  const selectedOrderData = selectedOrder ? parseOrderEncryptedData(selectedOrder.encrypted_data || '{}') : null;
+  const detailCard = selectedOrder ? `
+    <section class="card" style="margin-bottom:16px;">
+      <div class="row" style="justify-content:space-between;">
+        <h2 style="margin:0;">Order Detail: ${escapeHtml(selectedOrder.order_id || '')}</h2>
+        <a class="btn secondary small" href="/admin/orders">Close</a>
+      </div>
+      <div class="grid grid-2" style="margin-top:12px;">
+        <div>
+          <p><strong>Product:</strong> ${escapeHtml(selectedOrder.product_title || '-')}</p>
+          <p><strong>Status:</strong> ${escapeHtml(selectedOrder.status || '-')}</p>
+          <p><strong>Created:</strong> ${escapeHtml(formatDate(selectedOrder.created_at))}</p>
+          <p><strong>Delivery ETA:</strong> ${escapeHtml(selectedOrder.delivery_time_minutes || 60)} minute(s)</p>
+        </div>
+        <div>
+          <p><strong>Email:</strong> ${escapeHtml(selectedOrderData?.email || '-')}</p>
+          <p><strong>Amount:</strong> ${formatMoney(selectedOrderData?.amount || 0)}</p>
+          <p><strong>Buyer Name:</strong> ${escapeHtml(selectedOrderData?.name || selectedOrderData?.customer_name || '-')}</p>
+          <p><strong>Delivered URL:</strong> ${selectedOrder.delivered_video_url ? `<a href="${escapeHtml(selectedOrder.delivered_video_url)}" target="_blank" rel="noreferrer">Open</a>` : '-'}</p>
+        </div>
+      </div>
+    </section>
+  ` : '';
+
   const content = `
     <h1>Orders</h1>
     ${renderNotice(url)}
+    ${detailCard}
     <section class="card" style="overflow:auto;">
       <table>
         <thead><tr><th>Order</th><th>Product</th><th>Email</th><th>Amount</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
@@ -1868,6 +1991,17 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return renderHome(env, url);
   }
 
+  if (method === 'GET' && (
+    path === '/products' ||
+    path === '/products/' ||
+    path === '/products.html' ||
+    path === '/products-grid' ||
+    path === '/products-grid/' ||
+    path === '/products-grid.html'
+  )) {
+    return renderProductsArchive(env, url);
+  }
+
   if (method === 'GET' && (path === '/product' || path === '/product/')) {
     const pid = Number(url.searchParams.get('id') || 0);
     if (!pid) return Response.redirect(new URL('/', url.origin).toString(), 302);
@@ -1887,8 +2021,21 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return handleCreateOrder(env, req, url);
   }
 
+  if (method === 'GET' && (path === '/checkout' || path === '/checkout/' || path === '/checkout.html')) {
+    const pid = Number(url.searchParams.get('id') || url.searchParams.get('product_id') || 0);
+    if (pid > 0) {
+      const canonical = await resolveProductPath(env, pid);
+      return Response.redirect(new URL(canonical, url.origin).toString(), 302);
+    }
+    return redirectWithParams(url, '/products', { err: 'Choose a product to continue checkout.' }, 302);
+  }
+
   if (method === 'GET' && (path === '/success' || path === '/success.html')) {
     return renderSuccess(env, url, req);
+  }
+
+  if (method === 'GET' && (path === '/order-success' || path === '/order-success/' || path === '/order-success.html')) {
+    return Response.redirect(new URL('/success', url.origin).toString(), 302);
   }
 
   const orderMatch = path.match(/^\/order\/([^/]+)$/);
@@ -1896,12 +2043,26 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return renderOrder(env, url, decodeURIComponent(orderMatch[1]));
   }
 
+  if (method === 'GET' && (path === '/buyer-order' || path === '/buyer-order/' || path === '/buyer-order.html')) {
+    const orderId = String(url.searchParams.get('id') || '').trim();
+    if (!orderId) return redirectWithParams(url, '/', { err: 'Order id is required.' }, 302);
+    return Response.redirect(new URL(`/order/${encodeURIComponent(orderId)}`, url.origin).toString(), 302);
+  }
+
+  if (method === 'GET' && (path === '/order-detail' || path === '/order-detail/' || path === '/order-detail.html')) {
+    const orderId = String(url.searchParams.get('id') || '').trim();
+    const target = orderId
+      ? `/admin/orders?view=${encodeURIComponent(orderId)}`
+      : '/admin/orders';
+    return Response.redirect(new URL(target, url.origin).toString(), 302);
+  }
+
   const orderReviewMatch = path.match(/^\/order\/([^/]+)\/review$/);
   if (method === 'POST' && orderReviewMatch) {
     return handleOrderReview(env, req, url, decodeURIComponent(orderReviewMatch[1]));
   }
 
-  if (method === 'GET' && (path === '/blog' || path === '/blog/' || path === '/blog/index.html')) {
+  if (method === 'GET' && (path === '/blog' || path === '/blog/' || path === '/blog/index.html' || path === '/blog.html')) {
     return renderBlogList(env, url);
   }
 
@@ -1915,7 +2076,7 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return renderBlogPost(env, url, decodeURIComponent(blogMatch[1]));
   }
 
-  if (method === 'GET' && (path === '/forum' || path === '/forum/' || path === '/forum/index.html')) {
+  if (method === 'GET' && (path === '/forum' || path === '/forum/' || path === '/forum/index.html' || path === '/forum.html')) {
     return renderForumList(env, url);
   }
 
@@ -1931,20 +2092,6 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
   const forumQuestionMatch = path.match(/^\/forum\/([^/]+)$/);
   if (method === 'GET' && forumQuestionMatch) {
     return renderForumQuestion(env, url, decodeURIComponent(forumQuestionMatch[1]));
-  }
-
-  // Redirect legacy JS-heavy pages to no-JS equivalents.
-  if (method === 'GET' && (
-    path === '/products-grid' ||
-    path === '/products-grid.html' ||
-    path === '/checkout' ||
-    path === '/checkout.html' ||
-    path === '/buyer-order' ||
-    path === '/buyer-order.html' ||
-    path === '/order-detail' ||
-    path === '/order-detail.html'
-  )) {
-    return Response.redirect(new URL('/', url.origin).toString(), 302);
   }
 
   // Admin routes (Level 2)
@@ -2029,6 +2176,15 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
   }
   if (method === 'POST' && path === '/admin/moderation/reply') {
     return handleAdminModerationReply(env, req, url);
+  }
+
+  const customPageMatch = path.match(/^\/([a-z0-9][a-z0-9-]{0,79})\/?$/i);
+  if (method === 'GET' && customPageMatch) {
+    const slug = String(customPageMatch[1] || '').trim().toLowerCase();
+    if (!NOJS_RESERVED_PUBLIC_SLUGS.has(slug)) {
+      const pageResponse = await renderCustomPage(env, url, slug);
+      if (pageResponse) return pageResponse;
+    }
   }
 
   // Fallback: keep admin inside no-JS dashboard routes.

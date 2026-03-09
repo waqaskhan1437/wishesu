@@ -15,19 +15,9 @@ workers_dev = true
 directory = "./public"
 binding = "ASSETS"
 
-# IMPORTANT: Only run the Worker for dynamic routes.
-# Everything else is served directly as static assets (cheaper + faster).
-run_worker_first = [
-  "/",               # Homepage (can be dynamic)
-  "/api/*",          # All API routes
-  "/blog*",          # Blog archive + dynamic post pages
-  "/forum*",         # Forum pages
-  "/admin/*",        # Admin routes
-  "/product*",       # Product pages
-  "/download/*",     # Secure downloads
-  "/robots.txt",     # Dynamic robots.txt
-  "/sitemap.xml"     # Dynamic sitemap.xml
-]
+# Route every request through the Worker when full server-side rendering is
+# enabled. Static assets are still short-circuited in `src/index.js`.
+run_worker_first = ["/*"]
 
 not_found_handling = "404-page"
 
@@ -61,6 +51,7 @@ crons = ["*/5 * * * *", "0 2 * * *"]
 # Non-secret variables
 [vars]
 VERSION = "1"
+ENABLE_NOJS_SSR = "true"
 
 # Secrets (set with `wrangler secret put`)
 # - ADMIN_SESSION_SECRET

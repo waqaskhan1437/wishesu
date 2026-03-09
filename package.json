@@ -3,11 +3,14 @@
   "version": "1.0.1",
   "description": "Complete e-commerce solution with Whop integration and Google Sheets automation.",
   "main": "src/index.js",
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 5000 --ip 0.0.0.0",
     "dev:local": "wrangler dev --local --port 5000 --ip 0.0.0.0",
     "deploy": "wrangler deploy",
     "deploy:prod": "wrangler deploy --env production",
+    "test": "node --test test/ssr-routes.test.mjs",
+    "test:ssr": "node --test test/ssr-routes.test.mjs",
     "tail": "wrangler tail",
     "d1:execute": "wrangler d1 execute",
     "r2:list": "wrangler r2 bucket list"

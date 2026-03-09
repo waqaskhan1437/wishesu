@@ -2978,13 +2978,17 @@ export default {
 
     // COLD START FIX: Start DB initialization early and WAIT for critical paths
     // For API routes and dynamic pages, we need the DB ready before processing
+    const noJsSsrEarly = isNoJsSsrEnabled(env);
+    const isHtmlLikeRequest = (method === 'GET' || method === 'HEAD') &&
+      !/\.(css|js|ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|mp4|webm|mp3|pdf)$/i.test(path);
     const requiresDB = path.startsWith('/api/') || 
                        path.startsWith('/blog/') || 
                        path.startsWith('/forum/') ||
                        path.startsWith('/product-') ||
                        path.startsWith('/admin/') ||
                        path === '/' ||
-                       path === '/index.html';
+                       path === '/index.html' ||
+                       (noJsSsrEarly && isHtmlLikeRequest);
     
     if (env.DB) {
       if (requiresDB) {

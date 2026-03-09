@@ -17,38 +17,10 @@ directory = "./public"
 # response headers when necessary.
 binding = "ASSETS"
 
-# Only invoke the Worker on dynamic paths.  Requests matching the patterns
-# listed here will run through your Worker; all other requests will be served
-# directly from the static assets directory without consuming CPU.  This
-# dramatically reduces CPU usage for static content like CSS/JS/images and
-# prebuilt HTML pages.
-# Configure which requests should run through the Worker before checking
-# for static assets.  The most specific patterns should be listed first,
-# and patterns that are subsumed by broader patterns should be omitted to
-# avoid Wrangler warnings.  Because `/admin/*` matches login/logout
-# routes, separate patterns for `/admin/login*` and `/admin/logout*`
-# are unnecessary and would be considered redundant by Wrangler.
-run_worker_first = [
-  "/",               # Homepage (default home page from DB)
-  "/index.html",     # Canonical home alias redirect + SEO normalization
-  "/home*",          # Legacy home aliases
-  "/api/*",          # All API routes
-  "/blog*",          # Blog archive + dynamic blog post pages
-  "/forum*",         # Forum archive + dynamic forum pages
-  "/admin/*",        # Catch-all for all admin routes
-  "/product*",       # Product pages and product grid
-  "/page-builder*",  # Legacy builder aliases (redirect to /admin + auth)
-  "/landing-builder*", # Legacy builder aliases (redirect to /admin + auth)
-  "/checkout*",      # Checkout aliases (force noindex/canonical)
-  "/success*",       # Success aliases (force noindex/canonical)
-  "/order-success*", # Legacy success aliases (force noindex/canonical)
-  "/buyer-order*",   # Legacy buyer order aliases (force noindex/canonical)
-  "/order-detail*",  # Legacy order detail aliases (force noindex/canonical)
-  "/download/*",     # Secure downloads
-  "/favicon.ico",    # Explicit noindex header for favicon asset
-  "/robots.txt",     # Dynamic robots.txt
-  "/sitemap.xml"     # Dynamic sitemap.xml
-]
+# Route every request through the Worker so the no-JS SSR layer can own all
+# HTML routes, legacy aliases, and dynamic DB-backed pages. Static assets still
+# exit quickly through the Worker fast-path in `src/index.js`.
+run_worker_first = ["/*"]
 
 # Serve the nearest 404.html for unknown paths that don't match a static
 # asset or Worker route.  Change to "single-page-application" if you have an SPA.
@@ -82,3 +54,4 @@ crons = ["*/5 * * * *", "0 2 * * *"]
 [vars]
 VERSION = "22"
 CANONICAL_HOST = "prankwish.com"
+ENABLE_NOJS_SSR = "true"
