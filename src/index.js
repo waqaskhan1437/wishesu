@@ -1046,6 +1046,34 @@ const CANONICAL_ALIAS_MAP = new Map([
   ['/order-success.html', '/success']
 ]);
 
+const DIRECT_INTERNAL_ALIAS_PATHS = new Set([
+  '/index.html',
+  '/blog/index.html',
+  '/blog.html',
+  '/forum/index.html',
+  '/forum.html',
+  '/products.html',
+  '/products-grid',
+  '/products-grid/',
+  '/products-grid.html',
+  '/products/index.html',
+  '/checkout/',
+  '/checkout/index.html',
+  '/success/',
+  '/success.html',
+  '/buyer-order/',
+  '/buyer-order.html',
+  '/order-detail/',
+  '/order-detail.html',
+  '/order-success',
+  '/order-success.html'
+]);
+
+export function shouldServeCanonicalAliasDirectly(pathname) {
+  const raw = String(pathname || '/').trim() || '/';
+  return DIRECT_INTERNAL_ALIAS_PATHS.has(raw);
+}
+
 function normalizeCanonicalPath(pathname) {
   let p = String(pathname || '/').trim() || '/';
   p = CANONICAL_ALIAS_MAP.get(p) || p;
@@ -1062,11 +1090,12 @@ function normalizeCanonicalPath(pathname) {
   return p || '/';
 }
 
-function getCanonicalRedirectPath(pathname) {
+export function getCanonicalRedirectPath(pathname) {
   const raw = String(pathname || '/').trim() || '/';
   if (raw === '/admin/' || raw === '/api/') return null;
   if (raw.startsWith('/admin/') || raw.startsWith('/api/')) return null;
   if (raw === '/blog/' || raw === '/forum/' || raw === '/products/') return null;
+  if (shouldServeCanonicalAliasDirectly(raw)) return null;
   const normalized = normalizeCanonicalPath(raw);
   return normalized !== raw ? normalized : null;
 }
@@ -3500,6 +3529,14 @@ export default {
       path = '/' + path;
     }
 
+    if (shouldServeCanonicalAliasDirectly(path)) {
+      const directPath = normalizeCanonicalPath(path);
+      if (directPath && directPath !== path) {
+        path = directPath;
+        url.pathname = directPath;
+      }
+    }
+
     // Fast reject obvious scanner/bot probes before any expensive work.
     if ((method === 'GET' || method === 'HEAD' || method === 'POST') && isLikelyScannerPath(path)) {
       return new Response('Not found', {
@@ -3980,7 +4017,7 @@ if (method === 'GET' || method === 'HEAD') {
         }
       }
 
-      // ----- LEGACY FORUM QUESTION PAGE REDIRECT -----
+      // ----- LEGACY FORUM QUESTION PAGE COMPATIBILITY -----
       if ((method === 'GET' || method === 'HEAD') && (path === '/forum/question.html' || path === '/forum/question')) {
         const questionId = parseInt(url.searchParams.get('id') || '', 10);
         if (Number.isFinite(questionId) && env.DB) {
@@ -3992,13 +4029,26 @@ if (method === 'GET' || method === 'HEAD') {
               WHERE id = ? AND status = 'approved'
             `).bind(questionId).first();
             if (question?.slug) {
-              return Response.redirect(new URL(`/forum/${encodeURIComponent(String(question.slug))}`, req.url).toString(), 301);
+              const legacyPath = `/forum/${encodeURIComponent(String(question.slug))}`;
+              path = legacyPath;
+              url.pathname = legacyPath;
+              url.search = '';
+            } else {
+              path = '/forum/';
+              url.pathname = '/forum/';
+              url.search = '';
             }
           } catch (err) {
             console.warn('Legacy forum question redirect failed:', err);
+            path = '/forum/';
+            url.pathname = '/forum/';
+            url.search = '';
           }
+        } else {
+          path = '/forum/';
+          url.pathname = '/forum/';
+          url.search = '';
         }
-        return Response.redirect(new URL('/forum/', req.url).toString(), 302);
       }
 
       // ----- FORUM QUESTION PAGES -----
@@ -4363,6 +4413,7 @@ if (method === 'GET' || method === 'HEAD') {
         else if (
           path === '/products' ||
           path === '/products/' ||
+          path === '/products/index.html' ||
           path === '/products.html' ||
           path === '/products-grid' ||
           path === '/products-grid/' ||

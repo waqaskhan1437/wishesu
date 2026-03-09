@@ -125,9 +125,9 @@ export function renderHomepageHeroPlayerSsr(products = []) {
       innerHtml: `
         <div class="hero-player-stage" data-role="stage"></div>
         <div class="hero-player-dots" data-role="dots"></div>
-        <a class="hero-player-cta" data-role="cta" href="/products-grid">Book Now</a>
+        <a class="hero-player-cta" data-role="cta" href="/products">Book Now</a>
       `,
-      targetHref: '/products-grid',
+      targetHref: '/products',
       featured
     };
   }

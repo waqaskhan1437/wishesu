@@ -268,6 +268,52 @@ import {
 import { requireAdminOrApiKey } from './middleware/api-auth.js';
 import { protectEndpoint, DEFAULT_PERMISSIONS } from './utils/api-protector.js';
 
+const HEAD_SAFE_EXACT_API_PATHS = new Set([
+  '/api/health',
+  '/api/time',
+  '/api/debug',
+  '/api/products',
+  '/api/products/list',
+  '/api/reviews',
+  '/api/blogs/published',
+  '/api/forum/questions',
+  '/api/forum/question-replies',
+  '/api/forum/question-by-id',
+  '/api/forum/sidebar',
+  '/api/payment/methods',
+  '/api/settings/components',
+  '/api/settings/branding',
+  '/api/settings/whop',
+  '/api/settings/cobalt',
+  '/api/coupons/active',
+  '/api/coupons/enabled'
+]);
+
+const HEAD_SAFE_API_PATTERNS = [
+  /^\/api\/product\/\d+(?:\/adjacent)?$/,
+  /^\/api\/reviews\/\d+$/,
+  /^\/api\/blog\/public\/[^/]+$/,
+  /^\/api\/blog\/previous\/\d+$/,
+  /^\/api\/blog\/comments\/\d+$/,
+  /^\/api\/forum\/question\/[^/]+$/,
+  /^\/api\/order\/buyer\/[^/]+$/
+];
+
+export function isHeadCompatibleApiPath(path) {
+  const normalizedPath = String(path || '').trim();
+  if (!normalizedPath) return false;
+  if (HEAD_SAFE_EXACT_API_PATHS.has(normalizedPath)) return true;
+  return HEAD_SAFE_API_PATTERNS.some((pattern) => pattern.test(normalizedPath));
+}
+
+function toHeadResponse(response) {
+  if (!response) return response;
+  return new Response(null, {
+    status: response.status,
+    headers: new Headers(response.headers)
+  });
+}
+
 /**
  * Route API requests to appropriate handlers
  * @param {Request} req - Request object
@@ -278,6 +324,15 @@ import { protectEndpoint, DEFAULT_PERMISSIONS } from './utils/api-protector.js';
  * @returns {Promise<Response|null>}
  */
 export async function routeApiRequest(req, env, url, path, method) {
+  if (method === 'HEAD' && isHeadCompatibleApiPath(path)) {
+    const getRequest = new Request(url.toString(), {
+      method: 'GET',
+      headers: req.headers
+    });
+    const getResponse = await routeApiRequest(getRequest, env, url, path, 'GET');
+    return toHeadResponse(getResponse);
+  }
+
   // ----- NON-DB ROUTES (health checks, debug) -----
   if (path === '/api/health') {
     return json({ ok: true, time: Date.now() });
