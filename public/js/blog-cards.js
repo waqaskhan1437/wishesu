@@ -5,11 +5,29 @@
 
 (function() {
   window.BlogCards = {
+    getBootstrap: function(container) {
+      const bootstrapId = container?.dataset?.ssrBootstrapId;
+      if (!bootstrapId) return null;
+      const script = document.getElementById(bootstrapId);
+      if (!script) return null;
+      try {
+        return JSON.parse(script.textContent || '{}');
+      } catch (err) {
+        return null;
+      }
+    },
+
     // Render blog cards with pagination
     render: async function(containerId, options = {}) {
       const container = document.getElementById(containerId);
       if (!container) {
         console.error('Container not found:', containerId);
+        return;
+      }
+
+      const bootstrap = this.getBootstrap(container);
+      if (bootstrap && container.dataset.ssrBlogCards === '1' && container.querySelector('.blog-cards-grid')) {
+        this.addStyles();
         return;
       }
 
@@ -422,6 +440,13 @@
     renderSlider: async function(containerId, options = {}) {
       const container = document.getElementById(containerId);
       if (!container) return;
+
+       const bootstrap = this.getBootstrap(container);
+       if (bootstrap && container.dataset.ssrBlogCards === '1' && container.querySelector('.blog-slider-container')) {
+         this.addStyles();
+         this.updateSliderButtons(containerId);
+         return;
+       }
 
       container.innerHTML = '<p style="text-align:center;padding:20px;color:#6b7280;">Loading...</p>';
       this.addStyles();

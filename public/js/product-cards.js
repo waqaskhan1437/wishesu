@@ -5,12 +5,111 @@
 
 (function() {
   window.ProductCards = {
+    getBootstrap: function(container) {
+      const bootstrapId = container?.dataset?.ssrBootstrapId;
+      if (!bootstrapId) return null;
+      const script = document.getElementById(bootstrapId);
+      if (!script) return null;
+      try {
+        return JSON.parse(script.textContent || '{}');
+      } catch (err) {
+        return null;
+      }
+    },
+
+    createLoadMoreButton: function(options = {}) {
+      const loadBtn = document.createElement('button');
+      loadBtn.className = 'btn-load-more';
+      loadBtn.textContent = 'Load More Products';
+      loadBtn.style.display = 'none';
+      loadBtn.style.margin = '40px auto';
+      loadBtn.style.padding = '12px 30px';
+      loadBtn.style.background = 'white';
+      loadBtn.style.border = '1px solid #d1d5db';
+      loadBtn.style.borderRadius = '8px';
+      loadBtn.style.cursor = 'pointer';
+      loadBtn.style.fontSize = '1rem';
+      loadBtn.style.color = '#374151';
+      loadBtn.style.transition = 'all 0.2s';
+      loadBtn.onmouseover = () => { loadBtn.style.background = '#f9fafb'; loadBtn.style.borderColor = '#9ca3af'; };
+      loadBtn.onmouseout = () => { loadBtn.style.background = 'white'; loadBtn.style.borderColor = '#d1d5db'; };
+      return loadBtn;
+    },
+
+    hydrateSsr: function(container, containerId, bootstrap, options = {}) {
+      const resolvedOptions = Object.assign({}, bootstrap?.options || {}, options || {});
+      const pagination = bootstrap?.pagination || {};
+      const products = Array.isArray(bootstrap?.products) ? bootstrap.products : [];
+
+      if (resolvedOptions.layout === 'slider') {
+        this.addStyles();
+        this.updateSliderButtons(containerId);
+        return true;
+      }
+
+      let grid = container.querySelector('.product-cards-grid');
+      if (!grid) {
+        container.innerHTML = '';
+        grid = document.createElement('div');
+        grid.className = 'product-cards-grid';
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = `repeat(${resolvedOptions.columns || 3}, 1fr)`;
+        grid.style.gap = '30px';
+        grid.style.maxWidth = '1200px';
+        grid.style.margin = '0 auto';
+        container.appendChild(grid);
+        products.forEach((product) => {
+          const temp = document.createElement('div');
+          temp.innerHTML = this.renderCard(product, resolvedOptions);
+          while (temp.firstChild) {
+            grid.appendChild(temp.firstChild);
+          }
+        });
+      }
+
+      container._state = {
+        page: (pagination.page || 1) + 1,
+        limit: pagination.limit || resolvedOptions.limit || products.length || 12,
+        total: pagination.total || products.length,
+        pages: pagination.pages || 1,
+        loading: false,
+        filter: resolvedOptions.filter || 'all',
+        ids: resolvedOptions.ids || []
+      };
+
+      let loadBtn = container.querySelector('.btn-load-more');
+      if (!loadBtn) {
+        loadBtn = this.createLoadMoreButton(resolvedOptions);
+        container.appendChild(loadBtn);
+      }
+      loadBtn.onclick = () => this.loadMore(container, grid, loadBtn, resolvedOptions);
+
+      if (container._state.page > container._state.pages) {
+        loadBtn.style.display = 'none';
+      } else {
+        loadBtn.style.display = 'block';
+        loadBtn.textContent = 'Load More Products';
+        loadBtn.disabled = false;
+        loadBtn.style.opacity = '1';
+      }
+
+      this.addStyles();
+      return true;
+    },
+
     // Render product cards in a container
     render: async function(containerId, options = {}) {
       const container = document.getElementById(containerId);
       if (!container) {
         console.error('Container not found:', containerId);
         return;
+      }
+
+      const bootstrap = this.getBootstrap(container);
+      if (bootstrap && container.dataset.ssrProductCards === '1') {
+        if (this.hydrateSsr(container, containerId, bootstrap, options)) {
+          return;
+        }
       }
 
       // Clear container and setup structure
@@ -38,22 +137,7 @@
       container.appendChild(grid);
 
       // Load More Button
-      const loadBtn = document.createElement('button');
-      loadBtn.className = 'btn-load-more';
-      loadBtn.textContent = 'Load More Products';
-      loadBtn.style.display = 'none'; // Hidden until loaded
-      loadBtn.style.margin = '40px auto';
-      loadBtn.style.padding = '12px 30px';
-      loadBtn.style.background = 'white';
-      loadBtn.style.border = '1px solid #d1d5db';
-      loadBtn.style.borderRadius = '8px';
-      loadBtn.style.cursor = 'pointer';
-      loadBtn.style.fontSize = '1rem';
-      loadBtn.style.color = '#374151';
-      loadBtn.style.transition = 'all 0.2s';
-
-      loadBtn.onmouseover = () => { loadBtn.style.background = '#f9fafb'; loadBtn.style.borderColor = '#9ca3af'; };
-      loadBtn.onmouseout = () => { loadBtn.style.background = 'white'; loadBtn.style.borderColor = '#d1d5db'; };
+      const loadBtn = this.createLoadMoreButton(options);
       loadBtn.onclick = () => this.loadMore(container, grid, loadBtn, options);
 
       container.appendChild(loadBtn);
@@ -547,6 +631,13 @@
     renderSlider: async function(containerId, options = {}) {
       const container = document.getElementById(containerId);
       if (!container) return;
+
+      const bootstrap = this.getBootstrap(container);
+      if (bootstrap && container.dataset.ssrProductCards === '1' && container.querySelector('.product-slider-container')) {
+        this.addStyles();
+        this.updateSliderButtons(containerId);
+        return;
+      }
 
       container.innerHTML = '<p style="text-align:center;padding:20px;color:#6b7280;">Loading...</p>';
       this.addStyles();

@@ -20,6 +20,15 @@ import { getNoindexMetaTags, getSeoVisibilityRuleMatch } from './controllers/noi
 import { canonicalProductPath } from './utils/formatting.js';
 import { buildPublicProductStatusWhere } from './utils/product-visibility.js';
 import { handleNoJsRoutes, renderNoJsAdminLoginPage } from './controllers/nojs.js';
+import {
+  BLOG_CARDS_STYLE_TAG,
+  PRODUCT_CARDS_STYLE_TAG,
+  ensureStyleTag,
+  extractInlineRenderConfigs,
+  renderBlogCardsSsrMarkup,
+  renderProductCardsSsrMarkup,
+  replaceSimpleContainerById
+} from './utils/component-ssr.js';
 
 // Inject analytics & verification meta tags (Google Analytics, Facebook Pixel, site verification)
 import { injectAnalyticsAndMeta } from './controllers/analytics.js';
@@ -1724,6 +1733,454 @@ function renderBlogArchiveCardsSsr(blogs = [], pagination = {}) {
   }
 
   return `${styles}<div class="blog-cards-grid">${cardsHtml}</div>${renderBlogArchivePaginationSsr(pagination)}`;
+}
+
+function normalizeSsrInteger(value, fallback, min = 1, max = 100) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function normalizeSsrIdList(idsInput = []) {
+  if (!Array.isArray(idsInput)) return [];
+  return idsInput
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .slice(0, 50);
+}
+
+async function queryProductsForComponentSsr(env, options = {}) {
+  const limit = normalizeSsrInteger(options.limit, 12, 1, 100);
+  const page = normalizeSsrInteger(options.page, 1, 1, 100);
+  const offset = (page - 1) * limit;
+  const filter = String(options.filter || 'all').trim().toLowerCase();
+  const requestedIds = normalizeSsrIdList(options.ids);
+
+  if (requestedIds.length > 0) {
+    const numericIds = requestedIds.filter((item) => /^\d+$/.test(item));
+    const slugIds = requestedIds.filter((item) => !/^\d+$/.test(item));
+    const conditions = [];
+    const bindings = [];
+
+    if (numericIds.length > 0) {
+      conditions.push(`CAST(p.id AS TEXT) IN (${numericIds.map(() => '?').join(',')})`);
+      bindings.push(...numericIds);
+    }
+    if (slugIds.length > 0) {
+      conditions.push(`p.slug IN (${slugIds.map(() => '?').join(',')})`);
+      bindings.push(...slugIds);
+    }
+
+    if (conditions.length === 0) {
+      return { products: [], pagination: { page: 1, limit, total: 0, pages: 1 } };
+    }
+
+    const rows = await env.DB.prepare(`
+      SELECT
+        p.id, p.title, p.slug, p.normal_price, p.sale_price,
+        p.thumbnail_url, p.normal_delivery_text, p.instant_delivery,
+        p.featured,
+        (SELECT COUNT(*) FROM reviews WHERE product_id = p.id AND status = 'approved') as review_count,
+        (SELECT AVG(rating) FROM reviews WHERE product_id = p.id AND status = 'approved') as rating_average
+      FROM products p
+      WHERE ${buildPublicProductStatusWhere('p.status')}
+      AND (${conditions.join(' OR ')})
+      ORDER BY p.sort_order ASC, p.id DESC
+    `).bind(...bindings).all();
+
+    const ordered = requestedIds
+      .map((requestedId) => (rows.results || []).find((item) => (
+        String(item.id) === requestedId || String(item.slug || '') === requestedId
+      )))
+      .filter(Boolean)
+      .slice(0, limit)
+      .map((item) => ({
+        ...item,
+        delivery_time_days: parseInt(item.normal_delivery_text, 10) || 1,
+        review_count: item.review_count || 0,
+        average_rating: item.rating_average ? Math.round(item.rating_average * 10) / 10 : 0
+      }));
+
+    return {
+      products: ordered,
+      pagination: { page: 1, limit, total: ordered.length, pages: 1 }
+    };
+  }
+
+  let whereClause = `WHERE ${buildPublicProductStatusWhere('p.status')}`;
+  if (filter === 'featured') {
+    whereClause += ' AND p.featured = 1';
+  }
+
+  const totalRow = await env.DB.prepare(`SELECT COUNT(*) as count FROM products p ${whereClause}`).first();
+  const rows = await env.DB.prepare(`
+    SELECT
+      p.id, p.title, p.slug, p.normal_price, p.sale_price,
+      p.thumbnail_url, p.normal_delivery_text, p.instant_delivery,
+      p.featured,
+      (SELECT COUNT(*) FROM reviews WHERE product_id = p.id AND status = 'approved') as review_count,
+      (SELECT AVG(rating) FROM reviews WHERE product_id = p.id AND status = 'approved') as rating_average
+    FROM products p
+    ${whereClause}
+    ORDER BY p.sort_order ASC, p.id DESC
+    LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+
+  const products = (rows.results || []).map((item) => ({
+    ...item,
+    delivery_time_days: parseInt(item.normal_delivery_text, 10) || 1,
+    review_count: item.review_count || 0,
+    average_rating: item.rating_average ? Math.round(item.rating_average * 10) / 10 : 0
+  }));
+
+  return {
+    products,
+    pagination: {
+      page,
+      limit,
+      total: totalRow?.count || 0,
+      pages: Math.max(1, Math.ceil((totalRow?.count || 0) / limit))
+    }
+  };
+}
+
+async function queryBlogsForComponentSsr(env, options = {}) {
+  const limit = normalizeSsrInteger(options.limit, 30, 1, 100);
+  const page = normalizeSsrInteger(options.page, 1, 1, 100);
+  const offset = (page - 1) * limit;
+  const requestedIds = normalizeSsrIdList(options.ids);
+
+  if (requestedIds.length > 0) {
+    const numericIds = requestedIds.filter((item) => /^\d+$/.test(item));
+    const slugIds = requestedIds.filter((item) => !/^\d+$/.test(item));
+    const conditions = [];
+    const bindings = [];
+
+    if (numericIds.length > 0) {
+      conditions.push(`CAST(id AS TEXT) IN (${numericIds.map(() => '?').join(',')})`);
+      bindings.push(...numericIds);
+    }
+    if (slugIds.length > 0) {
+      conditions.push(`slug IN (${slugIds.map(() => '?').join(',')})`);
+      bindings.push(...slugIds);
+    }
+
+    if (conditions.length === 0) {
+      return { blogs: [], pagination: { page: 1, limit, total: 0, totalPages: 1, hasNext: false, hasPrev: false } };
+    }
+
+    const rows = await env.DB.prepare(`
+      SELECT id, title, slug, description, thumbnail_url, created_at
+      FROM blogs
+      WHERE status = 'published' AND (${conditions.join(' OR ')})
+      ORDER BY created_at DESC
+    `).bind(...bindings).all();
+
+    const blogs = requestedIds
+      .map((requestedId) => (rows.results || []).find((item) => (
+        String(item.id) === requestedId || String(item.slug || '') === requestedId
+      )))
+      .filter(Boolean)
+      .slice(0, limit);
+
+    return {
+      blogs,
+      pagination: { page: 1, limit, total: blogs.length, totalPages: 1, hasNext: false, hasPrev: false }
+    };
+  }
+
+  const [countResult, rows] = await Promise.all([
+    env.DB.prepare(`SELECT COUNT(*) as total FROM blogs WHERE status = 'published'`).first(),
+    env.DB.prepare(`
+      SELECT id, title, slug, description, thumbnail_url, created_at
+      FROM blogs
+      WHERE status = 'published'
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(limit, offset).all()
+  ]);
+
+  const total = countResult?.total || 0;
+  return {
+    blogs: rows.results || [],
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      hasNext: offset + limit < total,
+      hasPrev: page > 1
+    }
+  };
+}
+
+async function queryForumQuestionsForSsr(env, options = {}) {
+  const limit = normalizeSsrInteger(options.limit, 20, 1, 100);
+  const page = normalizeSsrInteger(options.page, 1, 1, 100);
+  const offset = (page - 1) * limit;
+
+  const [countResult, rows] = await Promise.all([
+    env.DB.prepare(`SELECT COUNT(*) as total FROM forum_questions WHERE status = 'approved'`).first(),
+    env.DB.prepare(`
+      SELECT id, title, slug, content, name, reply_count, created_at
+      FROM forum_questions
+      WHERE status = 'approved'
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(limit, offset).all()
+  ]);
+
+  const total = countResult?.total || 0;
+  return {
+    questions: rows.results || [],
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      hasNext: offset + limit < total,
+      hasPrev: page > 1
+    }
+  };
+}
+
+function replaceSimpleTextByIdSsr(html, elementId, value) {
+  const escapedId = String(elementId || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`<(span|div|p)([^>]*\\bid=["']${escapedId}["'][^>]*)>([\\s\\S]*?)</\\1>`, 'i');
+  return String(html || '').replace(pattern, `<$1$2>${escapeHtmlText(String(value ?? ''))}</$1>`);
+}
+
+function renderForumArchiveCardsSsr(questions = []) {
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return '<div class="no-questions"><p>No questions yet. Be the first to ask!</p></div>';
+  }
+
+  const cards = questions.map((question) => {
+    const date = question.created_at
+      ? new Date(question.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : '';
+    const initial = escapeHtmlText(String(question.name || 'A').charAt(0).toUpperCase());
+    return `
+      <div class="question-card" id="qcard-${escapeHtmlText(question.id)}">
+        <div class="question-header" onclick="toggleQuestion(${Number(question.id) || 0})">
+          <div class="q-avatar">${initial}</div>
+          <div class="q-content">
+            <div class="q-title">${escapeHtmlText(question.title || '')}</div>
+            <div class="q-preview">${escapeHtmlText(question.content || '')}</div>
+            <div class="q-meta">
+              <span>&#128100; ${escapeHtmlText(question.name || '')}</span>
+              <span>&#128197; ${escapeHtmlText(date)}</span>
+              <span class="reply-count">&#128172; ${escapeHtmlText(question.reply_count || 0)}</span>
+            </div>
+          </div>
+          <div class="expand-icon">&#9660;</div>
+        </div>
+        <div class="question-expanded">
+          <div class="expanded-content" id="expanded-${escapeHtmlText(question.id)}">
+            <div class="full-question">${escapeHtmlText(question.content || '')}</div>
+            <div id="replies-${escapeHtmlText(question.id)}"><div class="loading"><div class="loading-spinner"></div></div></div>
+            <div class="reply-form">
+              <h4>&#128172; Write a Reply</h4>
+              <div id="reply-msg-${escapeHtmlText(question.id)}" class="reply-message"></div>
+              <form onsubmit="submitReply(event, ${Number(question.id) || 0})">
+                <div class="form-row">
+                  <div class="form-group">
+                    <input type="text" id="rname-${escapeHtmlText(question.id)}" placeholder="Your name (max 50)" required maxlength="50">
+                  </div>
+                  <div class="form-group">
+                    <input type="email" id="remail-${escapeHtmlText(question.id)}" placeholder="Email (max 100)" required maxlength="100">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <textarea id="rcontent-${escapeHtmlText(question.id)}" placeholder="Write your reply (5-2000 chars)..." required minlength="5" maxlength="2000" oninput="document.getElementById('rcount-${escapeHtmlText(question.id)}').textContent=this.value.length"></textarea>
+                  <div style="text-align:right;font-size:0.75rem;color:#6b7280;margin-top:2px"><span id="rcount-${escapeHtmlText(question.id)}">0</span>/2000</div>
+                </div>
+                <button type="submit" class="reply-submit" id="rbtn-${escapeHtmlText(question.id)}">Submit Reply</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `<div class="questions-list">${cards}</div>`;
+}
+
+function renderForumArchivePaginationSsr(pagination = {}) {
+  const totalPages = Math.max(0, parseInt(pagination.totalPages, 10) || 0);
+  if (totalPages <= 1) return '';
+
+  const page = Math.max(1, parseInt(pagination.page, 10) || 1);
+  let html = `<button class="page-btn" onclick="loadQuestions(${page - 1})" ${!pagination.hasPrev ? 'disabled' : ''}>&larr;</button>`;
+
+  for (let index = 1; index <= totalPages; index += 1) {
+    html += `<button class="page-btn ${index === page ? 'active' : ''}" onclick="loadQuestions(${index})">${index}</button>`;
+  }
+
+  html += `<button class="page-btn" onclick="loadQuestions(${page + 1})" ${!pagination.hasNext ? 'disabled' : ''}>&rarr;</button>`;
+  return html;
+}
+
+function renderEmbeddedForumQuestionsSsr(questions = []) {
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return '<p style="text-align:center;color:#6b7280;padding:40px;background:white;border-radius:12px;">No questions yet. Be the first to ask!</p>';
+  }
+
+  return `<h3 style="margin-bottom:20px;color:#1f2937;">Recent Questions</h3>${questions.map((question) => {
+    const preview = escapeHtmlText(String(question.content || '').slice(0, 150) + (String(question.content || '').length > 150 ? '...' : ''));
+    const href = `/forum/${encodeURIComponent(String(question.slug || question.id || ''))}`;
+    return `<a href="${href}" style="display:block;background:white;border-radius:12px;padding:20px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-decoration:none;transition:transform 0.2s,box-shadow 0.2s;"><h4 style="color:#1f2937;margin-bottom:8px;font-size:1.1rem;">${escapeHtmlText(question.title || '')}</h4><p style="color:#6b7280;font-size:0.9rem;line-height:1.5;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${preview}</p><div style="display:flex;gap:15px;font-size:0.85rem;color:#9ca3af;"><span>&#128100; ${escapeHtmlText(question.name || '')}</span><span>&#128172; ${escapeHtmlText(question.reply_count || 0)} replies</span></div></a>`;
+  }).join('')}`;
+}
+
+function renderEmbeddedForumPaginationSsr(pagination = {}) {
+  const totalPages = Math.max(0, parseInt(pagination.totalPages, 10) || 0);
+  if (totalPages <= 1) return '';
+
+  const page = Math.max(1, parseInt(pagination.page, 10) || 1);
+  let html = '';
+
+  if (pagination.hasPrev) {
+    html += `<button onclick="loadForumQuestions(${page - 1})" style="padding:8px 16px;border:1px solid #e5e7eb;background:white;border-radius:8px;cursor:pointer;">&larr; Prev</button>`;
+  }
+
+  for (let index = 1; index <= totalPages; index += 1) {
+    if (index === page) {
+      html += `<button style="padding:8px 16px;border:none;background:#10b981;color:white;border-radius:8px;">${index}</button>`;
+    } else if (index === 1 || index === totalPages || Math.abs(index - page) <= 2) {
+      html += `<button onclick="loadForumQuestions(${index})" style="padding:8px 16px;border:1px solid #e5e7eb;background:white;border-radius:8px;cursor:pointer;">${index}</button>`;
+    } else if (Math.abs(index - page) === 3) {
+      html += '<span style="padding:8px;">...</span>';
+    }
+  }
+
+  if (pagination.hasNext) {
+    html += `<button onclick="loadForumQuestions(${page + 1})" style="padding:8px 16px;border:1px solid #e5e7eb;background:white;border-radius:8px;cursor:pointer;">Next &rarr;</button>`;
+  }
+
+  return html;
+}
+
+async function applyComponentSsrToHtml(env, html, url, path) {
+  if (!env?.DB || !html) return html;
+
+  let output = String(html);
+  let needsProductStyles = false;
+  let needsBlogStyles = false;
+
+  const productConfigs = extractInlineRenderConfigs(output, 'ProductCards');
+  const blogConfigs = extractInlineRenderConfigs(output, 'BlogCards');
+
+  if ((path === '/' || path === '/index.html') && !productConfigs.has('product-list') && output.includes('id="product-list"')) {
+    productConfigs.set('product-list', { filter: 'all', columns: 3, limit: 9, showReviews: true, showDelivery: true });
+  }
+
+  for (const [containerId, config] of productConfigs.entries()) {
+    if (!output.includes(`id="${containerId}"`) && !output.includes(`id='${containerId}'`)) continue;
+    const productResult = await queryProductsForComponentSsr(env, {
+      ...config,
+      page: url.searchParams.get('page') || config.page || 1
+    });
+    const rendered = renderProductCardsSsrMarkup({
+      containerId,
+      products: productResult.products,
+      options: config,
+      pagination: productResult.pagination
+    });
+    output = replaceSimpleContainerById(output, containerId, rendered.innerHtml, rendered.attrs, rendered.afterHtml);
+    needsProductStyles = true;
+  }
+
+  for (const [containerId, config] of blogConfigs.entries()) {
+    if (!output.includes(`id="${containerId}"`) && !output.includes(`id='${containerId}'`)) continue;
+    const blogResult = await queryBlogsForComponentSsr(env, {
+      ...config,
+      page: url.searchParams.get('page') || config.page || 1
+    });
+    const rendered = renderBlogCardsSsrMarkup({
+      containerId,
+      blogs: blogResult.blogs,
+      options: config,
+      pagination: blogResult.pagination
+    });
+    output = replaceSimpleContainerById(output, containerId, rendered.innerHtml, rendered.attrs, rendered.afterHtml);
+    needsBlogStyles = true;
+  }
+
+  const embedMatches = [...output.matchAll(/<(div|section)([^>]*\bdata-embed='([^']+)'[^>]*)>([\s\S]*?)<\/\1>/gi)];
+  for (let embedIndex = 0; embedIndex < embedMatches.length; embedIndex += 1) {
+    const match = embedMatches[embedIndex];
+    const [fullMatch, tagName, rawAttrs, rawConfig] = match;
+    let config;
+    try {
+      config = JSON.parse(rawConfig);
+    } catch (_) {
+      continue;
+    }
+
+    let replacement = null;
+    if (config.type === 'product') {
+      const productResult = await queryProductsForComponentSsr(env, config);
+      const rendered = renderProductCardsSsrMarkup({
+        containerId: `embed-product-${embedIndex + 1}`,
+        products: productResult.products,
+        options: config,
+        pagination: productResult.pagination
+      });
+      replacement = `<${tagName}${rawAttrs} data-ssr-product-cards="1">${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
+      needsProductStyles = true;
+    } else if (config.type === 'blog') {
+      const blogResult = await queryBlogsForComponentSsr(env, config);
+      const rendered = renderBlogCardsSsrMarkup({
+        containerId: `embed-blog-${embedIndex + 1}`,
+        blogs: blogResult.blogs,
+        options: {
+          ...config,
+          showPagination: false,
+          pagination: false
+        },
+        pagination: blogResult.pagination
+      });
+      replacement = `<${tagName}${rawAttrs} data-ssr-blog-cards="1">${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
+      needsBlogStyles = true;
+    } else if (config.type === 'forum') {
+      const forumResult = await queryForumQuestionsForSsr(env, { limit: 6, page: 1 });
+      replacement = `<${tagName}${rawAttrs}>${renderEmbeddedForumQuestionsSsr(forumResult.questions)}</${tagName}>`;
+    }
+
+    if (replacement) {
+      output = output.replace(fullMatch, replacement);
+    }
+  }
+
+  if (output.includes('id="questions-container"')) {
+    const forumResult = await queryForumQuestionsForSsr(env, {
+      limit: 20,
+      page: url.searchParams.get('page') || 1
+    });
+    output = replaceSimpleContainerById(output, 'questions-container', renderForumArchiveCardsSsr(forumResult.questions));
+    output = replaceSimpleContainerById(output, 'pagination', renderForumArchivePaginationSsr(forumResult.pagination));
+    output = replaceSimpleTextByIdSsr(output, 'total-count', forumResult.pagination.total || 0);
+  }
+
+  if (output.includes('id="forum-questions-container"')) {
+    const forumResult = await queryForumQuestionsForSsr(env, {
+      limit: 20,
+      page: url.searchParams.get('page') || 1
+    });
+    output = replaceSimpleContainerById(output, 'forum-questions-container', renderEmbeddedForumQuestionsSsr(forumResult.questions));
+    output = replaceSimpleContainerById(output, 'forum-pagination', renderEmbeddedForumPaginationSsr(forumResult.pagination));
+  }
+
+  if (needsProductStyles) {
+    output = ensureStyleTag(output, PRODUCT_CARDS_STYLE_TAG, 'product-cards-styles');
+  }
+  if (needsBlogStyles) {
+    output = ensureStyleTag(output, BLOG_CARDS_STYLE_TAG, 'blog-cards-styles');
+  }
+
+  return output;
 }
 
 // Blog post HTML template generator
@@ -3616,7 +4073,8 @@ if (method === 'GET' || method === 'HEAD') {
               const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
               if (row && row.content) {
                 // Serve the dynamic page content directly instead of redirecting.
-                let html = await applyGlobalComponentsSsr(env, row.content, path);
+                let html = await applyComponentSsrToHtml(env, row.content, url, path);
+                html = await applyGlobalComponentsSsr(env, html, path);
                 // Apply SEO tags if available.
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
@@ -3652,7 +4110,8 @@ if (method === 'GET' || method === 'HEAD') {
               await initDB(env);
               const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
               if (row && row.content) {
-                let html = await applyGlobalComponentsSsr(env, row.content, path);
+                let html = await applyComponentSsrToHtml(env, row.content, url, path);
+                html = await applyGlobalComponentsSsr(env, html, path);
 
                 // Apply SEO
                 try {
@@ -3728,6 +4187,7 @@ if (method === 'GET' || method === 'HEAD') {
             const isHtmlTarget = contentType.includes('text/html') || target.endsWith('.html');
             if (assetResp.status === 200 && method === 'GET' && isHtmlTarget) {
               let html = await assetResp.text();
+              html = await applyComponentSsrToHtml(env, html, url, path);
               html = await applyGlobalComponentsSsr(env, html, path);
               try {
                 const seo = await getSeoForRequest(env, req, { path: normalizedPath });
@@ -3793,7 +4253,8 @@ if (method === 'GET' || method === 'HEAD') {
             ).bind(defaultPageType, 'published').first();
             
             if (defaultPage && defaultPage.content) {
-              let html = await applyGlobalComponentsSsr(env, defaultPage.content, path);
+              let html = await applyComponentSsrToHtml(env, defaultPage.content, url, path);
+              html = await applyGlobalComponentsSsr(env, html, path);
 
               // Apply SEO tags (robots, canonical)
               const responseHeaders = {
@@ -4345,6 +4806,7 @@ if (method === 'GET' || method === 'HEAD') {
               }
             }
             
+            html = await applyComponentSsrToHtml(env, html, url, path);
             html = await applyGlobalComponentsSsr(env, html, path);
 
             const normalizedRequestPath = normalizeCanonicalPath(path);
