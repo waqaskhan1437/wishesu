@@ -4389,9 +4389,18 @@ if (method === 'GET' || method === 'HEAD') {
           '/order-detail': '/order-detail.html',
           '/order-detail/': '/order-detail.html',
           '/order-detail/index.html': '/order-detail.html',
+          '/products': '/products-grid.html',
+          '/products/': '/products-grid.html',
+          '/products/index.html': '/products-grid.html',
+          '/products-grid': '/products-grid.html',
+          '/products-grid/': '/products-grid.html',
           // Map blog and forum to their index files so these archives load
           // without needing to redirect to `/blog` or `/forum`.
+          '/blog': '/blog/index.html',
+          '/blog/': '/blog/index.html',
           '/blog.html': '/blog/index.html',
+          '/forum': '/forum/index.html',
+          '/forum/': '/forum/index.html',
           '/forum.html': '/forum/index.html'
         };
 
@@ -4569,10 +4578,15 @@ if (method === 'GET' || method === 'HEAD') {
           // Archive aliases: resolve folder URLs to concrete index assets to avoid
           // asset-layer redirect loops and allow SSR injection in one code path.
           const archiveAssetAliases = {
-            '/blog': '/blog/',
-            '/blog/': '/blog/',
-            '/forum': '/forum/',
-            '/forum/': '/forum/'
+            '/blog': '/blog/index.html',
+            '/blog/': '/blog/index.html',
+            '/forum': '/forum/index.html',
+            '/forum/': '/forum/index.html',
+            '/products': '/products-grid.html',
+            '/products/': '/products-grid.html',
+            '/products/index.html': '/products-grid.html',
+            '/products-grid': '/products-grid.html',
+            '/products-grid/': '/products-grid.html'
           };
           const archiveTarget = archiveAssetAliases[assetPath];
           if (archiveTarget) {
