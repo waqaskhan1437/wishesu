@@ -5,6 +5,18 @@
 
 (function() {
   window.ReviewsWidget = {
+    getBootstrap: function(container) {
+      const bootstrapId = container?.dataset?.ssrBootstrapId;
+      if (!bootstrapId) return null;
+      const script = document.getElementById(bootstrapId);
+      if (!script) return null;
+      try {
+        return JSON.parse(script.textContent || '{}');
+      } catch (err) {
+        return null;
+      }
+    },
+
     // Render reviews in a container
     render: async function(containerId, options = {}) {
       const container = document.getElementById(containerId);
@@ -22,6 +34,37 @@
         columns = 1,          // Layout columns
         showAvatar = true     // Show user avatar
       } = options;
+
+      const bootstrap = this.getBootstrap(container);
+      if (bootstrap && container.dataset.ssrReviewsWidget === '1') {
+        const resolvedOptions = Object.assign({}, bootstrap.options || {}, options || {});
+        const bootstrapReviews = Array.isArray(bootstrap.reviews) ? bootstrap.reviews : [];
+
+        if (bootstrapReviews.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <div style="font-size: 3rem; margin-bottom: 15px;">â­</div>
+              <p>No reviews yet. Be the first to review!</p>
+            </div>
+          `;
+          this.addStyles();
+          return;
+        }
+
+        container.innerHTML = `
+          <div class="reviews-grid" style="
+            display: grid;
+            grid-template-columns: repeat(${resolvedOptions.columns || 1}, 1fr);
+            gap: 25px;
+            max-width: 1200px;
+            margin: 0 auto;
+          ">
+            ${bootstrapReviews.map(r => this.renderReview(r, resolvedOptions.showAvatar !== false)).join('')}
+          </div>
+        `;
+        this.addStyles();
+        return;
+      }
 
       // Fetch reviews
       let reviews = [];

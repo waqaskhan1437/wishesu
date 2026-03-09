@@ -5,6 +5,18 @@
  */
 
 const API_BASE = '';
+const HOME_PRODUCTS_BOOTSTRAP_ID = 'home-products-bootstrap';
+
+function getInlineJsonBootstrap(id) {
+  const script = document.getElementById(id);
+  if (!script) return null;
+  try {
+    return JSON.parse(script.textContent || '{}');
+  } catch (error) {
+    console.warn('Invalid bootstrap JSON:', id, error);
+    return null;
+  }
+}
 
 /**
  * Fetch a JSON response from the given endpoint.  Throws if the network
@@ -61,6 +73,10 @@ async function apiFetch(path, options = {}) {
  * `{ products: [ { id, title, slug, normal_price, sale_price, thumbnail_url }, … ] }`.
  */
 function getProducts() {
+  const bootstrap = getInlineJsonBootstrap(HOME_PRODUCTS_BOOTSTRAP_ID);
+  if (bootstrap && Array.isArray(bootstrap.products)) {
+    return Promise.resolve({ products: bootstrap.products });
+  }
   return apiFetch('/api/products');
 }
 
@@ -73,6 +89,18 @@ function getProducts() {
  * @param {string|number} id Product ID
  */
 function getProduct(id) {
+  const bootstrap = getInlineJsonBootstrap(HOME_PRODUCTS_BOOTSTRAP_ID);
+  const normalizedId = String(id);
+  const details = bootstrap && bootstrap.detailsById && bootstrap.detailsById[normalizedId];
+  if (details && details.product) {
+    return Promise.resolve(details);
+  }
+  const fallbackProduct = bootstrap && Array.isArray(bootstrap.products)
+    ? bootstrap.products.find((item) => String(item && item.id) === normalizedId)
+    : null;
+  if (fallbackProduct) {
+    return Promise.resolve({ product: fallbackProduct, addons: [] });
+  }
   return apiFetch(`/api/product/${encodeURIComponent(id)}`);
 }
 

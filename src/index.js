@@ -29,6 +29,14 @@ import {
   renderProductCardsSsrMarkup,
   replaceSimpleContainerById
 } from './utils/component-ssr.js';
+import {
+  HOME_PRODUCTS_BOOTSTRAP_ID,
+  REVIEWS_WIDGET_STYLE_TAG,
+  buildHomeProductsBootstrap,
+  renderHomepageHeroPlayerSsr,
+  renderHomepageProductGridSsr,
+  renderReviewsWidgetSsrMarkup
+} from './utils/homepage-ssr.js';
 
 // Inject analytics & verification meta tags (Google Analytics, Facebook Pixel, site verification)
 import { injectAnalyticsAndMeta } from './controllers/analytics.js';
@@ -1778,7 +1786,7 @@ async function queryProductsForComponentSsr(env, options = {}) {
     const rows = await env.DB.prepare(`
       SELECT
         p.id, p.title, p.slug, p.normal_price, p.sale_price,
-        p.thumbnail_url, p.normal_delivery_text, p.instant_delivery,
+        p.thumbnail_url, p.video_url, p.normal_delivery_text, p.instant_delivery,
         p.featured,
         (SELECT COUNT(*) FROM reviews WHERE product_id = p.id AND status = 'approved') as review_count,
         (SELECT AVG(rating) FROM reviews WHERE product_id = p.id AND status = 'approved') as rating_average
@@ -1816,7 +1824,7 @@ async function queryProductsForComponentSsr(env, options = {}) {
   const rows = await env.DB.prepare(`
     SELECT
       p.id, p.title, p.slug, p.normal_price, p.sale_price,
-      p.thumbnail_url, p.normal_delivery_text, p.instant_delivery,
+      p.thumbnail_url, p.video_url, p.normal_delivery_text, p.instant_delivery,
       p.featured,
       (SELECT COUNT(*) FROM reviews WHERE product_id = p.id AND status = 'approved') as review_count,
       (SELECT AVG(rating) FROM reviews WHERE product_id = p.id AND status = 'approved') as rating_average
@@ -1944,10 +1952,70 @@ async function queryForumQuestionsForSsr(env, options = {}) {
   };
 }
 
+async function queryReviewsForSsr(env, options = {}) {
+  const limit = normalizeSsrInteger(options.limit, 6, 1, 50);
+  const requestedProductIds = normalizeSsrIdList(options.productIds);
+  const requestedReviewIds = normalizeSsrIdList(options.ids);
+  const rating = options.rating == null ? null : normalizeSsrInteger(options.rating, null, 1, 5);
+  const minRating = options.minRating == null ? null : normalizeSsrInteger(options.minRating, null, 1, 5);
+  const productId = options.productId == null ? null : normalizeSsrInteger(options.productId, null, 1, Number.MAX_SAFE_INTEGER);
+
+  let sql = `
+    SELECT r.*, p.title as product_title
+    FROM reviews r
+    LEFT JOIN products p ON r.product_id = p.id
+    WHERE r.status = 'approved'
+  `;
+  const bindings = [];
+
+  if (rating != null) {
+    sql += ' AND r.rating = ?';
+    bindings.push(rating);
+  }
+  if (minRating != null) {
+    sql += ' AND r.rating >= ?';
+    bindings.push(minRating);
+  }
+  if (productId != null) {
+    sql += ' AND r.product_id = ?';
+    bindings.push(productId);
+  }
+  if (requestedProductIds.length > 0) {
+    const numericProductIds = requestedProductIds
+      .map((value) => parseInt(value, 10))
+      .filter((value) => Number.isFinite(value));
+    if (numericProductIds.length > 0) {
+      sql += ` AND r.product_id IN (${numericProductIds.map(() => '?').join(',')})`;
+      bindings.push(...numericProductIds);
+    }
+  }
+  if (requestedReviewIds.length > 0) {
+    const numericReviewIds = requestedReviewIds
+      .map((value) => parseInt(value, 10))
+      .filter((value) => Number.isFinite(value));
+    if (numericReviewIds.length > 0) {
+      sql += ` AND r.id IN (${numericReviewIds.map(() => '?').join(',')})`;
+      bindings.push(...numericReviewIds);
+    }
+  }
+
+  sql += ' ORDER BY r.created_at DESC LIMIT ?';
+  bindings.push(limit);
+
+  const rows = await env.DB.prepare(sql).bind(...bindings).all();
+  return rows.results || [];
+}
+
 function replaceSimpleTextByIdSsr(html, elementId, value) {
   const escapedId = String(elementId || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`<(span|div|p)([^>]*\\bid=["']${escapedId}["'][^>]*)>([\\s\\S]*?)</\\1>`, 'i');
   return String(html || '').replace(pattern, `<$1$2>${escapeHtmlText(String(value ?? ''))}</$1>`);
+}
+
+function replaceAnchorHrefById(html, elementId, href) {
+  const escapedId = String(elementId || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`(<a[^>]*\\bid=["']${escapedId}["'][^>]*\\bhref=["'])[^"']*(["'])`, 'i');
+  return String(html || '').replace(pattern, `$1${escapeHtmlText(String(href || '#'))}$2`);
 }
 
 function renderForumArchiveCardsSsr(questions = []) {
@@ -2068,13 +2136,28 @@ async function applyComponentSsrToHtml(env, html, url, path) {
   let output = String(html);
   let needsProductStyles = false;
   let needsBlogStyles = false;
+  let needsReviewsStyles = false;
 
   const productConfigs = extractInlineRenderConfigs(output, 'ProductCards');
   const blogConfigs = extractInlineRenderConfigs(output, 'BlogCards');
+  const reviewConfigs = extractInlineRenderConfigs(output, 'ReviewsWidget');
+  const needsHomepageProducts = output.includes('id="product-grid"') || output.includes('id="hero-featured-player"');
+
+  if (output.includes('id="reviews-widget"') && !reviewConfigs.has('reviews-widget')) {
+    reviewConfigs.set('reviews-widget', { limit: 8, columns: 3, minRating: 5 });
+  }
 
   if ((path === '/' || path === '/index.html') && !productConfigs.has('product-list') && output.includes('id="product-list"')) {
     productConfigs.set('product-list', { filter: 'all', columns: 3, limit: 9, showReviews: true, showDelivery: true });
   }
+
+  let homeProductsBootstrap = null;
+  const getHomeProductsBootstrap = async () => {
+    if (homeProductsBootstrap) return homeProductsBootstrap;
+    const result = await queryProductsForComponentSsr(env, { limit: 24, page: 1 });
+    homeProductsBootstrap = buildHomeProductsBootstrap(result.products || []);
+    return homeProductsBootstrap;
+  };
 
   for (const [containerId, config] of productConfigs.entries()) {
     if (!output.includes(`id="${containerId}"`) && !output.includes(`id='${containerId}'`)) continue;
@@ -2106,6 +2189,49 @@ async function applyComponentSsrToHtml(env, html, url, path) {
     });
     output = replaceSimpleContainerById(output, containerId, rendered.innerHtml, rendered.attrs, rendered.afterHtml);
     needsBlogStyles = true;
+  }
+
+  for (const [containerId, config] of reviewConfigs.entries()) {
+    if (!output.includes(`id="${containerId}"`) && !output.includes(`id='${containerId}'`)) continue;
+    const reviews = await queryReviewsForSsr(env, config);
+    const rendered = renderReviewsWidgetSsrMarkup({
+      containerId,
+      reviews,
+      options: config
+    });
+    output = replaceSimpleContainerById(output, containerId, rendered.innerHtml, rendered.attrs, rendered.afterHtml);
+    needsReviewsStyles = true;
+  }
+
+  if (needsHomepageProducts) {
+    const bootstrap = await getHomeProductsBootstrap();
+    const products = Array.isArray(bootstrap?.products) ? bootstrap.products : [];
+    const bootstrapTag = `<script type="application/json" id="${HOME_PRODUCTS_BOOTSTRAP_ID}">${JSON.stringify(bootstrap || {}).replace(/</g, '\\u003c')}</script>`;
+    let injectedHomeBootstrap = false;
+
+    if (output.includes('id="product-grid"')) {
+      output = replaceSimpleContainerById(
+        output,
+        'product-grid',
+        renderHomepageProductGridSsr(products.slice(0, 12)),
+        { 'data-ssr-home-products': '1' },
+        bootstrapTag
+      );
+      injectedHomeBootstrap = true;
+    }
+
+    if (output.includes('id="hero-featured-player"')) {
+      const hero = renderHomepageHeroPlayerSsr(products);
+      output = replaceSimpleContainerById(
+        output,
+        'hero-featured-player',
+        hero.innerHtml,
+        { 'data-ssr-home-hero': '1' },
+        injectedHomeBootstrap ? '' : bootstrapTag
+      );
+      output = replaceAnchorHrefById(output, 'hero-order-link', hero.targetHref);
+      output = replaceAnchorHrefById(output, 'cta-order-link', hero.targetHref);
+    }
   }
 
   const embedMatches = [...output.matchAll(/<(div|section)([^>]*\bdata-embed='([^']+)'[^>]*)>([\s\S]*?)<\/\1>/gi)];
@@ -2178,6 +2304,9 @@ async function applyComponentSsrToHtml(env, html, url, path) {
   }
   if (needsBlogStyles) {
     output = ensureStyleTag(output, BLOG_CARDS_STYLE_TAG, 'blog-cards-styles');
+  }
+  if (needsReviewsStyles) {
+    output = ensureStyleTag(output, REVIEWS_WIDGET_STYLE_TAG, 'reviews-widget-styles');
   }
 
   return output;
