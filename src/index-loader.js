@@ -327,3 +327,147 @@ export {
   generateForumQuestionHTML,
   generateForumCard
 } from './ssr/forum-page-generator.js';
+
+// ============= Component Applier (NEW) =============
+export {
+  applyComponentSsrToHtml
+} from './ssr/component-applier.js';
+
+// ============= Query Modules (NEW) =============
+export {
+  getProductById,
+  getProductBySlug,
+  getAllProducts,
+  searchProducts,
+  getProductCount,
+  getProductReviews,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  getProductsByCategory,
+  getFeaturedProducts
+} from './queries/product-queries.js';
+
+export {
+  getOrderById,
+  getOrderByOrderId,
+  getOrders,
+  getOrdersByEmail,
+  getOrderCount,
+  createOrder,
+  updateOrderStatus,
+  deleteOrder,
+  getOrdersByProduct,
+  getRecentOrders,
+  searchOrders
+} from './queries/order-queries.js';
+
+export {
+  getBlogById,
+  getBlogBySlug,
+  getAllBlogs,
+  getBlogCount,
+  createBlog,
+  updateBlog,
+  deleteBlog,
+  getFeaturedBlogs,
+  searchBlogs,
+  getBlogComments,
+  createBlogComment
+} from './queries/blog-queries.js';
+
+export {
+  getForumQuestionById,
+  getForumQuestionBySlug,
+  getAllForumQuestions,
+  getForumQuestionCount,
+  createForumQuestion,
+  updateForumQuestion,
+  deleteForumQuestion,
+  getForumReplies,
+  createForumReply,
+  updateForumReply,
+  deleteForumReply,
+  searchForumQuestions,
+  incrementReplyCount
+} from './queries/forum-queries.js';
+
+// ============= Utility Modules (NEW) =============
+export * from './utils/r2-helpers.js';
+export * from './utils/logger.js';
+export * from './utils/external-fetch.js';
+export * from './utils/email-helpers.js';
+
+// ============= Validation (ENHANCED) =============
+export {
+  enforceUserRateLimit,
+  isValidEmail,
+  validateRequired,
+  isValidNumber,
+  isValidWhopPlanId,
+  isValidPhone,
+  isValidUrl,
+  isValidSlug,
+  validatePassword,
+  isValidId,
+  isValidDate,
+  isValidFileType,
+  isValidFileSize,
+  sanitizeInput
+} from './utils/validation.js';
+
+// ============= Auth Middleware (NEW) =============
+export {
+  requireAuth,
+  getClientIp,
+  getUserAgent,
+  checkAdminIp,
+  generateSessionToken,
+  hashPassword,
+  verifyPassword,
+  createSession,
+  isSessionValid,
+  getBasicAuthCredentials,
+  requireApiKey,
+  rateLimitKey
+} from './middleware/auth.js';
+
+// ============= Config Exports =============
+export {
+  initDB,
+  getDb,
+  getDbWithRetry,
+  withDbRetry,
+  isDbReady,
+  isDbInitialized
+} from './config/db.js';
+
+export { CORS } from './config/cors.js';
+
+// ============= Controller Exports =============
+export * from './controllers/products.js';
+export * from './controllers/orders.js';
+export * from './controllers/blog.js';
+export * from './controllers/forum.js';
+export * from './controllers/reviews.js';
+export * from './controllers/pages.js';
+export * from './controllers/admin.js';
+export * from './controllers/email.js';
+export * from './controllers/chat.js';
+export * from './controllers/coupons.js';
+export * from './controllers/noindex.js';
+export * from './controllers/seo-minimal.js';
+export * from './controllers/settings-clean.js';
+export * from './controllers/settings-media.js';
+export * from './controllers/backup.js';
+export * from './controllers/api-keys.js';
+export * from './controllers/analytics.js';
+export * from './controllers/webhooks.js';
+export * from './controllers/paypal.js';
+export * from './controllers/payment-gateway.js';
+export * from './controllers/payment-universal.js';
+export * from './controllers/whop.js';
+export * from './controllers/blog-comments.js';
+
+// ============= Middleware Exports =============
+export * from './middleware/api-auth.js';

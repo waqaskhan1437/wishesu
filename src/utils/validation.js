@@ -1,5 +1,6 @@
 /**
  * Input validation utilities
+ * Consolidated from all validators across codebase
  */
 
 /**
@@ -73,4 +74,126 @@ export function isValidNumber(value) {
 export function isValidWhopPlanId(planId) {
   if (!planId || typeof planId !== 'string') return false;
   return planId.startsWith('plan_') && planId.length > 5;
+}
+
+/**
+ * Validate phone number format
+ * @param {string} phone
+ * @returns {boolean}
+ */
+export function isValidPhone(phone) {
+  if (!phone || typeof phone !== 'string') return false;
+  const phoneRegex = /^[\d\s\-+()]{10,20}$/;
+  return phoneRegex.test(phone.trim());
+}
+
+/**
+ * Validate URL format
+ * @param {string} url
+ * @returns {boolean}
+ */
+export function isValidUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validate slug format
+ * @param {string} slug
+ * @returns {boolean}
+ */
+export function isValidSlug(slug) {
+  if (!slug || typeof slug !== 'string') return false;
+  const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  return slugRegex.test(slug);
+}
+
+/**
+ * Validate password strength
+ * @param {string} password
+ * @returns {{valid: boolean, message: string}}
+ */
+export function validatePassword(password) {
+  if (!password || typeof password !== 'string') {
+    return { valid: false, message: 'Password is required' };
+  }
+  
+  if (password.length < 8) {
+    return { valid: false, message: 'Password must be at least 8 characters' };
+  }
+  
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one uppercase letter' };
+  }
+  
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one lowercase letter' };
+  }
+  
+  if (!/\d/.test(password)) {
+    return { valid: false, message: 'Password must contain at least one number' };
+  }
+  
+  return { valid: true, message: 'Password is valid' };
+}
+
+/**
+ * Validate object ID
+ * @param {string|number} id
+ * @returns {boolean}
+ */
+export function isValidId(id) {
+  if (id === undefined || id === null) return false;
+  const num = Number(id);
+  return !isNaN(num) && num > 0;
+}
+
+/**
+ * Validate date string
+ * @param {string} dateStr
+ * @returns {boolean}
+ */
+export function isValidDate(dateStr) {
+  if (!dateStr) return false;
+  const date = new Date(dateStr);
+  return !isNaN(date.getTime());
+}
+
+/**
+ * Validate file type
+ * @param {string} filename
+ * @param {Array<string>} allowedTypes
+ * @returns {boolean}
+ */
+export function isValidFileType(filename, allowedTypes = []) {
+  if (!filename || !allowedTypes.length) return false;
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return allowedTypes.map(t => t.toLowerCase()).includes(ext);
+}
+
+/**
+ * Validate file size
+ * @param {number} size
+ * @param {number} maxSizeMB
+ * @returns {boolean}
+ */
+export function isValidFileSize(size, maxSizeMB = 10) {
+  const maxBytes = maxSizeMB * 1024 * 1024;
+  return size > 0 && size <= maxBytes;
+}
+
+/**
+ * Sanitize string input
+ * @param {string} input
+ * @param {number} maxLength
+ * @returns {string}
+ */
+export function sanitizeInput(input, maxLength = 1000) {
+  if (!input || typeof input !== 'string') return '';
+  return input.trim().slice(0, maxLength);
 }
