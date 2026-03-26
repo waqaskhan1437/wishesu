@@ -54,4 +54,4 @@ crons = ["*/5 * * * *", "0 2 * * *"]
 [vars]
 VERSION = "24"
 CANONICAL_HOST = "prankwish.com"
-ENABLE_NOJS_SSR = "true"
+ENABLE_NOJS_SSR = "false"
