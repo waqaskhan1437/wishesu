@@ -29,7 +29,8 @@ import { renderTermsFallbackPageHtml } from './utils/legal-pages.js';
 import { injectAnalyticsAndMeta } from './controllers/analytics.js';
 import { isAdminAuthed, createAdminSessionCookie, createLogoutCookie } from './utils/auth.js';
 
-import { noStoreHeaders, buildVersionedCacheKey } from './utils/cache-headers.js';
+import { noStoreHeaders } from './utils/cache-headers.js';
+import { buildVersionedCacheKey } from './utils/cache-keys.js';
 import { isLocalHostname, getCanonicalHostname, isInsecureRequest } from './utils/hostname-helpers.js';
 import { isEnabledFlag, isNoJsSsrEnabled } from './utils/feature-flags.js';
 import { isLikelyScannerPath, canLookupDynamicSlug, isKnownApiPath, isMalformedNestedSlug } from './utils/path-detection.js';
@@ -268,6 +269,18 @@ export default {
     const redirectPath = getCanonicalRedirectPath(path);
     if (redirectPath && !path.startsWith('/api/')) {
       return Response.redirect(`${url.origin}${redirectPath}${url.search}`, 301);
+    }
+
+    if (path === '/blog' && !path.endsWith('/')) {
+      return Response.redirect(`${url.origin}/blog/${url.search}`, 301);
+    }
+
+    if (path === '/forum' && !path.endsWith('/')) {
+      return Response.redirect(`${url.origin}/forum/${url.search}`, 301);
+    }
+
+    if (path === '/products' && !path.endsWith('/')) {
+      return Response.redirect(`${url.origin}/products/${url.search}`, 301);
     }
 
     if (path === '/robots.txt') {
