@@ -127,6 +127,10 @@ export function renderBlogArchiveCardsSsr(blogs = [], pagination = {}) {
   return `${styles}<div class="blog-cards-grid">${cardsHtml}</div>${paginationHtml}`;
 }
 
+export function renderBlogArchivePaginationSsr(pagination = {}) {
+  return renderPaginationSsr(pagination, { basePath: '/blog' });
+}
+
 export function renderEmbeddedBlogCards(blogs = []) {
   if (!Array.isArray(blogs) || blogs.length === 0) {
     return '<p style="text-align:center;color:#6b7280;padding:40px;background:white;border-radius:12px;">No blog posts found.</p>';

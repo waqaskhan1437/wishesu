@@ -104,3 +104,19 @@ export function rateLimitKey(req, endpoint) {
   const ip = getClientIp(req);
   return `ratelimit:${endpoint}:${ip}`;
 }
+
+export function requireAdmin(req, env) {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return { authorized: false, error: 'Authorization required' };
+  }
+  
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    if (env.ADMIN_API_TOKEN && token === env.ADMIN_API_TOKEN) {
+      return { authorized: true };
+    }
+  }
+  
+  return { authorized: false, error: 'Invalid authorization' };
+}
