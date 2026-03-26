@@ -7,50 +7,15 @@
   let mediaItems = [];
   let showAllMedia = false;
 
-  function toast(msg, ok = true) {
-    const el = document.getElementById('settings-toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.style.display = 'block';
-    el.style.background = ok ? '#10b981' : '#ef4444';
-    setTimeout(() => {
-      el.style.display = 'none';
-    }, 3000);
-  }
-
-  async function jfetch(url, opts = {}) {
-    const isFormData = opts.body instanceof FormData;
-    const headers = { ...(opts.headers || {}) };
-    if (!isFormData && !headers['Content-Type']) {
-      headers['Content-Type'] = 'application/json';
-    }
-
-    const res = await fetch(url, { ...opts, headers });
-    let data = {};
-    try {
-      data = await res.json();
-    } catch (_) {
-      data = {};
-    }
-
-    if (!res.ok) {
-      throw new Error(data.error || data.message || 'Request failed');
-    }
-    return data;
-  }
+  // Use shared utilities from dashboard-shared.js
+  const jfetch = AD.jfetch;
+  function toast(msg, ok) { AD.toast(msg, ok, 'settings-toast'); }
 
   function getPanel() {
     return document.getElementById('main-panel');
   }
 
-  function escapeHtml(value) {
-    return String(value || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
+  const escapeHtml = AD.escapeHtml;
 
   function formatBytes(bytes) {
     const n = Number(bytes || 0);

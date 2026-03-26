@@ -13,6 +13,24 @@
   --border: #e5e7eb;
   --radius: 12px;
   --radius-sm: 8px;
+
+  /* Admin color palette - used across dashboard modules */
+  --admin-blue: #3b82f6;
+  --admin-blue-hover: #2563eb;
+  --admin-red: #ef4444;
+  --admin-red-hover: #dc2626;
+  --admin-green: #10b981;
+  --admin-green-hover: #059669;
+  --admin-gray: #6b7280;
+  --admin-gray-dark: #374151;
+  --admin-gray-darker: #1f2937;
+  --admin-gray-light: #9ca3af;
+  --admin-border: #e5e7eb;
+  --admin-border-dark: #d1d5db;
+  --admin-bg-light: #f9fafb;
+  --admin-bg-card: #ffffff;
+  --admin-toast-success: #10b981;
+  --admin-toast-error: #ef4444;
 }
 
 body {

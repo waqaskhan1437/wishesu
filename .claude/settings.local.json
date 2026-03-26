@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for dir in . ./public ./public/admin ./public/blog ./public/css ./public/forum ./public/js ./public/js/addons ./public/js/admin ./public/js/product ./public/js/whop ./src ./src/config ./src/controllers ./src/middleware ./src/utils ./test)",
+      "Bash(do echo \"=== $dir ===\")",
+      "Read(//c/Users/waqas/Downloads/wishesu-main 00/wishesu-main/**)",
+      "Bash(done)"
+    ]
+  }
+}

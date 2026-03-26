@@ -169,6 +169,7 @@
   <script src="/js/api.js" defer></script>
   <script src="/js/product/addon-ui.js?v=29" defer></script>
   <script src="/js/product/seo-utils.js?v=29" defer></script>
+  <script src="/js/product/url-helpers.js?v=1" defer></script>
   <script src="/js/product/layout-main.js?v=29" defer></script>
   <script src="/js/product/layout-extra.js?v=31" defer></script>
   <script src="/js/product/checkout.js?v=29" defer></script>
@@ -177,6 +178,7 @@
   <!-- Non-critical runtime modules -->
   <script src="/js/universal-player.js" defer></script>
   <script src="/js/instant-upload.js" defer></script>
+  <script src="/js/shared-error-utils.js?v=1" defer></script>
   <script src="/js/payment-selector.js?v=29" defer></script>
   <script src="/js/coupon-widget.js" defer></script>
   <script src="/js/reviews-widget.js" defer></script>

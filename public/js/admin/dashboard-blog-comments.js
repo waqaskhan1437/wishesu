@@ -238,11 +238,7 @@
     }
   };
 
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
+  const escapeHtml = AD.escapeHtml;
 
   console.log('✅ Dashboard Blog Comments loaded');
 })(window.AdminDashboard);

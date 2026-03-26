@@ -11,39 +11,8 @@
   let cachedAddonEmail = '';
   let isCheckoutInProgress = false; // Prevent double clicks
 
-  function extractErrorMessage(value, fallback = 'Checkout failed') {
-    if (!value) return fallback;
-
-    if (typeof value === 'string') {
-      const msg = value.trim();
-      return msg || fallback;
-    }
-
-    if (value instanceof Error) {
-      return extractErrorMessage(value.message, fallback);
-    }
-
-    if (typeof value === 'object') {
-      const candidates = [value.error, value.message, value.detail, value.details, value.description];
-      for (const candidate of candidates) {
-        const msg = extractErrorMessage(candidate, '');
-        if (msg) return msg;
-      }
-      try {
-        const serialized = JSON.stringify(value);
-        if (serialized && serialized !== '{}' && serialized !== '[]') {
-          return serialized;
-        }
-      } catch (e) {}
-    }
-
-    try {
-      const msg = String(value).trim();
-      return msg || fallback;
-    } catch (e) {
-      return fallback;
-    }
-  }
+  // Use shared extractErrorMessage from shared-error-utils.js
+  const extractErrorMessage = window.extractErrorMessage;
 
   function normalizeAmount(value) {
     const num = Number(value);

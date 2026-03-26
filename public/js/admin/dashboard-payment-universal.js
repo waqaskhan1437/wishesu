@@ -601,13 +601,8 @@ function closeModal() {
     if (modal) modal.remove();
 }
 
-// Utility function to escape HTML
-function escapeHtml(text) {
-    if (typeof text !== 'string') return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+// Use shared escapeHtml from dashboard-shared.js
+const escapeHtml = window.AdminDashboard.escapeHtml;
 
 // Show message
 function showMessage(message, type = 'info') {

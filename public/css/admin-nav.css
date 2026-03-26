@@ -25,12 +25,12 @@
 .admin-header h1 {
   font-size: 2rem;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--admin-gray-darker);
   margin-bottom: 0.5rem;
 }
 
 .admin-subtitle {
-  color: #6b7280;
+  color: var(--admin-gray);
   font-size: 1.1rem;
   margin-bottom: 1rem;
 }
@@ -58,16 +58,16 @@
 }
 
 .admin-nav a:hover {
-  background: #3b82f6;
+  background: var(--admin-blue);
   color: white;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
 }
 
 .admin-nav a.active {
-  background: #3b82f6;
+  background: var(--admin-blue);
   color: white;
-  border-color: #3b82f6;
+  border-color: var(--admin-blue);
   box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
 }
 
@@ -121,7 +121,7 @@
 .section-title {
   font-size: 1.3rem;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--admin-gray-darker);
   margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
@@ -142,7 +142,7 @@
 .form-field label {
   display: block;
   font-weight: 600;
-  color: #374151;
+  color: var(--admin-gray-dark);
   margin-bottom: 0.5rem;
 }
 
@@ -161,7 +161,7 @@
 .form-field textarea:focus,
 .form-field select:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--admin-blue);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
@@ -182,13 +182,13 @@
 
 .field-group legend {
   font-weight: 600;
-  color: #374151;
+  color: var(--admin-gray-dark);
   padding: 0 0.5rem;
 }
 
 .field-note {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--admin-gray);
   margin-top: 0.5rem;
   font-style: italic;
 }
@@ -207,18 +207,18 @@
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: var(--admin-blue);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #2563eb;
+  background: var(--admin-blue-hover);
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
 }
 
 .btn-secondary {
-  background: #6b7280;
+  background: var(--admin-gray);
   color: white;
 }
 
@@ -229,23 +229,23 @@
 }
 
 .btn-danger {
-  background: #ef4444;
+  background: var(--admin-red);
   color: white;
 }
 
 .btn-danger:hover {
-  background: #dc2626;
+  background: var(--admin-red-hover);
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
 }
 
 .btn-success {
-  background: #10b981;
+  background: var(--admin-green);
   color: white;
 }
 
 .btn-success:hover {
-  background: #059669;
+  background: var(--admin-green-hover);
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
 }
@@ -265,7 +265,7 @@
   padding: 1rem;
   text-align: left;
   font-weight: 600;
-  color: #374151;
+  color: var(--admin-gray-dark);
   border-bottom: 2px solid #e5e7eb;
 }
 

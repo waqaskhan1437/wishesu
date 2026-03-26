@@ -13,49 +13,8 @@
   const WHOP_CHECKOUT_INTENT_KEY = 'whop_checkout_intent_v1';
   const CHECKOUT_INTENT_VERSION = 1;
 
-  function extractErrorMessage(value, fallback = 'Payment failed') {
-    if (!value) return fallback;
-
-    if (typeof value === 'string') {
-      const msg = value.trim();
-      return msg || fallback;
-    }
-
-    if (value instanceof Error) {
-      return extractErrorMessage(value.message, fallback);
-    }
-
-    if (typeof value === 'object') {
-      const candidates = [
-        value.error,
-        value.message,
-        value.detail,
-        value.details,
-        value.description,
-        value.reason,
-        value.statusText
-      ];
-
-      for (const candidate of candidates) {
-        const msg = extractErrorMessage(candidate, '');
-        if (msg) return msg;
-      }
-
-      try {
-        const serialized = JSON.stringify(value);
-        if (serialized && serialized !== '{}' && serialized !== '[]') {
-          return serialized;
-        }
-      } catch (e) {}
-    }
-
-    try {
-      const msg = String(value).trim();
-      return msg || fallback;
-    } catch (e) {
-      return fallback;
-    }
-  }
+  // Use shared extractErrorMessage from shared-error-utils.js
+  const extractErrorMessage = window.extractErrorMessage;
 
   function saveWhopCheckoutIntent(payload) {
     const intent = {

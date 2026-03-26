@@ -8,33 +8,8 @@
   let loaderPromise = null;
   let selectedMethodId = '';
 
-  function extractErrorMessage(value, fallback) {
-    if (!value) return fallback;
-    if (typeof value === 'string') {
-      const msg = value.trim();
-      return msg || fallback;
-    }
-    if (value instanceof Error) {
-      return extractErrorMessage(value.message, fallback);
-    }
-    if (typeof value === 'object') {
-      const fields = [value.error, value.message, value.detail, value.details, value.reason];
-      for (const field of fields) {
-        const msg = extractErrorMessage(field, '');
-        if (msg) return msg;
-      }
-      try {
-        const serialized = JSON.stringify(value);
-        if (serialized && serialized !== '{}' && serialized !== '[]') return serialized;
-      } catch (e) {}
-    }
-    try {
-      const msg = String(value).trim();
-      return msg || fallback;
-    } catch (e) {
-      return fallback;
-    }
-  }
+  // Use shared extractErrorMessage from shared-error-utils.js
+  const extractErrorMessage = window.extractErrorMessage;
 
   function setStatus(message, type) {
     const el = document.getElementById('checkout-status');

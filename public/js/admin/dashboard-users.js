@@ -506,12 +506,7 @@
     });
   }
 
-  function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
+  const escapeHtml = AD.escapeHtml;
 
   function debounce(func, wait) {
     let timeout;

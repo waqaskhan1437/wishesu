@@ -37,7 +37,7 @@
           return `
             <tr>
               <td><strong>#${b.id}</strong></td>
-              <td><img src="${b.thumbnail_url || 'https://via.placeholder.com/60x40?text=No+Image'}" style="width:60px;height:40px;object-fit:cover;border-radius:4px;"></td>
+              <td><img src="${b.thumbnail_url || AD.PLACEHOLDER.THUMB}" style="width:60px;height:40px;object-fit:cover;border-radius:4px;"></td>
               <td>${b.title}</td>
               <td><span class="${statusClass}">${b.status}</span></td>
               <td>${date}</td>

@@ -11,23 +11,9 @@
 
 (function(AD) {
   
-  function toast(msg, ok=true) {
-    const el = document.getElementById('seo-toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.style.display = 'block';
-    el.style.background = ok ? '#10b981' : '#ef4444';
-    setTimeout(() => el.style.display = 'none', 3000);
-  }
-
-  async function jfetch(url, opts={}) {
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) },
-      ...opts
-    });
-    if (!res.ok) throw new Error('Request failed');
-    return res.json();
-  }
+  // Use shared utilities from dashboard-shared.js
+  const jfetch = AD.jfetch;
+  function toast(msg, ok) { AD.toast(msg, ok, 'seo-toast'); }
 
   async function loadSEO(panel) {
     panel.innerHTML = `

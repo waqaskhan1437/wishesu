@@ -469,44 +469,30 @@ export async function handleUniversalWebhook(env, payload, headers, rawBody) {
     if (!gateway) {
       console.log('No matching gateway found for webhook:', payload);
       // Could not identify gateway - return generic success to avoid webhook failures
-      return new Response(JSON.stringify({ received: true, gateway: 'unknown' }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return json({ received: true, gateway: 'unknown' });
     }
-    
-    console.log(`Processing webhook for gateway: ${gateway.name}`, { 
+
+    console.log(`Processing webhook for gateway: ${gateway.name}`, {
       gateway_type: gateway.gateway_type,
       event_type: payload.type || payload.event_type
     });
-    
+
     // Verify webhook signature if secret is configured
     if (gateway.webhook_secret && gateway.webhook_secret.trim()) {
       const isValid = await verifyWebhookSignature(rawBody, headers, gateway.webhook_secret);
       if (!isValid) {
         console.error(`Invalid signature for gateway: ${gateway.name}`);
-        return new Response(JSON.stringify({ error: 'Invalid signature' }), { 
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return json({ error: 'Invalid signature' }, 401);
       }
     }
-    
+
     // Process the webhook event
     await processPaymentEvent(env, gateway, payload, headers);
-    
-    return new Response(JSON.stringify({ 
-      received: true, 
-      gateway: gateway.name,
-      processed: true
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+
+    return json({ received: true, gateway: gateway.name, processed: true });
   } catch (e) {
     console.error('Universal webhook error:', e);
-    return new Response(JSON.stringify({ error: e.message }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return json({ error: e.message }, 500);
   }
 }
 
@@ -861,12 +847,10 @@ function processWhopWebhook(payload, headers) {
  * API test endpoint for universal payment system
  */
 export async function handleUniversalPaymentAPI(env) {
-  return new Response(JSON.stringify({ 
-    success: true, 
+  return json({
+    success: true,
     message: 'Universal Payment Gateway System is operational',
     timestamp: new Date().toISOString()
-  }), {
-    headers: { 'Content-Type': 'application/json' }
   });
 }
 

@@ -17,41 +17,11 @@
     return key || 'detected';
   }
 
-  function escapeHtml(value) {
-    return String(value || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
+  const escapeHtml = AD.escapeHtml;
 
-  function toast(msg, ok = true) {
-    const el = document.getElementById('seo-rules-toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.style.display = 'block';
-    el.style.background = ok ? '#059669' : '#dc2626';
-    setTimeout(() => {
-      el.style.display = 'none';
-    }, 3000);
-  }
-
-  async function jfetch(url, opts = {}) {
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
-      ...opts
-    });
-    if (!res.ok) {
-      let msg = 'Request failed';
-      try {
-        const data = await res.json();
-        if (data && data.error) msg = data.error;
-      } catch (_) {}
-      throw new Error(msg);
-    }
-    return res.json();
-  }
+  // Use shared utilities from dashboard-shared.js
+  const jfetch = AD.jfetch;
+  function toast(msg, ok) { AD.toast(msg, ok, 'seo-rules-toast'); }
 
   function normalizeMode(value) {
     return String(value || '').toLowerCase() === 'index' ? 'index' : 'noindex';

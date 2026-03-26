@@ -6,42 +6,12 @@
  */
 
 (function(AD) {
-  function escapeHtml(value) {
-    return String(value || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
+  const escapeHtml = AD.escapeHtml;
+  const escapeAttr = AD.escapeHtml;
 
-  function escapeAttr(value) {
-    return escapeHtml(value);
-  }
-
-  function toast(msg, ok = true) {
-    const el = document.getElementById('emails-toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.style.display = 'block';
-    el.style.background = ok ? '#10b981' : '#ef4444';
-    setTimeout(() => {
-      el.style.display = 'none';
-    }, 3000);
-  }
-
-  async function jfetch(url, opts = {}) {
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
-      ...opts
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Request failed');
-    }
-    return data;
-  }
+  // Use shared utilities from dashboard-shared.js
+  const jfetch = AD.jfetch;
+  function toast(msg, ok) { AD.toast(msg, ok, 'emails-toast'); }
 
   const TEMPLATE_DEFINITIONS = [
     {

@@ -34,7 +34,7 @@
         document.getElementById('products-tbody').innerHTML = AD.products.map(p => `
           <tr>
             <td><strong>#${p.id}</strong></td>
-            <td><img src="${p.thumbnail_url || 'https://via.placeholder.com/60x40'}" style="width:60px;height:40px;object-fit:cover;border-radius:4px;"></td>
+            <td><img src="${p.thumbnail_url || AD.PLACEHOLDER.THUMB}" style="width:60px;height:40px;object-fit:cover;border-radius:4px;"></td>
             <td>${p.title}</td>
             <td><strong>$${p.sale_price || p.normal_price}</strong></td>
             <td>

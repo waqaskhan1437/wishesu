@@ -12,28 +12,9 @@
 
 (function(AD) {
   
-  function toast(msg, ok=true) {
-    const el = document.getElementById('backup-toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.style.display = 'block';
-    el.style.background = ok ? '#10b981' : '#ef4444';
-    setTimeout(() => el.style.display = 'none', 3000);
-  }
-
-  async function jfetch(url, opts={}) {
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) },
-      ...opts
-    });
-    let data;
-    try { data = await res.json(); } catch { data = null; }
-    if (!res.ok) {
-      const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `Request failed (${res.status})`;
-      throw new Error(msg);
-    }
-    return data;
-  }
+  // Use shared utilities from dashboard-shared.js
+  const jfetch = AD.jfetch;
+  function toast(msg, ok) { AD.toast(msg, ok, 'backup-toast'); }
 
   async function loadBackup(panel) {
     panel.innerHTML = `
