@@ -5,7 +5,7 @@ var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
 
-// .wrangler/tmp/bundle-GLwZSo/checked-fetch.js
+// .wrangler/tmp/bundle-O1Fiju/checked-fetch.js
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
     (typeof request === "string" ? new Request(request, init) : request).url
@@ -23,7 +23,7 @@ function checkURL(request, init) {
 }
 var urls;
 var init_checked_fetch = __esm({
-  ".wrangler/tmp/bundle-GLwZSo/checked-fetch.js"() {
+  ".wrangler/tmp/bundle-O1Fiju/checked-fetch.js"() {
     urls = /* @__PURE__ */ new Set();
     __name(checkURL, "checkURL");
     globalThis.fetch = new Proxy(globalThis.fetch, {
@@ -92,11 +92,11 @@ var init_component_ssr = __esm({
   }
 });
 
-// .wrangler/tmp/bundle-GLwZSo/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-O1Fiju/middleware-loader.entry.ts
 init_checked_fetch();
 init_modules_watch_stub();
 
-// .wrangler/tmp/bundle-GLwZSo/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-O1Fiju/middleware-insertion-facade.js
 init_checked_fetch();
 init_modules_watch_stub();
 
@@ -13870,7 +13870,7 @@ var src_default = {
     }
     try {
       if (env.ENABLE_NOJS_SSR === "true" || env.ENABLE_NOJS_SSR === "1") {
-        const nojsResult = await handleNoJsRoutes(request, env);
+        const nojsResult = await handleNoJsRoutes(request, env, url, path, method);
         if (nojsResult) return nojsResult;
       }
     } catch (e) {
@@ -13974,7 +13974,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-GLwZSo/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-O1Fiju/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -14008,7 +14008,7 @@ function __facade_invoke__(request, env, ctx2, dispatch2, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-GLwZSo/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-O1Fiju/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

@@ -253,7 +253,7 @@ export default {
 
     try {
       if (env.ENABLE_NOJS_SSR === 'true' || env.ENABLE_NOJS_SSR === '1') {
-        const nojsResult = await handleNoJsRoutes(request, env);
+        const nojsResult = await handleNoJsRoutes(request, env, url, path, method);
         if (nojsResult) return nojsResult;
       }
     } catch (e) {
@@ -305,7 +305,7 @@ export default {
     }
 
     if (path === '/admin/login') {
-      const loginPage = await renderNoJsAdminLoginPage(env);
+      const loginPage = await renderNoJsAdminLoginPage(url);
       return new Response(loginPage, { headers: { 'Content-Type': 'text/html' } });
     }
 

@@ -1,5 +1,6 @@
 import { canonicalProductPath, escapeHtml, slugifyStr } from '../utils/formatting.js';
 import { buildPublicProductStatusWhere } from '../utils/product-visibility.js';
+import { createAdminSessionCookie } from '../utils/auth.js';
 import {
   updateOrder,
   deliverOrder,
@@ -1986,6 +1987,25 @@ export function renderNoJsAdminLoginPage(url) {
 }
 
 export async function handleNoJsRoutes(req, env, url, path, method) {
+  // Handle admin login POST
+  if (method === 'POST' && path === '/admin/login') {
+    const formData = await req.formData();
+    const email = formData.get('email') || '';
+    const password = formData.get('password') || '';
+    
+    const adminEmail = env.ADMIN_EMAIL || 'admin@prankwish.com';
+    const adminPassword = env.ADMIN_PASSWORD || 'admin123';
+    
+    if (email === adminEmail && password === adminPassword) {
+      const cookie = await createAdminSessionCookie(env);
+      return Response.redirect(new URL('/admin', url.origin).toString(), 302, {
+        headers: cookie ? { 'Set-Cookie': cookie } : {}
+      });
+    }
+    
+    return Response.redirect(new URL('/admin/login?err=Invalid credentials', url.origin).toString(), 302);
+  }
+
   // Public storefront routes (Level 1)
   if (method === 'GET' && (path === '/' || path === '/index.html')) {
     return renderHome(env, url);
