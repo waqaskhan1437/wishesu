@@ -5,6 +5,33 @@ import worker, { getCanonicalRedirectPath, shouldServeCanonicalAliasDirectly } f
 import { isHeadCompatibleApiPath, routeApiRequest } from '../src/router.js';
 import { createAdminSessionCookie } from '../src/utils/auth.js';
 
+function createDbEnv(overrides = {}) {
+  return {
+    DB: {
+      prepare() {
+        return {
+          bind() {
+            return this;
+          },
+          async first() {
+            return null;
+          },
+          async all() {
+            return { results: [] };
+          },
+          async run() {
+            return { success: true };
+          }
+        };
+      },
+      async batch() {
+        return [];
+      }
+    },
+    ...overrides
+  };
+}
+
 test('direct aliases bypass canonical redirects', () => {
   assert.equal(shouldServeCanonicalAliasDirectly('/index.html'), true);
   assert.equal(shouldServeCanonicalAliasDirectly('/home'), true);
@@ -78,6 +105,32 @@ test('archive credentials endpoint works for authenticated admin', async () => {
   assert.equal(body.accessKey, env.ARCHIVE_ACCESS_KEY);
   assert.equal(body.secretKey, env.ARCHIVE_SECRET_KEY);
   assert.equal(body.bucket, 'wishesu_uploads');
+});
+
+test('orders list endpoint requires admin auth', async () => {
+  const request = new Request('https://example.com/api/orders');
+  const url = new URL(request.url);
+  const response = await routeApiRequest(request, createDbEnv(), url, url.pathname, request.method);
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: 'Unauthorized' });
+});
+
+test('manual order creation requires admin auth', async () => {
+  const request = new Request('https://example.com/api/order/create', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      manualOrder: true,
+      productId: 1,
+      email: 'buyer@example.com'
+    })
+  });
+  const url = new URL(request.url);
+  const response = await routeApiRequest(request, createDbEnv(), url, url.pathname, request.method);
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: 'Unauthorized' });
 });
 
 test('terms fallback page renders without redirect', async () => {

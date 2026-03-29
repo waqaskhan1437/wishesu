@@ -865,6 +865,8 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   // ----- ORDERS -----
   if (method === 'GET' && path === '/api/orders') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return getOrders(env);
   }
 
@@ -873,6 +875,8 @@ export async function routeApiRequest(req, env, url, path, method) {
     // Only use createManualOrder if explicitly marked as manual order from admin
     // Regular checkout orders have email+productId but should use createOrder
     if (body.manualOrder === true) {
+      const adminGate = await requireAdminApi(req, env);
+      if (adminGate) return adminGate;
       return createManualOrder(env, body);
     }
     return createOrder(env, body);
@@ -884,6 +888,8 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'DELETE' && path === '/api/order/delete') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const id = url.searchParams.get('id');
     return deleteOrder(env, id);
   }
@@ -893,11 +899,15 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/order/update') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json();
     return updateOrder(env, body);
   }
 
   if (method === 'POST' && path === '/api/order/deliver') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json();
     return deliverOrder(env, body);
   }
@@ -913,6 +923,8 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/order/archive-link') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json();
     return updateArchiveLink(env, body);
   }
@@ -923,6 +935,8 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/order/upload-encrypted-file') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return uploadEncryptedFile(env, req, url);
   }
 
