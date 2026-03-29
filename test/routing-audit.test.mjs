@@ -114,6 +114,25 @@ test('HEAD on safe API path returns GET metadata without body', async () => {
   assert.equal(await response.text(), '');
 });
 
+test('OPTIONS preflight allows Authorization and X-API-Key headers', async () => {
+  const request = new Request('https://example.com/api/orders', {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'https://app.example.com',
+      'Access-Control-Request-Method': 'GET',
+      'Access-Control-Request-Headers': 'Authorization, X-API-Key, Content-Type'
+    }
+  });
+  const response = await worker.fetch(request, {}, { waitUntil() {} });
+  const allowedHeaders = response.headers.get('access-control-allow-headers') || '';
+
+  assert.equal(response.status, 200);
+  assert.match(allowedHeaders, /Authorization/i);
+  assert.match(allowedHeaders, /X-API-Key/i);
+  assert.match(allowedHeaders, /Content-Type/i);
+  assert.equal(response.headers.get('access-control-max-age'), '86400');
+});
+
 test('archive credentials endpoint requires admin auth', async () => {
   const request = new Request('https://example.com/api/upload/archive-credentials', {
     method: 'POST'
