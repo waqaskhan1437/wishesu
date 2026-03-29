@@ -8,14 +8,6 @@ import { VERSION } from '../config/constants.js';
 import { getMimeTypeFromFilename, resolveContentType } from '../utils/upload-helper.js';
 import { normalizeArchiveMetaValue } from '../utils/formatting.js';
 
-// Reliable Cobalt Instances List (Fallback Pool) for Auto-Healing YouTube Downloader
-const FALLBACK_INSTANCES = [
-  'https://api.cobalt.tools',      // Official
-  'https://cobalt.sipnet.net',     // Community 1
-  'https://cobalt.slpy.one',       // Community 2
-  'https://api.wuk.sh'             // Community 3
-];
-
 // Flag to track if version purge check was done
 let purgeVersionChecked = false;
 

@@ -268,7 +268,6 @@ import {
 
 // API Auth middleware
 import { requireAdminOrApiKey } from './middleware/api-auth.js';
-import { protectEndpoint, DEFAULT_PERMISSIONS } from './utils/api-protector.js';
 
 const HEAD_SAFE_EXACT_API_PATHS = new Set([
   '/api/health',
