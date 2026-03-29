@@ -147,52 +147,36 @@
     setCheckoutButtonState(true);
 
     try {
-      // Get credentials from worker (lightweight call)
-      const credResponse = await fetch('/api/upload/archive-credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      });
-
-      if (!credResponse.ok) throw new Error('Failed to get upload credentials');
-
-      const creds = await credResponse.json();
-      if (!creds.success) throw new Error(creds.error || 'Credentials error');
-
-      // Generate unique item ID
+      const sessionId = 'upload_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
       const timestamp = Date.now();
       const randomStr = Math.random().toString(36).substr(2, 9);
-      const itemId = `wishesu_${timestamp}_${randomStr}`;
+      const itemId = `prankwish_${timestamp}_${randomStr}`;
       const safeFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
 
-      // Direct upload to Archive.org (streaming - zero worker CPU)
-      const archiveUrl = `https://s3.us.archive.org/${itemId}/${safeFilename}`;
+      const uploadUrl = `/api/upload/customer-file?sessionId=${encodeURIComponent(sessionId)}&itemId=${encodeURIComponent(itemId)}&filename=${encodeURIComponent(safeFilename)}&originalFilename=${encodeURIComponent(file.name)}`;
 
-      const uploadResponse = await fetch(archiveUrl, {
-        method: 'PUT',
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
         headers: {
-          'Authorization': `LOW ${creds.accessKey}:${creds.secretKey}`,
-          'Content-Type': file.type || 'video/mp4',
-          'x-archive-auto-make-bucket': '1',
-          'x-archive-meta-mediatype': 'movies',
-          'x-archive-meta-collection': 'opensource_movies',
-          'x-archive-meta-title': file.name,
-          'x-archive-meta-description': 'Video uploaded via Prankwish'
+          'Content-Type': file.type || 'video/mp4'
         },
         body: file
       });
 
       if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text().catch(() => '');
-        throw new Error(`Archive upload failed: ${uploadResponse.status}`);
+        const err = await uploadResponse.json().catch(() => ({}));
+        throw new Error(err.error || `Archive upload failed: ${uploadResponse.status}`);
       }
 
-      const finalUrl = `https://archive.org/download/${itemId}/${safeFilename}`;
+      const data = await uploadResponse.json();
+      if (!data.success || !data.url) {
+        throw new Error(data.error || 'Archive upload failed');
+      }
 
       uploadQueue.set(inputId, {
         fileName: file.name,
         status: 'uploaded',
-        url: finalUrl,
+        url: data.url,
         itemId: itemId,
         storage: 'archive'
       });

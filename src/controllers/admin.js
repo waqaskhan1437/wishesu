@@ -550,6 +550,11 @@ export async function uploadCustomerFile(env, req, url) {
       return json({ error: 'Archive.org credentials not configured' }, 500);
     }
 
+    const validationError = await validateUploadRequest(env, req, url);
+    if (validationError) {
+      return validationError;
+    }
+
     const itemId = (url.searchParams.get('itemId') || '').replace(/[^a-zA-Z0-9_.-]/g, '-');
     const filename = (url.searchParams.get('filename') || '').replace(/[^a-zA-Z0-9_.-]/g, '-');
     const originalFilename = url.searchParams.get('originalFilename');
@@ -582,7 +587,7 @@ export async function uploadCustomerFile(env, req, url) {
     }
 
     // Detect content type
-    const contentType = resolveContentType(filename, req.headers.get('content-type'));
+    const contentType = resolveContentType(req, filename);
     const isVideoUpload = contentType.startsWith('video/');
 
     // Get order details for metadata

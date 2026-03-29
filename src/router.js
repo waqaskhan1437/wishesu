@@ -170,6 +170,7 @@ import {
   getWhopSettings,
   saveWhopSettings,
   getR2File,
+  uploadCustomerFile,
   uploadEncryptedFile,
   uploadTempFile,
   getArchiveCredentials,
@@ -498,6 +499,10 @@ export async function routeApiRequest(req, env, url, path, method) {
   // ----- FILE UPLOAD ROUTES (no DB required) -----
   if (method === 'POST' && path === '/api/upload/temp-file') {
     return uploadTempFile(env, req, url);
+  }
+
+  if (method === 'POST' && path === '/api/upload/customer-file') {
+    return uploadCustomerFile(env, req, url);
   }
 
   // Archive.org credentials for direct browser upload (Zero CPU)

@@ -167,6 +167,37 @@ test('archive credentials endpoint works for authenticated admin', async () => {
   assert.equal(body.bucket, 'wishesu_uploads');
 });
 
+test('customer upload route stays public without exposing archive credentials', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('', { status: 200 });
+
+  try {
+    const env = createDbEnv({
+      ARCHIVE_ACCESS_KEY: 'ARCHIVE_ACCESS_PUBLIC',
+      ARCHIVE_SECRET_KEY: 'ARCHIVE_SECRET_PUBLIC'
+    });
+    const response = await requestRoute(
+      'POST',
+      'https://example.com/api/upload/customer-file?sessionId=upload_123&itemId=item_123&filename=clip.mp4&originalFilename=clip.mp4',
+      env,
+      {
+        headers: {
+          'content-type': 'video/mp4',
+          'content-length': '3'
+        },
+        body: new Uint8Array([1, 2, 3])
+      }
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.success, true);
+    assert.equal(body.url, 'https://archive.org/download/item_123/clip.mp4');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('orders list endpoint requires admin auth', async () => {
   const request = new Request('https://example.com/api/orders');
   const url = new URL(request.url);
