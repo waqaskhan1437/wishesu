@@ -4602,9 +4602,10 @@ if (method === 'GET' || method === 'HEAD') {
                 // ignore SEO injection errors
               }
 
+              const headers = applySecurityHeadersToHeaders(new Headers(responseHeaders), req);
               return new Response(html, {
                 status: 200,
-                headers: responseHeaders
+                headers
               });
             }
           } catch (e) {
