@@ -177,7 +177,7 @@
           'x-archive-meta-mediatype': 'movies',
           'x-archive-meta-collection': 'opensource_movies',
           'x-archive-meta-title': file.name,
-          'x-archive-meta-description': 'Video uploaded via WishesU'
+          'x-archive-meta-description': 'Video uploaded via Prankwish'
         },
         body: file
       });

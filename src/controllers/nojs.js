@@ -111,7 +111,7 @@ const NOJS_RESERVED_PUBLIC_SLUGS = new Set([
 ]);
 
 function renderLayout(opts = {}) {
-  const title = escapeHtml(opts.title || 'WishVideo');
+  const title = escapeHtml(opts.title || 'Prankwish');
   const description = escapeHtml(opts.description || 'No-JS server-rendered experience');
   const nav = opts.admin
     ? `
@@ -221,7 +221,7 @@ function renderLayout(opts = {}) {
 <body>
   <header class="top">
     <div class="wrap">
-      <a class="brand" href="${opts.admin ? '/admin' : '/'}">WishVideo No-JS</a>
+      <a class="brand" href="${opts.admin ? '/admin' : '/'}">Prankwish No-JS</a>
       ${nav}
     </div>
   </header>
@@ -400,7 +400,7 @@ async function renderStorefront(env, url, opts = {}) {
   `;
 
   return htmlResponse(renderLayout({
-    title: page?.title || opts.title || 'WishVideo Store',
+    title: page?.title || opts.title || 'Prankwish Store',
     description: page?.meta_description || opts.description || 'Server-rendered storefront',
     content
   }));
@@ -510,7 +510,7 @@ async function createGatewayCheckoutRedirect(env, url, opts = {}) {
 async function renderHome(env, url) {
   return renderStorefront(env, url, {
     pageType: 'home',
-    title: 'WishVideo Store',
+    title: 'Prankwish Store',
     description: 'Server-rendered home page',
     heading: 'Server-rendered Storefront',
     introText: 'This storefront is rendered fully on server with plain HTML forms and no client JS.'

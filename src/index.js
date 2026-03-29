@@ -1052,9 +1052,79 @@ function replaceLegacyBrandTokens(text, siteTitle) {
     .replace(/\bWishesU\b/gi, siteTitle);
 }
 
+const DEFAULT_SITE_TITLE = 'Prankwish';
+const DEFAULT_SITE_DESCRIPTION = 'Personalized prank video greetings, funny wishes, and surprise digital gifts from Prankwish.';
+
 function resolveFallbackSiteTitle(urlObj) {
   const host = String(urlObj?.hostname || '').replace(/^www\./i, '').trim();
-  return host || 'prankwish.com';
+  if (!host) return DEFAULT_SITE_TITLE;
+  if (host.includes('prankwish')) return DEFAULT_SITE_TITLE;
+  return host;
+}
+
+function resolveSiteDescription(seoSettings) {
+  const configured = String(seoSettings?.site_description || '').trim();
+  return configured || DEFAULT_SITE_DESCRIPTION;
+}
+
+function buildSiteAwareTitle(currentTitle, siteTitle) {
+  const safeSiteTitle = String(siteTitle || '').trim();
+  const rewritten = replaceLegacyBrandTokens(String(currentTitle || '').trim(), safeSiteTitle).trim();
+
+  if (!rewritten) return safeSiteTitle;
+  if (!safeSiteTitle) return rewritten;
+  if (rewritten.toLowerCase() === safeSiteTitle.toLowerCase()) return safeSiteTitle;
+
+  const normalized = rewritten.toLowerCase();
+  if (normalized === 'home' || normalized === 'loading...' || normalized === 'loading product...') {
+    return safeSiteTitle;
+  }
+
+  if (normalized.includes(safeSiteTitle.toLowerCase())) {
+    return rewritten;
+  }
+
+  if (/^(products?|blog|forum|terms of service|privacy policy|contact)$/i.test(rewritten)) {
+    return `${rewritten} | ${safeSiteTitle}`;
+  }
+
+  return rewritten;
+}
+
+function extractHtmlTitle(html) {
+  const match = String(html || '').match(/<title>([\s\S]*?)<\/title>/i);
+  return match ? String(match[1] || '').trim() : '';
+}
+
+function shouldReplaceSeoMetaContent(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === 'loading...' ||
+    normalized === 'home' ||
+    normalized === 'custom personalized video greetings from africa.' ||
+    normalized.includes('wishvideo') ||
+    normalized.includes('wishesu')
+  );
+}
+
+function upsertMetaTag(html, type, name, content, { alwaysReplace = false } = {}) {
+  if (!content) return html;
+  const attr = type === 'property' ? 'property' : 'name';
+  const escapedContent = escapeHtmlText(content);
+  const regex = new RegExp(`<meta\\s+${attr}=["']${name}["'][^>]*content=["']([^"']*)["'][^>]*>`, 'i');
+  const tag = `<meta ${attr}="${name}" content="${escapedContent}">`;
+
+  if (regex.test(html)) {
+    return html.replace(regex, (full, currentContent) => {
+      if (alwaysReplace || shouldReplaceSeoMetaContent(currentContent)) {
+        return tag;
+      }
+      return full;
+    });
+  }
+
+  return html.replace(/<\/head>/i, `${tag}\n</head>`);
 }
 
 async function getSeoSettingsObject(env) {
@@ -1082,9 +1152,8 @@ function applySiteTitleToHtml(html, siteTitle) {
   if (!html || !siteTitle) return html;
   const safeSiteTitle = escapeHtmlText(siteTitle);
   return html.replace(/<title>([\s\S]*?)<\/title>/i, (match, currentTitle) => {
-    const rewritten = replaceLegacyBrandTokens(currentTitle, safeSiteTitle);
-    if (rewritten === currentTitle) return match;
-    return `<title>${rewritten}</title>`;
+    const rewritten = buildSiteAwareTitle(currentTitle, safeSiteTitle);
+    return `<title>${escapeHtmlText(rewritten)}</title>`;
   });
 }
 
@@ -1575,7 +1644,13 @@ async function getSeoForRequest(env, req, opts = {}) {
     }
   }
 
-  return { robots, canonical, siteTitle };
+  return {
+    robots,
+    canonical,
+    siteTitle,
+    siteDescription: resolveSiteDescription(seoSettings),
+    ogImage: String(seoSettings?.og_image || '').trim()
+  };
 }
 
 /**
@@ -1587,7 +1662,7 @@ async function getSeoForRequest(env, req, opts = {}) {
  * @param {string} canonical Canonical URL to set, optional
  * @returns {string} Modified HTML with SEO tags injected
  */
-function applySeoToHtml(html, robots, canonical) {
+function applySeoToHtml(html, robots, canonical, meta = {}) {
   if (!html) return html;
   let out = String(html);
   if (!/<head[\s>]/i.test(out)) {
@@ -1633,6 +1708,26 @@ function applySeoToHtml(html, robots, canonical) {
     const faviconTags = `<link rel="icon" type="image/svg+xml" href="/favicon.svg">\n<link rel="icon" href="/favicon.ico" sizes="any">`;
     out = out.replace(/<\/head>/i, `${faviconTags}\n</head>`);
   }
+
+  const effectiveTitle = buildSiteAwareTitle(extractHtmlTitle(out) || meta.siteTitle || '', meta.siteTitle || '');
+  const description = String(meta.siteDescription || '').trim();
+  const ogImage = String(meta.ogImage || '').trim();
+  const siteTitle = String(meta.siteTitle || '').trim();
+
+  out = upsertMetaTag(out, 'name', 'description', description);
+  out = upsertMetaTag(out, 'property', 'og:title', effectiveTitle);
+  out = upsertMetaTag(out, 'property', 'og:description', description);
+  out = upsertMetaTag(out, 'property', 'og:url', canonical);
+  out = upsertMetaTag(out, 'property', 'og:site_name', siteTitle || effectiveTitle, { alwaysReplace: true });
+  out = upsertMetaTag(out, 'name', 'twitter:card', 'summary_large_image', { alwaysReplace: true });
+  out = upsertMetaTag(out, 'name', 'twitter:title', effectiveTitle);
+  out = upsertMetaTag(out, 'name', 'twitter:description', description);
+
+  if (ogImage) {
+    out = upsertMetaTag(out, 'property', 'og:image', ogImage);
+    out = upsertMetaTag(out, 'name', 'twitter:image', ogImage);
+  }
+
   return out;
 }
 
@@ -2452,7 +2547,7 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${blog.seo_title || blog.title} - WishesU</title>
+  <title>${blog.seo_title || blog.title} - ${DEFAULT_SITE_TITLE}</title>
   <meta name="description" content="${safeDesc}">
   <meta name="keywords" content="${blog.seo_keywords || ''}">
   <meta property="og:title" content="${safeTitle}">
@@ -3052,7 +3147,7 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${safeTitle} - Forum - WishesU</title>
+  <title>${safeTitle} - Forum - ${DEFAULT_SITE_TITLE}</title>
   <meta name="description" content="${safeTitle}">
   <link rel="stylesheet" href="/css/style.css">
   <style>
@@ -4041,7 +4136,7 @@ if (method === 'GET' || method === 'HEAD') {
               const previousBlogs = prevResult.results || [];
               const comments = commentsResult.results || [];
               const htmlRaw = generateBlogPostHTML(blog, previousBlogs, comments);
-              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical, seo);
               html = applySiteTitleToHtml(html, seo.siteTitle);
 
               // Fix 7: Inject BlogPosting JSON-LD schema
@@ -4193,7 +4288,7 @@ if (method === 'GET' || method === 'HEAD') {
               };
               
               const htmlRaw = generateForumQuestionHTML(question, replies, sidebar);
-              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical);
+              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical, seo);
               html = applySiteTitleToHtml(html, seo.siteTitle);
 
               // Fix 8: Inject QAPage JSON-LD schema
@@ -4338,7 +4433,7 @@ if (method === 'GET' || method === 'HEAD') {
                 // Apply SEO tags if available.
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
-                  html = applySeoToHtml(html, seo.robots, seo.canonical);
+                  html = applySeoToHtml(html, seo.robots, seo.canonical, seo);
                   html = applySiteTitleToHtml(html, seo.siteTitle);
                 } catch (e) {}
                 // Inject analytics and verification tags on dynamic pages
@@ -4376,7 +4471,7 @@ if (method === 'GET' || method === 'HEAD') {
                 // Apply SEO
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
-                  html = applySeoToHtml(html, seo.robots, seo.canonical);
+                  html = applySeoToHtml(html, seo.robots, seo.canonical, seo);
                   html = applySiteTitleToHtml(html, seo.siteTitle);
                 } catch (e) {}
                 // Inject analytics and verification tags on dynamic pages
@@ -4409,14 +4504,18 @@ if (method === 'GET' || method === 'HEAD') {
         let robots = 'index, follow';
         let canonical = new URL('/terms', req.url).toString();
         let siteTitle = '';
+        let siteDescription = DEFAULT_SITE_DESCRIPTION;
+        let ogImage = '';
         try {
           const seo = await getSeoForRequest(env, req, { path: '/terms' });
           robots = seo.robots || robots;
           canonical = seo.canonical || canonical;
           siteTitle = seo.siteTitle || '';
+          siteDescription = seo.siteDescription || siteDescription;
+          ogImage = seo.ogImage || '';
         } catch (_) {}
-        html = applySeoToHtml(html, robots, canonical);
         html = applySiteTitleToHtml(html, siteTitle);
+        html = applySeoToHtml(html, robots, canonical, { siteTitle, siteDescription, ogImage });
         html = await applyGlobalComponentsSsr(env, html, '/terms');
         try {
           html = await injectAnalyticsAndMeta(env, html);
@@ -4491,7 +4590,7 @@ if (method === 'GET' || method === 'HEAD') {
               html = await applyGlobalComponentsSsr(env, html, path);
               try {
                 const seo = await getSeoForRequest(env, req, { path: normalizedPath });
-                html = applySeoToHtml(html, seo.robots, seo.canonical);
+                html = applySeoToHtml(html, seo.robots, seo.canonical, seo);
                 html = applySiteTitleToHtml(html, seo.siteTitle);
                 headers.set('X-Robots-Tag', seo.robots);
                 const noindexTags = await getNoindexMetaTags(env, {
@@ -4566,7 +4665,7 @@ if (method === 'GET' || method === 'HEAD') {
               };
               try {
                 const seo = await getSeoForRequest(env, req, { path });
-                html = applySeoToHtml(html, seo.robots, seo.canonical);
+                html = applySeoToHtml(html, seo.robots, seo.canonical, seo);
                 html = applySiteTitleToHtml(html, seo.siteTitle);
                 responseHeaders['X-Robots-Tag'] = seo.robots;
                 // Add noindex tags if needed
@@ -4592,7 +4691,7 @@ if (method === 'GET' || method === 'HEAD') {
                       seoSettings = (parsed && parsed.settings) || {};
                     }
                     if (!seoSettings.site_url) seoSettings.site_url = url.origin;
-                    if (!seoSettings.site_title) seoSettings.site_title = 'WishVideo';
+                    if (!seoSettings.site_title) seoSettings.site_title = DEFAULT_SITE_TITLE;
                     const orgSchema = generateOrganizationSchema(seoSettings);
                     const siteSchema = generateWebSiteSchema(seoSettings);
                     html = html.replace(/<\/head>/i, `<script type="application/ld+json">${orgSchema}</script>\n<script type="application/ld+json">${siteSchema}</script>\n</head>`);
@@ -5038,7 +5137,7 @@ if (method === 'GET' || method === 'HEAD') {
                   const safeDesc = (product.seo_description || product.description || '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
                   const safeKeywords = (product.seo_keywords || '').replace(/"/g, '&quot;');
                   // Title tag
-                  html = html.replace('<title>Loading Product... | WishVideo</title>', `<title>${safeTitle} | WishVideo</title>`);
+                  html = html.replace('<title>Loading Product... | WishVideo</title>', `<title>${safeTitle} | ${DEFAULT_SITE_TITLE}</title>`);
                   // Open Graph title/description and image
                   html = html.replace('<meta property="og:title" content="Loading...">', `<meta property="og:title" content="${safeTitle}">`);
                   html = html.replace('<meta property="og:description" content="">', `<meta property="og:description" content="${safeDesc}">`);
@@ -5103,7 +5202,7 @@ if (method === 'GET' || method === 'HEAD') {
                     seoSettings2 = (parsed2 && parsed2.settings) || {};
                   }
                   if (!seoSettings2.site_url) seoSettings2.site_url = baseUrl;
-                  if (!seoSettings2.site_title) seoSettings2.site_title = 'WishVideo';
+                  if (!seoSettings2.site_title) seoSettings2.site_title = DEFAULT_SITE_TITLE;
                   const orgSchema = generateOrganizationSchema(seoSettings2);
                   const siteSchema = generateWebSiteSchema(seoSettings2);
                   html = html.replace(/<\/head>/i, `<script type="application/ld+json">${orgSchema}</script>\n<script type="application/ld+json">${siteSchema}</script>\n</head>`);
@@ -5131,7 +5230,7 @@ if (method === 'GET' || method === 'HEAD') {
             if (!isAdminUI && !isAdminAPI) {
               try {
                 const seo = await getSeoForRequest(env, req, schemaProduct ? { product: schemaProduct } : { path });
-                html = applySeoToHtml(html, seo.robots, seo.canonical);
+                html = applySeoToHtml(html, seo.robots, seo.canonical, seo);
                 html = applySiteTitleToHtml(html, seo.siteTitle);
                 headers.set('X-Robots-Tag', seo.robots);
                 

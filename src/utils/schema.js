@@ -39,7 +39,7 @@ export function generateOfferObject(product, baseUrl) {
     "priceValidUntil": priceValidUntil,
     "seller": {
       "@type": "Organization",
-      "name": "WishVideo"
+      "name": "Prankwish"
     }
   };
 
@@ -119,7 +119,7 @@ export function generateVideoObject(product, baseUrl) {
     },
     "publisher": {
       "@type": "Organization",
-      "name": "WishVideo",
+      "name": "Prankwish",
       "logo": {
         "@type": "ImageObject",
         "url": `${baseUrl}/favicon.ico`
@@ -172,12 +172,12 @@ export function generateProductSchema(product, baseUrl, reviews = []) {
     "image": images.length > 0 ? images : [`${baseUrl}/favicon.ico`],
     "brand": {
       "@type": "Brand",
-      "name": "WishVideo",
+      "name": "Prankwish",
       "logo": `${baseUrl}/favicon.ico`
     },
     "manufacturer": {
       "@type": "Organization",
-      "name": "WishVideo",
+      "name": "Prankwish",
       "url": baseUrl
     },
     "category": "Digital Goods > Personalized Videos",
@@ -306,7 +306,7 @@ export function generateCollectionSchema(products, baseUrl) {
   const schema = {
     "@context": "https://schema.org/",
     "@type": "ItemList",
-    "name": "WishVideo Products",
+    "name": "Prankwish Products",
     "numberOfItems": products.length,
     "itemListElement": itemListElement
   };
@@ -333,11 +333,11 @@ export function generateBlogPostingSchema(blog, baseUrl) {
       : (blog.created_at ? new Date(blog.created_at).toISOString() : new Date().toISOString()),
     "author": {
       "@type": "Organization",
-      "name": "WishVideo"
+      "name": "Prankwish"
     },
     "publisher": {
       "@type": "Organization",
-      "name": "WishVideo",
+      "name": "Prankwish",
       "logo": {
         "@type": "ImageObject",
         "url": `${baseUrl}/favicon.ico`
@@ -423,7 +423,7 @@ export function generateOrganizationSchema(settings) {
   const schema = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "name": settings.site_title || 'WishVideo',
+    "name": settings.site_title || 'Prankwish',
     "url": baseUrl,
     "logo": `${baseUrl}/favicon.ico`
   };
@@ -440,7 +440,7 @@ export function generateWebSiteSchema(settings) {
   const schema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    "name": settings.site_title || 'WishVideo',
+    "name": settings.site_title || 'Prankwish',
     "url": baseUrl
   };
   return JSON.stringify(schema);

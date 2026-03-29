@@ -153,7 +153,7 @@ export async function createPayPalOrder(env, body, origin) {
         custom_id: customData.substring(0, 127)
       }],
       application_context: {
-        brand_name: 'WishVideo',
+        brand_name: 'Prankwish',
         landing_page: 'NO_PREFERENCE',
         user_action: 'PAY_NOW',
         return_url: `${origin}/success.html?provider=paypal&product=${product_id}`,

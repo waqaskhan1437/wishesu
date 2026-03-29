@@ -8,8 +8,13 @@
  */
 
 ;(function(){
+  function getBrandName() {
+    const ogSiteName = document.querySelector('meta[property="og:site_name"]');
+    return (ogSiteName && ogSiteName.content ? ogSiteName.content : 'Prankwish').trim() || 'Prankwish';
+  }
+
   // Placeholder values that indicate the server did NOT inject real data
-  const PLACEHOLDER_TITLES = ['Loading Product... | WishVideo', 'Loading...'];
+  const PLACEHOLDER_TITLES = ['Loading Product... | Prankwish', 'Loading Product... | WishVideo', 'Loading...'];
   const PLACEHOLDER_CONTENTS = ['', 'Loading...', 'Custom personalized video greetings from Africa.'];
 
   function isPlaceholder(value, placeholders) {
@@ -19,7 +24,8 @@
 
   function updateSEO(product) {
     // 1. Basic SEO — only update if current value is a placeholder
-    const desiredTitle = (product.seo_title || product.title) + ' | WishVideo';
+    const brandName = getBrandName();
+    const desiredTitle = (product.seo_title || product.title) + ' | ' + brandName;
     if (isPlaceholder(document.title, PLACEHOLDER_TITLES)) {
       document.title = desiredTitle;
     }
@@ -36,7 +42,7 @@
     setMetaPropertyIfPlaceholder('og:image', product.thumbnail_url, PLACEHOLDER_CONTENTS);
     setMetaProperty('og:type', 'product');
     setMetaPropertyIfPlaceholder('og:url', window.location.href, PLACEHOLDER_CONTENTS);
-    setMetaProperty('og:site_name', 'WishVideo');
+    setMetaProperty('og:site_name', brandName);
     setMetaProperty('og:price:amount', product.sale_price || product.normal_price);
     setMetaProperty('og:price:currency', 'USD');
 
