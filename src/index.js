@@ -1158,6 +1158,163 @@ function applySiteTitleToHtml(html, siteTitle) {
   });
 }
 
+function stripControlCharacters(value) {
+  return String(value || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]+/g, ' ');
+}
+
+function normalizeSeoText(value, maxLength = 0) {
+  let text = stripControlCharacters(String(value || ''))
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (maxLength > 0 && text.length > maxLength) {
+    text = text.slice(0, maxLength).trimEnd();
+  }
+
+  return text;
+}
+
+function escapeRegexText(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function ensureHeadSection(html) {
+  if (!html) return html;
+  let out = String(html);
+  if (!/<head[\s>]/i.test(out)) {
+    if (/<html[^>]*>/i.test(out)) {
+      out = out.replace(/<html([^>]*)>/i, '<html$1>\n<head>\n</head>');
+    } else if (/<body[^>]*>/i.test(out)) {
+      out = out.replace(/<body([^>]*)>/i, '<head>\n</head>\n<body$1>');
+    } else {
+      out = `<head>\n</head>\n${out}`;
+    }
+  }
+  if (!/<\/head>/i.test(out)) {
+    if (/<body[^>]*>/i.test(out)) {
+      out = out.replace(/<body([^>]*)>/i, '</head>\n<body$1>');
+    } else {
+      out = `${out}\n</head>`;
+    }
+  }
+  return out;
+}
+
+function appendToHead(html, markup) {
+  if (!markup) return html;
+  return ensureHeadSection(html).replace(/<\/head>/i, `${markup}\n</head>`);
+}
+
+function upsertTitleTag(html, title) {
+  const safeTitle = escapeHtmlText(normalizeSeoText(title));
+  if (!safeTitle) return html;
+  const out = ensureHeadSection(html).replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, '');
+  return appendToHead(out, `<title>${safeTitle}</title>`);
+}
+
+function appendJsonLdToHead(html, schemaJson, schemaId = '') {
+  const safeSchemaJson = String(schemaJson || '').trim();
+  if (!safeSchemaJson || safeSchemaJson === '{}') return html;
+  let out = ensureHeadSection(html);
+  if (schemaId) {
+    const idRegex = new RegExp(`<script\\s+[^>]*id=["']${escapeRegexText(schemaId)}["'][^>]*>[\\s\\S]*?<\\/script>`, 'gi');
+    out = out.replace(idRegex, '');
+  }
+  const idAttr = schemaId ? ` id="${escapeHtmlText(schemaId)}"` : '';
+  return appendToHead(out, `<script type="application/ld+json"${idAttr}>${safeSchemaJson}</script>`);
+}
+
+function preferLastSingletonTag(html, tagRegex) {
+  const source = String(html || '');
+  const matches = source.match(tagRegex);
+  if (!matches || matches.length === 0) return source;
+  const preferredTag = matches[matches.length - 1].trim();
+  const out = source.replace(tagRegex, '');
+  return appendToHead(out, preferredTag);
+}
+
+function normalizeStoredPageHtml(html) {
+  if (!html) return html;
+
+  let out = ensureHeadSection(String(html));
+  const closeMatch = /<\/head>/i.exec(out);
+  if (!closeMatch) return out;
+
+  const closeIndex = closeMatch.index;
+  const closeEnd = closeIndex + closeMatch[0].length;
+  const extracted = [];
+  const bodyHeadTagRegex = /<(?:title\b[^>]*>[\s\S]*?<\/title>|meta\b[^>]*>|link\b[^>]*>|style\b[^>]*>[\s\S]*?<\/style>|script\b[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>)/gi;
+
+  const cleanedTail = out.slice(closeEnd).replace(bodyHeadTagRegex, (match) => {
+    extracted.push(match.trim());
+    return '';
+  });
+
+  out = `${out.slice(0, closeEnd)}${cleanedTail}`;
+  if (extracted.length > 0) {
+    out = appendToHead(out, extracted.join('\n'));
+  }
+
+  out = preferLastSingletonTag(out, /<title\b[^>]*>[\s\S]*?<\/title>/gi);
+  [
+    /<meta\s+[^>]*name=["']description["'][^>]*>/gi,
+    /<meta\s+[^>]*name=["']keywords["'][^>]*>/gi,
+    /<meta\s+[^>]*property=["']og:title["'][^>]*>/gi,
+    /<meta\s+[^>]*property=["']og:description["'][^>]*>/gi,
+    /<meta\s+[^>]*property=["']og:image["'][^>]*>/gi,
+    /<meta\s+[^>]*property=["']og:url["'][^>]*>/gi,
+    /<meta\s+[^>]*property=["']og:type["'][^>]*>/gi,
+    /<meta\s+[^>]*property=["']og:site_name["'][^>]*>/gi,
+    /<meta\s+[^>]*name=["']twitter:card["'][^>]*>/gi,
+    /<meta\s+[^>]*name=["']twitter:title["'][^>]*>/gi,
+    /<meta\s+[^>]*name=["']twitter:description["'][^>]*>/gi,
+    /<meta\s+[^>]*name=["']twitter:image["'][^>]*>/gi,
+    /<link\s+[^>]*rel=["']canonical["'][^>]*>/gi
+  ].forEach((pattern) => {
+    out = preferLastSingletonTag(out, pattern);
+  });
+
+  return out.replace(/\n{3,}/g, '\n\n');
+}
+
+function applyDefaultPageMetadata(html, pageType, seo = {}) {
+  const siteTitle = String(seo.siteTitle || DEFAULT_SITE_TITLE).trim() || DEFAULT_SITE_TITLE;
+  const canonical = String(seo.canonical || '').trim();
+  let pageTitle = '';
+  let description = '';
+
+  switch (pageType) {
+    case 'product_grid':
+      pageTitle = buildSiteAwareTitle('Personalized Video Gifts for Birthdays, Weddings and Pranks', siteTitle);
+      description = 'Browse custom prank videos, funny birthday greetings, wedding surprises, office roasts, and other personalized video gifts ready to order online.';
+      break;
+    case 'blog_archive':
+      pageTitle = buildSiteAwareTitle('Blog: Video Gift Ideas, Scripts and Occasion Guides', siteTitle);
+      description = 'Read practical ideas for personalized video gifts, request-writing tips, occasion guides, and customer-friendly gifting advice.';
+      break;
+    case 'forum_archive':
+      pageTitle = buildSiteAwareTitle('Forum: Customer Questions and Gift Help', siteTitle);
+      description = 'Browse real customer questions about orders, video gifts, delivery, and personalized surprise ideas before you buy.';
+      break;
+    default:
+      return html;
+  }
+
+  let out = upsertTitleTag(html, pageTitle);
+  out = upsertMetaTag(out, 'name', 'description', description, { alwaysReplace: true });
+  out = upsertMetaTag(out, 'property', 'og:title', pageTitle, { alwaysReplace: true });
+  out = upsertMetaTag(out, 'property', 'og:description', description, { alwaysReplace: true });
+  out = upsertMetaTag(out, 'property', 'og:type', 'website', { alwaysReplace: true });
+  if (canonical) {
+    out = upsertMetaTag(out, 'property', 'og:url', canonical, { alwaysReplace: true });
+  }
+  out = upsertMetaTag(out, 'name', 'twitter:card', 'summary_large_image', { alwaysReplace: true });
+  out = upsertMetaTag(out, 'name', 'twitter:title', pageTitle, { alwaysReplace: true });
+  out = upsertMetaTag(out, 'name', 'twitter:description', description, { alwaysReplace: true });
+  return out;
+}
+
 const CANONICAL_ALIAS_MAP = new Map([
   ['/index.html', '/'],
   ['/home', '/'],
@@ -1674,7 +1831,7 @@ async function getSeoForRequest(env, req, opts = {}) {
  */
 function applySeoToHtml(html, robots, canonical, meta = {}) {
   if (!html) return html;
-  let out = String(html);
+  let out = normalizeStoredPageHtml(String(html));
   if (!/<head[\s>]/i.test(out)) {
     if (/<html[^>]*>/i.test(out)) {
       out = out.replace(/<html([^>]*)>/i, '<html$1>\n<head>\n</head>');
@@ -2549,21 +2706,29 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
     `;
   }).join('');
 
-  const safeTitle = (blog.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const safeDesc = (blog.seo_description || blog.description || '').substring(0, 160).replace(/"/g, '&quot;');
+  const blogTitle = normalizeSeoText(blog.seo_title || blog.title || 'Blog Post');
+  const safeTitle = escapeHtmlText(blogTitle);
+  const safeMetaTitle = escapeHtmlText(buildSiteAwareTitle(blogTitle, DEFAULT_SITE_TITLE));
+  const safeDesc = escapeHtmlText(normalizeSeoText(blog.seo_description || blog.description || blog.content || blogTitle, 160));
+  const safeKeywords = escapeHtmlText(normalizeSeoText(blog.seo_keywords || ''));
+  const safeImage = escapeHtmlText(blog.thumbnail_url || '');
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${blog.seo_title || blog.title} - ${DEFAULT_SITE_TITLE}</title>
+  <title>${safeMetaTitle}</title>
   <meta name="description" content="${safeDesc}">
-  <meta name="keywords" content="${blog.seo_keywords || ''}">
+  <meta name="keywords" content="${safeKeywords}">
   <meta property="og:title" content="${safeTitle}">
   <meta property="og:description" content="${safeDesc}">
-  <meta property="og:image" content="${blog.thumbnail_url || ''}">
+  <meta property="og:image" content="${safeImage}">
   <meta property="og:type" content="article">
+  <meta name="twitter:card" content="${safeImage ? 'summary_large_image' : 'summary'}">
+  <meta name="twitter:title" content="${safeTitle}">
+  <meta name="twitter:description" content="${safeDesc}">
+  <meta name="twitter:image" content="${safeImage}">
   <link rel="stylesheet" href="/css/style.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2931,9 +3096,9 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
   <script src="/js/global-components.js"></script>
   <div class="blog-hero">
     <div class="blog-hero-inner">
-      <a href="/blog/" class="back-link">← Back to Blog</a>
+      <a href="/blog/" class="back-link">&larr; Back to Blog</a>
       <h1>${safeTitle}</h1>
-      ${date ? `<div class="blog-meta"><span>📅 ${date}</span></div>` : ''}
+      ${date ? `<div class="blog-meta"><span>Date: ${date}</span></div>` : ''}
     </div>
   </div>
   
@@ -2964,7 +3129,7 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
             <h4>Leave a Comment</h4>
             <div id="form-message" class="form-message"></div>
             <div id="pending-notice" class="pending-notice" style="display:none;">
-              ⏳ You have a comment awaiting approval. Please wait for it to be approved before posting another.
+              You have a comment awaiting approval. Please wait for it to be approved before posting another.
             </div>
             <form id="comment-form">
               <input type="hidden" id="blog-id" value="${blog.id}">
@@ -3107,8 +3272,12 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
     year: 'numeric', month: 'long', day: 'numeric' 
   }) : '';
   
-  const safeTitle = (question.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const safeContent = (question.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+  const questionTitle = normalizeSeoText(question.title || 'Forum Question');
+  const questionDescription = normalizeSeoText(question.content || question.title || '', 160) || questionTitle;
+  const safeTitle = escapeHtmlText(questionTitle);
+  const safeMetaTitle = escapeHtmlText(`${questionTitle} - Forum - ${DEFAULT_SITE_TITLE}`);
+  const safeDescription = escapeHtmlText(questionDescription);
+  const safeContent = escapeHtmlText(stripControlCharacters(question.content || '')).replace(/\n/g, '<br>');
   
   // Generate replies HTML
   const repliesHTML = replies.map(r => {
@@ -3157,8 +3326,14 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${safeTitle} - Forum - ${DEFAULT_SITE_TITLE}</title>
-  <meta name="description" content="${safeTitle}">
+  <title>${safeMetaTitle}</title>
+  <meta name="description" content="${safeDescription}">
+  <meta property="og:title" content="${safeTitle}">
+  <meta property="og:description" content="${safeDescription}">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="${safeTitle}">
+  <meta name="twitter:description" content="${safeDescription}">
   <link rel="stylesheet" href="/css/style.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -4145,20 +4320,33 @@ if (method === 'GET' || method === 'HEAD') {
               
               const previousBlogs = prevResult.results || [];
               const comments = commentsResult.results || [];
+              const blogTitle = normalizeSeoText(blog.seo_title || blog.title || 'Blog Post');
+              const blogDescription = normalizeSeoText(blog.seo_description || blog.description || blog.content || blogTitle, 160);
               const htmlRaw = generateBlogPostHTML(blog, previousBlogs, comments);
-              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical, seo);
+              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical, {
+                ...seo,
+                siteDescription: blogDescription,
+                ogImage: blog.thumbnail_url || seo.ogImage || ''
+              });
               html = applySiteTitleToHtml(html, seo.siteTitle);
+              html = upsertTitleTag(html, buildSiteAwareTitle(blogTitle, seo.siteTitle));
+              html = upsertMetaTag(html, 'name', 'description', blogDescription, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'property', 'og:title', blogTitle, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'property', 'og:description', blogDescription, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'property', 'og:url', seo.canonical, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'property', 'og:type', 'article', { alwaysReplace: true });
+              html = upsertMetaTag(html, 'name', 'twitter:card', blog.thumbnail_url ? 'summary_large_image' : 'summary', { alwaysReplace: true });
+              html = upsertMetaTag(html, 'name', 'twitter:title', blogTitle, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'name', 'twitter:description', blogDescription, { alwaysReplace: true });
+              if (blog.thumbnail_url) {
+                html = upsertMetaTag(html, 'property', 'og:image', blog.thumbnail_url, { alwaysReplace: true });
+                html = upsertMetaTag(html, 'name', 'twitter:image', blog.thumbnail_url, { alwaysReplace: true });
+              }
 
               // Fix 7: Inject BlogPosting JSON-LD schema
               try {
                 const blogSchemaJson = generateBlogPostingSchema(blog, url.origin);
-                html = html.replace('</head>', `<script type="application/ld+json">${blogSchemaJson}</script>\n</head>`);
-              } catch (_) {}
-
-              // Fix 7: Add og:url to blog pages
-              try {
-                const ogUrlTag = `<meta property="og:url" content="${seo.canonical}">`;
-                html = html.replace('</head>', `${ogUrlTag}\n</head>`);
+                html = appendJsonLdToHead(html, blogSchemaJson, 'blogposting-schema');
               } catch (_) {}
 
               // Fix 9: Add BreadcrumbList to blog pages
@@ -4168,7 +4356,7 @@ if (method === 'GET' || method === 'HEAD') {
                   { name: 'Blog', url: `${url.origin}/blog` },
                   { name: blog.title || '', url: seo.canonical }
                 ]);
-                html = html.replace('</head>', `<script type="application/ld+json">${breadcrumbJson}</script>\n</head>`);
+                html = appendJsonLdToHead(html, breadcrumbJson, 'blog-breadcrumb-schema');
               } catch (_) {}
 
               // Inject analytics scripts and verification meta tags
@@ -4297,35 +4485,28 @@ if (method === 'GET' || method === 'HEAD') {
                 blogs: blogsResult.results || []
               };
               
+              const forumTitle = normalizeSeoText(question.title || 'Forum Question');
+              const forumDescription = normalizeSeoText(question.content || question.title || '', 160) || forumTitle;
               const htmlRaw = generateForumQuestionHTML(question, replies, sidebar);
-              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical, seo);
+              let html = applySeoToHtml(htmlRaw, seo.robots, seo.canonical, {
+                ...seo,
+                siteDescription: forumDescription
+              });
               html = applySiteTitleToHtml(html, seo.siteTitle);
+              html = upsertTitleTag(html, buildSiteAwareTitle(`${forumTitle} - Forum`, seo.siteTitle));
+              html = upsertMetaTag(html, 'name', 'description', forumDescription, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'property', 'og:title', forumTitle, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'property', 'og:description', forumDescription, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'property', 'og:url', seo.canonical, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'property', 'og:type', 'article', { alwaysReplace: true });
+              html = upsertMetaTag(html, 'name', 'twitter:card', 'summary', { alwaysReplace: true });
+              html = upsertMetaTag(html, 'name', 'twitter:title', forumTitle, { alwaysReplace: true });
+              html = upsertMetaTag(html, 'name', 'twitter:description', forumDescription, { alwaysReplace: true });
 
               // Fix 8: Inject QAPage JSON-LD schema
               try {
                 const qaSchemaJson = generateQAPageSchema(question, replies, url.origin);
-                html = html.replace('</head>', `<script type="application/ld+json">${qaSchemaJson}</script>\n</head>`);
-              } catch (_) {}
-
-              // Fix 8: Add OG tags to forum pages
-              try {
-                const safeForumTitle = (question.title || '').replace(/"/g, '&quot;');
-                const forumContentSnippet = (question.content || '').replace(/<[^>]*>/g, '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
-                const ogTags = `<meta property="og:title" content="${safeForumTitle}">
-    <meta property="og:description" content="${forumContentSnippet}">
-    <meta property="og:url" content="${seo.canonical}">
-    <meta property="og:type" content="website">`;
-                html = html.replace('</head>', `${ogTags}\n</head>`);
-              } catch (_) {}
-
-              // Fix 8: Fix description meta to use actual content snippet
-              try {
-                const contentSnippet = (question.content || '').replace(/<[^>]*>/g, '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
-                const safeQTitle = (question.title || '').replace(/"/g, '&quot;');
-                html = html.replace(
-                  `<meta name="description" content="${safeQTitle}">`,
-                  `<meta name="description" content="${contentSnippet || safeQTitle}">`
-                );
+                html = appendJsonLdToHead(html, qaSchemaJson, 'forum-qa-schema');
               } catch (_) {}
 
               // Fix 9: Add BreadcrumbList to forum pages
@@ -4335,7 +4516,7 @@ if (method === 'GET' || method === 'HEAD') {
                   { name: 'Forum', url: `${url.origin}/forum` },
                   { name: question.title || '', url: seo.canonical }
                 ]);
-                html = html.replace('</head>', `<script type="application/ld+json">${breadcrumbJson}</script>\n</head>`);
+                html = appendJsonLdToHead(html, breadcrumbJson, 'forum-breadcrumb-schema');
               } catch (_) {}
 
               // Inject analytics scripts and verification meta tags
@@ -4675,6 +4856,7 @@ if (method === 'GET' || method === 'HEAD') {
               };
               try {
                 const seo = await getSeoForRequest(env, req, { path });
+                html = applyDefaultPageMetadata(html, defaultPageType, seo);
                 html = applySeoToHtml(html, seo.robots, seo.canonical, seo);
                 html = applySiteTitleToHtml(html, seo.siteTitle);
                 responseHeaders['X-Robots-Tag'] = seo.robots;
@@ -4704,7 +4886,8 @@ if (method === 'GET' || method === 'HEAD') {
                     if (!seoSettings.site_title) seoSettings.site_title = DEFAULT_SITE_TITLE;
                     const orgSchema = generateOrganizationSchema(seoSettings);
                     const siteSchema = generateWebSiteSchema(seoSettings);
-                    html = html.replace(/<\/head>/i, `<script type="application/ld+json">${orgSchema}</script>\n<script type="application/ld+json">${siteSchema}</script>\n</head>`);
+                    html = appendJsonLdToHead(html, orgSchema, 'home-organization-schema');
+                    html = appendJsonLdToHead(html, siteSchema, 'home-website-schema');
                   } catch (_) {}
                 }
               } catch (e) {
@@ -5215,7 +5398,8 @@ if (method === 'GET' || method === 'HEAD') {
                   if (!seoSettings2.site_title) seoSettings2.site_title = DEFAULT_SITE_TITLE;
                   const orgSchema = generateOrganizationSchema(seoSettings2);
                   const siteSchema = generateWebSiteSchema(seoSettings2);
-                  html = html.replace(/<\/head>/i, `<script type="application/ld+json">${orgSchema}</script>\n<script type="application/ld+json">${siteSchema}</script>\n</head>`);
+                  html = appendJsonLdToHead(html, orgSchema, 'home-organization-schema');
+                  html = appendJsonLdToHead(html, siteSchema, 'home-website-schema');
                 } catch (_) {}
               }
             }

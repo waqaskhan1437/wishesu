@@ -4,6 +4,21 @@
 
 import { canonicalProductPath } from './formatting.js';
 
+function resolveSchemaBrandName(baseUrl, fallback = 'Prankwish') {
+  try {
+    const hostname = new URL(String(baseUrl || 'https://prankwish.com')).hostname.replace(/^www\./i, '');
+    const firstLabel = hostname.split('.')[0] || '';
+    const brand = firstLabel
+      .split(/[-_]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+    return brand || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 /**
  * Generate Offer object for Product schemas
  * @param {Object} product - Product data
@@ -11,6 +26,7 @@ import { canonicalProductPath } from './formatting.js';
  * @returns {Object} Offer schema
  */
 export function generateOfferObject(product, baseUrl) {
+  const brandName = resolveSchemaBrandName(baseUrl);
   const price = parseFloat(product.sale_price || product.normal_price || 0);
   const date = new Date();
   date.setFullYear(date.getFullYear() + 1);
@@ -39,7 +55,7 @@ export function generateOfferObject(product, baseUrl) {
     "priceValidUntil": priceValidUntil,
     "seller": {
       "@type": "Organization",
-      "name": "Prankwish"
+      "name": brandName
     }
   };
 
@@ -90,6 +106,7 @@ export function generateOfferObject(product, baseUrl) {
  * @returns {Object|null} VideoObject schema or null if no video
  */
 export function generateVideoObject(product, baseUrl) {
+  const brandName = resolveSchemaBrandName(baseUrl);
   // Check for video URL in various fields
   const videoUrl = product.video_url || product.preview_video_url || product.sample_video_url;
   
@@ -119,7 +136,7 @@ export function generateVideoObject(product, baseUrl) {
     },
     "publisher": {
       "@type": "Organization",
-      "name": "Prankwish",
+      "name": brandName,
       "logo": {
         "@type": "ImageObject",
         "url": `${baseUrl}/favicon.ico`
@@ -144,6 +161,7 @@ export function generateVideoObject(product, baseUrl) {
  * @returns {string} JSON-LD schema as string
  */
 export function generateProductSchema(product, baseUrl, reviews = []) {
+  const brandName = resolveSchemaBrandName(baseUrl);
   const sku = product.slug ? `WV-${product.id}-${product.slug.toUpperCase().replace(/-/g, '')}` : `WV-${product.id}`;
   const productUrl = `${baseUrl}${canonicalProductPath(product)}`;
 
@@ -172,12 +190,12 @@ export function generateProductSchema(product, baseUrl, reviews = []) {
     "image": images.length > 0 ? images : [`${baseUrl}/favicon.ico`],
     "brand": {
       "@type": "Brand",
-      "name": "Prankwish",
+      "name": brandName,
       "logo": `${baseUrl}/favicon.ico`
     },
     "manufacturer": {
       "@type": "Organization",
-      "name": "Prankwish",
+      "name": brandName,
       "url": baseUrl
     },
     "category": "Digital Goods > Personalized Videos",
@@ -259,6 +277,7 @@ export function generateVideoSchema(product, baseUrl) {
  * @returns {string} JSON-LD schema as string
  */
 export function generateCollectionSchema(products, baseUrl) {
+  const brandName = resolveSchemaBrandName(baseUrl);
   if (!products || products.length === 0) {
     return '{}';
   }
@@ -306,7 +325,7 @@ export function generateCollectionSchema(products, baseUrl) {
   const schema = {
     "@context": "https://schema.org/",
     "@type": "ItemList",
-    "name": "Prankwish Products",
+    "name": `${brandName} Products`,
     "numberOfItems": products.length,
     "itemListElement": itemListElement
   };
@@ -321,10 +340,12 @@ export function generateCollectionSchema(products, baseUrl) {
  * @returns {string} JSON-LD schema as string
  */
 export function generateBlogPostingSchema(blog, baseUrl) {
+  const brandName = resolveSchemaBrandName(baseUrl);
+  const blogHeadline = blog.seo_title || blog.title || '';
   const schema = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
-    "headline": blog.title || '',
+    "headline": blogHeadline,
     "description": (blog.seo_description || blog.description || '').substring(0, 160),
     "image": blog.thumbnail_url || `${baseUrl}/favicon.ico`,
     "datePublished": blog.created_at ? new Date(blog.created_at).toISOString() : new Date().toISOString(),
@@ -333,11 +354,11 @@ export function generateBlogPostingSchema(blog, baseUrl) {
       : (blog.created_at ? new Date(blog.created_at).toISOString() : new Date().toISOString()),
     "author": {
       "@type": "Organization",
-      "name": "Prankwish"
+      "name": brandName
     },
     "publisher": {
       "@type": "Organization",
-      "name": "Prankwish",
+      "name": brandName,
       "logo": {
         "@type": "ImageObject",
         "url": `${baseUrl}/favicon.ico`
@@ -423,7 +444,7 @@ export function generateOrganizationSchema(settings) {
   const schema = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "name": settings.site_title || 'Prankwish',
+    "name": settings.site_title || resolveSchemaBrandName(baseUrl),
     "url": baseUrl,
     "logo": `${baseUrl}/favicon.ico`
   };
@@ -440,7 +461,7 @@ export function generateWebSiteSchema(settings) {
   const schema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    "name": settings.site_title || 'Prankwish',
+    "name": settings.site_title || resolveSchemaBrandName(baseUrl),
     "url": baseUrl
   };
   return JSON.stringify(schema);
@@ -456,5 +477,18 @@ export function generateWebSiteSchema(settings) {
 export function injectSchemaIntoHTML(html, schemaId, schemaJson) {
   const placeholder = `<script type="application/ld+json" id="${schemaId}">{}</script>`;
   const replacement = `<script type="application/ld+json" id="${schemaId}">${schemaJson}</script>`;
-  return html.replace(placeholder, replacement);
+  if (String(html || '').includes(placeholder)) {
+    return html.replace(placeholder, replacement);
+  }
+
+  const existingSchemaRegex = new RegExp(`<script\\s+type=["']application/ld\\+json["']\\s+id=["']${schemaId}["'][^>]*>[\\s\\S]*?<\\/script>`, 'i');
+  if (existingSchemaRegex.test(String(html || ''))) {
+    return html.replace(existingSchemaRegex, replacement);
+  }
+
+  if (/<\/head>/i.test(String(html || ''))) {
+    return html.replace(/<\/head>/i, `${replacement}\n</head>`);
+  }
+
+  return `${html}\n${replacement}`;
 }
