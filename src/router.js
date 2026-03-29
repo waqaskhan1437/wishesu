@@ -316,6 +316,14 @@ function toHeadResponse(response) {
   });
 }
 
+function unauthorizedApiResponse() {
+  return json({ error: 'Unauthorized' }, 401);
+}
+
+async function requireAdminApi(req, env) {
+  return (await isAdminAuthed(req, env)) ? null : unauthorizedApiResponse();
+}
+
 function isPlainObject(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
@@ -439,6 +447,8 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   // Archive.org credentials for direct browser upload (Zero CPU)
   if (method === 'POST' && path === '/api/upload/archive-credentials') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return getArchiveCredentials(env);
   }
 
