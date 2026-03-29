@@ -57,6 +57,22 @@ function createDbEnv(options = {}) {
   };
 }
 
+async function requestRoute(method, routeUrl, env = createDbEnv(), init = {}) {
+  const request = new Request(routeUrl, {
+    method,
+    ...init
+  });
+  const url = new URL(request.url);
+  const response = await routeApiRequest(request, env, url, url.pathname, request.method);
+  return response;
+}
+
+async function assertUnauthorizedRoute(method, routeUrl, init = {}) {
+  const response = await requestRoute(method, routeUrl, createDbEnv(), init);
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: 'Unauthorized' });
+}
+
 test('direct aliases bypass canonical redirects', () => {
   assert.equal(shouldServeCanonicalAliasDirectly('/index.html'), true);
   assert.equal(shouldServeCanonicalAliasDirectly('/home'), true);
@@ -290,6 +306,57 @@ test('cobalt settings endpoint requires admin auth', async () => {
 
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), { error: 'Unauthorized' });
+});
+
+test('product management routes require admin auth', async () => {
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/products/list');
+  await assertUnauthorizedRoute('POST', 'https://example.com/api/products/status', {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: 1, status: 'draft' })
+  });
+  await assertUnauthorizedRoute('POST', 'https://example.com/api/product/save', {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title: 'Locked Product' })
+  });
+  await assertUnauthorizedRoute('DELETE', 'https://example.com/api/product/delete?id=1');
+});
+
+test('payment and coupon admin routes require auth', async () => {
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/settings/payments');
+  await assertUnauthorizedRoute('POST', 'https://example.com/api/settings/payment-methods', {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ enable_paypal: true })
+  });
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/coupons');
+  await assertUnauthorizedRoute('POST', 'https://example.com/api/coupons/create', {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code: 'LOCKED10', discount_value: 10 })
+  });
+});
+
+test('page and blog admin routes require auth', async () => {
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/pages/list');
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/page/hidden-draft');
+  await assertUnauthorizedRoute('POST', 'https://example.com/api/pages/status', {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: 1, status: 'published' })
+  });
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/blogs/list');
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/blog/hidden-draft');
+  await assertUnauthorizedRoute('POST', 'https://example.com/api/blogs/status', {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: 1, status: 'published' })
+  });
+});
+
+test('review and admin comment routes require auth', async () => {
+  await assertUnauthorizedRoute('POST', 'https://example.com/api/reviews/update', {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: 1, status: 'approved' })
+  });
+  await assertUnauthorizedRoute('DELETE', 'https://example.com/api/reviews/delete?id=1');
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/admin/blog-comments');
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/admin/users');
 });
 
 test('terms fallback page renders without redirect', async () => {

@@ -300,11 +300,60 @@ const HEAD_SAFE_API_PATTERNS = [
   /^\/api\/order\/buyer\/[^/]+$/
 ];
 
+const ADMIN_ONLY_NON_PREFIXED_ROUTE_KEYS = new Set([
+  'GET /api/products/list',
+  'POST /api/products/status',
+  'POST /api/products/duplicate',
+  'POST /api/product/save',
+  'DELETE /api/product/delete',
+  'GET /api/settings/payments',
+  'POST /api/settings/payments',
+  'GET /api/settings/paypal',
+  'POST /api/settings/paypal',
+  'GET /api/settings/payment-methods',
+  'POST /api/settings/payment-methods',
+  'GET /api/coupons',
+  'POST /api/coupons/enabled',
+  'POST /api/coupons/create',
+  'POST /api/coupons/update',
+  'DELETE /api/coupons/delete',
+  'POST /api/coupons/status',
+  'GET /api/pages',
+  'GET /api/pages/list',
+  'GET /api/pages/load',
+  'GET /api/pages/default',
+  'POST /api/page/save',
+  'DELETE /api/page/delete',
+  'POST /api/pages/save',
+  'POST /api/pages/delete',
+  'POST /api/pages/status',
+  'POST /api/pages/duplicate',
+  'POST /api/pages/set-default',
+  'POST /api/pages/clear-default',
+  'POST /api/pages/type',
+  'GET /api/blogs',
+  'GET /api/blogs/list',
+  'POST /api/blog/save',
+  'DELETE /api/blog/delete',
+  'POST /api/blogs/status',
+  'POST /api/blogs/duplicate',
+  'POST /api/reviews/update',
+  'DELETE /api/reviews/delete'
+]);
+
 export function isHeadCompatibleApiPath(path) {
   const normalizedPath = String(path || '').trim();
   if (!normalizedPath) return false;
   if (HEAD_SAFE_EXACT_API_PATHS.has(normalizedPath)) return true;
   return HEAD_SAFE_API_PATTERNS.some((pattern) => pattern.test(normalizedPath));
+}
+
+function isAdminOnlyNonPrefixedRoute(path, method) {
+  const routeKey = `${String(method || '').toUpperCase()} ${String(path || '').trim()}`;
+  if (ADMIN_ONLY_NON_PREFIXED_ROUTE_KEYS.has(routeKey)) return true;
+  if (/^GET \/api\/page\/[^/]+$/.test(routeKey)) return true;
+  if (/^GET \/api\/blog\/[^/]+$/.test(routeKey)) return true;
+  return false;
 }
 
 function toHeadResponse(response) {
@@ -502,6 +551,16 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   if (path === '/api/admin/chats/sessions' && method === 'GET') {
     return getSessions(env);
+  }
+
+  if (path.startsWith('/api/admin/')) {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
+  }
+
+  if (isAdminOnlyNonPrefixedRoute(path, method)) {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
   }
 
   // ----- MINIMAL SEO APIs (2025 - Google Standards) -----
