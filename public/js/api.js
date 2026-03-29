@@ -165,12 +165,19 @@ window.createOrder = createOrder;
 window.saveArchiveLink = saveArchiveLink;
 
 /**
- * Fetch Whop settings from the backend.  Returns an object
- * containing a `settings` key.  This helper wraps a GET request
- * to `/api/settings/whop` and hides implementation details.
+ * Fetch public Whop checkout settings from the backend. Returns
+ * an object containing a `settings` key for backwards compatibility
+ * with existing product-page consumers.
  */
-function getWhopSettings() {
-  return apiFetch('/api/settings/whop');
+async function getWhopSettings() {
+  const data = await apiFetch('/api/payment/whop/checkout-settings');
+  return {
+    settings: {
+      default_product_id: data?.product_id || '',
+      product_id: data?.product_id || '',
+      theme: data?.theme || 'light'
+    }
+  };
 }
 
 /**
@@ -184,7 +191,7 @@ function getWhopSettings() {
  * @returns {Promise<any>} Parsed JSON response
  */
 function saveWhopSettings(data) {
-  return apiFetch('/api/settings/whop', {
+  return apiFetch('/api/admin/settings/whop', {
     method: 'POST',
     body: JSON.stringify(data)
   });

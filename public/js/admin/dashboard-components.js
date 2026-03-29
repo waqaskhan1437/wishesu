@@ -26,7 +26,7 @@
   // Load from API (with localStorage fallback)
   async function loadData() {
     try {
-      const res = await fetch('/api/settings/components');
+      const res = await fetch('/api/admin/settings/components');
       if (res.ok) {
         const json = await res.json();
         if (json.components) {
@@ -62,7 +62,7 @@
       console.log('✅ Components saved to localStorage');
 
       // Save to API
-      const res = await fetch('/api/settings/components', {
+      const res = await fetch('/api/admin/settings/components', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

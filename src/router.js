@@ -283,10 +283,9 @@ const HEAD_SAFE_EXACT_API_PATHS = new Set([
   '/api/forum/question-by-id',
   '/api/forum/sidebar',
   '/api/payment/methods',
+  '/api/payment/whop/checkout-settings',
   '/api/settings/components',
   '/api/settings/branding',
-  '/api/settings/whop',
-  '/api/settings/cobalt',
   '/api/coupons/active',
   '/api/coupons/enabled'
 ]);
@@ -985,11 +984,28 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   // ----- SETTINGS -----
+  if (method === 'GET' && path === '/api/admin/settings/whop') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
+    return getWhopSettings(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/settings/whop') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
+    const body = await req.json();
+    return saveWhopSettings(env, body);
+  }
+
   if (method === 'GET' && path === '/api/settings/whop') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return getWhopSettings(env);
   }
 
   if (method === 'POST' && path === '/api/settings/whop') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json();
     return saveWhopSettings(env, body);
   }
@@ -1000,26 +1016,60 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/settings/branding') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json();
     return saveBrandingSettings(env, body);
   }
 
   // ----- COBALT API SETTINGS -----
+  if (method === 'GET' && path === '/api/admin/settings/cobalt') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
+    return getCobaltSettings(env);
+  }
+
+  if (method === 'POST' && path === '/api/admin/settings/cobalt') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
+    const body = await req.json();
+    return saveCobaltSettings(env, body);
+  }
+
   if (method === 'GET' && path === '/api/settings/cobalt') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return getCobaltSettings(env);
   }
 
   if (method === 'POST' && path === '/api/settings/cobalt') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json();
     return saveCobaltSettings(env, body);
   }
 
   // ----- SITE COMPONENTS (HEADER/FOOTER) -----
-  if (method === 'GET' && path === '/api/settings/components') {
+  if (method === 'GET' && path === '/api/admin/settings/components') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return getSiteComponents(env);
   }
 
+  if (method === 'POST' && path === '/api/admin/settings/components') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
+    const body = await req.json();
+    return saveSiteComponents(env, body);
+  }
+
+  if (method === 'GET' && path === '/api/settings/components') {
+    return getSiteComponents(env, { publicView: true });
+  }
+
   if (method === 'POST' && path === '/api/settings/components') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json();
     return saveSiteComponents(env, body);
   }

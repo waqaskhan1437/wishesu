@@ -943,16 +943,38 @@ export async function saveCobaltSettings(env, body) {
 
 // ========== SITE COMPONENTS (HEADERS/FOOTERS) ==========
 
+function sanitizePublicSiteComponents(components) {
+  if (!components || typeof components !== 'object') return null;
+
+  return {
+    headers: Array.isArray(components.headers) ? components.headers : [],
+    footers: Array.isArray(components.footers) ? components.footers : [],
+    defaultHeaderId: components.defaultHeaderId ?? null,
+    defaultFooterId: components.defaultFooterId ?? null,
+    excludedPages: Array.isArray(components.excludedPages) ? components.excludedPages : [],
+    settings: components.settings && typeof components.settings === 'object'
+      ? components.settings
+      : {
+          enableGlobalHeader: true,
+          enableGlobalFooter: true
+        }
+  };
+}
+
 /**
  * Get Site Components (Header/Footer/etc.)
  */
-export async function getSiteComponents(env) {
+export async function getSiteComponents(env, options = {}) {
+  const publicView = options.publicView === true;
+
   try {
     const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('site_components').first();
     if (row && row.value) {
       try {
         const components = JSON.parse(row.value);
-        return json({ components });
+        return json({
+          components: publicView ? sanitizePublicSiteComponents(components) : components
+        });
       } catch (e) {
         return json({ components: null });
       }
