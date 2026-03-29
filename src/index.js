@@ -50,12 +50,68 @@ import { isAdminAuthed, createAdminSessionCookie, createLogoutCookie } from './u
 // ADMIN AUTH HELPERS (Module Level - OPTIMIZED)
 // =========================
 
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self' https: data: blob:",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:",
+  "style-src 'self' 'unsafe-inline' https:",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data: https:",
+  "connect-src 'self' https: wss:",
+  "media-src 'self' data: blob: https:",
+  "frame-src 'self' https:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self' https:",
+  "frame-ancestors 'self'"
+].join('; ');
+
 function noStoreHeaders(extra = {}) {
-  return {
+  const headers = new Headers({
     'Cache-Control': 'no-store, no-cache, must-revalidate',
     'Pragma': 'no-cache',
     ...extra
-  };
+  });
+  applySecurityHeadersToHeaders(headers);
+  return headers;
+}
+
+function applySecurityHeadersToHeaders(headers, req = null) {
+  const out = headers instanceof Headers ? headers : new Headers(headers || {});
+
+  if (!out.has('Content-Security-Policy')) {
+    out.set('Content-Security-Policy', CONTENT_SECURITY_POLICY);
+  }
+  if (!out.has('X-Frame-Options')) {
+    out.set('X-Frame-Options', 'SAMEORIGIN');
+  }
+  if (!out.has('X-Content-Type-Options')) {
+    out.set('X-Content-Type-Options', 'nosniff');
+  }
+  if (!out.has('Referrer-Policy')) {
+    out.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  }
+
+  if (req) {
+    try {
+      const reqUrl = new URL(req.url);
+      if (!isLocalHostname(reqUrl.hostname) && !isInsecureRequest(reqUrl, req) && !out.has('Strict-Transport-Security')) {
+        out.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+      }
+    } catch (_) {}
+  }
+
+  return out;
+}
+
+function finalizeResponse(response, req) {
+  if (!response) return response;
+  const headers = applySecurityHeadersToHeaders(new Headers(response.headers), req);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 }
 
 function buildVersionedCacheKey(req, accept = 'text/html') {
@@ -3685,6 +3741,7 @@ if (isLoginRoute && method === 'GET') {
       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       headers.set('Pragma', 'no-cache');
       headers.set('X-Worker-Version', VERSION);
+      applySecurityHeadersToHeaders(headers, req);
       return new Response(html, { status: 200, headers });
     }
   }
@@ -3784,7 +3841,7 @@ if (method === 'GET' || method === 'HEAD') {
     // Keep disabled by default to preserve existing frontend layout.
     if (noJsSsrEnabled) {
       const noJsResponse = await handleNoJsRoutes(req, env, url, path, method);
-      if (noJsResponse) return noJsResponse;
+      if (noJsResponse) return finalizeResponse(noJsResponse, req);
     }
 
 
@@ -3819,6 +3876,7 @@ if (method === 'GET' || method === 'HEAD') {
           // Favicon is a UI asset, not a search landing page.
           headers.set('X-Robots-Tag', 'noindex, nofollow');
         }
+        applySecurityHeadersToHeaders(headers, req);
         headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
         return new Response(assetResp.body, { status: 200, headers });
       }
@@ -3843,7 +3901,7 @@ if (method === 'GET' || method === 'HEAD') {
         }
       }
 
-      return new Response(JSON.stringify({
+      return finalizeResponse(new Response(JSON.stringify({
         status: 'ok',
         version: VERSION,
         db: dbStatus,
@@ -3854,7 +3912,7 @@ if (method === 'GET' || method === 'HEAD') {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store'
         }
-      });
+      }), req);
     }
 
     // Dynamic robots.txt + sitemap.xml (Minimal SEO 2025 - Google Standards)
@@ -4034,7 +4092,7 @@ if (method === 'GET' || method === 'HEAD') {
                   console.warn('Blog cache put error:', err);
                 }
               }
-              return resp;
+              return finalizeResponse(resp, req);
             }
           } catch (e) {
             console.error('Blog fetch error:', e);
@@ -4199,7 +4257,7 @@ if (method === 'GET' || method === 'HEAD') {
                   console.warn('Forum cache put error:', err);
                 }
               }
-              return resp;
+              return finalizeResponse(resp, req);
             }
           } catch (e) {
             console.error('Forum question fetch error:', e);
@@ -4210,13 +4268,14 @@ if (method === 'GET' || method === 'HEAD') {
       // ----- API ROUTES -----
       if (path.startsWith('/api/') || path === '/submit-order') {
         const apiResponse = await routeApiRequest(req, env, url, path, method);
-        if (apiResponse) return apiResponse;
+        if (apiResponse) return finalizeResponse(apiResponse, req);
       }
 
       // ----- SECURE DOWNLOAD -----
       if (path.startsWith('/download/')) {
         const orderId = path.split('/').pop();
-        return handleSecureDownload(env, orderId, url.origin);
+        const downloadResponse = await handleSecureDownload(env, orderId, url.origin);
+        return finalizeResponse(downloadResponse, req);
       }
 
       // ----- ADMIN SPA ROUTING -----
@@ -4368,6 +4427,7 @@ if (method === 'GET' || method === 'HEAD') {
           'X-Worker-Version': VERSION
         });
         headers.set('X-Robots-Tag', robots);
+        applySecurityHeadersToHeaders(headers, req);
         if (method === 'HEAD') {
           return new Response(null, { status: 200, headers });
         }
@@ -4421,6 +4481,7 @@ if (method === 'GET' || method === 'HEAD') {
             } else {
               headers.set('Cache-Control', 'public, max-age=300');
             }
+            applySecurityHeadersToHeaders(headers, req);
 
             const contentType = headers.get('content-type') || headers.get('Content-Type') || '';
             const isHtmlTarget = contentType.includes('text/html') || target.endsWith('.html');
@@ -4640,6 +4701,7 @@ if (method === 'GET' || method === 'HEAD') {
             if (cachedResponse) {
               const headers = new Headers(cachedResponse.headers);
               headers.set('X-Cache', 'HIT');
+              applySecurityHeadersToHeaders(headers, req);
               headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
               return new Response(cachedResponse.body, { 
                 status: cachedResponse.status, 
@@ -5089,7 +5151,7 @@ if (method === 'GET' || method === 'HEAD') {
                 // ignore SEO injection errors
               }
             }
-            
+            applySecurityHeadersToHeaders(headers, req);
             const response = new Response(html, { status: 200, headers });
             
             // Cache the response for non-admin pages (5 minutes TTL)
@@ -5124,6 +5186,7 @@ if (method === 'GET' || method === 'HEAD') {
         const headers = new Headers(assetResp.headers); headers.set('Alt-Svc', 'clear');
         headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         headers.set('Pragma', 'no-cache');
+        applySecurityHeadersToHeaders(headers, req);
         headers.set('X-Worker-Version', VERSION); headers.set('Alt-Svc', 'clear');
         
         return new Response(assetResp.body, { status: assetResp.status, headers });

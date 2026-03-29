@@ -412,6 +412,19 @@ test('r2 file endpoint only allows public temp objects anonymously', async () =>
   await assertUnauthorizedRoute('GET', 'https://example.com/api/r2/file?key=orders%2Fsecret.mp4');
 });
 
+test('api and html responses include baseline security headers', async () => {
+  const apiResponse = await worker.fetch(new Request('https://example.com/api/time'), {}, { waitUntil() {} });
+  const htmlResponse = await worker.fetch(new Request('https://example.com/terms'), {}, { waitUntil() {} });
+
+  for (const response of [apiResponse, htmlResponse]) {
+    assert.equal(response.headers.get('x-frame-options'), 'SAMEORIGIN');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
+    assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
+    assert.match(response.headers.get('strict-transport-security') || '', /max-age=31536000/);
+  }
+});
+
 test('terms fallback page renders without redirect', async () => {
   const request = new Request('https://example.com/terms');
   const response = await worker.fetch(request, {}, { waitUntil() {} });
