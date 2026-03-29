@@ -273,7 +273,6 @@ import { protectEndpoint, DEFAULT_PERMISSIONS } from './utils/api-protector.js';
 const HEAD_SAFE_EXACT_API_PATHS = new Set([
   '/api/health',
   '/api/time',
-  '/api/debug',
   '/api/products',
   '/api/products/list',
   '/api/reviews',
@@ -306,12 +305,17 @@ const ADMIN_ONLY_NON_PREFIXED_ROUTE_KEYS = new Set([
   'POST /api/products/duplicate',
   'POST /api/product/save',
   'DELETE /api/product/delete',
+  'POST /api/purge-cache',
   'GET /api/settings/payments',
   'POST /api/settings/payments',
   'GET /api/settings/paypal',
   'POST /api/settings/paypal',
   'GET /api/settings/payment-methods',
   'POST /api/settings/payment-methods',
+  'GET /api/whop/test-api',
+  'POST /api/whop/cleanup',
+  'GET /api/paypal/test',
+  'GET /api/payment/universal/test',
   'GET /api/coupons',
   'POST /api/coupons/enabled',
   'POST /api/coupons/create',
@@ -481,10 +485,14 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (path === '/api/debug') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return getDebugInfo(env);
   }
 
   if (method === 'GET' && path === '/api/whop/test-webhook') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return testWhopWebhook();
   }
 
@@ -1790,7 +1798,16 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   // ----- R2 FILE ACCESS -----
   if (method === 'GET' && path === '/api/r2/file') {
-    const key = url.searchParams.get('key');
+    const key = String(url.searchParams.get('key') || '').trim();
+    if (!key) {
+      return getR2File(env, key);
+    }
+
+    if (!key.startsWith('temp/')) {
+      const adminGate = await requireAdminApi(req, env);
+      if (adminGate) return adminGate;
+    }
+
     return getR2File(env, key);
   }
 

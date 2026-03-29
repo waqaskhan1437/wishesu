@@ -359,6 +359,40 @@ test('review and admin comment routes require auth', async () => {
   await assertUnauthorizedRoute('GET', 'https://example.com/api/admin/users');
 });
 
+test('debug and operational test routes require admin auth', async () => {
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/debug');
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/whop/test-webhook');
+  await assertUnauthorizedRoute('POST', 'https://example.com/api/purge-cache');
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/whop/test-api');
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/paypal/test');
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/payment/universal/test');
+});
+
+test('r2 file endpoint only allows public temp objects anonymously', async () => {
+  const tempEnv = createDbEnv({
+    R2_BUCKET: {
+      async get(key) {
+        assert.equal(key, 'temp/session/example.png');
+        return {
+          body: new TextEncoder().encode('temp-file'),
+          httpMetadata: { contentType: 'text/plain' }
+        };
+      }
+    }
+  });
+
+  const tempResponse = await requestRoute(
+    'GET',
+    'https://example.com/api/r2/file?key=temp%2Fsession%2Fexample.png',
+    tempEnv
+  );
+
+  assert.equal(tempResponse.status, 200);
+  assert.equal(await tempResponse.text(), 'temp-file');
+
+  await assertUnauthorizedRoute('GET', 'https://example.com/api/r2/file?key=orders%2Fsecret.mp4');
+});
+
 test('terms fallback page renders without redirect', async () => {
   const request = new Request('https://example.com/terms');
   const response = await worker.fetch(request, {}, { waitUntil() {} });
