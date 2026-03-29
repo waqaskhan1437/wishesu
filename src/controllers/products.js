@@ -5,7 +5,7 @@
  */
 
 import { json, cachedJson } from '../utils/response.js';
-import { slugifyStr, toISO8601 } from '../utils/formatting.js';
+import { canonicalProductPath, slugifyStr, toISO8601 } from '../utils/formatting.js';
 import { buildPublicProductStatusWhere, getProductTableColumns } from '../utils/product-visibility.js';
 
 // In-memory cache for products list (reduces DB queries)
@@ -499,6 +499,26 @@ export async function getAdjacentProducts(env, id) {
  */
 export async function handleProductRouting(env, url, path) {
   const now = Date.now();
+  const buildCanonicalResponse = (product) => {
+    const canonicalPath = canonicalProductPath({
+      id: product.id,
+      slug: product.slug,
+      title: product.title || `product-${product.id}`
+    });
+    const target = new URL(url.toString());
+    target.pathname = canonicalPath;
+    target.search = '';
+
+    return new Response(null, {
+      status: 301,
+      headers: {
+        'Location': target.toString(),
+        'Cache-Control': 'public, max-age=3600',
+        'X-Robots-Tag': 'noindex, nofollow',
+        'Link': `<${target.toString()}>; rel="canonical"`
+      }
+    });
+  };
 
   // Helper to get product from cache or DB
   async function getProductById(id) {
@@ -529,46 +549,39 @@ export async function handleProductRouting(env, url, path) {
   }
 
   /*
-   * Legacy handling (removed redirects)
+   * Legacy handling
    *
-   * Historically we supported two legacy product URL formats:
+   * Canonical product URLs live at `/product-<id>/<slug>`.
    *   1. /product?id=123  → canonical slug path `/product-123/<slug>`
    *   2. /product/<slug>  → canonical slug path `/product-<id>/<slug>`
    *
-   * These patterns are still recognized here so that any missing slug is normalized
-   * in the database. However, we no longer redirect the visitor to the canonical
-   * path. Returning null here allows the router to continue and either serve
-   * the canonical HTML page directly (via `/product-<id>/<slug>`) or yield
-   * a 404 if no matching route exists. This ensures there are no intermediate
-   * HTTP redirects and the DB slug remains the same as the user-facing URL.
+   * Keep old entry points working, but always 301 them onto the canonical path
+   * so search engines and users converge on one stable URL.
    */
 
-  // Handle legacy /product?id=123 by ensuring slug exists in DB
+  // Handle legacy /product?id=123
   const legacyId = (path === '/product') ? url.searchParams.get('id') : null;
   if (legacyId) {
     const p = await getProductById(legacyId);
     if (p) {
-      // Slug normalization removed: product slugs should be assigned
-      // when the product is created or updated via the admin panel.
-      // We avoid updating the DB on each legacy request to reduce CPU
-      // and DB usage on edge.
-      // We intentionally do not redirect. Returning null allows the request
-      // to fall through to normal route handling (typically 404 for /product).
-      return null;
+      return buildCanonicalResponse(p);
     }
   }
 
-  // Handle legacy /product/<slug> by ensuring slug exists in DB
+  // Handle legacy /product/<slug>
   if (path.startsWith('/product/') && path.length > '/product/'.length) {
     const slugIn = decodeURIComponent(path.slice('/product/'.length));
     const row = await getProductBySlug(slugIn);
     if (row) {
-      // Slug normalization removed: if the product has no slug, it will be
-      // generated and saved during product creation/update. Avoid hitting the DB
-      // here to reduce CPU usage.
-      // Again, do not redirect to canonical path. Let the router handle the
-      // current URL as-is. Users should navigate directly to `/product-<id>/<slug>`.
-      return null;
+      return buildCanonicalResponse(row);
+    }
+  }
+
+  const bareCanonicalMatch = path.match(/^\/product-(\d+)\/?$/);
+  if (bareCanonicalMatch) {
+    const row = await getProductById(bareCanonicalMatch[1]);
+    if (row) {
+      return buildCanonicalResponse(row);
     }
   }
 

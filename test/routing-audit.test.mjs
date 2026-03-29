@@ -2,8 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import worker, { getCanonicalRedirectPath, shouldServeCanonicalAliasDirectly } from '../src/index.js';
+import { handleProductRouting } from '../src/controllers/products.js';
+import { handleNoJsRoutes } from '../src/controllers/nojs.js';
 import { isHeadCompatibleApiPath, routeApiRequest } from '../src/router.js';
 import { createAdminSessionCookie } from '../src/utils/auth.js';
+import { rewriteLegacyInternalLinksInHtml } from '../src/utils/canonical.js';
 
 function createDbEnv(options = {}) {
   const {
@@ -73,19 +76,21 @@ async function assertUnauthorizedRoute(method, routeUrl, init = {}) {
   assert.deepEqual(await response.json(), { error: 'Unauthorized' });
 }
 
-test('direct aliases bypass canonical redirects', () => {
+test('legacy aliases stay recognized and now redirect to canonical URLs', () => {
   assert.equal(shouldServeCanonicalAliasDirectly('/index.html'), true);
   assert.equal(shouldServeCanonicalAliasDirectly('/home'), true);
   assert.equal(shouldServeCanonicalAliasDirectly('/products-grid'), true);
   assert.equal(shouldServeCanonicalAliasDirectly('/blog.html'), true);
   assert.equal(shouldServeCanonicalAliasDirectly('/terms'), true);
 
-  assert.equal(getCanonicalRedirectPath('/index.html'), null);
-  assert.equal(getCanonicalRedirectPath('/home'), null);
-  assert.equal(getCanonicalRedirectPath('/products-grid'), null);
-  assert.equal(getCanonicalRedirectPath('/blog.html'), null);
-  assert.equal(getCanonicalRedirectPath('/terms.html'), null);
-  assert.equal(getCanonicalRedirectPath('/order-success'), null);
+  assert.equal(getCanonicalRedirectPath('/index.html'), '/');
+  assert.equal(getCanonicalRedirectPath('/home'), '/');
+  assert.equal(getCanonicalRedirectPath('/products-grid'), '/products');
+  assert.equal(getCanonicalRedirectPath('/blog.html'), '/blog');
+  assert.equal(getCanonicalRedirectPath('/terms.html'), '/terms');
+  assert.equal(getCanonicalRedirectPath('/order-success'), '/success');
+  assert.equal(getCanonicalRedirectPath('/products/'), '/products');
+  assert.equal(getCanonicalRedirectPath('/blog/'), '/blog');
 });
 
 test('non-direct aliases still canonicalize', () => {
@@ -454,6 +459,73 @@ test('api and html responses include baseline security headers', async () => {
     assert.match(response.headers.get('content-security-policy') || '', /default-src 'self'/);
     assert.match(response.headers.get('strict-transport-security') || '', /max-age=31536000/);
   }
+});
+
+test('worker redirects duplicate public aliases before rendering', async () => {
+  const response = await worker.fetch(new Request('https://example.com/home'), {}, { waitUntil() {} });
+
+  assert.equal(response.status, 301);
+  assert.equal(response.headers.get('location'), 'https://example.com/');
+  assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow');
+});
+
+test('no-js storefront also redirects duplicate aliases', async () => {
+  const request = new Request('https://example.com/products-grid.html');
+  const url = new URL(request.url);
+  const response = await handleNoJsRoutes(request, {}, url, url.pathname, request.method);
+
+  assert.equal(response.status, 301);
+  assert.equal(response.headers.get('location'), 'https://example.com/products');
+});
+
+test('legacy internal links in HTML are rewritten to canonical paths', () => {
+  const html = '<a href="/home">Home</a><form action="/products-grid"></form><a href="https://prankwish.com/blog.html">Blog</a>';
+  const normalized = rewriteLegacyInternalLinksInHtml(html, 'https://prankwish.com');
+
+  assert.match(normalized, /href="\/"/);
+  assert.match(normalized, /action="\/products"/);
+  assert.match(normalized, /href="https:\/\/prankwish\.com\/blog"/);
+  assert.doesNotMatch(normalized, /\/home|\/products-grid|blog\.html/);
+});
+
+test('legacy product routes redirect to canonical product URLs', async () => {
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind(value) {
+            return {
+              async first() {
+                const normalized = String(sql || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                if (normalized.includes('where id = ?')) {
+                  return Number(value) === 62 ? { id: 62, slug: 'pure-magic', title: 'Pure Magic' } : null;
+                }
+                if (normalized.includes('where slug = ?')) {
+                  return String(value) === 'pure-magic' ? { id: 62, slug: 'pure-magic', title: 'Pure Magic' } : null;
+                }
+                return null;
+              }
+            };
+          }
+        };
+      }
+    }
+  };
+
+  const idUrl = new URL('https://example.com/product?id=62');
+  const slugUrl = new URL('https://example.com/product/pure-magic');
+  const bareCanonicalUrl = new URL('https://example.com/product-62');
+
+  const fromId = await handleProductRouting(env, idUrl, idUrl.pathname);
+  const fromSlug = await handleProductRouting(env, slugUrl, slugUrl.pathname);
+  const fromBareCanonical = await handleProductRouting(env, bareCanonicalUrl, bareCanonicalUrl.pathname);
+
+  assert.equal(fromId.status, 301);
+  assert.equal(fromSlug.status, 301);
+  assert.equal(fromBareCanonical.status, 301);
+  assert.equal(fromId.headers.get('location'), 'https://example.com/product-62/pure-magic');
+  assert.equal(fromSlug.headers.get('location'), 'https://example.com/product-62/pure-magic');
+  assert.equal(fromBareCanonical.headers.get('location'), 'https://example.com/product-62/pure-magic');
 });
 
 test('terms fallback page renders without redirect', async () => {

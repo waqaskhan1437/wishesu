@@ -1,4 +1,5 @@
 import { canonicalProductPath, escapeHtml, slugifyStr } from '../utils/formatting.js';
+import { getCanonicalRedirectPath, rewriteLegacyInternalLinksInHtml } from '../utils/canonical.js';
 import { buildPublicProductStatusWhere } from '../utils/product-visibility.js';
 import {
   updateOrder,
@@ -247,7 +248,7 @@ function htmlResponse(html, opts = {}) {
       if (v !== undefined && v !== null) headers.set(k, String(v));
     }
   }
-  return new Response(html, { status: opts.status || 200, headers });
+  return new Response(rewriteLegacyInternalLinksInHtml(html), { status: opts.status || 200, headers });
 }
 
 function redirectWithParams(url, path, params = {}, status = 303) {
@@ -331,6 +332,14 @@ async function resolveProductPath(env, productId) {
     'SELECT id, title, slug FROM products WHERE id = ?'
   ).bind(Number(productId)).first();
   if (!row) return '/';
+  return canonicalProductPath(row);
+}
+
+async function resolveProductPathBySlug(env, slug) {
+  const row = await env.DB.prepare(
+    'SELECT id, title, slug FROM products WHERE slug = ? LIMIT 1'
+  ).bind(String(slug || '')).first();
+  if (!row) return '';
   return canonicalProductPath(row);
 }
 
@@ -1986,6 +1995,15 @@ export function renderNoJsAdminLoginPage(url) {
 }
 
 export async function handleNoJsRoutes(req, env, url, path, method) {
+  if (method === 'GET' || method === 'HEAD') {
+    const canonicalRedirectPath = getCanonicalRedirectPath(path);
+    if (canonicalRedirectPath) {
+      const to = new URL(req.url);
+      to.pathname = canonicalRedirectPath;
+      return Response.redirect(to.toString(), 301);
+    }
+  }
+
   // Public storefront routes (Level 1)
   if (method === 'GET' && (path === '/' || path === '/index.html')) {
     return renderHome(env, url);
@@ -2010,6 +2028,21 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
       return redirectWithParams(url, canonical, { err: 'Payment was cancelled.' });
     }
     return Response.redirect(new URL(canonical, url.origin).toString(), 302);
+  }
+
+  if (method === 'GET' && path.startsWith('/product/') && path.length > '/product/'.length) {
+    const canonical = await resolveProductPathBySlug(env, decodeURIComponent(path.slice('/product/'.length)));
+    if (canonical) {
+      return Response.redirect(new URL(canonical, url.origin).toString(), 301);
+    }
+  }
+
+  const bareCanonicalMatch = path.match(/^\/product-(\d+)\/?$/);
+  if (method === 'GET' && bareCanonicalMatch) {
+    const canonical = await resolveProductPath(env, Number(bareCanonicalMatch[1]));
+    if (canonical && canonical !== '/') {
+      return Response.redirect(new URL(canonical, url.origin).toString(), 301);
+    }
   }
 
   const productMatch = path.match(/^\/product-(\d+)(?:\/[^/]+)?\/?$/);

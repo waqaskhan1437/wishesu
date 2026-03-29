@@ -7,6 +7,7 @@ import { CORS } from '../config/cors.js';
 import { VERSION } from '../config/constants.js';
 import { getMimeTypeFromFilename, resolveContentType } from '../utils/upload-helper.js';
 import { normalizeArchiveMetaValue } from '../utils/formatting.js';
+import { normalizeSiteComponentsPayload } from '../utils/canonical.js';
 
 // Flag to track if version purge check was done
 let purgeVersionChecked = false;
@@ -968,7 +969,7 @@ export async function getSiteComponents(env, options = {}) {
     const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('site_components').first();
     if (row && row.value) {
       try {
-        const components = JSON.parse(row.value);
+        const components = normalizeSiteComponentsPayload(JSON.parse(row.value));
         return json({
           components: publicView ? sanitizePublicSiteComponents(components) : components
         });
@@ -990,7 +991,7 @@ export async function getSiteComponents(env, options = {}) {
 export async function saveSiteComponents(env, body) {
   try {
     // If body has a 'data' wrapper, unwrap it, otherwise use body directly
-    const dataToSave = body.data || body;
+    const dataToSave = normalizeSiteComponentsPayload(body.data || body);
     const value = JSON.stringify(dataToSave);
 
     await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').bind('site_components', value).run();

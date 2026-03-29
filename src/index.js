@@ -20,6 +20,7 @@ import { getNoindexMetaTags, getSeoVisibilityRuleMatch } from './controllers/noi
 import { canonicalProductPath } from './utils/formatting.js';
 import { buildPublicProductStatusWhere } from './utils/product-visibility.js';
 import { handleNoJsRoutes, renderNoJsAdminLoginPage } from './controllers/nojs.js';
+import { normalizeSiteComponentsPayload, rewriteLegacyInternalLinksInHtml } from './utils/canonical.js';
 import {
   BLOG_CARDS_STYLE_TAG,
   PRODUCT_CARDS_STYLE_TAG,
@@ -1219,6 +1220,15 @@ const DIRECT_INTERNAL_ALIAS_PATHS = new Set([
   '/order-success.html'
 ]);
 
+const NON_REDIRECT_ALIAS_PATHS = new Set([
+  '/checkout/',
+  '/checkout/index.html',
+  '/buyer-order/',
+  '/buyer-order.html',
+  '/order-detail/',
+  '/order-detail.html'
+]);
+
 export function shouldServeCanonicalAliasDirectly(pathname) {
   const raw = String(pathname || '/').trim() || '/';
   return DIRECT_INTERNAL_ALIAS_PATHS.has(raw);
@@ -1244,8 +1254,7 @@ export function getCanonicalRedirectPath(pathname) {
   const raw = String(pathname || '/').trim() || '/';
   if (raw === '/admin/' || raw === '/api/') return null;
   if (raw.startsWith('/admin/') || raw.startsWith('/api/')) return null;
-  if (raw === '/blog/' || raw === '/forum/' || raw === '/products/') return null;
-  if (shouldServeCanonicalAliasDirectly(raw)) return null;
+  if (NON_REDIRECT_ALIAS_PATHS.has(raw)) return null;
   const normalized = normalizeCanonicalPath(raw);
   return normalized !== raw ? normalized : null;
 }
@@ -1403,7 +1412,7 @@ async function getSiteComponentsForSsr(env) {
       try {
         const candidate = JSON.parse(row.value);
         if (candidate && typeof candidate === 'object') {
-          parsed = candidate;
+          parsed = normalizeSiteComponentsPayload(candidate);
         }
       } catch (_) {}
     }
@@ -1425,6 +1434,7 @@ async function getSiteComponentsForSsr(env) {
 async function applyGlobalComponentsSsr(env, html, pathname) {
   const currentPath = String(pathname || '/');
   const normalizedPath = normalizeCanonicalPath(currentPath);
+  const finalizeHtml = (source) => rewriteLegacyInternalLinksInHtml(source);
   if (
     !html ||
     !/<body[^>]*>/i.test(html) ||
@@ -1432,19 +1442,19 @@ async function applyGlobalComponentsSsr(env, html, pathname) {
     normalizedPath.startsWith('/admin/') ||
     isTransactionalGlobalComponentsPath(normalizedPath)
   ) {
-    return html;
+    return finalizeHtml(html);
   }
 
   let out = ensureGlobalComponentsRuntimeScript(html);
-  if (!env?.DB) return out;
+  if (!env?.DB) return finalizeHtml(out);
 
   const components = await getSiteComponentsForSsr(env);
-  if (!components || typeof components !== 'object') return out;
+  if (!components || typeof components !== 'object') return finalizeHtml(out);
   if (
     isExcludedFromGlobalComponents(components.excludedPages, currentPath) ||
     isExcludedFromGlobalComponents(components.excludedPages, normalizedPath)
   ) {
-    return out;
+    return finalizeHtml(out);
   }
 
   const enableHeader = components?.settings?.enableGlobalHeader !== false;
@@ -3705,7 +3715,7 @@ export default {
       path = '/' + path;
     }
 
-    if (shouldServeCanonicalAliasDirectly(path)) {
+    if (method !== 'GET' && method !== 'HEAD' && shouldServeCanonicalAliasDirectly(path)) {
       const directPath = normalizeCanonicalPath(path);
       if (directPath && directPath !== path) {
         path = directPath;
@@ -4991,7 +5001,7 @@ if (method === 'GET' || method === 'HEAD') {
                         if (componentsRaw) {
                           const parsed = JSON.parse(componentsRaw);
                           if (parsed && typeof parsed === 'object') {
-                            siteComponents = parsed;
+                            siteComponents = normalizeSiteComponentsPayload(parsed, url.origin);
                           }
                         }
                       } catch (_) {}

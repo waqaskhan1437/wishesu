@@ -17,6 +17,101 @@
     return p || '/';
   }
 
+  const CANONICAL_ALIAS_MAP = new Map([
+    ['/index.html', '/'],
+    ['/home', '/'],
+    ['/home/', '/'],
+    ['/blog/index.html', '/blog'],
+    ['/blog.html', '/blog'],
+    ['/forum/index.html', '/forum'],
+    ['/forum.html', '/forum'],
+    ['/terms/', '/terms'],
+    ['/terms/index.html', '/terms'],
+    ['/terms.html', '/terms'],
+    ['/products/index.html', '/products'],
+    ['/products.html', '/products'],
+    ['/products-grid', '/products'],
+    ['/products-grid/', '/products'],
+    ['/products-grid.html', '/products'],
+    ['/checkout/', '/checkout'],
+    ['/checkout/index.html', '/checkout'],
+    ['/success.html', '/success'],
+    ['/buyer-order/', '/buyer-order'],
+    ['/buyer-order.html', '/buyer-order'],
+    ['/order-detail/', '/order-detail'],
+    ['/order-detail.html', '/order-detail'],
+    ['/order-success', '/success'],
+    ['/order-success.html', '/success']
+  ]);
+
+  function normalizeCanonicalPath(pathname) {
+    let p = normalizePath(pathname);
+    p = CANONICAL_ALIAS_MAP.get(p) || p;
+    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+    return p || '/';
+  }
+
+  function canonicalizeInternalUrlValue(rawValue) {
+    const original = String(rawValue || '');
+    const trimmed = original.trim();
+    if (!trimmed || /^(?:#|mailto:|tel:|javascript:|data:)/i.test(trimmed) || trimmed.startsWith('//')) {
+      return original;
+    }
+
+    const isAbsolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed);
+    const isRootRelative = trimmed.startsWith('/');
+    if (!isAbsolute && !isRootRelative) return original;
+
+    let parsed;
+    try {
+      parsed = new URL(trimmed, window.location.origin);
+    } catch (_) {
+      return original;
+    }
+
+    if (isAbsolute && parsed.origin !== window.location.origin) return original;
+
+    const normalizedPath = normalizeCanonicalPath(parsed.pathname);
+    if (normalizedPath === parsed.pathname) return original;
+    parsed.pathname = normalizedPath;
+
+    if (!isAbsolute) {
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+    return parsed.toString();
+  }
+
+  function rewriteLegacyInternalLinksInHtml(html) {
+    const source = String(html || '');
+    if (!source) return source;
+    return source.replace(/\b(href|action)\s*=\s*(["'])(.*?)\2/gi, function(match, attr, quote, value) {
+      const normalized = canonicalizeInternalUrlValue(value);
+      if (normalized === value) return match;
+      return `${attr}=${quote}${normalized}${quote}`;
+    });
+  }
+
+  function normalizeComponentsData(data) {
+    if (!data || typeof data !== 'object') return data;
+    const normalizeEntries = function(entries) {
+      if (!Array.isArray(entries)) return [];
+      return entries.map(function(entry) {
+        if (!entry || typeof entry !== 'object') return entry;
+        const next = { ...entry };
+        if (typeof next.code === 'string' && next.code) {
+          next.code = rewriteLegacyInternalLinksInHtml(next.code);
+        }
+        return next;
+      });
+    };
+
+    return {
+      ...data,
+      headers: normalizeEntries(data.headers),
+      footers: normalizeEntries(data.footers)
+    };
+  }
+
   function isTransactionalPage(pathname) {
     const p = normalizePath(pathname);
     return (
@@ -169,12 +264,12 @@
   // Load component data
   async function loadData() {
     // Step 8: on product page, prefer worker-embedded components to avoid API call.
-    if (
-      productBootstrap &&
-      productBootstrap.siteComponents &&
-      typeof productBootstrap.siteComponents === 'object'
-    ) {
-      const components = { ...productBootstrap.siteComponents, _timestamp: Date.now() };
+      if (
+        productBootstrap &&
+        productBootstrap.siteComponents &&
+        typeof productBootstrap.siteComponents === 'object'
+      ) {
+      const components = { ...normalizeComponentsData(productBootstrap.siteComponents), _timestamp: Date.now() };
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(components));
       } catch (e) {}
@@ -186,10 +281,11 @@
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const data = JSON.parse(stored);
+        const normalizedData = normalizeComponentsData(data);
         // If data is fresh (< 30 minutes), use it immediately
         // Note: _timestamp is added when saving from API
-        if (data._timestamp && (Date.now() - data._timestamp) < 1800000) {
-          return data;
+        if (normalizedData && normalizedData._timestamp && (Date.now() - normalizedData._timestamp) < 1800000) {
+          return normalizedData;
         }
       }
     } catch (e) {}
@@ -200,10 +296,11 @@
       if (res.ok) {
         const json = await res.json();
         if (json.components) {
+          const normalizedComponents = normalizeComponentsData(json.components);
           // Add timestamp for cache validity
-          json.components._timestamp = Date.now();
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(json.components));
-          return json.components;
+          normalizedComponents._timestamp = Date.now();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedComponents));
+          return normalizedComponents;
         }
       }
     } catch (e) {
@@ -213,7 +310,7 @@
     // 3. Fallback to stale LocalStorage data if API failed
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
+      if (stored) return normalizeComponentsData(JSON.parse(stored));
     } catch (e) {}
 
     return null;
@@ -234,6 +331,7 @@
   // Inject header
   function injectHeader(code) {
     if (document.querySelector('.site-header, #global-header')) return;
+    const normalizedCode = rewriteLegacyInternalLinksInHtml(code);
 
     // If a page provides a dedicated slot, inject into it instead of inserting a new
     // element at the top of <body>. This avoids layout shifts (CLS) on initial render.
@@ -241,7 +339,7 @@
     if (slot) {
       if (slot.dataset.injected === '1') return;
       slot.dataset.injected = '1';
-      slot.innerHTML = code;
+      slot.innerHTML = normalizedCode;
       // Execute scripts if any exist in the header code
       Array.from(slot.querySelectorAll('script')).forEach(oldScript => {
         const newScript = document.createElement('script');
@@ -254,7 +352,7 @@
 
     const wrapper = document.createElement('div');
     wrapper.id = 'global-header';
-    wrapper.innerHTML = code;
+    wrapper.innerHTML = normalizedCode;
     // Execute scripts if any exist in the header code
     Array.from(wrapper.querySelectorAll('script')).forEach(oldScript => {
       const newScript = document.createElement('script');
@@ -273,13 +371,14 @@
   // Inject footer
   function injectFooter(code) {
     if (document.querySelector('.site-footer, #global-footer')) return;
+    const normalizedCode = rewriteLegacyInternalLinksInHtml(code);
 
     // Prefer a slot if the page provides one (lets the page reserve space if needed).
     const slot = document.getElementById('global-footer-slot');
     if (slot) {
       if (slot.dataset.injected === '1') return;
       slot.dataset.injected = '1';
-      slot.innerHTML = code;
+      slot.innerHTML = normalizedCode;
       // Execute scripts if any exist in the footer code
       Array.from(slot.querySelectorAll('script')).forEach(oldScript => {
         const newScript = document.createElement('script');
@@ -292,7 +391,7 @@
 
     const wrapper = document.createElement('div');
     wrapper.id = 'global-footer';
-    wrapper.innerHTML = code;
+    wrapper.innerHTML = normalizedCode;
     // Execute scripts if any exist in the footer code
     Array.from(wrapper.querySelectorAll('script')).forEach(oldScript => {
         const newScript = document.createElement('script');
