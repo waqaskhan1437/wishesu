@@ -7,11 +7,17 @@ import { toISO8601 } from '../utils/formatting.js';
 import { getGoogleScriptUrl } from '../config/secrets.js';
 import { calculateAddonPrice, calculateServerSidePrice } from '../utils/pricing.js';
 import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-creation.js';
-import { sendOrderNotificationEmails } from '../utils/order-email-notifier.js';
+import {
+  sendOrderDeliveredNotificationEmails,
+  sendOrderNotificationEmails,
+  sendOrderRevisionRequestedNotificationEmails
+} from '../utils/order-email-notifier.js';
 
 // Webhooks (New Universal System)
 import {
   notifyOrderReceived,
+  notifyOrderDelivered,
+  notifyOrderRevisionRequested,
   notifyTipReceived,
   notifyCustomerOrderConfirmed,
   notifyCustomerOrderDelivered
@@ -542,6 +548,7 @@ export async function deliverOrder(env, body) {
   }
 
   const deliveredVideoUrl = downloadUrl || youtubeUrl;
+  const primaryDeliveryUrl = downloadUrl || deliveredVideoUrl;
 
   // Get order data before updating
   const orderResult = await env.DB.prepare(
@@ -573,10 +580,35 @@ export async function deliverOrder(env, body) {
   } catch (e) { }
 
   // Send customer delivery notification (async)
+  try {
+    await sendOrderDeliveredNotificationEmails(env, {
+      orderId,
+      customerEmail,
+      productTitle: orderResult?.product_title || 'Your Order',
+      deliveryUrl: primaryDeliveryUrl,
+      videoUrl: deliveredVideoUrl,
+      youtubeUrl
+    });
+  } catch (e) {
+    console.error('Order delivery email notification failed:', e?.message || e);
+  }
+
+  notifyOrderDelivered(env, {
+    orderId,
+    productTitle: orderResult?.product_title || 'Your Order',
+    customerEmail,
+    deliveryUrl: primaryDeliveryUrl,
+    videoUrl: deliveredVideoUrl,
+    youtubeUrl
+  }).catch(() => { });
+
   notifyCustomerOrderDelivered(env, {
-    orderId: orderId,
+    orderId,
     email: customerEmail,
-    productTitle: orderResult?.product_title || 'Your Order'
+    productTitle: orderResult?.product_title || 'Your Order',
+    deliveryUrl: primaryDeliveryUrl,
+    videoUrl: deliveredVideoUrl,
+    youtubeUrl
   }).catch(() => { });
 
   // Trigger email webhook if configured (legacy support)
@@ -587,11 +619,11 @@ export async function deliverOrder(env, body) {
       const gsPayload = {
         event: 'order.delivered',
         data: {
-          orderId: orderId,
+          orderId,
           productTitle: orderResult.product_title || 'Your Order',
-          customerEmail: customerEmail,
+          customerEmail,
           // Provide both deliveryUrl and videoUrl for compatibility
-          deliveryUrl: downloadUrl || deliveredVideoUrl,
+          deliveryUrl: primaryDeliveryUrl,
           videoUrl: deliveredVideoUrl,
           youtubeUrl: youtubeUrl || undefined
         }
@@ -614,6 +646,7 @@ export async function deliverOrder(env, body) {
  */
 export async function requestRevision(env, body) {
   if (!body.orderId) return json({ error: 'orderId required' }, 400);
+  const revisionReason = body.reason || 'No reason provided';
 
   // Get order data before updating
   const orderResult = await env.DB.prepare(
@@ -622,29 +655,53 @@ export async function requestRevision(env, body) {
 
   await env.DB.prepare(
     'UPDATE orders SET revision_requested=1, revision_count=revision_count+1, revision_reason=?, status=? WHERE order_id=?'
-  ).bind(body.reason || 'No reason provided', 'revision', body.orderId).run();
+  ).bind(revisionReason, 'revision', body.orderId).run();
+
+  let customerEmail = '';
+  try {
+    const decrypted = JSON.parse(orderResult?.encrypted_data || '{}');
+    customerEmail = decrypted.email || '';
+  } catch (e) {
+    console.warn('Could not decrypt order data for revision email');
+  }
+
+  const revisionCount = (Number(orderResult?.revision_count) || 0) + 1;
+
+  try {
+    await sendOrderRevisionRequestedNotificationEmails(env, {
+      orderId: body.orderId,
+      customerEmail,
+      productTitle: orderResult?.product_title || 'Your Order',
+      revisionReason,
+      revisionCount,
+      status: 'revision'
+    });
+  } catch (e) {
+    console.error('Order revision email notification failed:', e?.message || e);
+  }
+
+  notifyOrderRevisionRequested(env, {
+    orderId: body.orderId,
+    customerEmail,
+    productTitle: orderResult?.product_title || 'Your Order',
+    revisionReason,
+    revisionCount,
+    status: 'revision'
+  }).catch(() => { });
 
   // Trigger revision notification webhook if configured
   try {
     const googleScriptUrl = await getGoogleScriptUrl(env);
     if (googleScriptUrl && orderResult) {
-      let customerEmail = '';
-      try {
-        const decrypted = JSON.parse(orderResult.encrypted_data);
-        customerEmail = decrypted.email || '';
-      } catch (e) {
-        console.warn('Could not decrypt order data for email');
-      }
-
       // Use a universal event and flatten payload into a "data" object
       const gsPayload = {
         event: 'order.revision_requested',
         data: {
           orderId: body.orderId,
           productTitle: orderResult.product_title || 'Your Order',
-          customerEmail: customerEmail,
-          revisionReason: body.reason || 'No reason provided',
-          revisionCount: (orderResult.revision_count || 0) + 1,
+          customerEmail,
+          revisionReason,
+          revisionCount,
           status: 'revision'
         }
       };

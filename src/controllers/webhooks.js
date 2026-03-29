@@ -283,8 +283,10 @@ export async function notifyOrderDelivered(env, orderData) {
     orderId: orderData.orderId || orderData.order_id,
     productTitle: orderData.productTitle || orderData.product_title,
     customerName: orderData.customerName || orderData.customer_name,
+    customerEmail: orderData.customerEmail || orderData.email,
     deliveryUrl: orderData.deliveryUrl || orderData.delivery_url,
     videoUrl: orderData.videoUrl || orderData.video_url,
+    youtubeUrl: orderData.youtubeUrl || orderData.youtube_url,
     deliveredAt: new Date().toISOString()
   });
 }
@@ -362,7 +364,8 @@ export async function notifyCustomerOrderConfirmed(env, orderData) {
     customerName: orderData.customerName || orderData.customer_name,
     customerEmail: orderData.customerEmail || orderData.email,
     amount: orderData.amount || orderData.total,
-    trackingUrl: orderData.trackingUrl || orderData.tracking_url
+    trackingUrl: orderData.trackingUrl || orderData.tracking_url,
+    deliveryTime: orderData.deliveryTime || orderData.delivery_time
   });
 }
 
@@ -373,7 +376,10 @@ export async function notifyCustomerOrderDelivered(env, orderData) {
     customerName: orderData.customerName || orderData.customer_name,
     customerEmail: orderData.customerEmail || orderData.email,
     deliveryUrl: orderData.deliveryUrl || orderData.delivery_url,
-    videoUrl: orderData.videoUrl || orderData.video_url
+    videoUrl: orderData.videoUrl || orderData.video_url,
+    youtubeUrl: orderData.youtubeUrl || orderData.youtube_url,
+    trackingUrl: orderData.trackingUrl || orderData.tracking_url,
+    deliveredAt: new Date().toISOString()
   });
 }
 

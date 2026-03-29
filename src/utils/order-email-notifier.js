@@ -40,7 +40,7 @@ function resolveBaseUrl(env, orderData) {
 }
 
 function resolveFromEmail(env) {
-  return normalizeEmail(env.BREVO_FROM_EMAIL || env.FROM_EMAIL || 'support@prankwish.com');
+  return normalizeEmail(env.BREVO_FROM_EMAIL || env.FROM_EMAIL || '');
 }
 
 function resolveFromName(env) {
@@ -89,6 +89,22 @@ function formatTimestamp(ts) {
   const date = ts ? new Date(ts) : new Date();
   if (Number.isNaN(date.getTime())) return new Date().toISOString();
   return date.toISOString();
+}
+
+function coalesceUrl(...values) {
+  for (const value of values) {
+    const raw = String(value || '').trim();
+    if (!raw) continue;
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.toString();
+      }
+    } catch (e) {
+      // Ignore invalid URLs and continue checking fallbacks.
+    }
+  }
+  return '';
 }
 
 function splitUrlAndTrailingPunctuation(input) {
@@ -348,6 +364,110 @@ function buildAdminText(data) {
   ].join('\n');
 }
 
+function buildBuyerDeliveryHtml(data) {
+  const primaryDeliveryUrl = data.deliveryUrl || data.videoUrl || data.youtubeUrl || data.buyerLink;
+  const secondaryUrl = primaryDeliveryUrl !== data.buyerLink ? data.buyerLink : '';
+  const youtubeBlock = data.youtubeUrl && data.youtubeUrl !== primaryDeliveryUrl
+    ? `
+      <div style="margin-top:12px;">
+        <a href="${escapeHtml(data.youtubeUrl)}" style="display:inline-block;background:#dc2626;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:600;font-size:14px;">Watch on YouTube</a>
+      </div>
+    `.trim()
+    : '';
+
+  return `
+<div style="margin:0;background:#f1f5f9;padding:24px 12px;font-family:Segoe UI,Arial,sans-serif;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #dbeafe;border-radius:18px;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0f766e,#0ea5e9);padding:24px 28px;color:#ffffff;">
+      <div style="font-size:13px;opacity:0.92;letter-spacing:0.6px;">PRANKWISH DELIVERY READY</div>
+      <h2 style="margin:8px 0 0;font-size:24px;line-height:1.3;">Your order is ready</h2>
+      <p style="margin:10px 0 0;font-size:14px;opacity:0.96;">Order <strong>#${escapeHtml(data.orderId)}</strong> for <strong>${escapeHtml(data.productTitle)}</strong> has been delivered.</p>
+    </div>
+
+    <div style="padding:22px 24px;">
+      <div style="display:block;border:1px solid #dbeafe;border-radius:14px;padding:16px;background:#f8fafc;">
+        <p style="margin:0 0 8px;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Delivery</p>
+        <p style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">${escapeHtml(data.productTitle)}</p>
+        <p style="margin:10px 0 0;color:#334155;font-size:14px;">Order ID: <strong>#${escapeHtml(data.orderId)}</strong></p>
+      </div>
+
+      <div style="margin-top:20px;">
+        <a href="${escapeHtml(primaryDeliveryUrl)}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:600;font-size:14px;">Open Delivery</a>
+      </div>
+
+      ${secondaryUrl ? `
+      <div style="margin-top:12px;">
+        <a href="${escapeHtml(secondaryUrl)}" style="display:inline-block;background:#1d4ed8;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:600;font-size:14px;">Track Your Order</a>
+      </div>
+      `.trim() : ''}
+
+      ${youtubeBlock}
+
+      <p style="margin:20px 0 0;color:#64748b;font-size:12px;line-height:1.6;">
+        If the delivery link does not open, use your order page here: <a href="${escapeHtml(data.buyerLink)}" style="color:#1d4ed8;">${escapeHtml(data.buyerLink)}</a>
+      </p>
+    </div>
+  </div>
+</div>
+`.trim();
+}
+
+function buildBuyerDeliveryText(data) {
+  return [
+    `Your order is ready: #${data.orderId}`,
+    `Product: ${data.productTitle}`,
+    `Open delivery: ${data.deliveryUrl || data.videoUrl || data.youtubeUrl || data.buyerLink}`,
+    `Track order: ${data.buyerLink}`,
+    data.youtubeUrl ? `YouTube: ${data.youtubeUrl}` : ''
+  ].filter(Boolean).join('\n');
+}
+
+function buildAdminRevisionHtml(data) {
+  return `
+<div style="margin:0;background:#f8fafc;padding:24px 12px;font-family:Segoe UI,Arial,sans-serif;">
+  <div style="max-width:720px;margin:0 auto;background:#ffffff;border:1px solid #fecaca;border-radius:18px;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#991b1b,#ef4444);padding:24px 28px;color:#ffffff;">
+      <div style="font-size:13px;opacity:0.95;letter-spacing:0.6px;">REVISION REQUESTED</div>
+      <h2 style="margin:8px 0 0;font-size:24px;line-height:1.25;">Order #${escapeHtml(data.orderId)}</h2>
+      <p style="margin:10px 0 0;font-size:14px;opacity:0.95;">Customer: <strong>${escapeHtml(data.customerEmail || 'N/A')}</strong></p>
+    </div>
+
+    <div style="padding:22px 24px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;background:#ffffff;">
+        <tbody>
+          <tr><td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0f172a;width:30%;">Product</td><td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#334155;">${escapeHtml(data.productTitle)}</td></tr>
+          <tr><td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0f172a;">Revision Count</td><td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#334155;">${escapeHtml(String(data.revisionCount || 1))}</td></tr>
+          <tr><td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0f172a;">Status</td><td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;color:#334155;">${escapeHtml(data.status || 'revision')}</td></tr>
+          <tr><td style="padding:10px 12px;font-weight:600;color:#0f172a;">Requested At</td><td style="padding:10px 12px;color:#334155;">${escapeHtml(data.createdAt)}</td></tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:18px;padding:16px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca;">
+        <p style="margin:0 0 8px;font-size:13px;color:#991b1b;font-weight:700;">Customer request</p>
+        <p style="margin:0;color:#334155;line-height:1.6;">${linkifyPlainText(data.revisionReason || 'No reason provided')}</p>
+      </div>
+
+      <div style="margin-top:20px;">
+        <a href="${escapeHtml(data.adminLink)}" style="display:inline-block;background:#991b1b;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:600;font-size:14px;">Open Admin Order View</a>
+      </div>
+    </div>
+  </div>
+</div>
+`.trim();
+}
+
+function buildAdminRevisionText(data) {
+  return [
+    `Revision requested: #${data.orderId}`,
+    `Customer: ${data.customerEmail || 'N/A'}`,
+    `Product: ${data.productTitle}`,
+    `Revision count: ${data.revisionCount || 1}`,
+    `Status: ${data.status || 'revision'}`,
+    `Reason: ${data.revisionReason || 'No reason provided'}`,
+    `Admin order view: ${data.adminLink}`
+  ].join('\n');
+}
+
 async function sendBrevoEmail(env, message) {
   const apiKey = String(env.BREVO_API_KEY || '').trim();
   if (!apiKey) {
@@ -405,6 +525,30 @@ async function enrichOrderData(env, orderData) {
   const customerEmail = normalizeEmail(orderData.customerEmail || orderData.customer_email || orderData.email);
   const currency = String(orderData.currency || 'USD').toUpperCase();
   const amountLabel = formatMoney(orderData.amount, currency);
+  const deliveryUrl = coalesceUrl(
+    orderData.deliveryUrl,
+    orderData.delivery_url,
+    orderData.downloadUrl,
+    orderData.download_url,
+    orderData.archiveUrl,
+    orderData.archive_url,
+    orderData.videoUrl,
+    orderData.video_url,
+    orderData.youtubeUrl,
+    orderData.youtube_url
+  );
+  const videoUrl = coalesceUrl(
+    orderData.videoUrl,
+    orderData.video_url,
+    orderData.embedUrl,
+    orderData.embed_url,
+    orderData.youtubeUrl,
+    orderData.youtube_url,
+    deliveryUrl
+  );
+  const youtubeUrl = coalesceUrl(orderData.youtubeUrl, orderData.youtube_url);
+  const revisionReason = String(orderData.revisionReason || orderData.revision_reason || '').trim();
+  const revisionCount = Math.max(0, Math.round(asNumber(orderData.revisionCount || orderData.revision_count, 0)));
 
   return {
     orderId,
@@ -419,69 +563,115 @@ async function enrichOrderData(env, orderData) {
     paymentMethod: String(orderData.paymentMethod || orderData.payment_method || 'Online Checkout'),
     orderSource: String(orderData.orderSource || orderData.source || 'website'),
     createdAt: formatTimestamp(orderData.createdAt || orderData.created_at),
+    deliveryUrl,
+    videoUrl,
+    youtubeUrl,
+    revisionReason,
+    revisionCount,
+    status: String(orderData.status || 'revision').trim() || 'revision',
     buyerLink: `${baseUrl}/buyer-order.html?id=${encodeURIComponent(orderId)}`,
     adminLink: `${baseUrl}/order-detail.html?id=${encodeURIComponent(orderId)}&admin=1`
   };
 }
 
-export async function sendOrderNotificationEmails(env, orderData = {}) {
+async function sendNotificationBatch(env, messages = []) {
   const apiKey = String(env.BREVO_API_KEY || '').trim();
   if (!apiKey) {
     return { skipped: true, reason: 'BREVO_API_KEY missing' };
   }
 
-  const data = await enrichOrderData(env, orderData);
-  if (!data.orderId) {
-    return { skipped: true, reason: 'Missing orderId' };
-  }
-
   const fromEmail = resolveFromEmail(env);
-  const fromName = resolveFromName(env);
-  const adminEmail = resolveAdminEmail(env, orderData);
-  const buyerEmail = data.customerEmail;
-
   if (!fromEmail) {
-    return { skipped: true, reason: 'Missing sender email' };
+    return { skipped: true, reason: 'Missing sender email (BREVO_FROM_EMAIL)' };
   }
 
-  const tasks = [];
+  const fromName = resolveFromName(env);
+  const validMessages = messages.filter((message) => Array.isArray(message?.to) && message.to.length);
 
-  if (buyerEmail) {
-    tasks.push(sendBrevoEmail(env, {
-      sender: { name: fromName, email: fromEmail },
-      to: [{ email: buyerEmail }],
-      subject: `Order Confirmed #${data.orderId} - ${data.productTitle}`,
-      htmlContent: buildBuyerHtml(data),
-      textContent: buildBuyerText(data),
-      tags: ['order', 'buyer', 'confirmation']
-    }));
+  if (!validMessages.length) {
+    return { skipped: true, reason: 'No recipients configured' };
   }
 
-  if (adminEmail) {
-    tasks.push(sendBrevoEmail(env, {
-      sender: { name: fromName, email: fromEmail },
-      to: [{ email: adminEmail }],
-      subject: `New Order #${data.orderId} - ${data.productTitle}`,
-      htmlContent: buildAdminHtml(data),
-      textContent: buildAdminText(data),
-      tags: ['order', 'admin', 'new-order']
-    }));
-  }
+  const settled = await Promise.allSettled(
+    validMessages.map((message) => sendBrevoEmail(env, {
+      ...message,
+      sender: { name: fromName, email: fromEmail }
+    }))
+  );
 
-  if (!tasks.length) {
-    return { skipped: true, reason: 'No buyer/admin email configured' };
-  }
-
-  const settled = await Promise.allSettled(tasks);
   const failures = settled.filter((x) => x.status === 'rejected');
-
   if (failures.length) {
     console.error('Order email(s) failed:', failures.map((f) => f.reason?.message || f.reason));
   }
 
   return {
-    attempted: tasks.length,
+    attempted: validMessages.length,
     failed: failures.length,
     success: failures.length === 0
   };
+}
+
+export async function sendOrderNotificationEmails(env, orderData = {}) {
+  const data = await enrichOrderData(env, orderData);
+  if (!data.orderId) {
+    return { skipped: true, reason: 'Missing orderId' };
+  }
+
+  const adminEmail = resolveAdminEmail(env, orderData);
+  const buyerEmail = data.customerEmail;
+  return sendNotificationBatch(env, [
+    buyerEmail ? {
+      to: [{ email: buyerEmail }],
+      subject: `Order Confirmed #${data.orderId} - ${data.productTitle}`,
+      htmlContent: buildBuyerHtml(data),
+      textContent: buildBuyerText(data),
+      tags: ['order', 'buyer', 'confirmation']
+    } : null,
+    adminEmail ? {
+      to: [{ email: adminEmail }],
+      subject: `New Order #${data.orderId} - ${data.productTitle}`,
+      htmlContent: buildAdminHtml(data),
+      textContent: buildAdminText(data),
+      tags: ['order', 'admin', 'new-order']
+    } : null
+  ]);
+}
+
+export async function sendOrderDeliveredNotificationEmails(env, orderData = {}) {
+  const data = await enrichOrderData(env, orderData);
+  if (!data.orderId) {
+    return { skipped: true, reason: 'Missing orderId' };
+  }
+
+  if (!data.customerEmail) {
+    return { skipped: true, reason: 'Missing buyer email' };
+  }
+
+  return sendNotificationBatch(env, [{
+    to: [{ email: data.customerEmail }],
+    subject: `Your Order #${data.orderId} Is Ready - ${data.productTitle}`,
+    htmlContent: buildBuyerDeliveryHtml(data),
+    textContent: buildBuyerDeliveryText(data),
+    tags: ['order', 'buyer', 'delivered']
+  }]);
+}
+
+export async function sendOrderRevisionRequestedNotificationEmails(env, orderData = {}) {
+  const data = await enrichOrderData(env, orderData);
+  if (!data.orderId) {
+    return { skipped: true, reason: 'Missing orderId' };
+  }
+
+  const adminEmail = resolveAdminEmail(env, orderData);
+  if (!adminEmail) {
+    return { skipped: true, reason: 'Missing admin email' };
+  }
+
+  return sendNotificationBatch(env, [{
+    to: [{ email: adminEmail }],
+    subject: `Revision Requested #${data.orderId} - ${data.productTitle}`,
+    htmlContent: buildAdminRevisionHtml(data),
+    textContent: buildAdminRevisionText(data),
+    tags: ['order', 'admin', 'revision']
+  }]);
 }
