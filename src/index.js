@@ -1738,7 +1738,7 @@ function applySeoToHtml(html, robots, canonical, meta = {}) {
     out = upsertMetaTag(out, 'name', 'twitter:image', ogImage);
   }
 
-  return out;
+  return rewriteLegacyInternalLinksInHtml(out);
 }
 
 function formatBlogArchiveDate(value) {
