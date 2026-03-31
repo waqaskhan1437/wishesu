@@ -9,6 +9,8 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-danger" onclick="deleteAllBlogs()">Delete All Blogs</button>
           <button class="btn btn-primary" onclick="window.location.href='/admin/blog-form.html'">+ Add Blog Post</button>
+          <button class="btn" style="background:#10b981;color:white;" onclick="exportBlogsCsv()">Export CSV</button>
+          <button class="btn" style="background:#8b5cf6;color:white;" onclick="importBlogsCsv()">Import CSV</button>
         </div>
       </div>
       <div class="table-container">
@@ -157,6 +159,33 @@
       alert('Error deleting all blogs');
       console.error(err);
     }
+  };
+
+  // Export blogs as CSV
+  window.exportBlogsCsv = function() {
+    window.open('/api/admin/export/blogs/csv', '_blank');
+  };
+
+  // Import blogs from CSV
+  window.importBlogsCsv = function() {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.onchange = async function() {
+      var file = input.files[0];
+      if (!file) return;
+      try {
+        var text = await file.text();
+        var rows = AD.parseCsv(text);
+        if (!rows.length) { AD.toast('CSV file is empty or has no data rows', false); return; }
+        var data = await AD.adminPostJson('/api/admin/import/blogs', { blogs: rows });
+        AD.toast('Imported ' + (data.imported || 0) + ' blogs', true);
+        AD.loadView('blog');
+      } catch (err) {
+        AD.toast('Import failed: ' + err.message, false);
+      }
+    };
+    input.click();
   };
 
   console.log('✅ Dashboard Blog loaded');

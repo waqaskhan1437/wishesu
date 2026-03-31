@@ -48,3 +48,20 @@ export function errorResponse(message, status = 500) {
 export function successResponse(data = {}) {
   return json({ success: true, ...data });
 }
+
+/**
+ * Create a CSV file download response with CORS headers
+ * @param {string} csvString - CSV content
+ * @param {string} filename - Download filename
+ * @returns {Response}
+ */
+export function csvResponse(csvString, filename) {
+  return new Response(csvString, {
+    status: 200,
+    headers: {
+      ...CORS,
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`
+    }
+  });
+}

@@ -9,6 +9,8 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-danger" onclick="deleteAllProducts()">Delete All Products</button>
           <button class="btn btn-primary" onclick="window.location.href='/admin/product-form.html'">+ Add Product</button>
+          <button class="btn" style="background:#10b981;color:white;" onclick="exportProductsCsv()">Export CSV</button>
+          <button class="btn" style="background:#8b5cf6;color:white;" onclick="importProductsCsv()">Import CSV</button>
         </div>
       </div>
       <div class="table-container">
@@ -136,6 +138,33 @@
   // Keep legacy function for compatibility
   window.showProductDetail = function(id) {
     window.location.href = `/admin/product-form.html?id=${id}`;
+  };
+
+  // Export products as CSV
+  window.exportProductsCsv = function() {
+    window.open('/api/admin/export/products/csv', '_blank');
+  };
+
+  // Import products from CSV
+  window.importProductsCsv = function() {
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.onchange = async function() {
+      var file = input.files[0];
+      if (!file) return;
+      try {
+        var text = await file.text();
+        var rows = AD.parseCsv(text);
+        if (!rows.length) { AD.toast('CSV file is empty or has no data rows', false); return; }
+        var data = await AD.adminPostJson('/api/admin/import/products', { products: rows });
+        AD.toast('Imported ' + (data.imported || 0) + ' products', true);
+        AD.loadView('products');
+      } catch (err) {
+        AD.toast('Import failed: ' + err.message, false);
+      }
+    };
+    input.click();
   };
 
   console.log('✅ Dashboard Products loaded');

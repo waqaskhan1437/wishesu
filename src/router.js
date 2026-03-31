@@ -3,10 +3,28 @@
  * Optimized: DB initialization performed once at top level for all /api/ routes
  */
 
-import { json } from './utils/response.js';
+import { json, csvResponse } from './utils/response.js';
 import { initDB } from './config/db.js';
 import { isAdminAuthed } from './utils/auth.js';
 import { slugifyStr } from './utils/formatting.js';
+
+// CSV helpers
+function csvEscapeField(value) {
+  if (value === null || value === undefined) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return '"' + str.replace(/"/g, '""') + '"';
+  }
+  return str;
+}
+
+function rowsToCsv(rows, columns) {
+  const header = columns.map(csvEscapeField).join(',');
+  const lines = rows.map(row =>
+    columns.map(col => csvEscapeField(row[col])).join(',')
+  );
+  return header + '\n' + lines.join('\n');
+}
 
 // Products
 import {
@@ -1873,6 +1891,26 @@ export async function routeApiRequest(req, env, url, path, method) {
     try {
       const blogs = await env.DB.prepare('SELECT * FROM blogs').all();
       return json({ success: true, data: blogs.results || [] });
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
+  if (method === 'GET' && path === '/api/admin/export/products/csv') {
+    try {
+      const products = await env.DB.prepare('SELECT * FROM products').all();
+      const columns = ['id','title','slug','description','normal_price','sale_price','instant_delivery','normal_delivery_text','thumbnail_url','video_url','gallery_images','addons_json','seo_title','seo_description','seo_keywords','seo_canonical','whop_plan','whop_price_map','whop_product_id','status','featured','sort_order','created_at','updated_at'];
+      return csvResponse(rowsToCsv(products.results || [], columns), 'products.csv');
+    } catch (err) {
+      return json({ error: err.message }, 500);
+    }
+  }
+
+  if (method === 'GET' && path === '/api/admin/export/blogs/csv') {
+    try {
+      const blogs = await env.DB.prepare('SELECT * FROM blogs').all();
+      const columns = ['id','title','slug','description','content','thumbnail_url','custom_css','custom_js','seo_title','seo_description','seo_keywords','status','created_at','updated_at'];
+      return csvResponse(rowsToCsv(blogs.results || [], columns), 'blogs.csv');
     } catch (err) {
       return json({ error: err.message }, 500);
     }
