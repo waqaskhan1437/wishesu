@@ -4235,7 +4235,16 @@ if (method === 'GET' || method === 'HEAD') {
     // These files don't need DB, SEO injection, or any processing
     const staticExtensions = /\.(css|js|ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|mp4|webm|mp3|pdf)$/i;
     if ((method === 'GET' || method === 'HEAD') && staticExtensions.test(path) && env.ASSETS) {
-      const assetResp = await env.ASSETS.fetch(req);
+      // Strip conditional headers so the asset layer always returns the full
+      // response instead of 304, which shows as an "Unknown origin" subrequest.
+      const staticHeaders = new Headers(req.headers);
+      staticHeaders.delete('If-None-Match');
+      staticHeaders.delete('If-Modified-Since');
+      const assetResp = await env.ASSETS.fetch(new Request(req.url, {
+        method: req.method,
+        headers: staticHeaders,
+        redirect: 'manual'
+      }));
       if (assetResp.status === 200) {
         const headers = new Headers(assetResp.headers); headers.set('Alt-Svc', 'clear');
         // Cache static assets aggressively, but avoid long-lived caching for admin assets
@@ -5063,7 +5072,15 @@ if (method === 'GET' || method === 'HEAD') {
             '/products/': '/products-grid.html',
             '/products/index.html': '/products-grid.html',
             '/products-grid': '/products-grid.html',
-            '/products-grid/': '/products-grid.html'
+            '/products-grid/': '/products-grid.html',
+            '/checkout': '/checkout.html',
+            '/checkout/': '/checkout.html',
+            '/success': '/success.html',
+            '/success/': '/success.html',
+            '/buyer-order': '/buyer-order.html',
+            '/buyer-order/': '/buyer-order.html',
+            '/order-detail': '/order-detail.html',
+            '/order-detail/': '/order-detail.html'
           };
           const archiveTarget = archiveAssetAliases[assetPath];
           if (archiveTarget) {
@@ -5072,27 +5089,75 @@ if (method === 'GET' || method === 'HEAD') {
             assetReq = new Request(rewritten.toString(), req);
             assetPath = archiveTarget;
           }
+
+          // Generic path resolution: for extensionless paths not already
+          // aliased above, try resolving to {path}.html or {path}/index.html
+          // to prevent the asset layer from returning 307 redirects.
+          if (!archiveTarget && !assetPath.includes('.') && assetPath !== '/') {
+            const cleanPath = assetPath.endsWith('/') ? assetPath.slice(0, -1) : assetPath;
+            const rewritten = new URL(req.url);
+            rewritten.pathname = cleanPath + '.html';
+            assetReq = new Request(rewritten.toString(), req);
+            assetPath = cleanPath + '.html';
+          }
         }
+
+        // Broader path rejection: skip the asset layer for requests that are
+        // clearly not valid static files to avoid unnecessary 404 subrequests.
+        const skipAssetFetch =
+          // Double-extension probes (e.g. /file.php.bak)
+          /\.[a-z]{2,5}\.[a-z]{2,5}$/i.test(assetPath) ||
+          // Extremely long paths (>120 chars) are almost always scanner noise
+          assetPath.length > 120 ||
+          // Paths with encoded traversal or null bytes
+          assetPath.includes('%00') || assetPath.includes('..');
+
+        if (skipAssetFetch) {
+          return new Response('Not found', {
+            status: 404,
+            headers: {
+              'Content-Type': 'text/plain',
+              'Cache-Control': 'public, max-age=300',
+              'X-Worker-Version': VERSION
+            }
+          });
+        }
+
+        // Strip conditional headers (If-None-Match, If-Modified-Since) from the
+        // request sent to the asset binding.  The worker always needs the full
+        // response body to perform SSR injection; letting the asset layer return
+        // 304 just creates unnecessary subrequests in the Cloudflare metrics.
+        const strippedHeaders = new Headers(assetReq.headers);
+        strippedHeaders.delete('If-None-Match');
+        strippedHeaders.delete('If-Modified-Since');
+        assetReq = new Request(assetReq.url, {
+          method: assetReq.method,
+          headers: strippedHeaders,
+          redirect: 'manual'
+        });
 
         let assetResp = await env.ASSETS.fetch(assetReq);
 
-        // Defensive fallback for product listing route: if the asset layer
-        // responds with a redirect or not-found for `/products`, serve the
-        // concrete grid file directly to avoid loops and 404 indexing issues.
-        if (
-          (method === 'GET' || method === 'HEAD') &&
-          (assetPath === '/products' || assetPath === '/products/') &&
-          [301, 302, 307, 308, 404].includes(assetResp.status)
-        ) {
-          try {
-            const fallbackUrl = new URL('/products-grid.html', req.url);
-            assetReq = new Request(fallbackUrl.toString(), req);
-            assetPath = '/products-grid.html';
-            const fallbackResp = await env.ASSETS.fetch(assetReq);
-            if (fallbackResp.status === 200) {
-              assetResp = fallbackResp;
-            }
-          } catch (_) {}
+        // Handle redirect responses from the asset layer internally instead of
+        // letting them become additional subrequests.  When the asset binding
+        // returns 301/302/307/308, follow the Location header once.
+        if ([301, 302, 307, 308].includes(assetResp.status)) {
+          const location = assetResp.headers.get('Location');
+          if (location) {
+            try {
+              const redirectUrl = new URL(location, req.url);
+              const redirectReq = new Request(redirectUrl.toString(), {
+                method: method === 'HEAD' ? 'HEAD' : 'GET',
+                headers: strippedHeaders,
+                redirect: 'manual'
+              });
+              const redirectResp = await env.ASSETS.fetch(redirectReq);
+              if (redirectResp.status === 200) {
+                assetResp = redirectResp;
+                assetPath = redirectUrl.pathname;
+              }
+            } catch (_) {}
+          }
         }
         
         const contentType = assetResp.headers.get('content-type') || '';
