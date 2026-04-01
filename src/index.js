@@ -1144,7 +1144,12 @@ function upsertMetaTagsBatch(html, tags) {
     const attr = type === 'property' ? 'property' : 'name';
     const escapedContent = escapeHtmlText(content);
     const tag = `<meta ${attr}="${name}" content="${escapedContent}">`;
-    const regex = new RegExp(`<meta\\s+${attr}=["']${name}["'][^>]*content=["']([^"']*)["'][^>]*>`, 'i');
+    const cacheKey = `${attr}=${name}`;
+    let regex = metaTagRegexCache.get(cacheKey);
+    if (!regex) {
+      regex = new RegExp(`<meta\\s+${attr}=["']${name}["'][^>]*content=["']([^"']*)["'][^>]*>`, 'i');
+      metaTagRegexCache.set(cacheKey, regex);
+    }
 
     const match = regex.exec(out);
     if (match) {
@@ -1286,28 +1291,15 @@ function normalizeStoredPageHtml(html) {
   }
 
   // De-duplicate singleton tags: keep last occurrence of each, batch into one pass.
-  // Instead of 14 individual preferLastSingletonTag calls (each doing regex + appendToHead),
-  // we collect all singleton patterns, find their last matches in head, strip all, then
-  // re-append the preferred ones in a single appendToHead call.
-  const singletonPatterns = [
-    /<title\b[^>]*>[\s\S]*?<\/title>/gi,
-    /<meta\s+[^>]*name=["']description["'][^>]*>/gi,
-    /<meta\s+[^>]*name=["']keywords["'][^>]*>/gi,
-    /<meta\s+[^>]*property=["']og:title["'][^>]*>/gi,
-    /<meta\s+[^>]*property=["']og:description["'][^>]*>/gi,
-    /<meta\s+[^>]*property=["']og:image["'][^>]*>/gi,
-    /<meta\s+[^>]*property=["']og:url["'][^>]*>/gi,
-    /<meta\s+[^>]*property=["']og:type["'][^>]*>/gi,
-    /<meta\s+[^>]*property=["']og:site_name["'][^>]*>/gi,
-    /<meta\s+[^>]*name=["']twitter:card["'][^>]*>/gi,
-    /<meta\s+[^>]*name=["']twitter:title["'][^>]*>/gi,
-    /<meta\s+[^>]*name=["']twitter:description["'][^>]*>/gi,
-    /<meta\s+[^>]*name=["']twitter:image["'][^>]*>/gi,
-    /<link\s+[^>]*rel=["']canonical["'][^>]*>/gi
-  ];
+  // Short-circuit: if no duplicates of the two most common singletons, skip the expensive loop.
+  const titleCount = (out.match(/<title\b/gi) || []).length;
+  const descCount = (out.match(/<meta\s+[^>]*name=["']description["']/gi) || []).length;
+  if (titleCount <= 1 && descCount <= 1) {
+    return out.replace(/\n{3,}/g, '\n\n');
+  }
 
   const preferred = [];
-  for (const pattern of singletonPatterns) {
+  for (const pattern of SINGLETON_PATTERNS) {
     const matches = out.match(pattern);
     if (!matches || matches.length === 0) continue;
     preferred.push(matches[matches.length - 1].trim());
@@ -1484,6 +1476,66 @@ function isSensitiveNoindexPath(pathname) {
 }
 
 const SITE_COMPONENTS_SSR_TTL_MS = 3 * 60 * 1000; // 3 minutes (was 10s)
+
+// General settings cache (keyed by setting key, 3-min TTL)
+const settingsCache = new Map();
+const SETTINGS_CACHE_TTL = 3 * 60 * 1000;
+
+async function getCachedSettings(env, keys) {
+  const now = Date.now();
+  const missing = [];
+  const result = new Map();
+  for (const key of keys) {
+    const cached = settingsCache.get(key);
+    if (cached && (now - cached.ts) < SETTINGS_CACHE_TTL) {
+      result.set(key, cached.value);
+    } else {
+      missing.push(key);
+    }
+  }
+  if (missing.length > 0 && env?.DB) {
+    try {
+      await initDB(env);
+      const rows = await env.DB.prepare(
+        `SELECT key, value FROM settings WHERE key IN (${missing.map(() => '?').join(',')})`
+      ).bind(...missing).all();
+      for (const row of (rows.results || [])) {
+        const k = String(row.key || '');
+        settingsCache.set(k, { value: row.value, ts: now });
+        result.set(k, row.value);
+      }
+      // Cache nulls for missing keys to avoid re-querying
+      for (const key of missing) {
+        if (!result.has(key)) {
+          settingsCache.set(key, { value: null, ts: now });
+          result.set(key, null);
+        }
+      }
+    } catch (_) {}
+  }
+  return result;
+}
+
+// Pre-compiled singleton patterns for normalizeStoredPageHtml (avoid re-allocation per call)
+const SINGLETON_PATTERNS = [
+  /<title\b[^>]*>[\s\S]*?<\/title>/gi,
+  /<meta\s+[^>]*name=["']description["'][^>]*>/gi,
+  /<meta\s+[^>]*name=["']keywords["'][^>]*>/gi,
+  /<meta\s+[^>]*property=["']og:title["'][^>]*>/gi,
+  /<meta\s+[^>]*property=["']og:description["'][^>]*>/gi,
+  /<meta\s+[^>]*property=["']og:image["'][^>]*>/gi,
+  /<meta\s+[^>]*property=["']og:url["'][^>]*>/gi,
+  /<meta\s+[^>]*property=["']og:type["'][^>]*>/gi,
+  /<meta\s+[^>]*property=["']og:site_name["'][^>]*>/gi,
+  /<meta\s+[^>]*name=["']twitter:card["'][^>]*>/gi,
+  /<meta\s+[^>]*name=["']twitter:title["'][^>]*>/gi,
+  /<meta\s+[^>]*name=["']twitter:description["'][^>]*>/gi,
+  /<meta\s+[^>]*name=["']twitter:image["'][^>]*>/gi,
+  /<link\s+[^>]*rel=["']canonical["'][^>]*>/gi
+];
+
+// Pre-compiled regex cache for upsertMetaTagsBatch (keyed by "attr=name")
+const metaTagRegexCache = new Map();
 const siteComponentsSsrCache = {
   value: null,
   fetchedAt: 0,
@@ -2201,12 +2253,24 @@ function normalizeSsrIdList(idsInput = []) {
     .slice(0, 50);
 }
 
+const productQueryCache = new Map();
+const PRODUCT_QUERY_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
 async function queryProductsForComponentSsr(env, options = {}) {
   const limit = normalizeSsrInteger(options.limit, 12, 1, 100);
   const page = normalizeSsrInteger(options.page, 1, 1, 100);
   const offset = (page - 1) * limit;
   const filter = String(options.filter || 'all').trim().toLowerCase();
   const requestedIds = normalizeSsrIdList(options.ids);
+
+  // Check cache (skip for ID-based queries as they're less frequent)
+  const cacheKey = requestedIds.length > 0
+    ? `ids:${requestedIds.join(',')}:${limit}`
+    : `${filter}:${page}:${limit}`;
+  const cached = productQueryCache.get(cacheKey);
+  if (cached && (Date.now() - cached.ts) < PRODUCT_QUERY_CACHE_TTL) {
+    return cached.value;
+  }
 
   if (requestedIds.length > 0) {
     const numericIds = requestedIds.filter((item) => /^\d+$/.test(item));
@@ -2256,10 +2320,13 @@ async function queryProductsForComponentSsr(env, options = {}) {
         average_rating: item.rating_average ? Math.round(item.rating_average * 10) / 10 : 0
       }));
 
-    return {
+    const result = {
       products: ordered,
       pagination: { page: 1, limit, total: ordered.length, pages: 1 }
     };
+    productQueryCache.set(cacheKey, { value: result, ts: Date.now() });
+    if (productQueryCache.size > 100) productQueryCache.delete(productQueryCache.keys().next().value);
+    return result;
   }
 
   let whereClause = `WHERE ${buildPublicProductStatusWhere('p.status')}`;
@@ -2293,7 +2360,7 @@ async function queryProductsForComponentSsr(env, options = {}) {
     average_rating: item.rating_average ? Math.round(item.rating_average * 10) / 10 : 0
   }));
 
-  return {
+  const result = {
     products,
     pagination: {
       page,
@@ -2302,6 +2369,9 @@ async function queryProductsForComponentSsr(env, options = {}) {
       pages: Math.max(1, Math.ceil((totalRow?.count || 0) / limit))
     }
   };
+  productQueryCache.set(cacheKey, { value: result, ts: Date.now() });
+  if (productQueryCache.size > 100) productQueryCache.delete(productQueryCache.keys().next().value);
+  return result;
 }
 
 async function queryBlogsForComponentSsr(env, options = {}) {
@@ -5290,7 +5360,7 @@ if (method === 'GET' || method === 'HEAD') {
                 // OPTIMIZED: Run product + reviews + settings + whop gateway ALL in a single Promise.all
                 // This reduces from 2 sequential rounds to 1 round of parallel queries
                 const numPid = Number(productId);
-                const [productResult, reviewsResult, settingsRowsResult, whopGateway] = await Promise.all([
+                const [productResult, reviewsResult, settingsMap, whopGateway] = await Promise.all([
                   env.DB.prepare(`
                     SELECT p.*,
                       COUNT(r.id) as review_count,
@@ -5303,9 +5373,7 @@ if (method === 'GET' || method === 'HEAD') {
                   env.DB.prepare(
                     'SELECT * FROM reviews WHERE product_id = ? AND status = ? ORDER BY created_at DESC LIMIT 5'
                   ).bind(numPid, 'approved').all(),
-                  env.DB.prepare(
-                    'SELECT key, value FROM settings WHERE key IN (?, ?, ?)'
-                  ).bind('site_branding', 'site_components', 'whop').all(),
+                  getCachedSettings(env, ['site_branding', 'site_components', 'whop']),
                   env.DB.prepare(`
                     SELECT whop_product_id, whop_theme, webhook_secret, whop_api_key
                     FROM payment_gateways
@@ -5350,11 +5418,6 @@ if (method === 'GET' || method === 'HEAD') {
                           LIMIT 1
                         `).bind(product.sort_order, product.sort_order, product.id).first()
                       ]);
-
-                      const settingsRows = settingsRowsResult && Array.isArray(settingsRowsResult.results)
-                        ? settingsRowsResult.results
-                        : [];
-                      const settingsMap = new Map(settingsRows.map((row) => [String(row.key || ''), row.value]));
 
                       try {
                         const brandingRaw = settingsMap.get('site_branding');
@@ -5534,15 +5597,13 @@ if (method === 'GET' || method === 'HEAD') {
                   try {
                     const productSeo = await getSeoForRequest(env, req, { product });
                     const ogUrlTag = `<meta property="og:url" content="${productSeo.canonical}">`;
-                    html = html.replace('</head>', `${ogUrlTag}\n</head>`);
-
-                    // Fix 9: Add BreadcrumbList schema to product pages
                     const breadcrumbJson = generateBreadcrumbSchema([
                       { name: 'Home', url: baseUrl },
                       { name: 'Products', url: `${baseUrl}/products` },
                       { name: product.title || '', url: productSeo.canonical }
                     ]);
-                    html = html.replace('</head>', `<script type="application/ld+json">${breadcrumbJson}</script>\n</head>`);
+                    // Batch both injections into a single </head> replacement
+                    html = html.replace('</head>', `${ogUrlTag}\n<script type="application/ld+json">${breadcrumbJson}</script>\n</head>`);
                   } catch (_) {}
                 }
               }
@@ -5559,22 +5620,9 @@ if (method === 'GET' || method === 'HEAD') {
             ) {
               if (env.DB) {
                 await initDB(env);
-                // OPTIMIZED: Use LEFT JOIN instead of correlated subqueries, add LIMIT 50
-                const productsResult = await env.DB.prepare(`
-                  SELECT p.id, p.title, p.slug, p.description, p.normal_price, p.sale_price,
-                    p.thumbnail_url, p.video_url, p.instant_delivery, p.normal_delivery_text,
-                    p.sort_order, p.featured,
-                    COUNT(r.id) as review_count,
-                    AVG(r.rating) as rating_average
-                  FROM products p
-                  LEFT JOIN reviews r ON p.id = r.product_id AND r.status = 'approved'
-                  WHERE ${buildPublicProductStatusWhere('p.status')}
-                  GROUP BY p.id
-                  ORDER BY p.sort_order ASC, p.id DESC
-                  LIMIT 50
-                `).all();
-
-                const products = productsResult.results || [];
+                // Reuse cached queryProductsForComponentSsr instead of a separate heavy query
+                const cachedResult = await queryProductsForComponentSsr(env, { limit: 50, page: 1 });
+                const products = cachedResult.products || [];
                 if (products.length > 0) {
                   const schemaJson = generateCollectionSchema(products, baseUrl);
                   html = injectSchemaIntoHTML(html, 'collection-schema', schemaJson);
