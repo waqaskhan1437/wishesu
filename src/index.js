@@ -1602,7 +1602,7 @@ function injectGlobalHeaderSsr(html, headerCode) {
   if (!/<body[^>]*>/i.test(html)) return html;
   return String(html).replace(
     /<body([^>]*)>/i,
-    `<body$1>\n<div id="global-header">${headerCode}</div>`
+    `<body$1>\n<header id="global-header" role="banner">${headerCode}</header>`
   );
 }
 
@@ -1612,9 +1612,9 @@ function injectGlobalFooterSsr(html, footerCode) {
   if (withSlot !== html) return withSlot;
   const source = String(html);
   if (/<\/body>/i.test(source)) {
-    return source.replace(/<\/body>/i, `<div id="global-footer">${footerCode}</div>\n</body>`);
+    return source.replace(/<\/body>/i, `<footer id="global-footer" role="contentinfo">${footerCode}</footer>\n</body>`);
   }
-  return `${source}\n<div id="global-footer">${footerCode}</div>`;
+  return `${source}\n<footer id="global-footer" role="contentinfo">${footerCode}</footer>`;
 }
 
 function isExcludedFromGlobalComponents(excludedPages, pathname) {

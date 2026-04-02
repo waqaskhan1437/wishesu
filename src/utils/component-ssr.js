@@ -130,7 +130,7 @@ function renderProductCard(product, options = {}) {
   return `
     <a href="${productUrl}" class="product-card" data-product-id="${escapeHtml(String(id || ''))}" style="text-decoration:none; color:inherit; display:block;">
       <div class="product-thumbnail">
-        <img src="${escapeHtml(thumbnailUrl || '/placeholder.jpg')}" alt="${productTitle}" loading="lazy">
+        <img src="${escapeHtml(thumbnailUrl || '/placeholder.jpg')}" alt="${productTitle}" loading="lazy" width="400" height="225">
         ${hasDiscount ? `<div class="discount-badge">${discount}% OFF</div>` : ''}
       </div>
       <div class="product-content">
@@ -198,17 +198,17 @@ function renderBlogCard(blog) {
   const date = formatBlogDate(blog?.created_at);
 
   return `
-    <div class="blog-card" onclick="window.location.href='${blogUrl}'">
+    <a href="${blogUrl}" class="blog-card" style="text-decoration:none;color:inherit;display:block;">
       <div class="blog-thumbnail">
-        <img src="${escapeHtml(blog?.thumbnail_url || 'https://via.placeholder.com/400x225?text=No+Image')}" alt="${title}" loading="lazy">
+        <img src="${escapeHtml(blog?.thumbnail_url || '/placeholder.jpg')}" alt="${title}" loading="lazy" width="400" height="225">
       </div>
       <div class="blog-content">
         <h3 class="blog-title">${title}</h3>
         ${date ? `<div class="blog-date">&#128197; ${escapeHtml(date)}</div>` : ''}
         <p class="blog-description">${description}</p>
-        <a href="${blogUrl}" class="blog-read-more" onclick="event.stopPropagation();">Read More &rarr;</a>
+        <span class="blog-read-more">Read More &rarr;</span>
       </div>
-    </div>
+    </a>
   `;
 }
 

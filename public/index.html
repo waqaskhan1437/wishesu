@@ -49,6 +49,7 @@
 <body>
   <!-- Load global components asynchronously -->
   <script defer src="js/global-components.js"></script>
+  <div id="global-header-slot"></div>
   <main>
     <h1>Personalized Video Greetings</h1>
     <div id="product-list"></div>
@@ -59,7 +60,7 @@
   <script defer src="js/products.js"></script>
   <!-- Load chat widget after parsing the document to avoid blocking render -->
   <script defer src="js/chat-widget.js"></script>
-
+  <div id="global-footer-slot"></div>
 </body>
 
 </html>
