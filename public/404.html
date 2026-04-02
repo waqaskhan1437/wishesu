@@ -32,6 +32,13 @@
       color: var(--text-muted);
       margin-bottom: 2rem;
     }
+    .error-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 1rem;
+    }
     .error-link {
       display: inline-block;
       background: var(--primary);
@@ -45,19 +52,41 @@
     .error-link:hover {
       background: var(--primary-hover);
     }
+    .error-link-outline {
+      display: inline-block;
+      background: transparent;
+      color: var(--primary);
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      font-weight: 600;
+      border: 2px solid var(--primary);
+      transition: background 0.2s, color 0.2s;
+    }
+    .error-link-outline:hover {
+      background: var(--primary);
+      color: #fff;
+    }
   </style>
 </head>
 
 <body>
   <script defer src="/js/global-components.js"></script>
+  <div id="global-header-slot"></div>
   <main>
     <div class="error-container">
-      <div class="error-code">404</div>
-      <p class="error-message">Page not found</p>
+      <div class="error-code" aria-hidden="true">404</div>
+      <h1 class="error-message">Page Not Found</h1>
       <p class="error-detail">The page you're looking for doesn't exist or has been moved.</p>
-      <a href="/" class="error-link">Back to Home</a>
+      <nav class="error-nav" aria-label="Helpful links">
+        <a href="/" class="error-link">Back to Home</a>
+        <a href="/products" class="error-link-outline">Browse Products</a>
+        <a href="/blog" class="error-link-outline">Read Blog</a>
+        <a href="/contact" class="error-link-outline">Contact Us</a>
+      </nav>
     </div>
   </main>
+  <div id="global-footer-slot"></div>
 </body>
 
 </html>

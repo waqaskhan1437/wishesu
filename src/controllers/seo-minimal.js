@@ -318,10 +318,21 @@ export async function buildMinimalSitemapXml(env, req) {
     { loc: `${base}/forum`, lastmod: today, changefreq: 'daily', priority: 0.7 }
   );
 
+  // Deduplicate URLs by loc (keep first occurrence which has higher priority)
+  const seenLocs = new Set();
+  const dedupedUrls = [];
+  for (const u of urls) {
+    const normalizedLoc = u.loc.replace(/\/+$/, '') || '/';
+    if (!seenLocs.has(normalizedLoc)) {
+      seenLocs.add(normalizedLoc);
+      dedupedUrls.push(u);
+    }
+  }
+
   // Build XML (UTF-8, Google format)
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.slice(0, 50000).map(u => `  <url>
+${dedupedUrls.slice(0, 50000).map(u => `  <url>
     <loc>${escapeXml(u.loc)}</loc>
     ${u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ''}
     <changefreq>${u.changefreq}</changefreq>

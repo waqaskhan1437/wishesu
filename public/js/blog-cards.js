@@ -102,20 +102,21 @@
       const date = created_at ? this.formatDate(created_at) : '';
       const shortDesc = description ? (description.length > 120 ? description.substring(0, 120) + '...' : description) : '';
 
+      const safeTitle = String(title || 'Blog Post').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       return `
-        <div class="blog-card" onclick="window.location.href='${blogUrl}'">
+        <a class="blog-card" href="${blogUrl}" style="text-decoration:none;color:inherit;display:block;">
           <div class="blog-thumbnail">
-            <img src="${thumbnail_url || 'https://via.placeholder.com/400x225?text=No+Image'}" alt="${title}" loading="lazy">
+            <img src="${thumbnail_url || 'https://via.placeholder.com/400x225?text=No+Image'}" alt="${safeTitle}" width="400" height="225" loading="lazy">
           </div>
           <div class="blog-content">
             <h3 class="blog-title">${title}</h3>
             ${date ? `<div class="blog-date">📅 ${date}</div>` : ''}
             <p class="blog-description">${shortDesc}</p>
-            <a href="${blogUrl}" class="blog-read-more" onclick="event.stopPropagation();">
+            <span class="blog-read-more">
               Read More →
-            </a>
+            </span>
           </div>
-        </div>
+        </a>
       `;
     },
 

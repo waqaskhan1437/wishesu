@@ -1336,15 +1336,23 @@ function applyDefaultPageMetadata(html, pageType, seo = {}) {
       return html;
   }
 
+  // Use configured og_image or fall back to default banner
+  const ogImage = String(seo.ogImage || '').trim();
+  const defaultOgImage = ogImage || (canonical ? new URL('/', canonical).origin + '/og-banner.png' : '/og-banner.png');
+
   let out = upsertTitleTag(html, pageTitle);
   const metaTags = [
     { type: 'name', name: 'description', content: description, alwaysReplace: true },
     { type: 'property', name: 'og:title', content: pageTitle, alwaysReplace: true },
     { type: 'property', name: 'og:description', content: description, alwaysReplace: true },
     { type: 'property', name: 'og:type', content: 'website', alwaysReplace: true },
+    { type: 'property', name: 'og:image', content: defaultOgImage, alwaysReplace: true },
+    { type: 'property', name: 'og:image:width', content: '1200', alwaysReplace: true },
+    { type: 'property', name: 'og:image:height', content: '630', alwaysReplace: true },
     { type: 'name', name: 'twitter:card', content: 'summary_large_image', alwaysReplace: true },
     { type: 'name', name: 'twitter:title', content: pageTitle, alwaysReplace: true },
-    { type: 'name', name: 'twitter:description', content: description, alwaysReplace: true }
+    { type: 'name', name: 'twitter:description', content: description, alwaysReplace: true },
+    { type: 'name', name: 'twitter:image', content: defaultOgImage, alwaysReplace: true }
   ];
   if (canonical) {
     metaTags.push({ type: 'property', name: 'og:url', content: canonical, alwaysReplace: true });
@@ -2013,6 +2021,8 @@ function applySeoToHtml(html, robots, canonical, meta = {}) {
   ];
   if (ogImage) {
     metaTags.push({ type: 'property', name: 'og:image', content: ogImage });
+    metaTags.push({ type: 'property', name: 'og:image:width', content: '1200' });
+    metaTags.push({ type: 'property', name: 'og:image:height', content: '630' });
     metaTags.push({ type: 'name', name: 'twitter:image', content: ogImage });
   }
   out = upsertMetaTagsBatch(out, metaTags);
@@ -5224,6 +5234,22 @@ if (method === 'GET' || method === 'HEAD') {
                     html = appendJsonLdToHead(html, orgSchema, 'home-organization-schema');
                     html = appendJsonLdToHead(html, siteSchema, 'home-website-schema');
                   } catch (_) {}
+
+                  // Extract FAQ items for FAQPage schema on homepage
+                  try {
+                    const faqItems = [];
+                    const faqRegex = /<span[^>]*class="[^"]*faq-question[^"]*"[^>]*>([\s\S]*?)<\/span>[\s\S]*?<div[^>]*class="[^"]*faq-answer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+                    let faqMatch;
+                    while ((faqMatch = faqRegex.exec(html)) !== null) {
+                      const q = faqMatch[1].replace(/<[^>]+>/g, '').trim();
+                      const a = faqMatch[2].replace(/<[^>]+>/g, '').trim();
+                      if (q && a) faqItems.push({ question: q, answer: a });
+                    }
+                    if (faqItems.length > 0) {
+                      const faqSchema = generateFAQPageSchema(faqItems, url.origin);
+                      html = appendJsonLdToHead(html, faqSchema, 'home-faq-schema');
+                    }
+                  } catch (_) {}
                 }
               } catch (e) {
                 // ignore SEO injection errors
@@ -5483,7 +5509,42 @@ if (method === 'GET' || method === 'HEAD') {
                 console.warn('Blog archive SSR injection error:', archiveErr);
               }
             }
-            
+
+            // Forum archive page - inject CollectionPage schema for SEO
+            if ((assetPath === '/forum/' || assetPath === '/forum/index.html') && env.DB) {
+              try {
+                await initDB(env);
+                const forumResult = await queryForumQuestionsForSsr(env, { limit: 20, page: 1 });
+                const questions = forumResult.questions || [];
+                if (questions.length > 0) {
+                  const forumCollectionSchema = {
+                    '@context': 'https://schema.org',
+                    '@type': 'CollectionPage',
+                    name: 'Customer Forum',
+                    url: `${baseUrl}/forum`,
+                    description: 'Browse customer questions about personalized video gifts, orders, delivery, and surprise ideas.',
+                    mainEntity: {
+                      '@type': 'ItemList',
+                      itemListOrder: 'https://schema.org/ItemListOrderDescending',
+                      numberOfItems: forumResult.pagination.total || questions.length,
+                      itemListElement: questions.map((q, idx) => ({
+                        '@type': 'ListItem',
+                        position: idx + 1,
+                        url: `${baseUrl}${buildForumQuestionHref(q)}`,
+                        name: String(q.title || '')
+                      }))
+                    }
+                  };
+                  html = html.replace(
+                    '</head>',
+                    `<script type="application/ld+json">${JSON.stringify(forumCollectionSchema)}</script>\n</head>`
+                  );
+                }
+              } catch (forumSchemaErr) {
+                console.warn('Forum archive schema injection error:', forumSchemaErr);
+              }
+            }
+
             // Product detail page - inject individual product schema
             if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
               const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
@@ -5775,9 +5836,25 @@ if (method === 'GET' || method === 'HEAD') {
                   html = appendJsonLdToHead(html, orgSchema, 'home-organization-schema');
                   html = appendJsonLdToHead(html, siteSchema, 'home-website-schema');
                 } catch (_) {}
+
+                // Extract FAQ items from "How it works" or accordion sections for FAQPage schema
+                try {
+                  const faqItems = [];
+                  const faqRegex = /<span[^>]*class="[^"]*faq-question[^"]*"[^>]*>([\s\S]*?)<\/span>[\s\S]*?<div[^>]*class="[^"]*faq-answer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+                  let faqMatch;
+                  while ((faqMatch = faqRegex.exec(html)) !== null) {
+                    const q = faqMatch[1].replace(/<[^>]+>/g, '').trim();
+                    const a = faqMatch[2].replace(/<[^>]+>/g, '').trim();
+                    if (q && a) faqItems.push({ question: q, answer: a });
+                  }
+                  if (faqItems.length > 0) {
+                    const faqSchema = generateFAQPageSchema(faqItems, baseUrl);
+                    html = appendJsonLdToHead(html, faqSchema, 'home-faq-schema');
+                  }
+                } catch (_) {}
               }
             }
-            
+
             html = await applyComponentSsrToHtml(env, html, url, path);
             html = await applyGlobalComponentsSsr(env, html, path);
 

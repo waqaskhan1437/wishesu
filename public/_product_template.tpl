@@ -9,11 +9,14 @@
   <title>Personalized Video Greeting | prankwish.com</title>
   <meta name="description" content="Order a custom personalized video greeting for birthdays, holidays, and special occasions on prankwish.com.">
   <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://prankwish.com/">
 
   <meta property="og:type" content="product">
   <meta property="og:title" content="Personalized Video Greeting | prankwish.com">
   <meta property="og:description" content="Order a custom personalized video greeting for birthdays, holidays, and special occasions.">
-  <meta property="og:image" content="https://prankwish.com/favicon.svg">
+  <meta property="og:image" content="https://prankwish.com/og-banner.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:site_name" content="prankwish.com">
 
   <meta name="twitter:card" content="summary_large_image">
@@ -132,6 +135,7 @@
       <a href="/" aria-label="Go back to home page">&larr; Back to Home</a>
     </nav>
 
+    <h1 class="sr-only">Personalized Video Greeting</h1>
     <div id="product-container" class="loading-state">
       <!--PRODUCT_INITIAL_CONTENT_START-->
       <!-- Skeleton placeholder matching final layout to prevent CLS -->
@@ -187,6 +191,6 @@
   <script src="/js/payment-selector.js?v=29" defer></script>
   <script src="/js/coupon-widget.js" defer></script>
   <script src="/js/chat-widget.js" defer></script>
-
+  <div id="global-footer-slot"></div>
 </body>
 </html>
