@@ -4495,6 +4495,45 @@ if (method === 'GET' || method === 'HEAD') {
           }
         });
       }
+
+      // Handle common browser/crawler auto-requested files that don't exist
+      // to prevent unnecessary 404s and reduce noise in logs
+      if (path === '/manifest.json' || path === '/site.webmanifest') {
+        return new Response(JSON.stringify({
+          name: 'Site',
+          short_name: 'Site',
+          start_url: '/',
+          display: 'browser',
+          icons: [
+            { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' },
+            { src: '/favicon.ico', sizes: '48x48', type: 'image/x-icon' }
+          ]
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/manifest+json',
+            'Cache-Control': 'public, max-age=86400'
+          }
+        });
+      }
+
+      if (path === '/apple-touch-icon.png' || path === '/apple-touch-icon-precomposed.png' || path === '/apple-touch-icon-120x120.png' || path === '/apple-touch-icon-152x152.png' || path === '/apple-touch-icon-180x180.png') {
+        // Redirect to existing favicon
+        return new Response(null, {
+          status: 301,
+          headers: { 'Location': '/favicon.ico', 'Cache-Control': 'public, max-age=86400' }
+        });
+      }
+
+      if (path === '/browserconfig.xml') {
+        return new Response('<?xml version="1.0" encoding="utf-8"?><browserconfig><msapplication><tile><square150x150logo src="/favicon.ico"/><TileColor>#ffffff</TileColor></tile></msapplication></browserconfig>', {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/xml; charset=utf-8',
+            'Cache-Control': 'public, max-age=86400'
+          }
+        });
+      }
     }
 
     try {
