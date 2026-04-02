@@ -468,6 +468,93 @@ export function generateWebSiteSchema(settings) {
 }
 
 /**
+ * Generate WebPage JSON-LD schema for custom pages
+ * @param {Object} page - Page data (title, slug, meta_description, etc.)
+ * @param {string} baseUrl - Site base URL
+ * @param {Object} settings - Site settings (site_title, etc.)
+ * @returns {string} JSON-LD schema as string
+ */
+export function generateWebPageSchema(page, baseUrl, settings = {}) {
+  const brandName = settings.site_title || resolveSchemaBrandName(baseUrl);
+  const pageUrl = page.slug === 'home'
+    ? `${baseUrl}/`
+    : `${baseUrl}/${page.slug}`;
+
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": page.title || page.slug || 'Page',
+    "description": (page.meta_description || '').substring(0, 160),
+    "url": pageUrl,
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": brandName,
+      "url": baseUrl
+    }
+  };
+
+  if (page.feature_image_url) {
+    schema.primaryImageOfPage = {
+      "@type": "ImageObject",
+      "url": page.feature_image_url
+    };
+  }
+
+  if (page.created_at) {
+    schema.datePublished = new Date(page.created_at).toISOString();
+  }
+  if (page.updated_at) {
+    schema.dateModified = new Date(page.updated_at).toISOString();
+  }
+
+  // Add breadcrumb
+  schema.breadcrumb = {
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": `${baseUrl}/`
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": page.title || page.slug || 'Page',
+        "item": pageUrl
+      }
+    ]
+  };
+
+  return JSON.stringify(schema);
+}
+
+/**
+ * Generate FAQPage JSON-LD schema from FAQ content
+ * @param {Array} faqItems - Array of {question, answer} objects
+ * @param {string} baseUrl - Site base URL
+ * @returns {string} JSON-LD schema as string
+ */
+export function generateFAQPageSchema(faqItems, baseUrl) {
+  if (!Array.isArray(faqItems) || faqItems.length === 0) return '{}';
+
+  const schema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": faqItems.map(item => ({
+      "@type": "Question",
+      "name": item.question || '',
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": item.answer || ''
+      }
+    }))
+  };
+
+  return JSON.stringify(schema);
+}
+
+/**
  * Inject schema into HTML by replacing placeholder
  * @param {string} html - HTML content
  * @param {string} schemaId - Schema placeholder ID

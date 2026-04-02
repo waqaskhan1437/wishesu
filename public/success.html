@@ -743,8 +743,16 @@
             return;
           }
         } catch (err) {}
+        // Order may already exist (created by webhook) — still track purchase
+        if (orderData && orderData.amount) {
+          trackPurchaseEvent(paymentId || receiptId || 'whop-' + Date.now(), orderData.amount);
+        }
       }
 
+      // Last-resort tracking with whatever data we have
+      if (pendingOrderSnapshot && pendingOrderSnapshot.amount) {
+        trackPurchaseEvent(paymentId || receiptId || paypalToken || 'fallback-' + Date.now(), pendingOrderSnapshot.amount);
+      }
       setSoftFallback();
     })();
   </script>

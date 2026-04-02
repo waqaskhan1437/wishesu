@@ -13,7 +13,7 @@ import { handleProductRouting } from './controllers/products.js';
 import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
 import { generateBackupData, sendBackupEmail, createBackup as createBackupApi } from './controllers/backup.js';
-import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML, generateBlogPostingSchema, generateQAPageSchema, generateBreadcrumbSchema, generateOrganizationSchema, generateWebSiteSchema } from './utils/schema.js';
+import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML, generateBlogPostingSchema, generateQAPageSchema, generateBreadcrumbSchema, generateOrganizationSchema, generateWebSiteSchema, generateWebPageSchema, generateFAQPageSchema } from './utils/schema.js';
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildMinimalRobotsTxt, buildMinimalSitemapXml, getMinimalSEOSettings, getSettings as getSeoSettingsDirect } from './controllers/seo-minimal.js';
 import { getNoindexMetaTags, getSeoVisibilityRuleMatch } from './controllers/noindex.js';
@@ -2022,6 +2022,86 @@ function applySeoToHtml(html, robots, canonical, meta = {}) {
   return out;
 }
 
+/**
+ * Wrap custom page content with semantic HTML structure and inject WebPage/FAQ schema.
+ * Ensures <main>, <article>, proper <h1>, aria-labels, and JSON-LD structured data.
+ */
+function enhanceCustomPageHtml(html, pageRow, baseUrl, seoSettings = {}) {
+  let out = String(html || '');
+
+  // Ensure sr-only CSS is present for auto-injected H1
+  if (!out.includes('.sr-only')) {
+    const srOnlyCss = '<style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}</style>';
+    if (/<\/head>/i.test(out)) {
+      out = out.replace(/<\/head>/i, `${srOnlyCss}\n</head>`);
+    }
+  }
+
+  // Extract FAQ items from accordion blocks for FAQPage schema
+  // Match the FAQ block pattern: faq-toggle button with faq-question span, then faq-answer div
+  const faqItems = [];
+  const faqRegex = /<span[^>]*class="[^"]*faq-question[^"]*"[^>]*>([\s\S]*?)<\/span>[\s\S]*?<div[^>]*class="[^"]*faq-answer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+  let faqMatch;
+  while ((faqMatch = faqRegex.exec(out)) !== null) {
+    const q = faqMatch[1].replace(/<[^>]+>/g, '').trim();
+    const a = faqMatch[2].replace(/<[^>]+>/g, '').trim();
+    if (q && a) faqItems.push({ question: q, answer: a });
+  }
+
+  // Wrap body content in semantic <main><article> if not already present
+  if (!/<main[\s>]/i.test(out)) {
+    // Find body content to wrap
+    const bodyOpenMatch = out.match(/<body[^>]*>/i);
+    const bodyCloseMatch = out.match(/<\/body>/i);
+    if (bodyOpenMatch && bodyCloseMatch) {
+      const bodyOpenEnd = bodyOpenMatch.index + bodyOpenMatch[0].length;
+      const bodyCloseStart = bodyCloseMatch.index;
+      const bodyContent = out.slice(bodyOpenEnd, bodyCloseStart);
+      out = out.slice(0, bodyOpenEnd) +
+        '\n<main role="main">\n<article>\n' +
+        bodyContent +
+        '\n</article>\n</main>\n' +
+        out.slice(bodyCloseStart);
+    }
+  }
+
+  // Ensure a single H1 exists - inject from page title if missing
+  if (pageRow && pageRow.title && !/<h1[\s>]/i.test(out)) {
+    const safeTitle = escapeHtmlText(pageRow.title);
+    const mainMatch = out.match(/<main[^>]*>/i);
+    if (mainMatch) {
+      const insertPos = mainMatch.index + mainMatch[0].length;
+      // Check if <article> follows immediately
+      const afterMain = out.slice(insertPos, insertPos + 200);
+      const articleMatch = afterMain.match(/<article[^>]*>/i);
+      if (articleMatch) {
+        const articleEnd = insertPos + articleMatch.index + articleMatch[0].length;
+        out = out.slice(0, articleEnd) + `\n<h1 class="sr-only">${safeTitle}</h1>` + out.slice(articleEnd);
+      } else {
+        out = out.slice(0, insertPos) + `\n<h1 class="sr-only">${safeTitle}</h1>` + out.slice(insertPos);
+      }
+    }
+  }
+
+  // Inject WebPage JSON-LD schema
+  if (pageRow && baseUrl) {
+    try {
+      const webPageSchema = generateWebPageSchema(pageRow, baseUrl, seoSettings);
+      out = appendJsonLdToHead(out, webPageSchema, 'custom-page-schema');
+    } catch (_) {}
+  }
+
+  // Inject FAQPage JSON-LD schema if FAQ blocks are present
+  if (faqItems.length > 0 && baseUrl) {
+    try {
+      const faqSchema = generateFAQPageSchema(faqItems, baseUrl);
+      out = appendJsonLdToHead(out, faqSchema, 'faq-page-schema');
+    } catch (_) {}
+  }
+
+  return out;
+}
+
 function formatBlogArchiveDate(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -2296,7 +2376,7 @@ async function queryProductsForComponentSsr(env, options = {}) {
       SELECT
         p.id, p.title, p.slug, p.normal_price, p.sale_price,
         p.thumbnail_url, p.video_url, p.normal_delivery_text, p.instant_delivery,
-        p.featured,
+        p.featured, p.description,
         COUNT(r.id) as review_count,
         AVG(r.rating) as rating_average
       FROM products p
@@ -2341,7 +2421,7 @@ async function queryProductsForComponentSsr(env, options = {}) {
       SELECT
         p.id, p.title, p.slug, p.normal_price, p.sale_price,
         p.thumbnail_url, p.video_url, p.normal_delivery_text, p.instant_delivery,
-        p.featured,
+        p.featured, p.description,
         COUNT(r.id) as review_count,
         AVG(r.rating) as rating_average
       FROM products p
@@ -4822,17 +4902,24 @@ if (method === 'GET' || method === 'HEAD') {
           try {
             if (env.DB) {
               await initDB(env);
-              const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
+              const row = await env.DB.prepare('SELECT * FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
               if (row && row.content) {
                 // Serve the dynamic page content directly instead of redirecting.
                 let html = await applyComponentSsrToHtml(env, row.content, url, path);
                 html = await applyGlobalComponentsSsr(env, html, path);
                 // Apply SEO tags if available.
+                let seoSettings = {};
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
                   html = applySeoToHtml(html, seo.robots, seo.canonical, seo);
                   html = applySiteTitleToHtml(html, seo.siteTitle);
+                  seoSettings = { site_title: seo.siteTitle, site_url: seo.canonical ? seo.canonical.replace('/' + slug, '') : '' };
                 } catch (e) {}
+                // Enhance with semantic HTML and WebPage/FAQ schema
+                try {
+                  const baseUrl = seoSettings.site_url || url.origin;
+                  html = enhanceCustomPageHtml(html, row, baseUrl, seoSettings);
+                } catch (_) {}
                 // Inject analytics and verification tags on dynamic pages
                 try {
                   html = await injectAnalyticsAndMeta(env, html);
@@ -4860,25 +4947,32 @@ if (method === 'GET' || method === 'HEAD') {
           try {
             if (env.DB) {
               await initDB(env);
-              const row = await env.DB.prepare('SELECT content FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
+              const row = await env.DB.prepare('SELECT * FROM pages WHERE slug = ? AND status = ?').bind(slug, 'published').first();
               if (row && row.content) {
                 let html = await applyComponentSsrToHtml(env, row.content, url, path);
                 html = await applyGlobalComponentsSsr(env, html, path);
 
                 // Apply SEO
+                let seoSettings = {};
                 try {
                   const seo = await getSeoForRequest(env, req, { path: '/' + slug });
                   html = applySeoToHtml(html, seo.robots, seo.canonical, seo);
                   html = applySiteTitleToHtml(html, seo.siteTitle);
+                  seoSettings = { site_title: seo.siteTitle, site_url: seo.canonical ? seo.canonical.replace('/' + slug, '') : '' };
                 } catch (e) {}
+                // Enhance with semantic HTML and WebPage/FAQ schema
+                try {
+                  const baseUrl = seoSettings.site_url || url.origin;
+                  html = enhanceCustomPageHtml(html, row, baseUrl, seoSettings);
+                } catch (_) {}
                 // Inject analytics and verification tags on dynamic pages
                 try {
                   html = await injectAnalyticsAndMeta(env, html);
                 } catch (_) {}
-                
+
                 return new Response(html, {
                   status: 200,
-                  headers: { 
+                  headers: {
                     'Content-Type': 'text/html; charset=utf-8',
                     'X-Worker-Version': VERSION,
                     'Cache-Control': 'public, max-age=120'

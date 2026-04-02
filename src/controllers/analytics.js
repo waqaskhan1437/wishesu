@@ -174,10 +174,10 @@ export async function injectAnalyticsAndMeta(env, html) {
         snippets.push(
           `<!-- Google tag (gtag.js) - deferred for performance -->\n` +
           `<script>\n` +
+          `window.dataLayer = window.dataLayer || [];\n` +
+          `window.gtag = function(){ window.dataLayer.push(arguments); };\n` +
           `window.addEventListener('load', function() {\n` +
           `  function initGA() {\n` +
-          `    window.dataLayer = window.dataLayer || [];\n` +
-          `    window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };\n` +
           `    window.gtag('js', new Date());\n` +
           `    window.gtag('config', '${gaId}');\n` +
           `    var s = document.createElement('script');\n` +
