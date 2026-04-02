@@ -6,16 +6,20 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" href="/favicon.ico" sizes="any">
   
-  <title>Loading Product... | WishVideo</title>
-  <meta name="description" content="Custom personalized video greetings from Africa.">
-  <meta name="keywords" content="video, greeting, birthday, wish, africa">
+  <title>Personalized Video Greeting | prankwish.com</title>
+  <meta name="description" content="Order a custom personalized video greeting for birthdays, holidays, and special occasions on prankwish.com.">
   <meta name="robots" content="index, follow">
-  
+
   <meta property="og:type" content="product">
-  <meta property="og:title" content="Loading...">
-  <meta property="og:description" content="">
-  <meta property="og:image" content="">
-  
+  <meta property="og:title" content="Personalized Video Greeting | prankwish.com">
+  <meta property="og:description" content="Order a custom personalized video greeting for birthdays, holidays, and special occasions.">
+  <meta property="og:image" content="https://prankwish.com/favicon.svg">
+  <meta property="og:site_name" content="prankwish.com">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Personalized Video Greeting | prankwish.com">
+  <meta name="twitter:description" content="Order a custom personalized video greeting for birthdays, holidays, and special occasions.">
+
   <!-- Structured Data for SEO -->
   <script type="application/ld+json" id="product-schema">{}</script>
 

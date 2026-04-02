@@ -279,12 +279,14 @@
           <span class="delivery-text">${deliveryText}</span>
         </div>
       `;
+      // Escape title for safe use in HTML attributes
+      const safeTitle = String(title || 'Product').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       // OPTIMIZED: Use anchor tag for navigation instead of onclick (faster & better SEO)
       return `
         <a href="${productUrl}" class="product-card" data-product-id="${id}" style="text-decoration:none; color:inherit; display:block;">
           <!-- Thumbnail -->
           <div class="product-thumbnail">
-            <img src="${thumbnail_url || '/placeholder.jpg'}" alt="${title}" loading="lazy">
+            <img src="${thumbnail_url || '/placeholder.jpg'}" alt="${safeTitle} - Personalized Video Greeting" width="400" height="225" loading="lazy">
             ${hasDiscount ? `<div class="discount-badge">${discount}% OFF</div>` : ''}
           </div>
 

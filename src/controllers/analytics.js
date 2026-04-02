@@ -170,7 +170,13 @@ export async function injectAnalyticsAndMeta(env, html) {
 
     if (analytics) {
       const { ga_id: gaId = '', google_verify: gVerify = '', bing_verify: bVerify = '', fb_pixel_id: fbPixel = '' } = analytics;
-      if (gaId && !headSection.includes(gaId)) {
+      // Sanitize IDs to prevent XSS - only allow alphanumeric, hyphens, underscores
+      const sanitizeId = (val) => String(val || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      const safeGaId = sanitizeId(gaId);
+      const safeFbPixel = sanitizeId(fbPixel);
+      const safeGVerify = String(gVerify || '').replace(/[<>"'&]/g, '');
+      const safeBVerify = String(bVerify || '').replace(/[<>"'&]/g, '');
+      if (safeGaId && !headSection.includes(safeGaId)) {
         snippets.push(
           `<!-- Google tag (gtag.js) - deferred for performance -->\n` +
           `<script>\n` +
@@ -179,9 +185,9 @@ export async function injectAnalyticsAndMeta(env, html) {
           `window.addEventListener('load', function() {\n` +
           `  function initGA() {\n` +
           `    window.gtag('js', new Date());\n` +
-          `    window.gtag('config', '${gaId}');\n` +
+          `    window.gtag('config', '${safeGaId}');\n` +
           `    var s = document.createElement('script');\n` +
-          `    s.src = 'https://www.googletagmanager.com/gtag/js?id=${gaId}';\n` +
+          `    s.src = 'https://www.googletagmanager.com/gtag/js?id=${safeGaId}';\n` +
           `    s.async = true;\n` +
           `    document.head.appendChild(s);\n` +
           `  }\n` +
@@ -194,13 +200,13 @@ export async function injectAnalyticsAndMeta(env, html) {
           `</script>`
         );
       }
-      if (gVerify && !headSection.includes('google-site-verification')) {
-        snippets.push(`<meta name="google-site-verification" content="${gVerify}">`);
+      if (safeGVerify && !headSection.includes('google-site-verification')) {
+        snippets.push(`<meta name="google-site-verification" content="${safeGVerify}">`);
       }
-      if (bVerify && !headSection.includes('msvalidate.01')) {
-        snippets.push(`<meta name="msvalidate.01" content="${bVerify}">`);
+      if (safeBVerify && !headSection.includes('msvalidate.01')) {
+        snippets.push(`<meta name="msvalidate.01" content="${safeBVerify}">`);
       }
-      if (fbPixel && !headSection.includes(fbPixel)) {
+      if (safeFbPixel && !headSection.includes(safeFbPixel)) {
         snippets.push(
           `<script>\n` +
           `window.addEventListener('load', function() {\n` +
@@ -212,11 +218,11 @@ export async function injectAnalyticsAndMeta(env, html) {
           `   t=b.createElement(e); t.async=!0; t.src=v;\n` +
           `   s=b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t,s)\n` +
           `  }(window, document, 'script','https://connect.facebook.net/en_US/fbevents.js');\n` +
-          `  fbq('init','${fbPixel}');\n` +
+          `  fbq('init','${safeFbPixel}');\n` +
           `  fbq('track','PageView');\n` +
           `});\n` +
           `</script>\n` +
-          `<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${fbPixel}&ev=PageView&noscript=1"/></noscript>`
+          `<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${safeFbPixel}&ev=PageView&noscript=1"/></noscript>`
         );
       }
       if (analytics.custom_script) {

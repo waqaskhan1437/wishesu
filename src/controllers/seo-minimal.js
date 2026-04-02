@@ -26,7 +26,7 @@ const DEFAULT = {
   site_description: '',
   sitemap_enabled: 1,
   robots_enabled: 1,
-  og_enabled: 0,
+  og_enabled: 1,
   og_image: ''
 };
 
@@ -311,10 +311,11 @@ export async function buildMinimalSitemapXml(env, req) {
   } catch (e) {}
 
   // Core pages
+  const today = new Date().toISOString().split('T')[0];
   urls.push(
-    { loc: `${base}/products`, changefreq: 'daily', priority: 0.9 },
-    { loc: `${base}/blog`, changefreq: 'daily', priority: 0.8 },
-    { loc: `${base}/forum`, changefreq: 'daily', priority: 0.7 }
+    { loc: `${base}/products`, lastmod: today, changefreq: 'daily', priority: 0.9 },
+    { loc: `${base}/blog`, lastmod: today, changefreq: 'daily', priority: 0.8 },
+    { loc: `${base}/forum`, lastmod: today, changefreq: 'daily', priority: 0.7 }
   );
 
   // Build XML (UTF-8, Google format)
@@ -335,15 +336,27 @@ ${urls.slice(0, 50000).map(u => `  <url>
 }
 
 /**
+ * Escape HTML special characters to prevent XSS in meta tag injection
+ */
+function escapeHtmlAttr(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * Get meta tags for HTML injection
  */
 export async function getMetaTags(env, pageType, pageData = {}) {
   const s = await getSettings(env);
-  
-  const title = pageData.title || s.site_title || 'Website';
-  const description = pageData.description || s.site_description || '';
-  const url = pageData.url || s.site_url || '';
-  const image = pageData.image || s.og_image || '';
+
+  const title = escapeHtmlAttr(pageData.title || s.site_title || 'Website');
+  const description = escapeHtmlAttr(pageData.description || s.site_description || '');
+  const url = escapeHtmlAttr(pageData.url || s.site_url || '');
+  const image = escapeHtmlAttr(pageData.image || s.og_image || '');
 
   let tags = `
     <title>${title}</title>

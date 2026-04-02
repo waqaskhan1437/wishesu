@@ -124,7 +124,7 @@ export function generateVideoObject(product, baseUrl) {
     "@type": "VideoObject",
     "name": `${product.title} - Personalized Video`,
     "description": product.seo_description || product.description || `Watch ${product.title} personalized video greeting`,
-    "thumbnailUrl": product.thumbnail_url || `${baseUrl}/favicon.ico`,
+    "thumbnailUrl": product.thumbnail_url || `${baseUrl}/favicon.svg`,
     "uploadDate": uploadDate,
     "duration": duration,
     "contentUrl": videoUrl,
@@ -139,7 +139,7 @@ export function generateVideoObject(product, baseUrl) {
       "name": brandName,
       "logo": {
         "@type": "ImageObject",
-        "url": `${baseUrl}/favicon.ico`
+        "url": `${baseUrl}/favicon.svg`
       }
     }
   };
@@ -187,11 +187,11 @@ export function generateProductSchema(product, baseUrl, reviews = []) {
     "description": product.seo_description || product.description || product.title,
     "sku": sku,
     "mpn": sku,
-    "image": images.length > 0 ? images : [`${baseUrl}/favicon.ico`],
+    "image": images.length > 0 ? images : [`${baseUrl}/favicon.svg`],
     "brand": {
       "@type": "Brand",
       "name": brandName,
-      "logo": `${baseUrl}/favicon.ico`
+      "logo": `${baseUrl}/favicon.svg`
     },
     "manufacturer": {
       "@type": "Organization",
@@ -347,7 +347,7 @@ export function generateBlogPostingSchema(blog, baseUrl) {
     "@type": "BlogPosting",
     "headline": blogHeadline,
     "description": (blog.seo_description || blog.description || '').substring(0, 160),
-    "image": blog.thumbnail_url || `${baseUrl}/favicon.ico`,
+    "image": blog.thumbnail_url || `${baseUrl}/favicon.svg`,
     "datePublished": blog.created_at ? new Date(blog.created_at).toISOString() : new Date().toISOString(),
     "dateModified": blog.updated_at
       ? new Date(blog.updated_at).toISOString()
@@ -361,7 +361,7 @@ export function generateBlogPostingSchema(blog, baseUrl) {
       "name": brandName,
       "logo": {
         "@type": "ImageObject",
-        "url": `${baseUrl}/favicon.ico`
+        "url": `${baseUrl}/favicon.svg`
       }
     },
     "mainEntityOfPage": {
@@ -446,7 +446,12 @@ export function generateOrganizationSchema(settings) {
     "@type": "Organization",
     "name": settings.site_title || resolveSchemaBrandName(baseUrl),
     "url": baseUrl,
-    "logo": `${baseUrl}/favicon.ico`
+    "logo": {
+      "@type": "ImageObject",
+      "url": `${baseUrl}/favicon.svg`,
+      "width": 512,
+      "height": 512
+    }
   };
   return JSON.stringify(schema);
 }
