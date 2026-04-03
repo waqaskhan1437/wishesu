@@ -14,7 +14,7 @@
   <meta property="og:type" content="product">
   <meta property="og:title" content="Personalized Video Greeting | prankwish.com">
   <meta property="og:description" content="Order a custom personalized video greeting for birthdays, holidays, and special occasions.">
-  <meta property="og:image" content="https://prankwish.com/og-banner.png">
+  <meta property="og:image" content="https://prankwish.com/favicon.svg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:site_name" content="prankwish.com">
