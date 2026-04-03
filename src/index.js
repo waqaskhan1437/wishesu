@@ -1320,6 +1320,10 @@ function applyDefaultPageMetadata(html, pageType, seo = {}) {
   let description = '';
 
   switch (pageType) {
+    case 'home':
+      pageTitle = buildSiteAwareTitle('Custom Video Gifts & Personalized Greetings', siteTitle);
+      description = 'Order personalized video greetings for birthdays, holidays, and special occasions. Unique custom video gifts delivered digitally in 24-48 hours.';
+      break;
     case 'product_grid':
       pageTitle = buildSiteAwareTitle('Personalized Video Gifts for Birthdays, Weddings and Pranks', siteTitle);
       description = 'Browse custom prank videos, funny birthday greetings, wedding surprises, office roasts, and other personalized video gifts ready to order online.';
@@ -2020,12 +2024,12 @@ function applySeoToHtml(html, robots, canonical, meta = {}) {
     { type: 'name', name: 'twitter:title', content: effectiveTitle },
     { type: 'name', name: 'twitter:description', content: description }
   ];
-  if (ogImage) {
-    metaTags.push({ type: 'property', name: 'og:image', content: ogImage });
-    metaTags.push({ type: 'property', name: 'og:image:width', content: '1200' });
-    metaTags.push({ type: 'property', name: 'og:image:height', content: '630' });
-    metaTags.push({ type: 'name', name: 'twitter:image', content: ogImage });
-  }
+  // Always ensure og:image exists (use configured image or fallback to favicon.svg)
+  const effectiveOgImage = ogImage || ((canonical ? (() => { try { return new URL(canonical).origin; } catch (_) { return ''; } })() : '') + '/favicon.svg') || '/favicon.svg';
+  metaTags.push({ type: 'property', name: 'og:image', content: effectiveOgImage });
+  metaTags.push({ type: 'property', name: 'og:image:width', content: '1200' });
+  metaTags.push({ type: 'property', name: 'og:image:height', content: '630' });
+  metaTags.push({ type: 'name', name: 'twitter:image', content: effectiveOgImage });
   out = upsertMetaTagsBatch(out, metaTags);
 
   // NOTE: rewriteLegacyInternalLinksInHtml is called by applyGlobalComponentsSsr
@@ -5844,15 +5848,19 @@ if (method === 'GET' || method === 'HEAD') {
                   // Add video meta tags for social sharing and SEO
                   if (product.video_url || product.preview_video_url) {
                     const videoUrl = product.video_url || product.preview_video_url;
+                    // Use upsert for og:type and twitter:card to avoid duplicates
+                    html = upsertMetaTagsBatch(html, [
+                      { type: 'property', name: 'og:type', content: 'video.other', alwaysReplace: true },
+                      { type: 'name', name: 'twitter:card', content: 'player', alwaysReplace: true }
+                    ]);
+                    // Append video-specific tags (these don't exist in template)
                     const videoMetaTags = `
-    <meta property="og:type" content="video.other">
     <meta property="og:video" content="${videoUrl}">
     <meta property="og:video:url" content="${videoUrl}">
     <meta property="og:video:secure_url" content="${videoUrl}">
     <meta property="og:video:type" content="video/mp4">
     <meta property="og:video:width" content="1280">
     <meta property="og:video:height" content="720">
-    <meta name="twitter:card" content="player">
     <meta name="twitter:player" content="${videoUrl}">
     <meta name="twitter:player:width" content="1280">
     <meta name="twitter:player:height" content="720">`;
@@ -5873,21 +5881,25 @@ if (method === 'GET' || method === 'HEAD') {
                     html = html.replace('</head>', `${preloadTag}\n</head>`);
                   }
                   
-                  // Inject SEO meta tags
-                  // Prefer SEO-specific fields when provided; fall back to generic title/description
-                  const safeTitle = (product.seo_title || product.title || '').replace(/"/g, '&quot;');
-                  const safeDesc = (product.seo_description || product.description || '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
-                  const safeKeywords = (product.seo_keywords || '').replace(/"/g, '&quot;');
-                  // Title tag
-                  html = html.replace('<title>Loading Product... | WishVideo</title>', `<title>${safeTitle} | ${DEFAULT_SITE_TITLE}</title>`);
-                  // Open Graph title/description and image
-                  html = html.replace('<meta property="og:title" content="Loading...">', `<meta property="og:title" content="${safeTitle}">`);
-                  html = html.replace('<meta property="og:description" content="">', `<meta property="og:description" content="${safeDesc}">`);
-                  html = html.replace('<meta property="og:image" content="">', `<meta property="og:image" content="${product.thumbnail_url || ''}">`);
-                  // Description tag
-                  html = html.replace('<meta name="description" content="Custom personalized video greetings from Africa.">', `<meta name="description" content="${safeDesc}">`);
-                  // Keywords tag (if provided, override default keywords)
-                  html = html.replace('<meta name="keywords" content="video, greeting, birthday, wish, africa">', `<meta name="keywords" content="${safeKeywords}">`);
+                  // Inject SEO meta tags using robust upsert (not brittle string matching)
+                  const safeTitle = String(product.seo_title || product.title || '').replace(/"/g, '&quot;');
+                  const safeDesc = String(product.seo_description || product.description || '').substring(0, 160).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+                  const productImage = String(product.thumbnail_url || '').trim();
+                  const productOgImage = productImage || (baseUrl + '/favicon.svg');
+
+                  html = upsertTitleTag(html, `${safeTitle} | ${DEFAULT_SITE_TITLE}`);
+                  const productMetaTags = [
+                    { type: 'name', name: 'description', content: safeDesc, alwaysReplace: true },
+                    { type: 'property', name: 'og:title', content: safeTitle, alwaysReplace: true },
+                    { type: 'property', name: 'og:description', content: safeDesc, alwaysReplace: true },
+                    { type: 'property', name: 'og:image', content: productOgImage, alwaysReplace: true },
+                    { type: 'property', name: 'og:image:width', content: '1200', alwaysReplace: true },
+                    { type: 'property', name: 'og:image:height', content: '630', alwaysReplace: true },
+                    { type: 'name', name: 'twitter:title', content: safeTitle, alwaysReplace: true },
+                    { type: 'name', name: 'twitter:description', content: safeDesc, alwaysReplace: true },
+                    { type: 'name', name: 'twitter:image', content: productOgImage, alwaysReplace: true }
+                  ];
+                  html = upsertMetaTagsBatch(html, productMetaTags);
 
                   // Fix 6: Add og:url to product pages
                   try {
