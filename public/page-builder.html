@@ -571,6 +571,9 @@
           <button class="block-btn" onclick="addSection('forum')">
             <span class="icon">❓</span> Forum List
           </button>
+          <button class="block-btn" onclick="addSection('reviews')">
+            <span class="icon">â­</span> Review Cards
+          </button>
           <button class="block-btn" onclick="addSection('faq')">
             <span class="icon">❓</span> FAQ Accordion
           </button>
@@ -761,6 +764,7 @@
 
   <script defer src="/js/product-cards.js"></script>
   <script defer src="/js/blog-cards.js"></script>
+  <script defer src="/js/reviews-widget.js"></script>
   <script defer src="/js/instant-upload.js"></script>
   <script>
     // State
@@ -936,6 +940,55 @@
             </div>
             <div class="blog-widget-container" data-embed='{"type":"blog","limit":6,"columns":3,"layout":"grid","filter":"all","ids":[]}'>
               <p style="text-align:center;color:#6b7280;">Blog cards will load here...</p>
+            </div>
+          </div>
+        </section>
+      `,
+      reviews: `
+        <section class="widget-section" style="padding:60px 20px;background:#f8fafc;">
+          <div style="max-width:1200px;margin:0 auto;">
+            <h2 style="text-align:center;font-size:2rem;margin-bottom:40px;" contenteditable="true">Customer Reviews</h2>
+            <div class="widget-config" style="background:#fff7ed;border:2px dashed #f97316;border-radius:12px;padding:20px;margin-bottom:20px;">
+              <div style="display:flex;flex-wrap:wrap;gap:15px;align-items:center;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#9a3412;">
+                  â­ Min Rating:
+                  <select class="widget-min-rating" style="padding:8px 12px;border:2px solid #f97316;border-radius:6px;font-size:0.85rem;">
+                    <option value="3">3+</option>
+                    <option value="4">4+</option>
+                    <option value="5" selected>5 only</option>
+                  </select>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#9a3412;">
+                  ðŸ”¢ Columns:
+                  <select class="widget-columns" style="padding:8px 12px;border:2px solid #f97316;border-radius:6px;font-size:0.85rem;">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                  </select>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#9a3412;">
+                  ðŸ“¦ Limit:
+                  <select class="widget-limit-select" style="padding:8px 12px;border:2px solid #f97316;border-radius:6px;font-size:0.85rem;">
+                    <option value="3">3</option>
+                    <option value="6" selected>6</option>
+                    <option value="9">9</option>
+                    <option value="12">12</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                  <input type="number" class="widget-limit-custom" min="1" max="50" placeholder="e.g. 20" style="display:none;width:70px;padding:8px;border:2px solid #f97316;border-radius:6px;font-size:0.85rem;">
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#9a3412;">
+                  Product ID:
+                  <input type="text" class="widget-product-id" placeholder="Optional" style="width:110px;padding:8px 12px;border:2px solid #f97316;border-radius:6px;font-size:0.85rem;">
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#9a3412;">
+                  <input type="checkbox" class="widget-show-avatar" checked>
+                  Show Avatar
+                </label>
+              </div>
+            </div>
+            <div class="reviews-widget-container" data-embed='{"type":"review","limit":6,"columns":3,"minRating":5,"showAvatar":true}'>
+              <p style="text-align:center;color:#6b7280;">Review cards will load here...</p>
             </div>
           </div>
         </section>
@@ -1689,26 +1742,79 @@
           });
         }
       }
+
+      // Reviews widget
+      const reviewsWidget = wrapper.querySelector('.reviews-widget-container[data-embed*="review"]');
+      if (reviewsWidget && typeof ReviewsWidget !== 'undefined') {
+        const containerId = 'rw-' + Date.now();
+        reviewsWidget.id = containerId;
+        const config = getWidgetConfig(wrapper, 'review');
+        renderReviewsWidget(containerId, config);
+
+        const configPanel = wrapper.querySelector('.widget-config');
+        if (configPanel) {
+          configPanel.querySelectorAll('select, input').forEach(el => {
+            el.addEventListener('change', () => {
+              const newConfig = getWidgetConfig(wrapper, 'review');
+              updateWidgetDataEmbed(reviewsWidget, newConfig);
+              renderReviewsWidget(containerId, newConfig);
+            });
+          });
+        }
+      }
+    }
+
+    function getDefaultWidgetConfig(type) {
+      if (type === 'review') {
+        return { type, limit: 6, columns: 3, minRating: 5, showAvatar: true };
+      }
+      return { type, limit: 6, columns: 3, layout: 'grid', filter: 'all', ids: [] };
+    }
+
+    function getExistingWidgetConfig(wrapper, type) {
+      const selector = type === 'product'
+        ? '.product-widget-container[data-embed*="product"]'
+        : type === 'blog'
+          ? '.blog-widget-container[data-embed*="blog"]'
+          : '.reviews-widget-container[data-embed*="review"]';
+      const widget = wrapper.querySelector(selector);
+      const fallback = getDefaultWidgetConfig(type);
+      if (!widget) return fallback;
+      try {
+        return Object.assign({}, fallback, JSON.parse(widget.getAttribute('data-embed') || '{}'));
+      } catch (_) {
+        return fallback;
+      }
     }
 
     function getWidgetConfig(wrapper, type) {
       const configPanel = wrapper.querySelector('.widget-config');
-      if (!configPanel) return { limit: 6, columns: 3, layout: 'grid', filter: 'all' };
+      const fallback = getDefaultWidgetConfig(type);
+      if (!configPanel) return getExistingWidgetConfig(wrapper, type);
 
-      const layout = configPanel.querySelector('.widget-layout')?.value || 'grid';
-      const columns = parseInt(configPanel.querySelector('.widget-columns')?.value || '3');
-      const filter = configPanel.querySelector('.widget-filter')?.value || 'all';
+      const layout = configPanel.querySelector('.widget-layout')?.value || fallback.layout || 'grid';
+      const columns = parseInt(configPanel.querySelector('.widget-columns')?.value || String(fallback.columns || 3));
+      const filter = configPanel.querySelector('.widget-filter')?.value || fallback.filter || 'all';
 
       // Handle custom limit
       const limitSelect = configPanel.querySelector('.widget-limit-select');
       const limitCustom = configPanel.querySelector('.widget-limit-custom');
-      let limit = 6;
+      let limit = fallback.limit || 6;
       if (limitSelect) {
         if (limitSelect.value === 'custom' && limitCustom) {
-          limit = parseInt(limitCustom.value) || 6;
+          limit = parseInt(limitCustom.value) || limit;
         } else {
-          limit = parseInt(limitSelect.value) || 6;
+          limit = parseInt(limitSelect.value) || limit;
         }
+      }
+
+      if (type === 'review') {
+        const minRating = parseInt(configPanel.querySelector('.widget-min-rating')?.value || String(fallback.minRating || 5)) || 5;
+        const showAvatar = configPanel.querySelector('.widget-show-avatar')?.checked !== false;
+        const productId = configPanel.querySelector('.widget-product-id')?.value?.trim() || '';
+        const config = { type, limit, columns, minRating, showAvatar };
+        if (productId) config.productId = productId;
+        return config;
       }
 
       // Handle custom IDs
@@ -1797,6 +1903,25 @@
           } else {
             BlogCards.render(containerId, opts);
           }
+        }
+      }, 100);
+    }
+
+    function renderReviewsWidget(containerId, config) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading reviews...</p>';
+
+      setTimeout(() => {
+        if (typeof ReviewsWidget !== 'undefined') {
+          const opts = {
+            limit: config.limit,
+            columns: config.columns,
+            minRating: config.minRating,
+            showAvatar: config.showAvatar !== false
+          };
+          if (config.productId) opts.productId = config.productId;
+          ReviewsWidget.render(containerId, opts);
         }
       }, 100);
     }
@@ -1967,7 +2092,7 @@
         });
         cloneWrapper.querySelectorAll('.widget-config').forEach(el => el.remove());
         // Clean up widget container IDs and clear preview content
-        cloneWrapper.querySelectorAll('.product-widget-container, .blog-widget-container').forEach(el => {
+        cloneWrapper.querySelectorAll('.product-widget-container, .blog-widget-container, .reviews-widget-container').forEach(el => {
           el.removeAttribute('id');
           el.innerHTML = '';
         });
@@ -2037,6 +2162,7 @@
   <noscript><link rel="stylesheet" href="/css/style.css"></noscript>
   <script defer src="/js/product-cards.js"><\/script>
   <script defer src="/js/blog-cards.js"><\/script>
+  <script defer src="/js/reviews-widget.js"><\/script>
   <style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}.faq-item.open .faq-answer{max-height:500px !important;}.faq-item.open .faq-toggle span:last-child{transform:rotate(180deg);}</style>
  </head>
  <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
@@ -2067,6 +2193,15 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         BlogCards.render(cid, {limit:config.limit,columns:config.columns,showPagination:false});
       }
+    }
+  });
+  document.querySelectorAll('[data-embed*="review"]').forEach(function(el, i) {
+    if (typeof ReviewsWidget !== 'undefined') {
+      var cid = 'rw-' + i + '-' + Date.now();
+      el.id = cid;
+      var config = {limit:6,columns:3,minRating:5,showAvatar:true};
+      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
+      ReviewsWidget.render(cid, config);
     }
   });
   // FAQ accordion toggle
@@ -2152,7 +2287,7 @@ URL: ${window.location.origin}${publicUrl}`);
       const html = generateOutputHtml();
       const title = document.getElementById('seo-title').value || 'Preview';
       const previewWindow = window.open('', 'preview', 'width=1200,height=800');
-      previewWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${title}</title><link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="/css/style.css"></noscript><script defer src="/js/product-cards.js"><\/script><script defer src="/js/blog-cards.js"><\/script></head><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${html}<script>
+      previewWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${title}</title><link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="/css/style.css"></noscript><script defer src="/js/product-cards.js"><\/script><script defer src="/js/blog-cards.js"><\/script><script defer src="/js/reviews-widget.js"><\/script></head><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${html}<script>
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('[data-embed*="product"]').forEach(function(el, i) {
     if (typeof ProductCards !== 'undefined') {
@@ -2178,6 +2313,15 @@ document.addEventListener('DOMContentLoaded', function() {
       } else {
         BlogCards.render(cid, {limit:config.limit,columns:config.columns,showPagination:false});
       }
+    }
+  });
+  document.querySelectorAll('[data-embed*="review"]').forEach(function(el, i) {
+    if (typeof ReviewsWidget !== 'undefined') {
+      var cid = 'rw-preview-' + i;
+      el.id = cid;
+      var config = {limit:6,columns:3,minRating:5,showAvatar:true};
+      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
+      ReviewsWidget.render(cid, config);
     }
   });
 });
@@ -2243,6 +2387,7 @@ document.addEventListener('DOMContentLoaded', function() {
               wrapper.innerHTML = sectionHtml + createControls();
               canvas.appendChild(wrapper);
               enableEditing(wrapper);
+              initDynamicWidgets(wrapper);
             });
           }
           

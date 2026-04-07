@@ -2861,7 +2861,10 @@ async function applyComponentSsrToHtml(env, html, url, path) {
         options: config,
         pagination: productResult.pagination
       });
-      replacement = `<${tagName}${rawAttrs} data-ssr-product-cards="1">${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
+      const renderedAttrs = Object.entries(rendered.attrs || {})
+        .map(([key, value]) => ` ${key}="${escapeHtmlText(String(value))}"`)
+        .join('');
+      replacement = `<${tagName}${rawAttrs}${renderedAttrs}>${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
       needsProductStyles = true;
     } else if (config.type === 'blog') {
       const blogResult = await queryBlogsForComponentSsr(env, config);
@@ -2875,8 +2878,23 @@ async function applyComponentSsrToHtml(env, html, url, path) {
         },
         pagination: blogResult.pagination
       });
-      replacement = `<${tagName}${rawAttrs} data-ssr-blog-cards="1">${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
+      const renderedAttrs = Object.entries(rendered.attrs || {})
+        .map(([key, value]) => ` ${key}="${escapeHtmlText(String(value))}"`)
+        .join('');
+      replacement = `<${tagName}${rawAttrs}${renderedAttrs}>${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
       needsBlogStyles = true;
+    } else if (config.type === 'review') {
+      const reviews = await queryReviewsForSsr(env, config);
+      const rendered = renderReviewsWidgetSsrMarkup({
+        containerId: `embed-review-${embedIndex + 1}`,
+        reviews,
+        options: config
+      });
+      const renderedAttrs = Object.entries(rendered.attrs || {})
+        .map(([key, value]) => ` ${key}="${escapeHtmlText(String(value))}"`)
+        .join('');
+      replacement = `<${tagName}${rawAttrs}${renderedAttrs}>${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
+      needsReviewsStyles = true;
     } else if (config.type === 'forum') {
       const forumResult = await queryForumQuestionsForSsr(env, { limit: 6, page: 1 });
       replacement = `<${tagName}${rawAttrs}>${renderEmbeddedForumQuestionsSsr(forumResult.questions)}</${tagName}>`;
