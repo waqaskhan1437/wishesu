@@ -35,6 +35,9 @@ import {
   REVIEWS_WIDGET_STYLE_TAG,
   buildHomeProductsBootstrap,
   renderHomepageHeroPlayerSsr,
+  renderLegacyHomepageHeroPlayerSsr,
+  renderLegacyHomepageProductSliderSsr,
+  renderLegacyHomepageReviewsSliderSsr,
   renderHomepageProductGridSsr,
   renderReviewsWidgetSsrMarkup
 } from './utils/homepage-ssr.js';
@@ -2749,12 +2752,17 @@ async function applyComponentSsrToHtml(env, html, url, path) {
   const blogConfigs = extractInlineRenderConfigs(output, 'BlogCards');
   const reviewConfigs = extractInlineRenderConfigs(output, 'ReviewsWidget');
   const needsHomepageProducts = output.includes('id="product-grid"') || output.includes('id="hero-featured-player"');
+  const isRootHomepage = path === '/' || path === '/index.html';
+  const needsLegacyHomepageHero = isRootHomepage && output.includes('id="heroPlayerStage"');
+  const needsLegacyHomepageInstant = isRootHomepage && output.includes('id="instantTrack"');
+  const needsLegacyHomepageFeatured = isRootHomepage && output.includes('id="featuredTrack"');
+  const needsLegacyHomepageReviews = isRootHomepage && output.includes('id="reviewsTrack"');
 
   if (output.includes('id="reviews-widget"') && !reviewConfigs.has('reviews-widget')) {
     reviewConfigs.set('reviews-widget', { limit: 8, columns: 3, minRating: 5 });
   }
 
-  if ((path === '/' || path === '/index.html') && !productConfigs.has('product-list') && output.includes('id="product-list"')) {
+  if (isRootHomepage && !productConfigs.has('product-list') && output.includes('id="product-list"')) {
     productConfigs.set('product-list', { filter: 'all', columns: 3, limit: 9, showReviews: true, showDelivery: true });
   }
 
@@ -2838,6 +2846,54 @@ async function applyComponentSsrToHtml(env, html, url, path) {
       );
       output = replaceAnchorHrefById(output, 'hero-order-link', hero.targetHref);
       output = replaceAnchorHrefById(output, 'cta-order-link', hero.targetHref);
+    }
+  }
+
+  if (needsLegacyHomepageHero || needsLegacyHomepageInstant || needsLegacyHomepageFeatured || needsLegacyHomepageReviews) {
+    const bootstrap = await getHomeProductsBootstrap();
+    const products = Array.isArray(bootstrap?.products) ? bootstrap.products : [];
+
+    if (needsLegacyHomepageHero) {
+      const hero = renderLegacyHomepageHeroPlayerSsr(products);
+      output = replaceSimpleContainerById(output, 'heroPlayerStage', hero.stageHtml, { 'data-ssr-home-hero': '1' });
+      if (output.includes('id="heroThumbnails"')) {
+        output = replaceSimpleContainerById(output, 'heroThumbnails', hero.thumbnailsHtml);
+      }
+      if (output.includes('id="heroDots"')) {
+        output = replaceSimpleContainerById(output, 'heroDots', hero.dotsHtml);
+      }
+      if (output.includes('id="heroProductInfo"')) {
+        output = replaceSimpleContainerById(output, 'heroProductInfo', hero.infoHtml);
+      }
+      output = replaceAnchorHrefById(output, 'heroBookBtn', hero.targetHref);
+    }
+
+    if (needsLegacyHomepageInstant) {
+      output = replaceSimpleContainerById(
+        output,
+        'instantTrack',
+        renderLegacyHomepageProductSliderSsr(products, { mode: 'instant', limit: 8 }),
+        { 'data-ssr-home-products': '1' }
+      );
+    }
+
+    if (needsLegacyHomepageFeatured) {
+      output = replaceSimpleContainerById(
+        output,
+        'featuredTrack',
+        renderLegacyHomepageProductSliderSsr(products, { mode: 'featured', limit: 8 }),
+        { 'data-ssr-home-products': '1' }
+      );
+    }
+
+    if (needsLegacyHomepageReviews) {
+      const reviews = await queryReviewsForSsr(env, { limit: 8 });
+      output = replaceSimpleContainerById(
+        output,
+        'reviewsTrack',
+        renderLegacyHomepageReviewsSliderSsr(reviews),
+        { 'data-ssr-home-reviews': '1' }
+      );
     }
   }
 

@@ -154,6 +154,189 @@ export function renderHomepageHeroPlayerSsr(products = []) {
   };
 }
 
+function isTruthyInstantDelivery(value) {
+  return value === true || value === 1 || value === '1' || value === 'true';
+}
+
+function resolveProductPrices(product) {
+  const normalPrice = Number(product?.normal_price || 0);
+  const salePrice = Number(product?.sale_price || normalPrice || 0);
+  const hasDiscount = normalPrice > 0 && salePrice > 0 && salePrice < normalPrice;
+  const discount = hasDiscount
+    ? Math.max(0, Math.round((1 - (salePrice / normalPrice)) * 100))
+    : 0;
+
+  return {
+    normalPrice,
+    salePrice,
+    hasDiscount,
+    discount
+  };
+}
+
+function renderLegacyStars(ratingValue) {
+  const rating = clamp(Math.round(Number(ratingValue || 0)), 0, 5, 5);
+  return `${'&#9733;'.repeat(rating)}${'&#9734;'.repeat(Math.max(0, 5 - rating))}`;
+}
+
+function renderLegacyPrice(finalPrice, originalPrice = 0, originalClassName = 'original-price') {
+  const price = Number(finalPrice || 0);
+  const original = Number(originalPrice || 0);
+  const safePrice = Number.isFinite(price) ? price.toFixed(0) : '0';
+  const safeOriginal = Number.isFinite(original) && original > 0 ? original.toFixed(0) : '';
+  return `<span class="current-price">$${safePrice}</span>${safeOriginal ? `<span class="${originalClassName}">$${safeOriginal}</span>` : ''}`;
+}
+
+export function renderLegacyHomepageProductSliderSsr(products = [], options = {}) {
+  const mode = String(options.mode || 'featured').trim().toLowerCase();
+  const limit = clamp(options.limit, 1, 24, mode === 'instant' ? 8 : 8);
+
+  const sourceProducts = Array.isArray(products) ? products : [];
+  const filteredProducts = mode === 'instant'
+    ? sourceProducts.filter((product) => isTruthyInstantDelivery(product?.instant_delivery))
+    : sourceProducts.filter((product) => String(product?.thumbnail_url || product?.video_url || '').trim() !== '');
+
+  const selectedProducts = filteredProducts.slice(0, limit);
+  if (selectedProducts.length === 0) {
+    return `<div class="pw-loading">${mode === 'instant' ? 'No instant delivery products available right now.' : 'No featured products available right now.'}</div>`;
+  }
+
+  return selectedProducts.map((product) => {
+    const productTitle = escapeHtml(String(product?.title || 'Product'));
+    const imageUrl = escapeHtml(String(product?.thumbnail_url || ''));
+    const productUrl = canonicalProductPath(product);
+    const reviewCount = Math.max(0, parseInt(product?.review_count, 10) || 0);
+    const rating = Number(product?.average_rating ?? product?.rating_average ?? 0);
+    const { normalPrice, salePrice, hasDiscount, discount } = resolveProductPrices(product);
+
+    return `
+      <div class="slider-item">
+        <div class="product-card">
+          <div class="product-image">
+            <a href="${productUrl}"><img src="${imageUrl}" alt="${productTitle}" loading="lazy"></a>
+            ${mode === 'instant' ? '<span class="instant-badge">&#9889; 60 Min</span>' : ''}
+            ${hasDiscount ? `<span class="product-badge">${discount}% OFF</span>` : ''}
+          </div>
+          <div class="product-info">
+            <h3 class="product-title">${productTitle}</h3>
+            <div class="product-rating">
+              <span class="stars">${renderLegacyStars(rating)}</span>
+              <span class="review-count">(${reviewCount})</span>
+            </div>
+            <div class="product-price">${renderLegacyPrice(salePrice, hasDiscount ? normalPrice : 0)}</div>
+            <a href="${productUrl}" class="product-book-btn">Book Now</a>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+export function renderLegacyHomepageHeroPlayerSsr(products = []) {
+  const featured = selectFeaturedHomeProducts(products);
+
+  if (featured.length === 0) {
+    return {
+      stageHtml: '<div class="pw-loading">No products available</div>',
+      thumbnailsHtml: '',
+      dotsHtml: '',
+      infoHtml: '',
+      targetHref: '/products'
+    };
+  }
+
+  const current = featured[0];
+  const productTitle = escapeHtml(String(current?.title || 'Featured product'));
+  const thumbnailUrl = escapeHtml(String(current?.thumbnail_url || ''));
+  const productUrl = canonicalProductPath(current);
+  const youtubeId = extractYoutubeId(current?.video_url);
+  const { normalPrice, salePrice, hasDiscount } = resolveProductPrices(current);
+
+  const stageHtml = youtubeId
+    ? `<iframe src="https://www.youtube.com/embed/${escapeHtml(youtubeId)}?rel=0&amp;playsinline=1&amp;mute=1" title="${productTitle}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width:100%;height:100%;border:none;"></iframe>`
+    : String(current?.video_url || '').trim()
+      ? `<video src="${escapeHtml(String(current.video_url))}" muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover;"></video>`
+      : `<img src="${thumbnailUrl}" alt="${productTitle}" loading="lazy" style="width:100%;height:100%;object-fit:cover;">`;
+
+  const thumbnailsHtml = featured.map((item, index) => {
+    const itemTitle = escapeHtml(String(item?.title || 'Product'));
+    const itemThumb = escapeHtml(String(item?.thumbnail_url || ''));
+    const hasVideo = String(item?.video_url || '').trim() !== '';
+    return `
+      <div class="player-thumb${index === 0 ? ' active' : ''}" data-index="${index}">
+        <img src="${itemThumb}" alt="${itemTitle}" loading="lazy">
+        ${hasVideo ? '<div class="pw-thumb-play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>' : ''}
+      </div>
+    `;
+  }).join('');
+
+  const dotsHtml = featured.map((_, index) => (
+    `<button class="hero-player-dot${index === 0 ? ' active' : ''}" data-index="${index}" type="button" aria-label="Play product ${index + 1}"></button>`
+  )).join('');
+
+  const infoHtml = `
+    <div>
+      <div class="hero-product-title">${productTitle}</div>
+      <span class="hero-product-price">
+        $${Number.isFinite(salePrice) ? salePrice.toFixed(0) : '0'}
+        ${hasDiscount ? `<span class="pw-old-price">$${normalPrice.toFixed(0)}</span>` : ''}
+      </span>
+    </div>
+  `;
+
+  return {
+    stageHtml,
+    thumbnailsHtml,
+    dotsHtml,
+    infoHtml,
+    targetHref: productUrl
+  };
+}
+
+function buildReviewerInitials(name) {
+  const value = String(name || '').trim();
+  if (!value) return '?';
+  return value
+    .split(/\s+/)
+    .map((part) => part.charAt(0))
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+export function renderLegacyHomepageReviewsSliderSsr(reviews = []) {
+  const items = Array.isArray(reviews) ? reviews.slice(0, 8) : [];
+  if (items.length === 0) {
+    return '<div style="text-align:center;padding:40px;color:#6b7280;">No reviews yet. Be the first to leave a review!</div>';
+  }
+
+  return items.map((review) => {
+    const reviewerName = escapeHtml(String(review?.customer_name || review?.author_name || 'Anonymous'));
+    const reviewText = escapeHtml(String(review?.review_text || review?.comment || 'No review text provided.'));
+    const productTitle = escapeHtml(String(review?.product_name || review?.product_title || ''));
+    const dateText = escapeHtml(safeDate(review?.created_at));
+    const initials = buildReviewerInitials(reviewerName);
+    const rating = clamp(parseInt(review?.rating, 10) || 5, 1, 5, 5);
+
+    return `
+      <div class="slider-item">
+        <div class="review-card">
+          <div class="review-header">
+            <div class="review-avatar">${initials}</div>
+            <div>
+              <div class="review-author">${reviewerName}</div>
+              <div class="review-date">${dateText}</div>
+            </div>
+          </div>
+          <div class="review-stars stars">${renderLegacyStars(rating)}</div>
+          <p class="review-text">${reviewText}</p>
+          ${productTitle ? `<span class="review-product-tag">${productTitle}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 export function renderReviewsWidgetSsrMarkup({ containerId, reviews = [], options = {} }) {
   const resolvedOptions = {
     columns: clamp(options.columns, 1, 6, 1),
