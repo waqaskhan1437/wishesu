@@ -40,7 +40,7 @@ function resolveBaseUrl(env, orderData) {
 }
 
 function resolveFromEmail(env) {
-  return normalizeEmail(env.BREVO_FROM_EMAIL || env.FROM_EMAIL || 'support@prankwish.com');
+  return normalizeEmail(env.BREVO_FROM_EMAIL || env.FROM_EMAIL || '');
 }
 
 function resolveFromName(env) {

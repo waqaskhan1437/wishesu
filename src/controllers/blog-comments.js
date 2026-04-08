@@ -4,6 +4,7 @@
  */
 
 import { json } from '../utils/response.js';
+import { isValidEmail } from '../utils/validation.js';
 import { notifyBlogComment } from './webhooks.js';
 
 /**
@@ -74,8 +75,7 @@ export async function addBlogComment(env, body) {
     }
 
     // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
+    if (!isValidEmail(trimmedEmail)) {
       return json({ error: 'Invalid email format' }, 400);
     }
 

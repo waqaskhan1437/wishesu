@@ -32,6 +32,26 @@ const seed = {
     },
     {
       id: 2,
+      slug: 'blog',
+      title: 'Blog Hub',
+      meta_description: 'Blog archive intro',
+      content: '<section><h2>Blog Intro</h2><p>Latest stories from the team.</p></section>',
+      page_type: 'blog_archive',
+      is_default: 1,
+      status: 'published'
+    },
+    {
+      id: 3,
+      slug: 'forum',
+      title: 'Forum Hub',
+      meta_description: 'Forum archive intro',
+      content: '<section><h2>Forum Intro</h2><p>Ask delivery and product questions.</p></section>',
+      page_type: 'forum_archive',
+      is_default: 1,
+      status: 'published'
+    },
+    {
+      id: 4,
       slug: 'about-us',
       title: 'About Us',
       meta_description: 'About page',
@@ -39,6 +59,29 @@ const seed = {
       page_type: 'custom',
       is_default: 0,
       status: 'published'
+    }
+  ],
+  blogs: [
+    {
+      id: 5,
+      title: 'Launch Story',
+      slug: 'launch-story',
+      description: 'How we built WishesU.',
+      thumbnail_url: 'https://cdn.example.com/blog.jpg',
+      status: 'published',
+      created_at: '2026-03-02T10:00:00Z'
+    }
+  ],
+  forumQuestions: [
+    {
+      id: 11,
+      title: 'How fast is delivery?',
+      slug: 'how-fast-is-delivery',
+      content: 'Need fast delivery details.',
+      name: 'Buyer',
+      reply_count: 2,
+      status: 'approved',
+      created_at: '2026-03-03T10:00:00Z'
     }
   ],
   orders: [
@@ -64,6 +107,8 @@ function createDbMock(overrides = {}) {
   const data = {
     products: overrides.products ?? seed.products,
     pages: overrides.pages ?? seed.pages,
+    blogs: overrides.blogs ?? seed.blogs,
+    forumQuestions: overrides.forumQuestions ?? seed.forumQuestions,
     orders: overrides.orders ?? seed.orders
   };
 
@@ -134,11 +179,19 @@ function resolveAll(sql, args, data) {
     }));
   }
 
+  if (normalized.includes('from blogs')) {
+    return data.blogs;
+  }
+
+  if (normalized.includes('from forum_questions')) {
+    return data.forumQuestions;
+  }
+
   return [];
 }
 
-async function callRoute(pathname) {
-  const request = new Request(`https://example.com${pathname}`);
+async function callRoute(pathname, init = {}) {
+  const request = new Request(`https://example.com${pathname}`, init);
   const url = new URL(request.url);
   const response = await handleNoJsRoutes(request, createEnv(), url, url.pathname, request.method);
   return response;
@@ -160,6 +213,31 @@ test('products archive route renders product cards on server', async () => {
   assert.match(html, /All Products/);
   assert.match(html, /Birthday Blast/);
   assert.match(html, /Open Product/);
+});
+
+test('blog archive route renders default page intro server-side', async () => {
+  const response = await callRoute('/blog');
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Blog Hub/);
+  assert.match(html, /Blog Intro/);
+  assert.match(html, /Launch Story/);
+});
+
+test('forum archive route renders default page intro server-side', async () => {
+  const response = await callRoute('/forum');
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Forum Hub/);
+  assert.match(html, /Forum Intro/);
+  assert.match(html, /How fast is delivery\?/);
+});
+
+test('head requests use the same SSR route without a response body', async () => {
+  const response = await callRoute('/blog', { method: 'HEAD' });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') || '', /text\/html/i);
+  assert.equal(await response.text(), '');
 });
 
 test('legacy checkout alias redirects to canonical SSR product route', async () => {

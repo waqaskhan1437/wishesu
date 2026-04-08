@@ -11,6 +11,7 @@
 
 import { json } from '../utils/response.js';
 import { escapeHtml } from '../utils/formatting.js';
+import { isValidEmail } from '../utils/validation.js';
 import { fetchWithTimeout } from '../utils/fetch-timeout.js';
 
 // In‑memory caches for templates to avoid frequent DB queries
@@ -147,8 +148,7 @@ export async function saveEmailTemplateApi(env, body) {
 
 function normalizeEmail(value) {
   const email = String(value || '').trim().toLowerCase();
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) ? email : '';
+  return isValidEmail(email) ? email : '';
 }
 
 function resolveFromEmail(env) {

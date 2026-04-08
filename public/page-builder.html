@@ -1700,68 +1700,8 @@
     function initDynamicWidgets(wrapper) {
       // Setup custom limit input toggle
       setupLimitCustomInput(wrapper);
-
-      // Product widget
-      const productWidget = wrapper.querySelector('.product-widget-container[data-embed*="product"]');
-      if (productWidget && typeof ProductCards !== 'undefined') {
-        const containerId = 'pc-' + Date.now();
-        productWidget.id = containerId;
-        const config = getWidgetConfig(wrapper, 'product');
-        renderProductWidget(containerId, config);
-
-        // Listen for config changes
-        const configPanel = wrapper.querySelector('.widget-config');
-        if (configPanel) {
-          configPanel.querySelectorAll('select, input').forEach(el => {
-            el.addEventListener('change', () => {
-              const newConfig = getWidgetConfig(wrapper, 'product');
-              updateWidgetDataEmbed(productWidget, newConfig);
-              renderProductWidget(containerId, newConfig);
-            });
-          });
-        }
-      }
-
-      // Blog widget
-      const blogWidget = wrapper.querySelector('.blog-widget-container[data-embed*="blog"]');
-      if (blogWidget && typeof BlogCards !== 'undefined') {
-        const containerId = 'bc-' + Date.now();
-        blogWidget.id = containerId;
-        const config = getWidgetConfig(wrapper, 'blog');
-        renderBlogWidget(containerId, config);
-
-        // Listen for config changes
-        const configPanel = wrapper.querySelector('.widget-config');
-        if (configPanel) {
-          configPanel.querySelectorAll('select, input').forEach(el => {
-            el.addEventListener('change', () => {
-              const newConfig = getWidgetConfig(wrapper, 'blog');
-              updateWidgetDataEmbed(blogWidget, newConfig);
-              renderBlogWidget(containerId, newConfig);
-            });
-          });
-        }
-      }
-
-      // Reviews widget
-      const reviewsWidget = wrapper.querySelector('.reviews-widget-container[data-embed*="review"]');
-      if (reviewsWidget && typeof ReviewsWidget !== 'undefined') {
-        const containerId = 'rw-' + Date.now();
-        reviewsWidget.id = containerId;
-        const config = getWidgetConfig(wrapper, 'review');
-        renderReviewsWidget(containerId, config);
-
-        const configPanel = wrapper.querySelector('.widget-config');
-        if (configPanel) {
-          configPanel.querySelectorAll('select, input').forEach(el => {
-            el.addEventListener('change', () => {
-              const newConfig = getWidgetConfig(wrapper, 'review');
-              updateWidgetDataEmbed(reviewsWidget, newConfig);
-              renderReviewsWidget(containerId, newConfig);
-            });
-          });
-        }
-      }
+      bindWidgetConfigPanel(wrapper);
+      ['product', 'blog', 'review'].forEach(type => syncWidgetInWrapper(wrapper, type));
     }
 
     function getDefaultWidgetConfig(type) {
@@ -1863,67 +1803,128 @@
       widget.setAttribute('data-embed', JSON.stringify(config));
     }
 
-    function renderProductWidget(containerId, config) {
-      const container = document.getElementById(containerId);
-      if (!container) return;
-      container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading products...</p>';
+    const WIDGET_DEFINITIONS = {
+      product: {
+        selector: '.product-widget-container[data-embed*="product"]',
+        prefix: 'pc',
+        globalName: 'ProductCards',
+        loadingMessage: 'Loading products...'
+      },
+      blog: {
+        selector: '.blog-widget-container[data-embed*="blog"]',
+        prefix: 'bc',
+        globalName: 'BlogCards',
+        loadingMessage: 'Loading blogs...'
+      },
+      review: {
+        selector: '.reviews-widget-container[data-embed*="review"]',
+        prefix: 'rw',
+        globalName: 'ReviewsWidget',
+        loadingMessage: 'Loading reviews...'
+      }
+    };
 
-      setTimeout(() => {
-        if (typeof ProductCards !== 'undefined') {
-          const opts = {
-            limit: config.limit,
-            columns: config.columns,
-            filter: config.filter,
-            ids: config.ids || []
-          };
-          if (config.layout === 'slider' && ProductCards.renderSlider) {
-            ProductCards.renderSlider(containerId, opts);
-          } else {
-            ProductCards.render(containerId, opts);
-          }
-        }
-      }, 100);
+    function getWidgetDefinition(type) {
+      return WIDGET_DEFINITIONS[type] || null;
     }
 
-    function renderBlogWidget(containerId, config) {
-      const container = document.getElementById(containerId);
-      if (!container) return;
-      container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading blogs...</p>';
-
-      setTimeout(() => {
-        if (typeof BlogCards !== 'undefined') {
-          const opts = {
-            limit: config.limit,
-            columns: config.columns,
-            showPagination: false,
-            ids: config.ids || []
-          };
-          if (config.layout === 'slider' && BlogCards.renderSlider) {
-            BlogCards.renderSlider(containerId, opts);
-          } else {
-            BlogCards.render(containerId, opts);
-          }
-        }
-      }, 100);
+    function getWidgetContainer(wrapper, type) {
+      const def = getWidgetDefinition(type);
+      return def ? wrapper.querySelector(def.selector) : null;
     }
 
-    function renderReviewsWidget(containerId, config) {
+    function ensureWidgetInstanceId(widget, type) {
+      if (widget.id) return widget.id;
+      const def = getWidgetDefinition(type);
+      widget.id = `${def.prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      return widget.id;
+    }
+
+    function getWidgetRenderOptions(type, config, options = {}) {
+      const cfg = Object.assign({}, config || {});
+      if (type === 'product') {
+        return {
+          limit: cfg.limit,
+          columns: cfg.columns,
+          filter: cfg.filter,
+          ids: cfg.ids || []
+        };
+      }
+      if (type === 'blog') {
+        const blogOptions = {
+          limit: cfg.limit,
+          columns: cfg.columns,
+          ids: cfg.ids || []
+        };
+        if (!options.paginated) {
+          blogOptions.showPagination = false;
+        }
+        return blogOptions;
+      }
+      const reviewOptions = {
+        limit: cfg.limit,
+        columns: cfg.columns,
+        minRating: cfg.minRating,
+        showAvatar: cfg.showAvatar !== false
+      };
+      if (cfg.productId) reviewOptions.productId = cfg.productId;
+      return reviewOptions;
+    }
+
+    function renderWidgetByType(type, containerId, config, options = {}) {
+      const def = getWidgetDefinition(type);
+      if (!def) return;
+      const runtime = window[def.globalName];
+      if (!runtime) return;
+
+      const renderOptions = getWidgetRenderOptions(type, config, options);
+      if (type === 'product') {
+        if (config.layout === 'slider' && runtime.renderSlider) {
+          runtime.renderSlider(containerId, renderOptions);
+        } else {
+          runtime.render(containerId, renderOptions);
+        }
+        return;
+      }
+
+      if (type === 'blog') {
+        if (config.layout === 'slider' && runtime.renderSlider) {
+          runtime.renderSlider(containerId, renderOptions);
+        } else {
+          runtime.render(containerId, renderOptions);
+        }
+        return;
+      }
+
+      runtime.render(containerId, renderOptions);
+    }
+
+    function renderWidgetPreview(type, containerId, config) {
       const container = document.getElementById(containerId);
       if (!container) return;
-      container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading reviews...</p>';
+      const def = getWidgetDefinition(type);
+      container.innerHTML = `<p style="text-align:center;color:#6b7280;padding:20px;">${def.loadingMessage}</p>`;
+      setTimeout(() => renderWidgetByType(type, containerId, config, { paginated: false }), 100);
+    }
 
-      setTimeout(() => {
-        if (typeof ReviewsWidget !== 'undefined') {
-          const opts = {
-            limit: config.limit,
-            columns: config.columns,
-            minRating: config.minRating,
-            showAvatar: config.showAvatar !== false
-          };
-          if (config.productId) opts.productId = config.productId;
-          ReviewsWidget.render(containerId, opts);
-        }
-      }, 100);
+    function syncWidgetInWrapper(wrapper, type) {
+      const widget = getWidgetContainer(wrapper, type);
+      if (!widget) return;
+      const config = getWidgetConfig(wrapper, type);
+      updateWidgetDataEmbed(widget, config);
+      const containerId = ensureWidgetInstanceId(widget, type);
+      renderWidgetPreview(type, containerId, config);
+    }
+
+    function bindWidgetConfigPanel(wrapper) {
+      const configPanel = wrapper.querySelector('.widget-config');
+      if (!configPanel || configPanel.dataset.widgetConfigBound === '1') return;
+      configPanel.dataset.widgetConfigBound = '1';
+      configPanel.querySelectorAll('select, input').forEach(el => {
+        el.addEventListener('change', () => {
+          ['product', 'blog', 'review'].forEach(type => syncWidgetInWrapper(wrapper, type));
+        });
+      });
     }
 
     // Section Actions
@@ -2103,6 +2104,132 @@
       return parts.join('\n');
     }
 
+    function buildCommonPageHeadAssets() {
+      return [
+        `  <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">`,
+        `  <noscript><link rel="stylesheet" href="/css/style.css"></noscript>`,
+        `  <script defer src="/js/product-cards.js"><\/script>`,
+        `  <script defer src="/js/blog-cards.js"><\/script>`,
+        `  <script defer src="/js/reviews-widget.js"><\/script>`,
+        `  <style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}.faq-item.open .faq-answer{max-height:500px !important;}.faq-item.open .faq-toggle span:last-child{transform:rotate(180deg);}</style>`
+      ].join('\n');
+    }
+
+    function buildPageHydrationRuntimeScript(idPrefix = 'widget', includeInteractions = true) {
+      const prefixLiteral = JSON.stringify(idPrefix);
+      const lines = [
+        '<script>',
+        '(function(){',
+        `  var idPrefix = ${prefixLiteral};`,
+        '  function parseConfig(el, fallback) {',
+        '    try {',
+        '      return Object.assign({}, fallback, JSON.parse(el.getAttribute("data-embed") || "{}"));',
+        '    } catch (e) {',
+        '      return Object.assign({}, fallback);',
+        '    }',
+        '  }',
+        '  function assignId(el, prefix, index) {',
+        '    if (el.id) return el.id;',
+        '    var suffix = Date.now ? Date.now() : new Date().getTime();',
+        '    el.id = prefix + "-" + index + "-" + suffix;',
+        '    return el.id;',
+        '  }',
+        '  function hydrateWidgets() {',
+        '    document.querySelectorAll(\'.product-widget-container[data-embed*="product"]\').forEach(function(el, i) {',
+        '      if (!window.ProductCards) return;',
+        '      var config = parseConfig(el, { limit: 6, columns: 3, filter: "all", layout: "grid", ids: [] });',
+        '      var id = assignId(el, idPrefix + "-pc", i);',
+        '      var options = { limit: config.limit, columns: config.columns, filter: config.filter, ids: config.ids || [] };',
+        '      if (config.layout === "slider" && window.ProductCards.renderSlider) {',
+        '        window.ProductCards.renderSlider(id, options);',
+        '      } else {',
+        '        window.ProductCards.render(id, options);',
+        '      }',
+        '    });',
+        '    document.querySelectorAll(\'.blog-widget-container[data-embed*="blog"]\').forEach(function(el, i) {',
+        '      if (!window.BlogCards) return;',
+        '      var config = parseConfig(el, { limit: 6, columns: 3, layout: "grid", ids: [] });',
+        '      var id = assignId(el, idPrefix + "-bc", i);',
+        '      var options = { limit: config.limit, columns: config.columns, ids: config.ids || [], showPagination: false };',
+        '      if (config.layout === "slider" && window.BlogCards.renderSlider) {',
+        '        window.BlogCards.renderSlider(id, options);',
+        '      } else {',
+        '        window.BlogCards.render(id, options);',
+        '      }',
+        '    });',
+        '    document.querySelectorAll(\'.reviews-widget-container[data-embed*="review"]\').forEach(function(el, i) {',
+        '      if (!window.ReviewsWidget) return;',
+        '      var config = parseConfig(el, { limit: 6, columns: 3, minRating: 5, showAvatar: true });',
+        '      var id = assignId(el, idPrefix + "-rw", i);',
+        '      var options = { limit: config.limit, columns: config.columns, minRating: config.minRating, showAvatar: config.showAvatar !== false };',
+        '      if (config.productId) options.productId = config.productId;',
+        '      window.ReviewsWidget.render(id, options);',
+        '    });',
+        '  }'
+      ];
+
+      if (includeInteractions) {
+        lines.push(
+          '  function bindFaqAccordions() {',
+          '    document.querySelectorAll(".faq-toggle").forEach(function(btn) {',
+          '      btn.addEventListener("click", function() {',
+          '        this.parentElement.classList.toggle("open");',
+          '      });',
+          '    });',
+          '  }',
+          '  function startCountdownTimers() {',
+          '    document.querySelectorAll(".countdown-timer").forEach(function(timer) {',
+          '      var endAttr = timer.getAttribute("data-end");',
+          '      var end = endAttr ? new Date(endAttr).getTime() : Date.now() + 7 * 24 * 60 * 60 * 1000;',
+          '      function tick() {',
+          '        var now = Date.now();',
+          '        var diff = Math.max(0, end - now);',
+          '        var d = Math.floor(diff / 86400000);',
+          '        var h = Math.floor((diff % 86400000) / 3600000);',
+          '        var m = Math.floor((diff % 3600000) / 60000);',
+          '        var s = Math.floor((diff % 60000) / 1000);',
+          '        var de = timer.querySelector(".countdown-days"); if (de) de.textContent = String(d).padStart(2, "0");',
+          '        var he = timer.querySelector(".countdown-hours"); if (he) he.textContent = String(h).padStart(2, "0");',
+          '        var me = timer.querySelector(".countdown-mins"); if (me) me.textContent = String(m).padStart(2, "0");',
+          '        var se = timer.querySelector(".countdown-secs"); if (se) se.textContent = String(s).padStart(2, "0");',
+          '        if (diff > 0) requestAnimationFrame(function() { setTimeout(tick, 1000); });',
+          '      }',
+          '      tick();',
+          '    });',
+          '  }'
+        );
+      }
+
+      lines.push('  document.addEventListener("DOMContentLoaded", function() {', '    hydrateWidgets();');
+      if (includeInteractions) {
+        lines.push('    bindFaqAccordions();', '    startCountdownTimers();');
+      }
+      lines.push('  });', '})();', '<\\/script>');
+      return lines.join('\n');
+    }
+
+    function buildPageDocumentHtml(options = {}) {
+      const headContent = options.headContent || '';
+      const bodyContent = options.bodyContent || '';
+      const title = options.title || 'Preview';
+      const idPrefix = options.idPrefix || 'widget';
+      const includeInteractions = options.includeInteractions !== false;
+      return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+${headContent}
+${buildCommonPageHeadAssets()}
+</head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+${bodyContent}
+${buildPageHydrationRuntimeScript(idPrefix, includeInteractions)}
+</body>
+</html>`;
+    }
+
     // Save Page
     document.getElementById('save-btn').addEventListener('click', async () => {
       const title = document.getElementById('seo-title').value.trim();
@@ -2151,86 +2278,12 @@
       if (canonicalUrl) seoOverrideTags += `\n  <link rel="canonical" href="${canonicalUrl}">`;
       if (robotsMeta) seoOverrideTags += `\n  <meta name="robots" content="${robotsMeta}">`;
 
-      const fullHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
-  <meta name="description" content="${desc.replace(/"/g, '&quot;')}">${seoOverrideTags}
-  <link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-  <noscript><link rel="stylesheet" href="/css/style.css"></noscript>
-  <script defer src="/js/product-cards.js"><\/script>
-  <script defer src="/js/blog-cards.js"><\/script>
-  <script defer src="/js/reviews-widget.js"><\/script>
-  <style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}.faq-item.open .faq-answer{max-height:500px !important;}.faq-item.open .faq-toggle span:last-child{transform:rotate(180deg);}</style>
- </head>
- <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-${html}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('[data-embed*="product"]').forEach(function(el, i) {
-    if (typeof ProductCards !== 'undefined') {
-      var cid = 'pc-' + i + '-' + Date.now();
-      el.id = cid;
-      var config = {limit:6,columns:3,filter:'all',layout:'grid'};
-      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
-      if (config.layout === 'slider') {
-        ProductCards.renderSlider ? ProductCards.renderSlider(cid, config) : ProductCards.render(cid, config);
-      } else {
-        ProductCards.render(cid, config);
-      }
-    }
-  });
-  document.querySelectorAll('[data-embed*="blog"]').forEach(function(el, i) {
-    if (typeof BlogCards !== 'undefined') {
-      var cid = 'bc-' + i + '-' + Date.now();
-      el.id = cid;
-      var config = {limit:6,columns:3,layout:'grid'};
-      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
-      if (config.layout === 'slider') {
-        BlogCards.renderSlider ? BlogCards.renderSlider(cid, config) : BlogCards.render(cid, config);
-      } else {
-        BlogCards.render(cid, {limit:config.limit,columns:config.columns,showPagination:false});
-      }
-    }
-  });
-  document.querySelectorAll('[data-embed*="review"]').forEach(function(el, i) {
-    if (typeof ReviewsWidget !== 'undefined') {
-      var cid = 'rw-' + i + '-' + Date.now();
-      el.id = cid;
-      var config = {limit:6,columns:3,minRating:5,showAvatar:true};
-      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
-      ReviewsWidget.render(cid, config);
-    }
-  });
-  // FAQ accordion toggle
-  document.querySelectorAll('.faq-toggle').forEach(function(btn) {
-    btn.addEventListener('click', function() { this.parentElement.classList.toggle('open'); });
-  });
-  // Countdown timer
-  document.querySelectorAll('.countdown-timer').forEach(function(timer) {
-    var endAttr = timer.getAttribute('data-end');
-    var end = endAttr ? new Date(endAttr).getTime() : Date.now() + 7*24*60*60*1000;
-    function tick() {
-      var now = Date.now();
-      var diff = Math.max(0, end - now);
-      var d = Math.floor(diff / 86400000);
-      var h = Math.floor((diff % 86400000) / 3600000);
-      var m = Math.floor((diff % 3600000) / 60000);
-      var s = Math.floor((diff % 60000) / 1000);
-      var de = timer.querySelector('.countdown-days'); if(de) de.textContent = String(d).padStart(2,'0');
-      var he = timer.querySelector('.countdown-hours'); if(he) he.textContent = String(h).padStart(2,'0');
-      var me = timer.querySelector('.countdown-mins'); if(me) me.textContent = String(m).padStart(2,'0');
-      var se = timer.querySelector('.countdown-secs'); if(se) se.textContent = String(s).padStart(2,'0');
-      if (diff > 0) requestAnimationFrame(function(){ setTimeout(tick, 1000); });
-    }
-    tick();
-  });
-});
-<\/script>
-</body>
-</html>`;
+      const fullHTML = buildPageDocumentHtml({
+        title,
+        headContent: `  <meta name="description" content="${desc.replace(/"/g, '&quot;')}">${seoOverrideTags}`,
+        bodyContent: html,
+        idPrefix: 'page'
+      });
 
       try {
         const payload = {
@@ -2287,45 +2340,11 @@ URL: ${window.location.origin}${publicUrl}`);
       const html = generateOutputHtml();
       const title = document.getElementById('seo-title').value || 'Preview';
       const previewWindow = window.open('', 'preview', 'width=1200,height=800');
-      previewWindow.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${title}</title><link rel="preload" href="/css/style.css" as="style" onload="this.onload=null;this.rel='stylesheet'"><noscript><link rel="stylesheet" href="/css/style.css"></noscript><script defer src="/js/product-cards.js"><\/script><script defer src="/js/blog-cards.js"><\/script><script defer src="/js/reviews-widget.js"><\/script></head><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">${html}<script>
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('[data-embed*="product"]').forEach(function(el, i) {
-    if (typeof ProductCards !== 'undefined') {
-      var cid = 'pc-preview-' + i;
-      el.id = cid;
-      var config = {limit:6,columns:3,filter:'all',layout:'grid'};
-      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
-      if (config.layout === 'slider') {
-        ProductCards.renderSlider ? ProductCards.renderSlider(cid, config) : ProductCards.render(cid, config);
-      } else {
-        ProductCards.render(cid, config);
-      }
-    }
-  });
-  document.querySelectorAll('[data-embed*="blog"]').forEach(function(el, i) {
-    if (typeof BlogCards !== 'undefined') {
-      var cid = 'bc-preview-' + i;
-      el.id = cid;
-      var config = {limit:6,columns:3,layout:'grid'};
-      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
-      if (config.layout === 'slider') {
-        BlogCards.renderSlider ? BlogCards.renderSlider(cid, config) : BlogCards.render(cid, config);
-      } else {
-        BlogCards.render(cid, {limit:config.limit,columns:config.columns,showPagination:false});
-      }
-    }
-  });
-  document.querySelectorAll('[data-embed*="review"]').forEach(function(el, i) {
-    if (typeof ReviewsWidget !== 'undefined') {
-      var cid = 'rw-preview-' + i;
-      el.id = cid;
-      var config = {limit:6,columns:3,minRating:5,showAvatar:true};
-      try { config = Object.assign(config, JSON.parse(el.getAttribute('data-embed'))); } catch(e) {}
-      ReviewsWidget.render(cid, config);
-    }
-  });
-});
-<\/script></body></html>`);
+      previewWindow.document.write(buildPageDocumentHtml({
+        title,
+        bodyContent: html,
+        idPrefix: 'preview'
+      }));
       previewWindow.document.close();
     });
 

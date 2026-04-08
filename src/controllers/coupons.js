@@ -4,34 +4,26 @@
  */
 
 import { json, cachedJson } from '../utils/response.js';
+import { COUPONS_TABLE_DDL } from '../config/db.js';
 
 // In-memory cache for active coupons
 let couponsCache = null;
 let couponsCacheTime = 0;
 const COUPONS_CACHE_TTL = 60000; // 1 minute
+let couponsTableEnsured = false;
+
+async function ensureCouponsTable(env) {
+  if (couponsTableEnsured || !env?.DB) return;
+  await env.DB.prepare(COUPONS_TABLE_DDL).run();
+  couponsTableEnsured = true;
+}
 
 /**
  * Get all coupons (admin)
  */
 export async function getCoupons(env) {
   try {
-    // Ensure table exists
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS coupons (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT UNIQUE NOT NULL,
-        discount_type TEXT DEFAULT 'percentage',
-        discount_value REAL NOT NULL,
-        min_order_amount REAL DEFAULT 0,
-        max_uses INTEGER DEFAULT 0,
-        used_count INTEGER DEFAULT 0,
-        valid_from INTEGER,
-        valid_until INTEGER,
-        product_ids TEXT,
-        status TEXT DEFAULT 'active',
-        created_at INTEGER
-      )
-    `).run();
+    await ensureCouponsTable(env);
     
     const result = await env.DB.prepare(`
       SELECT * FROM coupons ORDER BY created_at DESC
@@ -57,6 +49,7 @@ export async function getActiveCoupons(env) {
   }
   
   try {
+    await ensureCouponsTable(env);
     const result = await env.DB.prepare(`
       SELECT id, code, discount_type, discount_value, min_order_amount, product_ids
       FROM coupons 
@@ -81,24 +74,7 @@ export async function getActiveCoupons(env) {
  */
 export async function getCouponsEnabled(env) {
   try {
-    // First ensure coupons table exists
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS coupons (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT UNIQUE NOT NULL,
-        discount_type TEXT DEFAULT 'percentage',
-        discount_value REAL NOT NULL,
-        min_order_amount REAL DEFAULT 0,
-        max_uses INTEGER DEFAULT 0,
-        used_count INTEGER DEFAULT 0,
-        valid_from INTEGER,
-        valid_until INTEGER,
-        product_ids TEXT,
-        status TEXT DEFAULT 'active',
-        created_at INTEGER
-      )
-    `).run();
-    
+    await ensureCouponsTable(env);
     const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('coupons_enabled').first();
     const enabled = row?.value === 'true';
     return cachedJson({ success: true, enabled }, 120);
@@ -132,6 +108,7 @@ export async function validateCoupon(env, body) {
   }
   
   try {
+    await ensureCouponsTable(env);
     const now = Date.now();
     const coupon = await env.DB.prepare(`
       SELECT * FROM coupons 
@@ -211,6 +188,7 @@ export async function validateCoupon(env, body) {
  */
 export async function useCoupon(env, couponId) {
   try {
+    await ensureCouponsTable(env);
     await env.DB.prepare(`
       UPDATE coupons SET used_count = used_count + 1 WHERE id = ?
     `).bind(couponId).run();
@@ -230,6 +208,7 @@ export async function useCoupon(env, couponId) {
  */
 export async function createCoupon(env, body) {
   try {
+    await ensureCouponsTable(env);
     const {
       code,
       discount_type = 'percentage',
@@ -283,6 +262,7 @@ export async function createCoupon(env, body) {
  */
 export async function updateCoupon(env, body) {
   try {
+    await ensureCouponsTable(env);
     const {
       id,
       code,
@@ -340,6 +320,7 @@ export async function updateCoupon(env, body) {
  */
 export async function deleteCoupon(env, id) {
   try {
+    await ensureCouponsTable(env);
     await env.DB.prepare('DELETE FROM coupons WHERE id = ?').bind(id).run();
     
     // Invalidate cache
@@ -357,6 +338,7 @@ export async function deleteCoupon(env, id) {
  */
 export async function toggleCouponStatus(env, body) {
   try {
+    await ensureCouponsTable(env);
     const { id, status } = body;
     await env.DB.prepare('UPDATE coupons SET status = ? WHERE id = ?').bind(status, id).run();
     

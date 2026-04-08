@@ -17,10 +17,19 @@ import { generateProductSchema, generateCollectionSchema, generateVideoSchema, i
 import { getMimeTypeFromFilename } from './utils/upload-helper.js';
 import { buildMinimalRobotsTxt, buildMinimalSitemapXml, getMinimalSEOSettings, getSettings as getSeoSettingsDirect } from './controllers/seo-minimal.js';
 import { getNoindexMetaTags, getSeoVisibilityRuleMatch } from './controllers/noindex.js';
-import { canonicalProductPath } from './utils/formatting.js';
+import { canonicalProductPath, escapeHtml } from './utils/formatting.js';
 import { buildPublicProductStatusWhere } from './utils/product-visibility.js';
 import { handleNoJsRoutes, renderNoJsAdminLoginPage } from './controllers/nojs.js';
-import { normalizeSiteComponentsPayload, rewriteLegacyInternalLinksInHtml } from './utils/canonical.js';
+import {
+  getCanonicalRedirectPath,
+  isSensitiveNoindexPath,
+  normalizeCanonicalPath,
+  normalizeSiteComponentsPayload,
+  resolvePublicHtmlAssetPath,
+  resolveStandaloneAdminAssetPath,
+  rewriteLegacyInternalLinksInHtml,
+  shouldServeCanonicalAliasDirectly
+} from './utils/canonical.js';
 import {
   BLOG_CARDS_STYLE_TAG,
   PRODUCT_CARDS_STYLE_TAG,
@@ -48,6 +57,8 @@ import { injectAnalyticsAndMeta } from './controllers/analytics.js';
 
 // Auth utilities
 import { isAdminAuthed, createAdminSessionCookie, createLogoutCookie } from './utils/auth.js';
+
+export { getCanonicalRedirectPath, shouldServeCanonicalAliasDirectly };
 
 
 // =========================
@@ -161,6 +172,25 @@ function isNoJsSsrEnabled(env) {
   return isEnabledFlag(env?.ENABLE_NOJS_SSR) || isEnabledFlag(env?.NOJS_SSR) || isEnabledFlag(env?.NOJS_MODE);
 }
 
+function shouldAttemptNoJsSsrRoute(path, method) {
+  const verb = String(method || '').toUpperCase();
+  if (verb !== 'GET' && verb !== 'HEAD' && verb !== 'POST') return false;
+
+  const pathname = String(path || '');
+  if (!pathname || pathname.startsWith('/api/') || pathname.startsWith('/download/')) return false;
+  if (
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/manifest.json' ||
+    pathname === '/site.webmanifest' ||
+    pathname.startsWith('/.well-known/')
+  ) {
+    return false;
+  }
+
+  return !/\.(css|js|ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|mp4|webm|mp3|pdf|xml|txt|json|webmanifest)$/i.test(pathname);
+}
+
 // Common automated scanner paths (WordPress/PHP/admin probes) that do not
 // exist on this app. Fast-rejecting them avoids unnecessary subrequests and
 // DB warmup work on every probe.
@@ -246,15 +276,7 @@ function isMalformedNestedSlug(pathname, prefix) {
   return !canLookupDynamicSlug(slug);
 }
 
-function escapeHtmlText(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
+// Use escapeHtml from formatting.js - removed local duplicate
 const ALLOWED_PRODUCT_DESCRIPTION_TAGS = new Set([
   'p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
   'strong', 'em', 'b', 'i', 'u',
@@ -283,7 +305,7 @@ function sanitizeProductDescriptionHtml(rawInput) {
 
   const hasMarkupHint = /<[a-z!/][^>]*>/i.test(raw) || /&lt;[a-z!/]/i.test(raw);
   if (!hasMarkupHint) {
-    return escapeHtmlText(raw).replace(/\n/g, '<br>');
+    return escapeHtml(raw).replace(/\n/g, '<br>');
   }
 
   let html = decodeBasicHtmlEntities(raw)
@@ -328,9 +350,9 @@ function sanitizeProductDescriptionHtml(rawInput) {
       ).trim().toLowerCase();
 
       if (targetRaw === '_blank') {
-        return `<a href="${escapeHtmlText(safeHref)}" target="_blank" rel="noopener noreferrer">`;
+        return `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer">`;
       }
-      return `<a href="${escapeHtmlText(safeHref)}">`;
+      return `<a href="${escapeHtml(safeHref)}">`;
     }
 
     return `<${tagName}>`;
@@ -582,10 +604,10 @@ function renderReviewMediaDataAttrsForSsr(review, media) {
     : reviewTextRaw;
 
   const attrs = [
-    `data-review-video-url="${escapeHtmlText(String(media?.videoUrl || ''))}"`,
-    `data-review-poster-url="${escapeHtmlText(String(media?.posterUrl || ''))}"`,
-    `data-reviewer-name="${escapeHtmlText(reviewerName)}"`,
-    `data-review-text="${escapeHtmlText(reviewText)}"`
+    `data-review-video-url="${escapeHtml(String(media?.videoUrl || ''))}"`,
+    `data-review-poster-url="${escapeHtml(String(media?.posterUrl || ''))}"`,
+    `data-reviewer-name="${escapeHtml(reviewerName)}"`,
+    `data-review-text="${escapeHtml(reviewText)}"`
   ];
   return attrs.join(' ');
 }
@@ -595,20 +617,20 @@ function renderSsrReviewCards(reviewsInput = []) {
   if (reviews.length === 0) return '';
 
   return reviews.map((review) => {
-    const reviewerName = escapeHtmlText(
+    const reviewerName = escapeHtml(
       String(review?.customer_name || review?.author_name || 'Anonymous')
     );
-    const reviewText = escapeHtmlText(
+    const reviewText = escapeHtml(
       String(review?.review_text || review?.comment || '')
     ).replace(/\n/g, '<br>');
     const rating = Math.max(1, Math.min(5, parseInt(review?.rating, 10) || 5));
     const stars = '&#9733;'.repeat(rating) + '&#9734;'.repeat(5 - rating);
-    const dateText = escapeHtmlText(formatReviewDateForSsr(review?.created_at));
+    const dateText = escapeHtml(formatReviewDateForSsr(review?.created_at));
     const reviewMedia = resolveReviewVideoMediaForSsr(review);
     const watchDataAttrs = renderReviewMediaDataAttrsForSsr(review, reviewMedia);
     const canWatch = !!reviewMedia.canWatch && !!reviewMedia.videoUrl;
     const posterThumb = reviewMedia.posterUrl
-      ? `<img src="${escapeHtmlText(optimizeThumbUrlForSsr(reviewMedia.posterUrl, 520))}" alt="Review video thumbnail" loading="lazy" decoding="async" width="260" height="146" style="width:100%;height:100%;object-fit:cover;display:block;">`
+      ? `<img src="${escapeHtml(optimizeThumbUrlForSsr(reviewMedia.posterUrl, 520))}" alt="Review video thumbnail" loading="lazy" decoding="async" width="260" height="146" style="width:100%;height:100%;object-fit:cover;display:block;">`
       : '<div style="width:100%;height:100%;background:#0f172a;"></div>';
     const watchRowHtml = canWatch
       ? `
@@ -647,7 +669,7 @@ function renderSsrReviewSliderThumbs(reviewsInput = []) {
   return reviewMediaList.map(({ review, media }) => {
     const dataAttrs = renderReviewMediaDataAttrsForSsr(review, media);
     const posterHtml = media.posterUrl
-      ? `<img src="${escapeHtmlText(optimizeThumbUrlForSsr(media.posterUrl, 280))}" alt="Review video thumbnail" loading="lazy" decoding="async" width="140" height="100" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;background:#1a1a2e;">`
+      ? `<img src="${escapeHtml(optimizeThumbUrlForSsr(media.posterUrl, 280))}" alt="Review video thumbnail" loading="lazy" decoding="async" width="140" height="100" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;background:#1a1a2e;">`
       : '<div style="width:100%;height:100%;background:#1a1a2e;"></div>';
 
     return `
@@ -672,18 +694,18 @@ function renderAddonDataAttrsForSsr(optionInput = {}) {
   const option = optionInput && typeof optionInput === 'object' ? optionInput : {};
   const attrs = [];
   const price = Number(option.price);
-  attrs.push(`data-price="${escapeHtmlText(Number.isFinite(price) ? String(price) : '0')}"`);
+  attrs.push(`data-price="${escapeHtml(Number.isFinite(price) ? String(price) : '0')}"`);
 
   if (option.file) {
     attrs.push('data-needs-file="true"');
-    attrs.push(`data-file-qty="${escapeHtmlText(String(parseInt(option.fileQuantity, 10) || 1))}"`);
+    attrs.push(`data-file-qty="${escapeHtml(String(parseInt(option.fileQuantity, 10) || 1))}"`);
   }
   if (option.textField) {
     attrs.push('data-needs-text="true"');
   }
   if (option.delivery && typeof option.delivery === 'object') {
     attrs.push(`data-delivery-instant="${option.delivery.instant ? 'true' : 'false'}"`);
-    attrs.push(`data-delivery-days="${escapeHtmlText(String(parseInt(option.delivery.days, 10) || 1))}"`);
+    attrs.push(`data-delivery-days="${escapeHtml(String(parseInt(option.delivery.days, 10) || 1))}"`);
   }
 
   return attrs.length > 0 ? ` ${attrs.join(' ')}` : '';
@@ -694,14 +716,14 @@ function renderSsrAddonField(fieldInput, index) {
   const type = String(field.type || 'text').trim().toLowerCase();
   const fallbackId = `addon-${index + 1}`;
   const baseId = sanitizeAddonIdForSsr(field.id || fallbackId, fallbackId);
-  const labelText = escapeHtmlText(String(field.label || field.text || '').trim());
+  const labelText = escapeHtml(String(field.label || field.text || '').trim());
   const required = !!field.required;
   const requiredHtml = required
     ? ' <span style="color:red" aria-hidden="true">*</span><span class="sr-only"> (required)</span>'
     : '';
 
   if (type === 'heading') {
-    const headingText = escapeHtmlText(String(field.text || field.label || '').trim());
+    const headingText = escapeHtml(String(field.text || field.label || '').trim());
     if (!headingText) return '';
     return `
       <h3 style="margin-top:1.5rem;font-size:1.1rem;">${headingText}</h3>`;
@@ -712,7 +734,7 @@ function renderSsrAddonField(fieldInput, index) {
   if (type === 'select') {
     const optionsHtml = options.map((optInput, idx) => {
       const opt = optInput && typeof optInput === 'object' ? optInput : {};
-      const optLabel = escapeHtmlText(String(opt.label || `Option ${idx + 1}`));
+      const optLabel = escapeHtml(String(opt.label || `Option ${idx + 1}`));
       const optPrice = Number(opt.price);
       const priceSuffix = Number.isFinite(optPrice) && optPrice > 0 ? ` (+$${formatPriceForSsr(optPrice)})` : '';
       const selectedAttr = opt.default ? ' selected' : '';
@@ -721,9 +743,9 @@ function renderSsrAddonField(fieldInput, index) {
     }).join('');
 
     return `
-      <div class="addon-group" role="group" aria-label="${labelText || escapeHtmlText(baseId)}">
-        ${labelText ? `<label class="addon-group-label" id="${escapeHtmlText(baseId)}-label" for="${escapeHtmlText(baseId)}">${labelText}${requiredHtml}</label>` : ''}
-        <select class="form-select" name="${escapeHtmlText(baseId)}" id="${escapeHtmlText(baseId)}"${required ? ' required' : ''}>
+      <div class="addon-group" role="group" aria-label="${labelText || escapeHtml(baseId)}">
+        ${labelText ? `<label class="addon-group-label" id="${escapeHtml(baseId)}-label" for="${escapeHtml(baseId)}">${labelText}${requiredHtml}</label>` : ''}
+        <select class="form-select" name="${escapeHtml(baseId)}" id="${escapeHtml(baseId)}"${required ? ' required' : ''}>
 ${optionsHtml}
         </select>
         <div class="addon-extras"></div>
@@ -734,7 +756,7 @@ ${optionsHtml}
     const isRadio = type === 'radio';
     const optionCards = options.map((optInput, idx) => {
       const opt = optInput && typeof optInput === 'object' ? optInput : {};
-      const optLabel = escapeHtmlText(String(opt.label || `Option ${idx + 1}`));
+      const optLabel = escapeHtml(String(opt.label || `Option ${idx + 1}`));
       const optPrice = Number(opt.price);
       const priceHtml = Number.isFinite(optPrice) && optPrice > 0
         ? `<span class="opt-price">+$${formatPriceForSsr(optPrice)}</span>`
@@ -747,7 +769,7 @@ ${optionsHtml}
         return `
           <label class="addon-option-card${selectedClass}">
             <input type="radio"
-                   name="${escapeHtmlText(baseId)}"
+                   name="${escapeHtml(baseId)}"
                    value="${optLabel}"
                    class="addon-radio"${renderAddonDataAttrsForSsr(opt)}${checkedAttr}${requiredAttr}>
             ${optLabel}
@@ -759,7 +781,7 @@ ${optionsHtml}
           <div>
             <label class="addon-option-card${selectedClass}">
               <input type="checkbox"
-                     name="${escapeHtmlText(baseId)}"
+                     name="${escapeHtml(baseId)}"
                      value="${optLabel}"
                      class="addon-checkbox"${renderAddonDataAttrsForSsr(opt)}${checkedAttr}>
               ${optLabel}
@@ -770,17 +792,17 @@ ${optionsHtml}
     }).join('');
 
     return `
-      <div class="addon-group" role="group" aria-label="${labelText || escapeHtmlText(baseId)}">
-        ${labelText ? `<label class="addon-group-label" id="${escapeHtmlText(baseId)}-label">${labelText}${requiredHtml}</label>` : ''}
+      <div class="addon-group" role="group" aria-label="${labelText || escapeHtml(baseId)}">
+        ${labelText ? `<label class="addon-group-label" id="${escapeHtml(baseId)}-label">${labelText}${requiredHtml}</label>` : ''}
         <div>${optionCards}</div>
         ${isRadio ? '<div class="addon-extras"></div>' : ''}
       </div>`;
   }
 
   const isTextarea = type === 'textarea';
-  const safeType = isTextarea ? '' : escapeHtmlText(type || 'text');
+  const safeType = isTextarea ? '' : escapeHtml(type || 'text');
   const placeholder = String(field.placeholder || '').trim();
-  const placeholderAttr = placeholder ? ` placeholder="${escapeHtmlText(placeholder)}"` : '';
+  const placeholderAttr = placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : '';
   const requiredAttr = required ? ' required' : '';
   const maxLength = isTextarea ? 2000 : (safeType === 'email' ? 100 : (safeType === 'text' ? 200 : 0));
   const maxLengthAttr = maxLength > 0 ? ` maxlength="${maxLength}"` : '';
@@ -788,17 +810,17 @@ ${optionsHtml}
 
   if (isTextarea) {
     return `
-      <div class="addon-group" role="group" aria-label="${labelText || escapeHtmlText(baseId)}">
-        ${labelText ? `<label class="addon-group-label" id="${escapeHtmlText(baseId)}-label" for="${escapeHtmlText(baseId)}">${labelText}${requiredHtml}</label>` : ''}
-        <textarea class="form-textarea" name="${escapeHtmlText(baseId)}" id="${escapeHtmlText(baseId)}"${placeholderAttr}${requiredAttr}${maxLengthAttr}></textarea>
+      <div class="addon-group" role="group" aria-label="${labelText || escapeHtml(baseId)}">
+        ${labelText ? `<label class="addon-group-label" id="${escapeHtml(baseId)}-label" for="${escapeHtml(baseId)}">${labelText}${requiredHtml}</label>` : ''}
+        <textarea class="form-textarea" name="${escapeHtml(baseId)}" id="${escapeHtml(baseId)}"${placeholderAttr}${requiredAttr}${maxLengthAttr}></textarea>
         <div class="addon-extras"></div>
       </div>`;
   }
 
   return `
-      <div class="addon-group" role="group" aria-label="${labelText || escapeHtmlText(baseId)}">
-        ${labelText ? `<label class="addon-group-label" id="${escapeHtmlText(baseId)}-label" for="${escapeHtmlText(baseId)}">${labelText}${requiredHtml}</label>` : ''}
-        <input class="form-input" type="${safeType || 'text'}" name="${escapeHtmlText(baseId)}" id="${escapeHtmlText(baseId)}"${placeholderAttr}${requiredAttr}${maxLengthAttr}${acceptAttr}>
+      <div class="addon-group" role="group" aria-label="${labelText || escapeHtml(baseId)}">
+        ${labelText ? `<label class="addon-group-label" id="${escapeHtml(baseId)}-label" for="${escapeHtml(baseId)}">${labelText}${requiredHtml}</label>` : ''}
+        <input class="form-input" type="${safeType || 'text'}" name="${escapeHtml(baseId)}" id="${escapeHtml(baseId)}"${placeholderAttr}${requiredAttr}${maxLengthAttr}${acceptAttr}>
         <div class="addon-extras"></div>
       </div>`;
 }
@@ -824,11 +846,11 @@ function renderProductStep1PlayerShell(product, addonsInput = [], reviewsInput =
 
   const addonGroups = parseAddonGroupsForSsr(addonsInput);
   const title = String(product.title || 'Product');
-  const safeTitle = escapeHtmlText(title);
+  const safeTitle = escapeHtml(title);
   const thumbSrcRaw = String(product.thumbnail_url || '').trim() || 'https://via.placeholder.com/1280x720?text=Preview';
-  const thumbSrc = escapeHtmlText(thumbSrcRaw);
+  const thumbSrc = escapeHtml(thumbSrcRaw);
   const hasVideo = !!String(product.video_url || '').trim();
-  const safeVideoUrl = escapeHtmlText(String(product.video_url || '').trim());
+  const safeVideoUrl = escapeHtml(String(product.video_url || '').trim());
   const reviewCount = Math.max(0, parseInt(product.review_count, 10) || 0);
   const ratingAverage = Number(product.rating_average);
   const normalizedRating = Number.isFinite(ratingAverage) && ratingAverage > 0 ? ratingAverage : 5.0;
@@ -883,8 +905,8 @@ function renderProductStep1PlayerShell(product, addonsInput = [], reviewsInput =
   const galleryImages = normalizeGalleryForPlayerSsr(product.gallery_images, thumbSrcRaw, product.video_url);
   const galleryThumbHtml = galleryImages.map((src, idx) => {
     const optimizedSrc = optimizeThumbUrlForSsr(src, 280);
-    const safeSrc = escapeHtmlText(optimizedSrc);
-    const safeFullSrc = escapeHtmlText(src);
+    const safeSrc = escapeHtml(optimizedSrc);
+    const safeFullSrc = escapeHtml(src);
     return `
           <img
             src="${safeSrc}"
@@ -905,7 +927,7 @@ function renderProductStep1PlayerShell(product, addonsInput = [], reviewsInput =
     ? `
                 <div class="thumb-wrapper" style="position:relative;display:inline-block;">
                   <img
-                    src="${escapeHtmlText(optimizeThumbUrlForSsr(thumbSrcRaw, 280))}"
+                    src="${escapeHtml(optimizeThumbUrlForSsr(thumbSrcRaw, 280))}"
                     class="thumb active"
                     alt="${safeTitle} - Thumbnail"
                     data-media-kind="video-main"
@@ -922,7 +944,7 @@ function renderProductStep1PlayerShell(product, addonsInput = [], reviewsInput =
                 </div>`
     : `
                 <img
-                  src="${escapeHtmlText(optimizeThumbUrlForSsr(thumbSrcRaw, 280))}"
+                  src="${escapeHtml(optimizeThumbUrlForSsr(thumbSrcRaw, 280))}"
                   class="thumb active"
                   alt="${safeTitle} - Thumbnail"
                   data-media-kind="image"
@@ -983,12 +1005,12 @@ ${reviewSliderThumbHtml}
               <h1 class="product-title">${safeTitle}</h1>
               <div class="rating-row" role="img" aria-label="Rating: ${normalizedRating.toFixed(1)} out of 5 stars, ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}">
                 <span class="stars" aria-hidden="true">${stars}</span>
-                <span class="review-count">${escapeHtmlText(reviewText)}</span>
+                <span class="review-count">${escapeHtml(reviewText)}</span>
               </div>
               <div class="badges-row">
                 <div class="badge-box badge-delivery" id="delivery-badge">
                   <div class="icon" id="delivery-badge-icon">${deliveryBadge.icon}</div>
-                  <span id="delivery-badge-text">${escapeHtmlText(deliveryBadge.text)}</span>
+                  <span id="delivery-badge-text">${escapeHtml(deliveryBadge.text)}</span>
                 </div>
                 <div class="badge-box badge-price">
                   <div class="price-final">$${basePriceText}</div>
@@ -1115,7 +1137,7 @@ function shouldReplaceSeoMetaContent(value) {
 function upsertMetaTag(html, type, name, content, { alwaysReplace = false } = {}) {
   if (!content) return html;
   const attr = type === 'property' ? 'property' : 'name';
-  const escapedContent = escapeHtmlText(content);
+  const escapedContent = escapeHtml(content);
   const regex = new RegExp(`<meta\\s+${attr}=["']${name}["'][^>]*content=["']([^"']*)["'][^>]*>`, 'i');
   const tag = `<meta ${attr}="${name}" content="${escapedContent}">`;
 
@@ -1145,7 +1167,7 @@ function upsertMetaTagsBatch(html, tags) {
   for (const { type, name, content, alwaysReplace } of tags) {
     if (!content) continue;
     const attr = type === 'property' ? 'property' : 'name';
-    const escapedContent = escapeHtmlText(content);
+    const escapedContent = escapeHtml(content);
     const tag = `<meta ${attr}="${name}" content="${escapedContent}">`;
     const cacheKey = `${attr}=${name}`;
     let regex = metaTagRegexCache.get(cacheKey);
@@ -1188,10 +1210,10 @@ function resolveSiteTitle(seoSettings, urlObj) {
 
 function applySiteTitleToHtml(html, siteTitle) {
   if (!html || !siteTitle) return html;
-  const safeSiteTitle = escapeHtmlText(siteTitle);
+  const safeSiteTitle = escapeHtml(siteTitle);
   return html.replace(/<title>([\s\S]*?)<\/title>/i, (match, currentTitle) => {
     const rewritten = buildSiteAwareTitle(currentTitle, safeSiteTitle);
-    return `<title>${escapeHtmlText(rewritten)}</title>`;
+    return `<title>${escapeHtml(rewritten)}</title>`;
   });
 }
 
@@ -1244,7 +1266,7 @@ function appendToHead(html, markup) {
 }
 
 function upsertTitleTag(html, title) {
-  const safeTitle = escapeHtmlText(normalizeSeoText(title));
+  const safeTitle = escapeHtml(normalizeSeoText(title));
   if (!safeTitle) return html;
   const out = ensureHeadSection(html).replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, '');
   return appendToHead(out, `<title>${safeTitle}</title>`);
@@ -1258,8 +1280,50 @@ function appendJsonLdToHead(html, schemaJson, schemaId = '') {
     const idRegex = new RegExp(`<script\\s+[^>]*id=["']${escapeRegexText(schemaId)}["'][^>]*>[\\s\\S]*?<\\/script>`, 'gi');
     out = out.replace(idRegex, '');
   }
-  const idAttr = schemaId ? ` id="${escapeHtmlText(schemaId)}"` : '';
+  const idAttr = schemaId ? ` id="${escapeHtml(schemaId)}"` : '';
   return appendToHead(out, `<script type="application/ld+json"${idAttr}>${safeSchemaJson}</script>`);
+}
+
+function extractHomepageFaqItemsFromHtml(html) {
+  const faqItems = [];
+  const faqRegex = /<span[^>]*class="[^"]*faq-question[^"]*"[^>]*>([\s\S]*?)<\/span>[\s\S]*?<div[^>]*class="[^"]*faq-answer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+  let faqMatch;
+  while ((faqMatch = faqRegex.exec(String(html || ''))) !== null) {
+    const question = faqMatch[1].replace(/<[^>]+>/g, '').trim();
+    const answer = faqMatch[2].replace(/<[^>]+>/g, '').trim();
+    if (question && answer) faqItems.push({ question, answer });
+  }
+  return faqItems;
+}
+
+async function injectHomepageStructuredData(env, html, baseUrl) {
+  let out = html;
+
+  try {
+    const seoSettings = await getSeoSettingsDirect(env) || {};
+    if (!seoSettings.site_url) seoSettings.site_url = baseUrl;
+    if (!seoSettings.site_title) seoSettings.site_title = DEFAULT_SITE_TITLE;
+
+    const orgSchema = generateOrganizationSchema(seoSettings);
+    const siteSchema = generateWebSiteSchema(seoSettings);
+
+    if (!/"@type"\s*:\s*"Organization"/.test(out)) {
+      out = appendJsonLdToHead(out, orgSchema, 'home-organization-schema');
+    }
+    if (!/"@type"\s*:\s*"WebSite"/.test(out)) {
+      out = appendJsonLdToHead(out, siteSchema, 'home-website-schema');
+    }
+  } catch (_) {}
+
+  try {
+    const faqItems = extractHomepageFaqItemsFromHtml(out);
+    if (faqItems.length > 0) {
+      const faqSchema = generateFAQPageSchema(faqItems, baseUrl);
+      out = appendJsonLdToHead(out, faqSchema, 'home-faq-schema');
+    }
+  } catch (_) {}
+
+  return out;
 }
 
 function preferLastSingletonTag(html, tagRegex) {
@@ -1368,127 +1432,9 @@ function applyDefaultPageMetadata(html, pageType, seo = {}) {
   return upsertMetaTagsBatch(out, metaTags);
 }
 
-const CANONICAL_ALIAS_MAP = new Map([
-  ['/index.html', '/'],
-  ['/home', '/'],
-  ['/home/', '/'],
-  ['/page-builder', '/admin/page-builder.html'],
-  ['/page-builder/', '/admin/page-builder.html'],
-  ['/page-builder.html', '/admin/page-builder.html'],
-  ['/landing-builder', '/admin/landing-builder.html'],
-  ['/landing-builder/', '/admin/landing-builder.html'],
-  ['/landing-builder.html', '/admin/landing-builder.html'],
-  ['/blog/index.html', '/blog'],
-  ['/blog.html', '/blog'],
-  ['/forum/index.html', '/forum'],
-  ['/forum.html', '/forum'],
-  ['/terms/', '/terms'],
-  ['/terms/index.html', '/terms'],
-  ['/terms.html', '/terms'],
-  ['/products/index.html', '/products'],
-  ['/products.html', '/products'],
-  ['/products-grid', '/products'],
-  ['/products-grid/', '/products'],
-  ['/products-grid.html', '/products'],
-  ['/checkout/', '/checkout'],
-  ['/checkout/index.html', '/checkout'],
-  ['/success.html', '/success'],
-  ['/buyer-order/', '/buyer-order'],
-  ['/buyer-order.html', '/buyer-order'],
-  ['/order-detail/', '/order-detail'],
-  ['/order-detail.html', '/order-detail'],
-  ['/order-success', '/success'],
-  ['/order-success.html', '/success']
-]);
-
-const DIRECT_INTERNAL_ALIAS_PATHS = new Set([
-  '/index.html',
-  '/home',
-  '/home/',
-  '/blog/index.html',
-  '/blog.html',
-  '/forum/index.html',
-  '/forum.html',
-  '/terms',
-  '/terms/',
-  '/terms/index.html',
-  '/terms.html',
-  '/products.html',
-  '/products-grid',
-  '/products-grid/',
-  '/products-grid.html',
-  '/products/index.html',
-  '/checkout/',
-  '/checkout/index.html',
-  '/success/',
-  '/success.html',
-  '/buyer-order/',
-  '/buyer-order.html',
-  '/order-detail/',
-  '/order-detail.html',
-  '/order-success',
-  '/order-success.html'
-]);
-
-const NON_REDIRECT_ALIAS_PATHS = new Set([
-  '/checkout/',
-  '/checkout/index.html',
-  '/buyer-order/',
-  '/buyer-order.html',
-  '/order-detail/',
-  '/order-detail.html'
-]);
-
-export function shouldServeCanonicalAliasDirectly(pathname) {
-  const raw = String(pathname || '/').trim() || '/';
-  return DIRECT_INTERNAL_ALIAS_PATHS.has(raw);
-}
-
-function normalizeCanonicalPath(pathname) {
-  let p = String(pathname || '/').trim() || '/';
-  p = CANONICAL_ALIAS_MAP.get(p) || p;
-
-  // Keep trailing slash only for root and admin/api namespaces.
-  if (
-    p.length > 1 &&
-    p.endsWith('/') &&
-    !p.startsWith('/admin/') &&
-    !p.startsWith('/api/')
-  ) {
-    p = p.slice(0, -1);
-  }
-  return p || '/';
-}
-
-export function getCanonicalRedirectPath(pathname) {
-  const raw = String(pathname || '/').trim() || '/';
-  if (raw === '/admin/' || raw === '/api/') return null;
-  if (raw.startsWith('/admin/') || raw.startsWith('/api/')) return null;
-  if (NON_REDIRECT_ALIAS_PATHS.has(raw)) return null;
-  const normalized = normalizeCanonicalPath(raw);
-  return normalized !== raw ? normalized : null;
-}
-
 function isLocalDevHost(hostname) {
   const h = String(hostname || '').trim().toLowerCase();
   return h === 'localhost' || h === '127.0.0.1' || h === '::1';
-}
-
-function isSensitiveNoindexPath(pathname) {
-  const p = normalizeCanonicalPath(pathname);
-  if (
-    p === '/checkout' ||
-    p === '/success' ||
-    p === '/buyer-order' ||
-    p === '/order-detail'
-  ) {
-    return true;
-  }
-  if (p === '/admin' || p.startsWith('/admin/')) return true;
-  if (p === '/api' || p.startsWith('/api/')) return true;
-  if (p === '/order' || p.startsWith('/order/')) return true;
-  if (p === '/download' || p.startsWith('/download/')) return true;
-  return false;
 }
 
 const SITE_COMPONENTS_SSR_TTL_MS = 3 * 60 * 1000; // 3 minutes (was 10s)
@@ -2085,7 +2031,7 @@ function enhanceCustomPageHtml(html, pageRow, baseUrl, seoSettings = {}) {
 
   // Ensure a single H1 exists - inject from page title if missing
   if (pageRow && pageRow.title && !/<h1[\s>]/i.test(out)) {
-    const safeTitle = escapeHtmlText(pageRow.title);
+    const safeTitle = escapeHtml(pageRow.title);
     const mainMatch = out.match(/<main[^>]*>/i);
     if (mainMatch) {
       const insertPos = mainMatch.index + mainMatch[0].length;
@@ -2199,10 +2145,10 @@ function renderBlogArchiveCardsSsr(blogs = [], pagination = {}) {
     if (!slugOrId) return '';
 
     const blogUrl = `/blog/${encodeURIComponent(slugOrId)}`;
-    const title = escapeHtmlText(blog.title || 'Untitled');
-    const description = escapeHtmlText(truncateBlogArchiveText(blog.description || '', 120));
-    const dateText = escapeHtmlText(formatBlogArchiveDate(blog.created_at));
-    const thumb = escapeHtmlText(
+    const title = escapeHtml(blog.title || 'Untitled');
+    const description = escapeHtml(truncateBlogArchiveText(blog.description || '', 120));
+    const dateText = escapeHtml(formatBlogArchiveDate(blog.created_at));
+    const thumb = escapeHtml(
       String(blog.thumbnail_url || '').trim() || 'https://via.placeholder.com/400x225?text=No+Image'
     );
 
@@ -2629,13 +2575,13 @@ async function queryReviewsForSsr(env, options = {}) {
 function replaceSimpleTextByIdSsr(html, elementId, value) {
   const escapedId = String(elementId || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`<(span|div|p)([^>]*\\bid=["']${escapedId}["'][^>]*)>([\\s\\S]*?)</\\1>`, 'i');
-  return String(html || '').replace(pattern, `<$1$2>${escapeHtmlText(String(value ?? ''))}</$1>`);
+  return String(html || '').replace(pattern, `<$1$2>${escapeHtml(String(value ?? ''))}</$1>`);
 }
 
 function replaceAnchorHrefById(html, elementId, href) {
   const escapedId = String(elementId || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`(<a[^>]*\\bid=["']${escapedId}["'][^>]*\\bhref=["'])[^"']*(["'])`, 'i');
-  return String(html || '').replace(pattern, `$1${escapeHtmlText(String(href || '#'))}$2`);
+  return String(html || '').replace(pattern, `$1${escapeHtml(String(href || '#'))}$2`);
 }
 
 function buildForumQuestionHref(question) {
@@ -2661,19 +2607,19 @@ function renderForumArchiveCardsSsr(questions = []) {
     const date = question.created_at
       ? new Date(question.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       : '';
-    const initial = escapeHtmlText(String(question.name || 'A').charAt(0).toUpperCase());
+    const initial = escapeHtml(String(question.name || 'A').charAt(0).toUpperCase());
     const href = buildForumQuestionHref(question);
     return `
-      <a class="question-card question-link-card" id="qcard-${escapeHtmlText(question.id)}" href="${href}" style="display:block;text-decoration:none;color:inherit;">
+      <a class="question-card question-link-card" id="qcard-${escapeHtml(question.id)}" href="${href}" style="display:block;text-decoration:none;color:inherit;">
         <div class="question-header">
           <div class="q-avatar">${initial}</div>
           <div class="q-content">
-            <div class="q-title">${escapeHtmlText(question.title || '')}</div>
-            <div class="q-preview">${escapeHtmlText(question.content || '')}</div>
+            <div class="q-title">${escapeHtml(question.title || '')}</div>
+            <div class="q-preview">${escapeHtml(question.content || '')}</div>
             <div class="q-meta">
-              <span>&#128100; ${escapeHtmlText(question.name || '')}</span>
-              <span>&#128197; ${escapeHtmlText(date)}</span>
-              <span class="reply-count">&#128172; ${escapeHtmlText(question.reply_count || 0)} replies</span>
+              <span>&#128100; ${escapeHtml(question.name || '')}</span>
+              <span>&#128197; ${escapeHtml(date)}</span>
+              <span class="reply-count">&#128172; ${escapeHtml(question.reply_count || 0)} replies</span>
             </div>
           </div>
           <div class="expand-icon">&rarr;</div>
@@ -2706,9 +2652,9 @@ function renderEmbeddedForumQuestionsSsr(questions = []) {
   }
 
   return `<h3 style="margin-bottom:20px;color:#1f2937;">Recent Questions</h3>${questions.map((question) => {
-    const preview = escapeHtmlText(String(question.content || '').slice(0, 150) + (String(question.content || '').length > 150 ? '...' : ''));
+    const preview = escapeHtml(String(question.content || '').slice(0, 150) + (String(question.content || '').length > 150 ? '...' : ''));
     const href = buildForumQuestionHref(question);
-    return `<a href="${href}" style="display:block;background:white;border-radius:12px;padding:20px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-decoration:none;transition:transform 0.2s,box-shadow 0.2s;"><h4 style="color:#1f2937;margin-bottom:8px;font-size:1.1rem;">${escapeHtmlText(question.title || '')}</h4><p style="color:#6b7280;font-size:0.9rem;line-height:1.5;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${preview}</p><div style="display:flex;gap:15px;font-size:0.85rem;color:#9ca3af;"><span>&#128100; ${escapeHtmlText(question.name || '')}</span><span>&#128172; ${escapeHtmlText(question.reply_count || 0)} replies</span></div></a>`;
+    return `<a href="${href}" style="display:block;background:white;border-radius:12px;padding:20px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,0.06);text-decoration:none;transition:transform 0.2s,box-shadow 0.2s;"><h4 style="color:#1f2937;margin-bottom:8px;font-size:1.1rem;">${escapeHtml(question.title || '')}</h4><p style="color:#6b7280;font-size:0.9rem;line-height:1.5;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${preview}</p><div style="display:flex;gap:15px;font-size:0.85rem;color:#9ca3af;"><span>&#128100; ${escapeHtml(question.name || '')}</span><span>&#128172; ${escapeHtml(question.reply_count || 0)} replies</span></div></a>`;
   }).join('')}`;
 }
 
@@ -2918,7 +2864,7 @@ async function applyComponentSsrToHtml(env, html, url, path) {
         pagination: productResult.pagination
       });
       const renderedAttrs = Object.entries(rendered.attrs || {})
-        .map(([key, value]) => ` ${key}="${escapeHtmlText(String(value))}"`)
+        .map(([key, value]) => ` ${key}="${escapeHtml(String(value))}"`)
         .join('');
       replacement = `<${tagName}${rawAttrs}${renderedAttrs}>${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
       needsProductStyles = true;
@@ -2935,7 +2881,7 @@ async function applyComponentSsrToHtml(env, html, url, path) {
         pagination: blogResult.pagination
       });
       const renderedAttrs = Object.entries(rendered.attrs || {})
-        .map(([key, value]) => ` ${key}="${escapeHtmlText(String(value))}"`)
+        .map(([key, value]) => ` ${key}="${escapeHtml(String(value))}"`)
         .join('');
       replacement = `<${tagName}${rawAttrs}${renderedAttrs}>${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
       needsBlogStyles = true;
@@ -2947,7 +2893,7 @@ async function applyComponentSsrToHtml(env, html, url, path) {
         options: config
       });
       const renderedAttrs = Object.entries(rendered.attrs || {})
-        .map(([key, value]) => ` ${key}="${escapeHtmlText(String(value))}"`)
+        .map(([key, value]) => ` ${key}="${escapeHtml(String(value))}"`)
         .join('');
       replacement = `<${tagName}${rawAttrs}${renderedAttrs}>${rendered.innerHtml}</${tagName}>${rendered.afterHtml}`;
       needsReviewsStyles = true;
@@ -3040,11 +2986,11 @@ function generateBlogPostHTML(blog, previousBlogs = [], comments = []) {
   }).join('');
 
   const blogTitle = normalizeSeoText(blog.seo_title || blog.title || 'Blog Post');
-  const safeTitle = escapeHtmlText(blogTitle);
-  const safeMetaTitle = escapeHtmlText(buildSiteAwareTitle(blogTitle, DEFAULT_SITE_TITLE));
-  const safeDesc = escapeHtmlText(normalizeSeoText(blog.seo_description || blog.description || blog.content || blogTitle, 160));
-  const safeKeywords = escapeHtmlText(normalizeSeoText(blog.seo_keywords || ''));
-  const safeImage = escapeHtmlText(blog.thumbnail_url || '');
+  const safeTitle = escapeHtml(blogTitle);
+  const safeMetaTitle = escapeHtml(buildSiteAwareTitle(blogTitle, DEFAULT_SITE_TITLE));
+  const safeDesc = escapeHtml(normalizeSeoText(blog.seo_description || blog.description || blog.content || blogTitle, 160));
+  const safeKeywords = escapeHtml(normalizeSeoText(blog.seo_keywords || ''));
+  const safeImage = escapeHtml(blog.thumbnail_url || '');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -3607,10 +3553,10 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
   
   const questionTitle = normalizeSeoText(question.title || 'Forum Question');
   const questionDescription = normalizeSeoText(question.content || question.title || '', 160) || questionTitle;
-  const safeTitle = escapeHtmlText(questionTitle);
-  const safeMetaTitle = escapeHtmlText(`${questionTitle} - Forum - ${DEFAULT_SITE_TITLE}`);
-  const safeDescription = escapeHtmlText(questionDescription);
-  const safeContent = escapeHtmlText(stripControlCharacters(question.content || '')).replace(/\n/g, '<br>');
+  const safeTitle = escapeHtml(questionTitle);
+  const safeMetaTitle = escapeHtml(`${questionTitle} - Forum - ${DEFAULT_SITE_TITLE}`);
+  const safeDescription = escapeHtml(questionDescription);
+  const safeContent = escapeHtml(stripControlCharacters(question.content || '')).replace(/\n/g, '<br>');
   
   // Generate replies HTML
   const repliesHTML = replies.map(r => {
@@ -4272,8 +4218,7 @@ export default {
     // COLD START FIX: Start DB initialization early and WAIT for critical paths
     // For API routes and dynamic pages, we need the DB ready before processing
     const noJsSsrEarly = isNoJsSsrEnabled(env);
-    const isHtmlLikeRequest = (method === 'GET' || method === 'HEAD') &&
-      !/\.(css|js|ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|mp4|webm|mp3|pdf)$/i.test(path);
+    const prefersNoJsRoute = shouldAttemptNoJsSsrRoute(path, method);
     const requiresDB = path.startsWith('/api/') || 
                        path.startsWith('/blog/') || 
                        path.startsWith('/forum/') ||
@@ -4281,7 +4226,8 @@ export default {
                        path.startsWith('/admin/') ||
                        path === '/' ||
                        path === '/index.html' ||
-                       (noJsSsrEarly && isHtmlLikeRequest);
+                       (Boolean(env.DB) && prefersNoJsRoute) ||
+                       (noJsSsrEarly && prefersNoJsRoute);
     
     if (env.DB) {
       if (requiresDB) {
@@ -4341,7 +4287,7 @@ if (isLoginRoute && method === 'GET') {
   if (await isAdminAuthed(req, env)) {
     return Response.redirect(new URL('/admin', req.url).toString(), 302);
   }
-  if (noJsSsrEnabled) {
+  if (noJsSsrEnabled || Boolean(env.DB)) {
     return renderNoJsAdminLoginPage(url);
   }
 
@@ -4409,7 +4355,7 @@ if (isLoginRoute && method === 'POST') {
     status: 302,
     headers: noStoreHeaders({
       'Set-Cookie': createLogoutCookie(),
-      'Location': new URL(noJsSsrEnabled ? '/admin/login?err=Invalid%20login' : '/admin/login?e=1', req.url).toString()
+      'Location': new URL((noJsSsrEnabled || Boolean(env.DB)) ? '/admin/login?err=Invalid%20login' : '/admin/login?e=1', req.url).toString()
     })
   });
 }
@@ -4450,9 +4396,9 @@ if (method === 'GET' || method === 'HEAD') {
   }
 }
 
-    // ----- NO-JS SSR ROUTES (feature-flagged) -----
-    // Keep disabled by default to preserve existing frontend layout.
-    if (noJsSsrEnabled) {
+    // Prefer server-rendered routes for content/admin surfaces to avoid
+    // duplicate HTML stacks, client loading shells, and overlapping aliases.
+    if ((noJsSsrEnabled || Boolean(env.DB)) && shouldAttemptNoJsSsrRoute(path, method)) {
       const noJsResponse = await handleNoJsRoutes(req, env, url, path, method);
       if (noJsResponse) return finalizeResponse(noJsResponse, req);
     }
@@ -4981,21 +4927,11 @@ if (method === 'GET' || method === 'HEAD') {
       // ----- ADMIN SPA ROUTING -----
       // Handle both /admin and /admin/ and all admin sub-routes
       if ((path === '/admin' || path.startsWith('/admin/')) && !path.startsWith('/api/')) {
-        // These standalone pages should be served directly from assets
-        const standaloneAdminPages = new Map([
-          ['/admin/product-form.html', '/admin/product-form.html'],
-          ['/admin/blog-form.html', '/admin/blog-form.html'],
-          // Source file currently lives at project root for legacy compatibility.
-          ['/admin/page-builder.html', '/page-builder.html'],
-          ['/admin/landing-builder.html', '/admin/landing-builder.html'],
-          ['/admin/migrate-reviews.html', '/admin/migrate-reviews.html']
-        ]);
-        
-        if (standaloneAdminPages.has(path)) {
+        const standaloneAdminAssetPath = resolveStandaloneAdminAssetPath(path);
+        if (standaloneAdminAssetPath) {
           // Serve these pages directly from assets
           if (env.ASSETS) {
-            const assetPath = standaloneAdminPages.get(path);
-            const assetResp = await env.ASSETS.fetch(new Request(new URL(assetPath, req.url)));
+            const assetResp = await env.ASSETS.fetch(new Request(new URL(standaloneAdminAssetPath, req.url)));
             const headers = new Headers(assetResp.headers); headers.set('Alt-Svc', 'clear');
             headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             headers.set('Pragma', 'no-cache');
@@ -5153,36 +5089,7 @@ if (method === 'GET' || method === 'HEAD') {
       }
 
       if (method === 'GET' || method === 'HEAD') {
-        const htmlAssetTargets = {
-          // Checkout and order flows are always served from static assets.
-          '/checkout': '/checkout.html',
-          '/checkout/': '/checkout.html',
-          '/checkout/index.html': '/checkout.html',
-          '/success': '/success.html',
-          '/success/': '/success.html',
-          '/success/index.html': '/success.html',
-          '/buyer-order': '/buyer-order.html',
-          '/buyer-order/': '/buyer-order.html',
-          '/buyer-order/index.html': '/buyer-order.html',
-          '/order-detail': '/order-detail.html',
-          '/order-detail/': '/order-detail.html',
-          '/order-detail/index.html': '/order-detail.html',
-          '/products': '/products-grid.html',
-          '/products/': '/products-grid.html',
-          '/products/index.html': '/products-grid.html',
-          '/products-grid': '/products-grid.html',
-          '/products-grid/': '/products-grid.html',
-          // Map blog and forum to their index files so these archives load
-          // without needing to redirect to `/blog` or `/forum`.
-          '/blog': '/blog/index.html',
-          '/blog/': '/blog/index.html',
-          '/blog.html': '/blog/index.html',
-          '/forum': '/forum/index.html',
-          '/forum/': '/forum/index.html',
-          '/forum.html': '/forum/index.html'
-        };
-
-        const target = htmlAssetTargets[path];
+        const target = resolvePublicHtmlAssetPath(path);
         if (target) {
           // Serve the target asset directly from the ASSETS KV.  We mirror
           // the header behaviour used elsewhere in the router.
@@ -5236,7 +5143,7 @@ if (method === 'GET' || method === 'HEAD') {
 
       // ----- DEFAULT PAGE ROUTING -----
       // Check for default pages and serve them instead of static files
-      if ((method === 'GET' || method === 'HEAD') && env.DB) {
+      if (!shouldAttemptNoJsSsrRoute(path, method) && (method === 'GET' || method === 'HEAD') && env.DB) {
         let defaultPageType = null;
         
         // Home page — serve default home from DB only at the canonical root URL.
@@ -5303,37 +5210,7 @@ if (method === 'GET' || method === 'HEAD') {
                 } catch (_) {}
                 // Homepage: inject Organization + WebSite schema
                 if (defaultPageType === 'home') {
-                  try {
-                    // OPTIMIZED: Use cached getSettings directly instead of getMinimalSEOSettings
-                    const seoSettings = await getSeoSettingsDirect(env) || {};
-                    if (!seoSettings.site_url) seoSettings.site_url = url.origin;
-                    if (!seoSettings.site_title) seoSettings.site_title = DEFAULT_SITE_TITLE;
-                    const orgSchema = generateOrganizationSchema(seoSettings);
-                    const siteSchema = generateWebSiteSchema(seoSettings);
-                    // Only inject if not already present in page content (page builder may embed them)
-                    if (!/"@type"\s*:\s*"Organization"/.test(html)) {
-                      html = appendJsonLdToHead(html, orgSchema, 'home-organization-schema');
-                    }
-                    if (!/"@type"\s*:\s*"WebSite"/.test(html)) {
-                      html = appendJsonLdToHead(html, siteSchema, 'home-website-schema');
-                    }
-                  } catch (_) {}
-
-                  // Extract FAQ items for FAQPage schema on homepage
-                  try {
-                    const faqItems = [];
-                    const faqRegex = /<span[^>]*class="[^"]*faq-question[^"]*"[^>]*>([\s\S]*?)<\/span>[\s\S]*?<div[^>]*class="[^"]*faq-answer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
-                    let faqMatch;
-                    while ((faqMatch = faqRegex.exec(html)) !== null) {
-                      const q = faqMatch[1].replace(/<[^>]+>/g, '').trim();
-                      const a = faqMatch[2].replace(/<[^>]+>/g, '').trim();
-                      if (q && a) faqItems.push({ question: q, answer: a });
-                    }
-                    if (faqItems.length > 0) {
-                      const faqSchema = generateFAQPageSchema(faqItems, url.origin);
-                      html = appendJsonLdToHead(html, faqSchema, 'home-faq-schema');
-                    }
-                  } catch (_) {}
+                  html = await injectHomepageStructuredData(env, html, url.origin);
                 }
 
                 // Blog archive: inject CollectionPage schema
@@ -5464,26 +5341,7 @@ if (method === 'GET' || method === 'HEAD') {
 
           // Archive aliases: resolve folder URLs to concrete index assets to avoid
           // asset-layer redirect loops and allow SSR injection in one code path.
-          const archiveAssetAliases = {
-            '/blog': '/blog/index.html',
-            '/blog/': '/blog/index.html',
-            '/forum': '/forum/index.html',
-            '/forum/': '/forum/index.html',
-            '/products': '/products-grid.html',
-            '/products/': '/products-grid.html',
-            '/products/index.html': '/products-grid.html',
-            '/products-grid': '/products-grid.html',
-            '/products-grid/': '/products-grid.html',
-            '/checkout': '/checkout.html',
-            '/checkout/': '/checkout.html',
-            '/success': '/success.html',
-            '/success/': '/success.html',
-            '/buyer-order': '/buyer-order.html',
-            '/buyer-order/': '/buyer-order.html',
-            '/order-detail': '/order-detail.html',
-            '/order-detail/': '/order-detail.html'
-          };
-          const archiveTarget = archiveAssetAliases[assetPath];
+          const archiveTarget = resolvePublicHtmlAssetPath(assetPath);
           if (archiveTarget) {
             const rewritten = new URL(req.url);
             rewritten.pathname = archiveTarget;
@@ -5602,7 +5460,7 @@ if (method === 'GET' || method === 'HEAD') {
 
             // Blog archive page - render first-page content on server so layout
             // remains visible with JS disabled and avoids client fetch churn.
-            if ((assetPath === '/blog/' || assetPath === '/blog/index.html') && env.DB) {
+            if (!shouldAttemptNoJsSsrRoute(assetPath, method) && (assetPath === '/blog/' || assetPath === '/blog/index.html') && env.DB) {
               try {
                 await initDB(env);
 
@@ -5683,7 +5541,7 @@ if (method === 'GET' || method === 'HEAD') {
             }
 
             // Forum archive page - inject CollectionPage schema for SEO
-            if ((assetPath === '/forum/' || assetPath === '/forum/index.html') && env.DB) {
+            if (!shouldAttemptNoJsSsrRoute(assetPath, method) && (assetPath === '/forum/' || assetPath === '/forum/index.html') && env.DB) {
               try {
                 await initDB(env);
                 const forumResult = await queryForumQuestionsForSsr(env, { limit: 20, page: 1 });
@@ -6013,37 +5871,7 @@ if (method === 'GET' || method === 'HEAD') {
 
               // Fix 10: Inject Organization + WebSite schema on homepage
               if (assetPath === '/index.html' || assetPath === '/') {
-                try {
-                  // OPTIMIZED: Use cached getSettings directly instead of getMinimalSEOSettings
-                  // which wraps result in json() Response then re-parses it
-                  const seoSettings2 = await getSeoSettingsDirect(env) || {};
-                  if (!seoSettings2.site_url) seoSettings2.site_url = baseUrl;
-                  if (!seoSettings2.site_title) seoSettings2.site_title = DEFAULT_SITE_TITLE;
-                  const orgSchema = generateOrganizationSchema(seoSettings2);
-                  const siteSchema = generateWebSiteSchema(seoSettings2);
-                  if (!/"@type"\s*:\s*"Organization"/.test(html)) {
-                    html = appendJsonLdToHead(html, orgSchema, 'home-organization-schema');
-                  }
-                  if (!/"@type"\s*:\s*"WebSite"/.test(html)) {
-                    html = appendJsonLdToHead(html, siteSchema, 'home-website-schema');
-                  }
-                } catch (_) {}
-
-                // Extract FAQ items from "How it works" or accordion sections for FAQPage schema
-                try {
-                  const faqItems = [];
-                  const faqRegex = /<span[^>]*class="[^"]*faq-question[^"]*"[^>]*>([\s\S]*?)<\/span>[\s\S]*?<div[^>]*class="[^"]*faq-answer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
-                  let faqMatch;
-                  while ((faqMatch = faqRegex.exec(html)) !== null) {
-                    const q = faqMatch[1].replace(/<[^>]+>/g, '').trim();
-                    const a = faqMatch[2].replace(/<[^>]+>/g, '').trim();
-                    if (q && a) faqItems.push({ question: q, answer: a });
-                  }
-                  if (faqItems.length > 0) {
-                    const faqSchema = generateFAQPageSchema(faqItems, baseUrl);
-                    html = appendJsonLdToHead(html, faqSchema, 'home-faq-schema');
-                  }
-                } catch (_) {}
+                html = await injectHomepageStructuredData(env, html, baseUrl);
               }
             }
 

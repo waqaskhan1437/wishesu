@@ -23,6 +23,67 @@ let initStartTime = 0;
 // Increased timeout for better cold start handling
 const DB_INIT_TIMEOUT_MS = 5000;
 
+export const BACKUPS_TABLE_DDL = `
+  CREATE TABLE IF NOT EXISTS backups (
+    id TEXT PRIMARY KEY,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    size INTEGER DEFAULT 0,
+    media_count INTEGER DEFAULT 0,
+    r2_key TEXT,
+    data TEXT
+  )
+`;
+
+export const COUPONS_TABLE_DDL = `
+  CREATE TABLE IF NOT EXISTS coupons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    discount_type TEXT DEFAULT 'percentage',
+    discount_value REAL NOT NULL,
+    min_order_amount REAL DEFAULT 0,
+    max_uses INTEGER DEFAULT 0,
+    used_count INTEGER DEFAULT 0,
+    valid_from INTEGER,
+    valid_until INTEGER,
+    product_ids TEXT,
+    status TEXT DEFAULT 'active',
+    created_at INTEGER
+  )
+`;
+
+export function getForumQuestionsTableDdl(options = {}) {
+  const ifNotExists = options.ifNotExists !== false ? 'IF NOT EXISTS ' : '';
+  return `
+    CREATE TABLE ${ifNotExists}forum_questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL DEFAULT '',
+      slug TEXT UNIQUE,
+      content TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL DEFAULT '',
+      email TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      reply_count INTEGER DEFAULT 0,
+      created_at INTEGER,
+      updated_at INTEGER
+    )
+  `;
+}
+
+export function getForumRepliesTableDdl(options = {}) {
+  const ifNotExists = options.ifNotExists !== false ? 'IF NOT EXISTS ' : '';
+  return `
+    CREATE TABLE ${ifNotExists}forum_replies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      question_id INTEGER NOT NULL DEFAULT 0,
+      name TEXT NOT NULL DEFAULT '',
+      email TEXT DEFAULT '',
+      content TEXT NOT NULL DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      created_at INTEGER
+    )
+  `;
+}
+
 /**
  * Initialize database schema - creates all required tables
  * OPTIMIZED: Skips if already done in this isolate
@@ -103,7 +164,7 @@ export async function initDB(env) {
         // Settings table
         env.DB.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`),
         // Backups table (JSON exports)
-        env.DB.prepare(`CREATE TABLE IF NOT EXISTS backups (id TEXT PRIMARY KEY, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, size INTEGER DEFAULT 0, media_count INTEGER DEFAULT 0, data TEXT)`),
+        env.DB.prepare(BACKUPS_TABLE_DDL),
         // Pages table
         env.DB.prepare(`
           CREATE TABLE IF NOT EXISTS pages (
@@ -192,50 +253,11 @@ export async function initDB(env) {
           )
         `),
         // Forum questions table
-        env.DB.prepare(`
-          CREATE TABLE IF NOT EXISTS forum_questions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            slug TEXT UNIQUE,
-            content TEXT NOT NULL,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL,
-            status TEXT DEFAULT 'pending',
-            reply_count INTEGER DEFAULT 0,
-            created_at INTEGER,
-            updated_at INTEGER
-          )
-        `),
+        env.DB.prepare(getForumQuestionsTableDdl()),
         // Forum replies table
-        env.DB.prepare(`
-          CREATE TABLE IF NOT EXISTS forum_replies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL,
-            content TEXT NOT NULL,
-            status TEXT DEFAULT 'pending',
-            created_at INTEGER,
-            FOREIGN KEY (question_id) REFERENCES forum_questions(id)
-          )
-        `),
+        env.DB.prepare(getForumRepliesTableDdl()),
         // Coupons table
-        env.DB.prepare(`
-          CREATE TABLE IF NOT EXISTS coupons (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            discount_type TEXT DEFAULT 'percentage',
-            discount_value REAL NOT NULL,
-            min_order_amount REAL DEFAULT 0,
-            max_uses INTEGER DEFAULT 0,
-            used_count INTEGER DEFAULT 0,
-            valid_from INTEGER,
-            valid_until INTEGER,
-            product_ids TEXT,
-            status TEXT DEFAULT 'active',
-            created_at INTEGER
-          )
-        `),
+        env.DB.prepare(COUPONS_TABLE_DDL),
         // API Keys table
         env.DB.prepare(`
           CREATE TABLE IF NOT EXISTS api_keys (

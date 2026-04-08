@@ -4,6 +4,7 @@
 
 import { json } from '../utils/response.js';
 import { toISO8601 } from '../utils/formatting.js';
+import { isValidEmail } from '../utils/validation.js';
 import { getGoogleScriptUrl } from '../config/secrets.js';
 import { calculateAddonPrice, calculateServerSidePrice } from '../utils/pricing.js';
 import { calculateDeliveryMinutes, createOrderRecord } from '../utils/order-creation.js';
@@ -63,13 +64,12 @@ function validateAddons(addons) {
 }
 
 /**
- * Validate email
+ * Validate email - use shared utility
  */
 function validateEmail(email) {
   if (!email) return '';
   const trimmed = String(email).trim().substring(0, ADDON_LIMITS.email);
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(trimmed) ? trimmed : '';
+  return isValidEmail(trimmed) ? trimmed : '';
 }
 
 /**

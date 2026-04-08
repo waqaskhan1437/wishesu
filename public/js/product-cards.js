@@ -4,8 +4,15 @@
  */
 
 (function() {
+  // Use shared bootstrap utilities
+  const { getBootstrap: sharedGetBootstrap } = window.BootstrapUtils || {};
+
   window.ProductCards = {
     getBootstrap: function(container) {
+      return sharedGetBootstrap ? sharedGetBootstrap(container) : getBootstrapFallback(container);
+    },
+
+    getBootstrapFallback: function(container) {
       const bootstrapId = container?.dataset?.ssrBootstrapId;
       if (!bootstrapId) return null;
       const script = document.getElementById(bootstrapId);

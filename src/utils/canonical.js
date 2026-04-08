@@ -5,9 +5,9 @@ const CANONICAL_ALIAS_ENTRIES = Object.freeze([
   ['/page-builder', '/admin/page-builder.html'],
   ['/page-builder/', '/admin/page-builder.html'],
   ['/page-builder.html', '/admin/page-builder.html'],
-  ['/landing-builder', '/admin/landing-builder.html'],
-  ['/landing-builder/', '/admin/landing-builder.html'],
-  ['/landing-builder.html', '/admin/landing-builder.html'],
+  ['/landing-builder', '/admin/page-builder.html'],
+  ['/landing-builder/', '/admin/page-builder.html'],
+  ['/landing-builder.html', '/admin/page-builder.html'],
   ['/blog/index.html', '/blog'],
   ['/blog.html', '/blog'],
   ['/forum/index.html', '/forum'],
@@ -74,7 +74,58 @@ const SAME_SITE_HOSTS = new Set([
   'www.prankwish.com'
 ]);
 
+const PUBLIC_HTML_ASSET_ALIAS_ENTRIES = Object.freeze([
+  ['/blog', '/blog/index.html'],
+  ['/blog/', '/blog/index.html'],
+  ['/blog.html', '/blog/index.html'],
+  ['/forum', '/forum/index.html'],
+  ['/forum/', '/forum/index.html'],
+  ['/forum.html', '/forum/index.html'],
+  ['/products', '/products-grid.html'],
+  ['/products/', '/products-grid.html'],
+  ['/products/index.html', '/products-grid.html'],
+  ['/products-grid', '/products-grid.html'],
+  ['/products-grid/', '/products-grid.html'],
+  ['/products-grid.html', '/products-grid.html'],
+  ['/checkout', '/checkout.html'],
+  ['/checkout/', '/checkout.html'],
+  ['/checkout/index.html', '/checkout.html'],
+  ['/success', '/success.html'],
+  ['/success/', '/success.html'],
+  ['/success/index.html', '/success.html'],
+  ['/buyer-order', '/buyer-order.html'],
+  ['/buyer-order/', '/buyer-order.html'],
+  ['/buyer-order/index.html', '/buyer-order.html'],
+  ['/order-detail', '/order-detail.html'],
+  ['/order-detail/', '/order-detail.html'],
+  ['/order-detail/index.html', '/order-detail.html']
+]);
+
+const ADMIN_STANDALONE_ASSET_ENTRIES = Object.freeze([
+  ['/admin/product-form.html', '/admin/product-form.html'],
+  ['/admin/blog-form.html', '/admin/blog-form.html'],
+  ['/admin/page-builder.html', '/page-builder.html'],
+  ['/admin/landing-builder.html', '/page-builder.html'],
+  ['/admin/migrate-reviews.html', '/admin/migrate-reviews.html']
+]);
+
+const SENSITIVE_EXACT_PATHS = new Set([
+  '/checkout',
+  '/success',
+  '/buyer-order',
+  '/order-detail'
+]);
+
+const SENSITIVE_PREFIXES = Object.freeze([
+  '/admin/',
+  '/api/',
+  '/order/',
+  '/download/'
+]);
+
 export const CANONICAL_ALIAS_MAP = new Map(CANONICAL_ALIAS_ENTRIES);
+export const PUBLIC_HTML_ASSET_ALIAS_MAP = new Map(PUBLIC_HTML_ASSET_ALIAS_ENTRIES);
+export const ADMIN_STANDALONE_ASSET_MAP = new Map(ADMIN_STANDALONE_ASSET_ENTRIES);
 
 function collapsePathname(pathname) {
   let path = String(pathname || '/').trim() || '/';
@@ -134,6 +185,16 @@ export function normalizeCanonicalPath(pathname) {
   }
 
   return path || '/';
+}
+
+export function resolvePublicHtmlAssetPath(pathname) {
+  const raw = collapsePathname(pathname);
+  return PUBLIC_HTML_ASSET_ALIAS_MAP.get(raw) || null;
+}
+
+export function resolveStandaloneAdminAssetPath(pathname) {
+  const raw = collapsePathname(pathname);
+  return ADMIN_STANDALONE_ASSET_MAP.get(raw) || null;
 }
 
 export function getCanonicalRedirectPath(pathname) {
@@ -244,4 +305,11 @@ export function normalizeSiteComponentsPayload(components, baseOrigin = 'https:/
     headers: normalizeComponentList(components.headers, baseOrigin),
     footers: normalizeComponentList(components.footers, baseOrigin)
   };
+}
+
+export function isSensitiveNoindexPath(pathname) {
+  const normalized = normalizeCanonicalPath(pathname);
+  if (SENSITIVE_EXACT_PATHS.has(normalized)) return true;
+  if (normalized === '/admin' || normalized === '/api' || normalized === '/order' || normalized === '/download') return true;
+  return SENSITIVE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 }
