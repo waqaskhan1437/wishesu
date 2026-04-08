@@ -431,9 +431,24 @@
     loadExistingPage: function(name) {
       var self = this;
       
+      console.log('Loading page:', name);
+      
       fetch('/api/pages/load?name=' + encodeURIComponent(name))
-        .then(function(res) { return res.json(); })
+        .then(function(res) {
+          console.log('Response status:', res.status);
+          if (!res.ok) {
+            throw new Error('HTTP ' + res.status + ': ' + res.statusText);
+          }
+          return res.json();
+        })
         .then(function(data) {
+          console.log('Response data:', data);
+          
+          if (data.error) {
+            alert('❌ Error: ' + data.error);
+            return;
+          }
+          
           if (data.content) {
             self.editingPageId = data.id ? Number(data.id) : null;
             self.originalPageSlug = (data.slug || name || '').toString().trim();
@@ -490,11 +505,16 @@
             
             self.updateCanvasEmptyState();
             alert('✅ Page loaded!');
+          } else if (data.error) {
+            alert('❌ Error: ' + data.error);
           } else {
             alert('Page not found or empty');
           }
         })
-        .catch(function(err) { alert('❌ Error: ' + err.message); });
+        .catch(function(err) { 
+          console.error('Load error:', err);
+          alert('❌ Error: ' + err.message); 
+        });
     }
   };
 

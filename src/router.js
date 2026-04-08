@@ -8,6 +8,16 @@ import { initDB } from './config/db.js';
 import { isAdminAuthed } from './utils/auth.js';
 import { slugifyStr } from './utils/formatting.js';
 
+// Routes configuration
+import { 
+  PAGE_BUILDER_ROUTES, 
+  COMPONENTS_ROUTES,
+  isPageBuilderRoute, 
+  getPageBuilderRouteConfig,
+  isComponentsRoute,
+  getComponentsRouteConfig
+} from './routes/loader.js';
+
 // CSV helpers
 function csvEscapeField(value) {
   if (value === null || value === undefined) return '';
@@ -340,19 +350,6 @@ const ADMIN_ONLY_NON_PREFIXED_ROUTE_KEYS = new Set([
   'POST /api/coupons/update',
   'DELETE /api/coupons/delete',
   'POST /api/coupons/status',
-  'GET /api/pages',
-  'GET /api/pages/list',
-  'GET /api/pages/load',
-  'GET /api/pages/default',
-  'POST /api/page/save',
-  'DELETE /api/page/delete',
-  'POST /api/pages/save',
-  'POST /api/pages/delete',
-  'POST /api/pages/status',
-  'POST /api/pages/duplicate',
-  'POST /api/pages/set-default',
-  'POST /api/pages/clear-default',
-  'POST /api/pages/type',
   'GET /api/blogs',
   'GET /api/blogs/list',
   'POST /api/blog/save',
@@ -371,6 +368,14 @@ export function isHeadCompatibleApiPath(path) {
 }
 
 function isAdminOnlyNonPrefixedRoute(path, method) {
+  // Use routes loader for page builder and components
+  if (isPageBuilderRoute(path) || isComponentsRoute(path)) {
+    const config = isPageBuilderRoute(path) 
+      ? getPageBuilderRouteConfig(method, path)
+      : getComponentsRouteConfig(method, path);
+    return config ? config.adminRequired : false;
+  }
+  
   const routeKey = `${String(method || '').toUpperCase()} ${String(path || '').trim()}`;
   if (ADMIN_ONLY_NON_PREFIXED_ROUTE_KEYS.has(routeKey)) return true;
   if (/^GET \/api\/page\/[^/]+$/.test(routeKey)) return true;
@@ -1215,10 +1220,14 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   // ----- PAGES -----
   if (method === 'GET' && path === '/api/pages') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return getPages(env);
   }
 
   if (method === 'GET' && path === '/api/pages/list') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     return getPagesList(env);
   }
 
@@ -1228,41 +1237,57 @@ export async function routeApiRequest(req, env, url, path, method) {
   }
 
   if (method === 'POST' && path === '/api/page/save') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json();
     return savePage(env, body);
   }
 
   if (method === 'DELETE' && path === '/api/page/delete') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const id = url.searchParams.get('id');
     return deletePage(env, id);
   }
 
   if (method === 'POST' && path === '/api/pages/save') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json();
     return savePageBuilder(env, body);
   }
 
   if (method === 'POST' && path === '/api/pages/delete') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json().catch(() => ({}));
     return deletePageBySlug(env, body);
   }
 
   if (method === 'POST' && path === '/api/admin/pages/delete-all') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json().catch(() => ({}));
     return deleteAllPages(env, body);
   }
 
   if (method === 'POST' && path === '/api/pages/status') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json().catch(() => ({}));
     return updatePageStatus(env, body);
   }
 
   if (method === 'POST' && path === '/api/pages/duplicate') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json().catch(() => ({}));
     return duplicatePage(env, body);
   }
 
   if (method === 'GET' && path === '/api/pages/load') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const name = url.searchParams.get('name');
     return loadPageBuilder(env, name);
   }
@@ -1275,18 +1300,24 @@ export async function routeApiRequest(req, env, url, path, method) {
 
   // Set page as default
   if (method === 'POST' && path === '/api/pages/set-default') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json().catch(() => ({}));
     return setDefaultPage(env, body);
   }
 
   // Clear default page for type
   if (method === 'POST' && path === '/api/pages/clear-default') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json().catch(() => ({}));
     return clearDefaultPage(env, body);
   }
 
   // Update page type
   if (method === 'POST' && path === '/api/pages/type') {
+    const adminGate = await requireAdminApi(req, env);
+    if (adminGate) return adminGate;
     const body = await req.json().catch(() => ({}));
     return updatePageType(env, body);
   }
