@@ -1,27 +1,102 @@
 /**
  * Advanced Dashboard Components - Multiple Headers, Footers, Product/Review lists
  * With code editor, templates, live preview, page exclusion, and proper CRUD
- * USES SHARED MODULES: SiteComponentsStorage, SiteComponentsTemplates, SiteComponentsEmbed
  */
 
 (function(AD) {
-  // Use shared storage (no duplicate code)
-  const loadData = SiteComponentsStorage.load.bind(SiteComponentsStorage);
-  const saveData = SiteComponentsStorage.save.bind(SiteComponentsStorage);
-  
-  // Use shared templates
-  const headerTemplates = SiteComponentsTemplates.headers;
-  const footerTemplates = SiteComponentsTemplates.footers;
-  const commonPages = SiteComponentsTemplates.commonPages;
-  
-  // Use shared embed functions
-  const buildProductEmbed = SiteComponentsEmbed.buildProductEmbed;
-  const buildReviewEmbed = SiteComponentsEmbed.buildReviewEmbed;
+  const STORAGE_KEY = 'siteComponents';
   
   // Default component data structure
   function getDefaultData() {
-    return SiteComponentsStorage.getDefaultData();
+    return {
+      headers: [],
+      footers: [],
+      productLists: [],
+      reviewLists: [],
+      defaultHeaderId: null,
+      defaultFooterId: null,
+      excludedPages: [],
+      settings: {
+        enableGlobalHeader: true,
+        enableGlobalFooter: true
+      }
+    };
   }
+
+  // Load from API (with localStorage fallback)
+  async function loadData() {
+    try {
+      const res = await fetch('/api/admin/settings/components');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.components) {
+          console.log('✅ Loaded components from API');
+          // Update localStorage to match server
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(json.components));
+          return { ...getDefaultData(), ...json.components };
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load components from API:', e);
+    }
+
+    // Fallback to localStorage if API fails or returns null
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        console.log('⚠️ Loaded components from localStorage (API fallback)');
+        const data = JSON.parse(stored);
+        return { ...getDefaultData(), ...data };
+      }
+    } catch (e) {
+      console.error('Failed to load components:', e);
+    }
+    return getDefaultData();
+  }
+
+  // Save to API
+  async function saveData(data) {
+    try {
+      // Save to localStorage immediately (optimistic)
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      console.log('✅ Components saved to localStorage');
+
+      // Save to API
+      const res = await fetch('/api/admin/settings/components', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        console.log('✅ Components saved to API');
+        return true;
+      } else {
+        console.error('Failed to save to API:', result.error);
+        alert('⚠️ Saved locally, but failed to save to server: ' + (result.error || 'Unknown error'));
+        return false;
+      }
+    } catch (e) {
+      console.error('Failed to save components:', e);
+      alert('⚠️ Saved locally, but failed to save to server. Please check your connection.');
+      return false;
+    }
+  }
+
+  // Generate embed code
+  function buildProductEmbed(id, options) {
+    const END = '</' + 'script>';
+    return `<div id="${id}"></div>\n<script defer src="/js/product-cards.js">${END}\n<script>\n(function(){\n  function run(){\n    if (window.ProductCards && typeof window.ProductCards.render === 'function') {\n      window.ProductCards.render('${id}', ${JSON.stringify(options, null, 2)});\n      return;\n    }\n    setTimeout(run, 50);\n  }\n  if (document.readyState === 'loading') {\n    document.addEventListener('DOMContentLoaded', run);\n  } else {\n    run();\n  }\n})();\n${END}`;
+  }
+
+  function buildReviewEmbed(id, options) {
+    const END = '</' + 'script>';
+    return `<div id="${id}"></div>\n<script defer src="/js/reviews-widget.js">${END}\n<script>\n(function(){\n  function run(){\n    if (window.ReviewsWidget && typeof window.ReviewsWidget.render === 'function') {\n      window.ReviewsWidget.render('${id}', ${JSON.stringify(options, null, 2)});\n      return;\n    }\n    setTimeout(run, 50);\n  }\n  if (document.readyState === 'loading') {\n    document.addEventListener('DOMContentLoaded', run);\n  } else {\n    run();\n  }\n})();\n${END}`;
+  }
+
+  // Header Templates
+  const headerTemplates = [
     {
       name: 'Simple Centered',
       code: `<header class="site-header" style="background:#fff;padding:20px 0;border-bottom:1px solid #e5e7eb;">
@@ -79,10 +154,84 @@
   </div>
 </header>`
     }
-  // Footer Templates are now loaded from SiteComponentsTemplates.footers (see line 14)
-  // Common page paths for exclusion are now loaded from SiteComponentsTemplates.commonPages (see line 15)
+  ];
 
-  // Wait for shared modules to be ready
+  // Footer Templates
+  const footerTemplates = [
+    {
+      name: 'Simple Copyright',
+      code: `<footer class="site-footer" style="background:#f9fafb;padding:30px 20px;text-align:center;border-top:1px solid #e5e7eb;">
+  <p style="color:#6b7280;margin:0;">&copy; 2025 Prankwish. All rights reserved.</p>
+</footer>`
+    },
+    {
+      name: 'With Links',
+      code: `<footer class="site-footer" style="background:#1f2937;color:#d1d5db;padding:50px 20px;">
+  <div style="max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:40px;">
+    <div>
+      <h4 style="color:#fff;margin:0 0 15px;font-size:1.1rem;">Prankwish</h4>
+      <p style="margin:0;font-size:0.9rem;line-height:1.6;">Creating memorable video greetings for your special moments.</p>
+    </div>
+    <div>
+      <h4 style="color:#fff;margin:0 0 15px;font-size:1.1rem;">Quick Links</h4>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <a href="/" style="color:#d1d5db;text-decoration:none;font-size:0.9rem;">Home</a>
+        <a href="/products" style="color:#d1d5db;text-decoration:none;font-size:0.9rem;">Products</a>
+        <a href="/blog" style="color:#d1d5db;text-decoration:none;font-size:0.9rem;">Blog</a>
+      </div>
+    </div>
+    <div>
+      <h4 style="color:#fff;margin:0 0 15px;font-size:1.1rem;">Contact</h4>
+      <p style="margin:0;font-size:0.9rem;">support@prankwish.com</p>
+    </div>
+  </div>
+  <div style="max-width:1200px;margin:40px auto 0;padding-top:20px;border-top:1px solid #374151;text-align:center;">
+    <p style="margin:0;font-size:0.85rem;">&copy; 2025 Prankwish. All rights reserved.</p>
+  </div>
+</footer>`
+    },
+    {
+      name: 'Gradient CTA',
+      code: `<footer class="site-footer" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:40px 20px;text-align:center;">
+  <div style="max-width:800px;margin:0 auto;">
+    <h3 style="margin:0 0 10px;font-size:1.5rem;">Ready to create something special?</h3>
+    <p style="margin:0 0 20px;opacity:0.9;">Order your personalized video greeting today!</p>
+    <a href="/products" style="display:inline-block;background:white;color:#667eea;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:700;">Browse Products</a>
+  </div>
+  <p style="margin:30px 0 0;font-size:0.85rem;opacity:0.8;">&copy; 2025 Prankwish</p>
+</footer>`
+    },
+    {
+      name: 'Modern Minimal',
+      code: `<footer class="site-footer" style="background:#fff;padding:40px 20px;border-top:1px solid #e5e7eb;">
+  <div style="max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:20px;">
+    <div>
+      <a href="/" style="font-size:1.3rem;font-weight:800;color:#1f2937;text-decoration:none;">PRANKWISH</a>
+    </div>
+    <nav style="display:flex;gap:25px;flex-wrap:wrap;">
+      <a href="/" style="color:#6b7280;text-decoration:none;font-size:0.9rem;">Home</a>
+      <a href="/products" style="color:#6b7280;text-decoration:none;font-size:0.9rem;">Products</a>
+      <a href="/blog" style="color:#6b7280;text-decoration:none;font-size:0.9rem;">Blog</a>
+      <a href="/forum" style="color:#6b7280;text-decoration:none;font-size:0.9rem;">Forum</a>
+    </nav>
+    <p style="margin:0;color:#9ca3af;font-size:0.85rem;">&copy; 2025 Prankwish</p>
+  </div>
+</footer>`
+    }
+  ];
+
+  // Common page paths for exclusion
+  const commonPages = [
+    { path: '/', label: 'Home Page' },
+    { path: '/products', label: 'Products' },
+    { path: '/product/', label: 'Product Pages (all)' },
+    { path: '/blog', label: 'Blog' },
+    { path: '/blog/', label: 'Blog Posts (all)' },
+    { path: '/forum', label: 'Forum' },
+    { path: '/forum/', label: 'Forum Posts (all)' },
+    { path: '/admin', label: 'Admin Pages (all)' },
+    { path: '/success', label: 'Success Page' },
+    { path: '/order', label: 'Order Pages' }
   ];
 
   AD.loadComponents = async function(panel) {
