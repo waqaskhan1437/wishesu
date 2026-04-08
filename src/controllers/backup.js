@@ -8,7 +8,6 @@
 
 import { json } from '../utils/response.js';
 import { CORS } from '../config/cors.js';
-import { BACKUPS_TABLE_DDL } from '../config/db.js';
 import { dispatch as dispatchWebhook } from './webhooks.js';
 import { requireAdminOrApiKey } from '../middleware/api-auth.js';
 
@@ -131,7 +130,17 @@ function extractLinksFromValue(val) {
 
 async function ensureBackupsTable(env) {
   // Create table if missing
-  await env.DB.prepare(BACKUPS_TABLE_DDL).run();
+  await env.DB
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS backups (
+        id TEXT PRIMARY KEY,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        size INTEGER DEFAULT 0,
+        media_count INTEGER DEFAULT 0,
+        r2_key TEXT
+      )`
+    )
+    .run();
 
   // If table existed from an older version, migrate missing columns
   const info = await env.DB.prepare('PRAGMA table_info(backups)').all();
@@ -158,10 +167,6 @@ async function ensureBackupsTable(env) {
   if (!cols.has('r2_key')) {
     await env.DB.prepare('ALTER TABLE backups ADD COLUMN r2_key TEXT').run();
     cols.add('r2_key');
-  }
-  if (!cols.has('data')) {
-    await env.DB.prepare('ALTER TABLE backups ADD COLUMN data TEXT').run().catch(() => null);
-    cols.add('data');
   }
 }
 

@@ -142,31 +142,25 @@
 
   function scheduleInit() {
     const runInit = () => { initProductPage(); };
-    let recoveryTimer = null;
-    const scheduleRecovery = (delayMs) => {
-      if (recoveryTimer) return;
-      recoveryTimer = setTimeout(() => {
-        recoveryTimer = null;
-        if (!window.__productPageInitialized && !window.__productPageInitInProgress) {
-          runInit();
-        }
-      }, delayMs);
-    };
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', runInit, { once: true });
     } else {
       setTimeout(runInit, 0);
     }
     // BFCache/back-forward navigation safety.
-    window.addEventListener('pageshow', (event) => {
-      if (event && event.persisted) {
-        window.__productPageInitialized = false;
+    window.addEventListener('pageshow', runInit);
+    // If any late script stalls DOMContentLoaded, retry once after load.
+    window.addEventListener('load', () => {
+      if (!window.__productPageInitialized && !window.__productPageInitInProgress) {
         runInit();
       }
-    });
-    // Single late recovery to avoid permanent skeletons without creating
-    // multiple overlapping init triggers.
-    scheduleRecovery(2500);
+    }, { once: true });
+    // Final guard: avoid permanent skeleton on intermittent script/network issues.
+    setTimeout(() => {
+      if (!window.__productPageInitialized && !window.__productPageInitInProgress) {
+        runInit();
+      }
+    }, 4000);
   }
 
   scheduleInit();

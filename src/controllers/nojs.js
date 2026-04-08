@@ -251,21 +251,6 @@ function htmlResponse(html, opts = {}) {
   return new Response(rewriteLegacyInternalLinksInHtml(html), { status: opts.status || 200, headers });
 }
 
-function headResponseFrom(response) {
-  if (!response) return response;
-  return new Response(null, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: new Headers(response.headers)
-  });
-}
-
-async function renderReadResponse(method, responseOrPromise) {
-  const response = await responseOrPromise;
-  if (!response) return response;
-  return String(method || '').toUpperCase() === 'HEAD' ? headResponseFrom(response) : response;
-}
-
 function redirectWithParams(url, path, params = {}, status = 303) {
   const to = new URL(path, url.origin);
   for (const [k, v] of Object.entries(params)) {
@@ -377,12 +362,6 @@ async function getDefaultPublishedPage(env, pageType) {
     ORDER BY id DESC
     LIMIT 1
   `).bind(String(pageType)).first();
-}
-
-function renderPageIntroSection(page) {
-  const bodyHtml = sanitizeRichHtml(extractBodyFragment(page?.content || ''));
-  if (!bodyHtml) return '';
-  return `<section class="card">${bodyHtml}</section>`;
 }
 
 function renderStoreProductCards(products = []) {
@@ -989,7 +968,6 @@ async function handleOrderReview(env, req, url, orderId) {
 }
 
 async function renderBlogList(env, url) {
-  const page = await getDefaultPublishedPage(env, 'blog_archive');
   const r = await env.DB.prepare(`
     SELECT id, title, slug, description, thumbnail_url, created_at
     FROM blogs
@@ -1008,12 +986,10 @@ async function renderBlogList(env, url) {
   `).join('');
 
   return htmlResponse(renderLayout({
-    title: page?.title || 'Blog',
-    description: page?.meta_description || 'Server-rendered blog archive',
+    title: 'Blog',
     content: `
-      <h1>${escapeHtml(page?.title || 'Blog Archive')}</h1>
+      <h1>Blog Archive</h1>
       ${renderNotice(url)}
-      ${renderPageIntroSection(page)}
       <section class="grid grid-3">${items || '<div class="card">No posts yet.</div>'}</section>
     `
   }));
@@ -1111,7 +1087,6 @@ async function handleBlogComment(env, req, url, slug) {
 }
 
 async function renderForumList(env, url) {
-  const page = await getDefaultPublishedPage(env, 'forum_archive');
   const result = await env.DB.prepare(`
     SELECT id, title, slug, content, name, reply_count, created_at
     FROM forum_questions
@@ -1129,9 +1104,8 @@ async function renderForumList(env, url) {
   `).join('');
 
   const content = `
-    <h1>${escapeHtml(page?.title || 'Forum')}</h1>
+    <h1>Forum</h1>
     ${renderNotice(url)}
-    ${renderPageIntroSection(page)}
     <section class="card">
       <h2>Ask a Question</h2>
       <form class="form-grid" method="post" action="/forum/ask">
@@ -1158,8 +1132,7 @@ async function renderForumList(env, url) {
     <section style="margin-top:18px;" class="grid">${rows || '<div class="card">No approved questions yet.</div>'}</section>
   `;
   return htmlResponse(renderLayout({
-    title: page?.title || 'Forum',
-    description: page?.meta_description || 'Server-rendered forum archive',
+    title: 'Forum',
     content
   }));
 }
@@ -2039,8 +2012,6 @@ export function renderNoJsAdminLoginPage(url) {
 }
 
 export async function handleNoJsRoutes(req, env, url, path, method) {
-  const isReadMethod = method === 'GET' || method === 'HEAD';
-
   if (method === 'GET' || method === 'HEAD') {
     const canonicalRedirectPath = getCanonicalRedirectPath(path);
     if (canonicalRedirectPath) {
@@ -2051,11 +2022,11 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
   }
 
   // Public storefront routes (Level 1)
-  if (isReadMethod && (path === '/' || path === '/index.html')) {
-    return renderReadResponse(method, renderHome(env, url));
+  if (method === 'GET' && (path === '/' || path === '/index.html')) {
+    return renderHome(env, url);
   }
 
-  if (isReadMethod && (
+  if (method === 'GET' && (
     path === '/products' ||
     path === '/products/' ||
     path === '/products.html' ||
@@ -2063,10 +2034,10 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     path === '/products-grid/' ||
     path === '/products-grid.html'
   )) {
-    return renderReadResponse(method, renderProductsArchive(env, url));
+    return renderProductsArchive(env, url);
   }
 
-  if (isReadMethod && (path === '/product' || path === '/product/')) {
+  if (method === 'GET' && (path === '/product' || path === '/product/')) {
     const pid = Number(url.searchParams.get('id') || 0);
     if (!pid) return Response.redirect(new URL('/', url.origin).toString(), 302);
     const canonical = await resolveProductPath(env, pid);
@@ -2076,7 +2047,7 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return Response.redirect(new URL(canonical, url.origin).toString(), 302);
   }
 
-  if (isReadMethod && path.startsWith('/product/') && path.length > '/product/'.length) {
+  if (method === 'GET' && path.startsWith('/product/') && path.length > '/product/'.length) {
     const canonical = await resolveProductPathBySlug(env, decodeURIComponent(path.slice('/product/'.length)));
     if (canonical) {
       return Response.redirect(new URL(canonical, url.origin).toString(), 301);
@@ -2084,7 +2055,7 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
   }
 
   const bareCanonicalMatch = path.match(/^\/product-(\d+)\/?$/);
-  if (isReadMethod && bareCanonicalMatch) {
+  if (method === 'GET' && bareCanonicalMatch) {
     const canonical = await resolveProductPath(env, Number(bareCanonicalMatch[1]));
     if (canonical && canonical !== '/') {
       return Response.redirect(new URL(canonical, url.origin).toString(), 301);
@@ -2092,15 +2063,15 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
   }
 
   const productMatch = path.match(/^\/product-(\d+)(?:\/[^/]+)?\/?$/);
-  if (isReadMethod && productMatch) {
-    return renderReadResponse(method, renderProduct(env, url, Number(productMatch[1])));
+  if (method === 'GET' && productMatch) {
+    return renderProduct(env, url, Number(productMatch[1]));
   }
 
   if (method === 'POST' && path === '/order/create') {
     return handleCreateOrder(env, req, url);
   }
 
-  if (isReadMethod && (path === '/checkout' || path === '/checkout/' || path === '/checkout.html')) {
+  if (method === 'GET' && (path === '/checkout' || path === '/checkout/' || path === '/checkout.html')) {
     const pid = Number(url.searchParams.get('id') || url.searchParams.get('product_id') || 0);
     if (pid > 0) {
       const canonical = await resolveProductPath(env, pid);
@@ -2109,26 +2080,26 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return redirectWithParams(url, '/products', { err: 'Choose a product to continue checkout.' }, 302);
   }
 
-  if (isReadMethod && (path === '/success' || path === '/success.html')) {
-    return renderReadResponse(method, renderSuccess(env, url, req));
+  if (method === 'GET' && (path === '/success' || path === '/success.html')) {
+    return renderSuccess(env, url, req);
   }
 
-  if (isReadMethod && (path === '/order-success' || path === '/order-success/' || path === '/order-success.html')) {
+  if (method === 'GET' && (path === '/order-success' || path === '/order-success/' || path === '/order-success.html')) {
     return Response.redirect(new URL('/success', url.origin).toString(), 302);
   }
 
   const orderMatch = path.match(/^\/order\/([^/]+)$/);
-  if (isReadMethod && orderMatch) {
-    return renderReadResponse(method, renderOrder(env, url, decodeURIComponent(orderMatch[1])));
+  if (method === 'GET' && orderMatch) {
+    return renderOrder(env, url, decodeURIComponent(orderMatch[1]));
   }
 
-  if (isReadMethod && (path === '/buyer-order' || path === '/buyer-order/' || path === '/buyer-order.html')) {
+  if (method === 'GET' && (path === '/buyer-order' || path === '/buyer-order/' || path === '/buyer-order.html')) {
     const orderId = String(url.searchParams.get('id') || '').trim();
     if (!orderId) return redirectWithParams(url, '/', { err: 'Order id is required.' }, 302);
     return Response.redirect(new URL(`/order/${encodeURIComponent(orderId)}`, url.origin).toString(), 302);
   }
 
-  if (isReadMethod && (path === '/order-detail' || path === '/order-detail/' || path === '/order-detail.html')) {
+  if (method === 'GET' && (path === '/order-detail' || path === '/order-detail/' || path === '/order-detail.html')) {
     const orderId = String(url.searchParams.get('id') || '').trim();
     const target = orderId
       ? `/admin/orders?view=${encodeURIComponent(orderId)}`
@@ -2141,8 +2112,8 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return handleOrderReview(env, req, url, decodeURIComponent(orderReviewMatch[1]));
   }
 
-  if (isReadMethod && (path === '/blog' || path === '/blog/' || path === '/blog/index.html' || path === '/blog.html')) {
-    return renderReadResponse(method, renderBlogList(env, url));
+  if (method === 'GET' && (path === '/blog' || path === '/blog/' || path === '/blog/index.html' || path === '/blog.html')) {
+    return renderBlogList(env, url);
   }
 
   const blogCommentMatch = path.match(/^\/blog\/([^/]+)\/comment$/);
@@ -2151,12 +2122,12 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
   }
 
   const blogMatch = path.match(/^\/blog\/([^/]+)$/);
-  if (isReadMethod && blogMatch) {
-    return renderReadResponse(method, renderBlogPost(env, url, decodeURIComponent(blogMatch[1])));
+  if (method === 'GET' && blogMatch) {
+    return renderBlogPost(env, url, decodeURIComponent(blogMatch[1]));
   }
 
-  if (isReadMethod && (path === '/forum' || path === '/forum/' || path === '/forum/index.html' || path === '/forum.html')) {
-    return renderReadResponse(method, renderForumList(env, url));
+  if (method === 'GET' && (path === '/forum' || path === '/forum/' || path === '/forum/index.html' || path === '/forum.html')) {
+    return renderForumList(env, url);
   }
 
   if (method === 'POST' && path === '/forum/ask') {
@@ -2169,21 +2140,21 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
   }
 
   const forumQuestionMatch = path.match(/^\/forum\/([^/]+)$/);
-  if (isReadMethod && forumQuestionMatch) {
-    return renderReadResponse(method, renderForumQuestion(env, url, decodeURIComponent(forumQuestionMatch[1])));
+  if (method === 'GET' && forumQuestionMatch) {
+    return renderForumQuestion(env, url, decodeURIComponent(forumQuestionMatch[1]));
   }
 
   // Admin routes (Level 2)
-  if (isReadMethod && (
+  if (method === 'GET' && (
     path === '/admin' ||
     path === '/admin/' ||
     path === '/admin/dashboard.html'
   )) {
-    return renderReadResponse(method, renderAdminDashboard(env, url));
+    return renderAdminDashboard(env, url);
   }
 
-  if (isReadMethod && (path === '/admin/products' || path === '/admin/product-form.html')) {
-    return renderReadResponse(method, renderAdminProducts(env, url));
+  if (method === 'GET' && (path === '/admin/products' || path === '/admin/product-form.html')) {
+    return renderAdminProducts(env, url);
   }
   if (method === 'POST' && path === '/admin/products/save') {
     return handleAdminProductSave(env, req, url);
@@ -2195,8 +2166,8 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return handleAdminProductStatus(env, req, url);
   }
 
-  if (isReadMethod && (path === '/admin/orders' || path === '/admin/orders.html')) {
-    return renderReadResponse(method, renderAdminOrders(env, url));
+  if (method === 'GET' && (path === '/admin/orders' || path === '/admin/orders.html')) {
+    return renderAdminOrders(env, url);
   }
   if (method === 'POST' && path === '/admin/orders/update') {
     return handleAdminOrderUpdate(env, req, url);
@@ -2208,12 +2179,12 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return handleAdminOrderDelete(env, req, url);
   }
 
-  if (isReadMethod && (
+  if (method === 'GET' && (
     path === '/admin/pages' ||
     path === '/admin/page-builder.html' ||
     path === '/admin/landing-builder.html'
   )) {
-    return renderReadResponse(method, renderAdminPages(env, url));
+    return renderAdminPages(env, url);
   }
   if (method === 'POST' && path === '/admin/pages/save') {
     return handleAdminPageSave(env, req, url);
@@ -2225,8 +2196,8 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return handleAdminPageDelete(env, req, url);
   }
 
-  if (isReadMethod && (path === '/admin/blogs' || path === '/admin/blog-form.html')) {
-    return renderReadResponse(method, renderAdminBlogs(env, url));
+  if (method === 'GET' && (path === '/admin/blogs' || path === '/admin/blog-form.html')) {
+    return renderAdminBlogs(env, url);
   }
   if (method === 'POST' && path === '/admin/blogs/save') {
     return handleAdminBlogSave(env, req, url);
@@ -2238,11 +2209,11 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
     return handleAdminBlogDelete(env, req, url);
   }
 
-  if (isReadMethod && (
+  if (method === 'GET' && (
     path === '/admin/moderation' ||
     path === '/admin/migrate-reviews.html'
   )) {
-    return renderReadResponse(method, renderAdminModeration(env, url));
+    return renderAdminModeration(env, url);
   }
   if (method === 'POST' && path === '/admin/moderation/review') {
     return handleAdminModerationReview(env, req, url);
@@ -2258,16 +2229,16 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
   }
 
   const customPageMatch = path.match(/^\/([a-z0-9][a-z0-9-]{0,79})\/?$/i);
-  if (isReadMethod && customPageMatch) {
+  if (method === 'GET' && customPageMatch) {
     const slug = String(customPageMatch[1] || '').trim().toLowerCase();
     if (!NOJS_RESERVED_PUBLIC_SLUGS.has(slug)) {
-      const pageResponse = await renderReadResponse(method, renderCustomPage(env, url, slug));
+      const pageResponse = await renderCustomPage(env, url, slug);
       if (pageResponse) return pageResponse;
     }
   }
 
   // Fallback: keep admin inside no-JS dashboard routes.
-  if (isReadMethod && path.startsWith('/admin/') && !path.startsWith('/admin/login') && !path.startsWith('/admin/logout')) {
+  if (method === 'GET' && path.startsWith('/admin/') && !path.startsWith('/admin/login') && !path.startsWith('/admin/logout')) {
     return Response.redirect(new URL('/admin', url.origin).toString(), 302);
   }
 

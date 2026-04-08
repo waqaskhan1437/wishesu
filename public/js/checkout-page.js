@@ -292,28 +292,10 @@
     });
   }
 
-  // Use shared utilities
-  const { formatUSD: sharedFormatUSD, escapeHtml: sharedEscapeHtml } = window.SharedPaymentUtils || {};
-  const { escapeHtml: sharedHtmlEscape } = window.HtmlUtils || {};
-
   function formatUsd(amount) {
-    if (sharedFormatUSD) return sharedFormatUSD(amount);
     const n = Number(amount);
-    if (!Number.isFinite(n)) return '';
+    if (!Number.isFinite(n)) return '$0.00';
     return '$' + n.toFixed(2);
-  }
-
-  function escapeHtml(value) {
-    return (sharedHtmlEscape || sharedEscapeHtml || escapeHtmlFallback)(value);
-  }
-
-  function escapeHtmlFallback(value) {
-    return String(value || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
   }
 
   function escapeHtml(value) {

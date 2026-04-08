@@ -87,12 +87,12 @@
   // Generate embed code
   function buildProductEmbed(id, options) {
     const END = '</' + 'script>';
-    return `<div id="${id}"></div>\n<script defer src="/js/product-cards.js" id="${id}-product-cards-script">${END}\n<script>\n(function(){\n  var attempts = 0;\n  var maxAttempts = 20;\n  function run(){\n    if (window.ProductCards && typeof window.ProductCards.render === 'function') {\n      window.ProductCards.render('${id}', ${JSON.stringify(options, null, 2)});\n      return;\n    }\n    if (attempts >= maxAttempts) return;\n    attempts += 1;\n    setTimeout(run, 50);\n  }\n  var scriptEl = document.getElementById('${id}-product-cards-script');\n  if (scriptEl) scriptEl.addEventListener('load', run, { once: true });\n  if (document.readyState === 'loading') {\n    document.addEventListener('DOMContentLoaded', run, { once: true });\n  } else {\n    run();\n  }\n})();\n${END}`;
+    return `<div id="${id}"></div>\n<script defer src="/js/product-cards.js">${END}\n<script>\n(function(){\n  function run(){\n    if (window.ProductCards && typeof window.ProductCards.render === 'function') {\n      window.ProductCards.render('${id}', ${JSON.stringify(options, null, 2)});\n      return;\n    }\n    setTimeout(run, 50);\n  }\n  if (document.readyState === 'loading') {\n    document.addEventListener('DOMContentLoaded', run);\n  } else {\n    run();\n  }\n})();\n${END}`;
   }
 
   function buildReviewEmbed(id, options) {
     const END = '</' + 'script>';
-    return `<div id="${id}"></div>\n<script defer src="/js/reviews-widget.js" id="${id}-reviews-widget-script">${END}\n<script>\n(function(){\n  var attempts = 0;\n  var maxAttempts = 20;\n  function run(){\n    if (window.ReviewsWidget && typeof window.ReviewsWidget.render === 'function') {\n      window.ReviewsWidget.render('${id}', ${JSON.stringify(options, null, 2)});\n      return;\n    }\n    if (attempts >= maxAttempts) return;\n    attempts += 1;\n    setTimeout(run, 50);\n  }\n  var scriptEl = document.getElementById('${id}-reviews-widget-script');\n  if (scriptEl) scriptEl.addEventListener('load', run, { once: true });\n  if (document.readyState === 'loading') {\n    document.addEventListener('DOMContentLoaded', run, { once: true });\n  } else {\n    run();\n  }\n})();\n${END}`;
+    return `<div id="${id}"></div>\n<script defer src="/js/reviews-widget.js">${END}\n<script>\n(function(){\n  function run(){\n    if (window.ReviewsWidget && typeof window.ReviewsWidget.render === 'function') {\n      window.ReviewsWidget.render('${id}', ${JSON.stringify(options, null, 2)});\n      return;\n    }\n    setTimeout(run, 50);\n  }\n  if (document.readyState === 'loading') {\n    document.addEventListener('DOMContentLoaded', run);\n  } else {\n    run();\n  }\n})();\n${END}`;
   }
 
   // Header Templates

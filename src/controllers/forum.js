@@ -5,9 +5,7 @@
 
 import { json, cachedJson } from '../utils/response.js';
 import { slugifyStr } from '../utils/formatting.js';
-import { isValidEmail } from '../utils/validation.js';
 import { buildPublicProductStatusWhere } from '../utils/product-visibility.js';
-import { getForumQuestionsTableDdl, getForumRepliesTableDdl } from '../config/db.js';
 import { 
   notifyForumQuestion, 
   notifyForumReply,
@@ -123,111 +121,6 @@ async function ensureForumQuestionSlugHealth(env) {
   }
 }
 
-async function loadExistingTableRows(env, tableName) {
-  try {
-    const result = await env.DB.prepare(`SELECT * FROM ${tableName}`).all();
-    return result.results || [];
-  } catch (_) {
-    return [];
-  }
-}
-
-async function recreateForumRepliesTable(env, existingReplies = null) {
-  const rows = Array.isArray(existingReplies) ? existingReplies : await loadExistingTableRows(env, 'forum_replies');
-
-  await env.DB.prepare(`DROP TABLE IF EXISTS forum_replies`).run();
-  await env.DB.prepare(getForumRepliesTableDdl({ ifNotExists: false })).run();
-
-  let restoredReplies = 0;
-  const batchSize = 10;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
-    const results = await Promise.allSettled(batch.map((reply) =>
-      env.DB.prepare(`
-        INSERT INTO forum_replies (id, question_id, name, email, content, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        reply.id || null,
-        reply.question_id || 0,
-        reply.name || '',
-        reply.email || '',
-        reply.content || '',
-        reply.status || 'pending',
-        reply.created_at || Date.now()
-      ).run()
-    ));
-    restoredReplies += results.filter((result) => result.status === 'fulfilled').length;
-  }
-
-  return restoredReplies;
-}
-
-async function recreateForumQuestionsTable(env, existingQuestions = null) {
-  const rows = Array.isArray(existingQuestions) ? existingQuestions : await loadExistingTableRows(env, 'forum_questions');
-
-  await env.DB.prepare(`DROP TABLE IF EXISTS forum_questions`).run();
-  await env.DB.prepare(getForumQuestionsTableDdl({ ifNotExists: false })).run();
-
-  const usedForumSlugs = new Set();
-  const buildRestoredForumSlug = (question, fallbackSeed) => {
-    const baseSlug = buildForumQuestionBaseSlug(question?.slug || question?.title || '', fallbackSeed);
-    let candidate = baseSlug;
-    let suffix = 1;
-    while (usedForumSlugs.has(candidate)) {
-      candidate = `${baseSlug}-${suffix++}`;
-    }
-    usedForumSlugs.add(candidate);
-    return candidate;
-  };
-
-  let restoredQuestions = 0;
-  const batchSize = 10;
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
-    const results = await Promise.allSettled(batch.map((question, batchIndex) =>
-      env.DB.prepare(`
-        INSERT INTO forum_questions (id, title, slug, content, name, email, status, reply_count, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        question.id || null,
-        question.title || '',
-        buildRestoredForumSlug(question, question.id || i + batchIndex + 1),
-        question.content || '',
-        question.name || '',
-        question.email || '',
-        question.status || 'pending',
-        question.reply_count || 0,
-        question.created_at || Date.now(),
-        question.updated_at || Date.now()
-      ).run()
-    ));
-    restoredQuestions += results.filter((result) => result.status === 'fulfilled').length;
-  }
-
-  return restoredQuestions;
-}
-
-export async function migrateForumSchema(env) {
-  forumSlugHealthChecked = false;
-
-  const [existingReplies, existingQuestions] = await Promise.all([
-    loadExistingTableRows(env, 'forum_replies'),
-    loadExistingTableRows(env, 'forum_questions')
-  ]);
-
-  const restoredReplies = await recreateForumRepliesTable(env, existingReplies);
-  const restoredQuestions = await recreateForumQuestionsTable(env, existingQuestions);
-
-  await normalizeExistingForumQuestionSlugs(env);
-  forumSlugHealthChecked = true;
-  forumSchemaValidated = true;
-
-  return {
-    replies: restoredReplies,
-    questions: restoredQuestions
-  };
-}
-
 /**
  * Ensure forum tables exist with proper schema
  * Uses caching to avoid repeated checks on every request
@@ -265,11 +158,84 @@ async function ensureForumTables(env) {
 
       // Only recreate if needed (rare - only on first deploy or schema change)
       if (!repliesOk) {
-        await recreateForumRepliesTable(env);
+        // Backup and recreate forum_replies
+        let existingReplies = [];
+        try {
+          const result = await env.DB.prepare(`SELECT * FROM forum_replies`).all();
+          existingReplies = result.results || [];
+        } catch (e) { /* table might not exist */ }
+
+        await env.DB.prepare(`DROP TABLE IF EXISTS forum_replies`).run();
+        await env.DB.prepare(`
+          CREATE TABLE forum_replies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_id INTEGER NOT NULL DEFAULT 0,
+            name TEXT NOT NULL DEFAULT '',
+            email TEXT DEFAULT '',
+            content TEXT NOT NULL DEFAULT '',
+            status TEXT DEFAULT 'pending',
+            created_at INTEGER
+          )
+        `).run();
+
+        // Batch insert for better performance
+        if (existingReplies.length > 0) {
+          const batch = existingReplies.map(r => 
+            env.DB.prepare(`INSERT INTO forum_replies (id, question_id, name, email, content, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+              .bind(r.id || null, r.question_id || 0, r.name || '', r.email || '', r.content || '', r.status || 'pending', r.created_at || Date.now())
+          );
+          // Execute in parallel batches of 10
+          for (let i = 0; i < batch.length; i += 10) {
+            await Promise.all(batch.slice(i, i + 10).map(stmt => stmt.run().catch(() => {})));
+          }
+        }
       }
 
       if (!questionsOk) {
-        await recreateForumQuestionsTable(env);
+        // Backup and recreate forum_questions
+        let existingQuestions = [];
+        try {
+          const result = await env.DB.prepare(`SELECT * FROM forum_questions`).all();
+          existingQuestions = result.results || [];
+        } catch (e) { /* table might not exist */ }
+
+        await env.DB.prepare(`DROP TABLE IF EXISTS forum_questions`).run();
+        await env.DB.prepare(`
+          CREATE TABLE forum_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL DEFAULT '',
+            slug TEXT UNIQUE,
+            content TEXT NOT NULL DEFAULT '',
+            name TEXT NOT NULL DEFAULT '',
+            email TEXT DEFAULT '',
+            status TEXT DEFAULT 'pending',
+            reply_count INTEGER DEFAULT 0,
+            created_at INTEGER,
+            updated_at INTEGER
+          )
+        `).run();
+
+        // Batch insert for better performance
+        if (existingQuestions.length > 0) {
+          const usedForumSlugs = new Set();
+          const buildRestoredForumSlug = (question, fallbackIndex) => {
+            const baseSlug = buildForumQuestionBaseSlug(question?.slug || question?.title || '', fallbackIndex);
+            let candidate = baseSlug;
+            let suffix = 1;
+            while (usedForumSlugs.has(candidate)) {
+              candidate = `${baseSlug}-${suffix++}`;
+            }
+            usedForumSlugs.add(candidate);
+            return candidate;
+          };
+          const batch = existingQuestions.map(q =>
+            env.DB.prepare(`INSERT INTO forum_questions (id, title, slug, content, name, email, status, reply_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+              .bind(q.id || null, q.title || '', buildRestoredForumSlug(q, q.id || Date.now()), q.content || '', q.name || '', q.email || '', q.status || 'pending', q.reply_count || 0, q.created_at || Date.now(), q.updated_at || Date.now())
+          );
+          for (let i = 0; i < batch.length; i += 10) {
+            await Promise.all(batch.slice(i, i + 10).map(stmt => stmt.run().catch(() => {})));
+          }
+        }
       }
 
       await normalizeExistingForumQuestionSlugs(env);
@@ -497,7 +463,8 @@ export async function submitQuestion(env, body) {
     }
 
     // Validate email
-    if (!isValidEmail(trimmedEmail)) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
       return json({ error: 'Invalid email format' }, 400);
     }
 
@@ -597,7 +564,8 @@ export async function submitReply(env, body) {
     }
 
     // Validate email
-    if (!isValidEmail(trimmedEmail)) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
       return json({ error: 'Invalid email format' }, 400);
     }
 

@@ -12,9 +12,6 @@
     let selectedRating = 5;
     let countdownTimer = null;
 
-    // Use shared utilities
-    const { escapeHtml: sharedEscapeHtml } = window.HtmlUtils || {};
-
     if (!orderId) {
         showError('Order ID not found');
         return;
@@ -406,7 +403,6 @@
 
     function escapeHtml(str) {
         if (!str) return '';
-        if (sharedEscapeHtml) return sharedEscapeHtml(str);
         return str
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')

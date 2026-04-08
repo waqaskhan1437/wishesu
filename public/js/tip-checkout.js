@@ -6,14 +6,7 @@
 ;(function () {
   let modalEl = null;
 
-  // Use shared utilities from shared-payment-utils.js
-  const { loadPaymentMethods: sharedLoadPaymentMethods, loadPayPalSDK: sharedLoadPayPalSDK, formatUSD: sharedFormatUSD } = window.SharedPaymentUtils || {};
-
   async function loadPaymentMethods() {
-    return sharedLoadPaymentMethods ? await sharedLoadPaymentMethods() : loadPaymentMethodsFallback();
-  }
-
-  function loadPaymentMethodsFallback() {
     try {
       const res = await fetch('/api/payment/methods');
       const data = await res.json();
@@ -25,10 +18,6 @@
   }
 
   function loadPayPalSDK(clientId) {
-    return sharedLoadPayPalSDK ? sharedLoadPayPalSDK(clientId) : loadPayPalSDKFallback(clientId);
-  }
-
-  function loadPayPalSDKFallback(clientId) {
     return new Promise((resolve, reject) => {
       if (window.paypal) {
         resolve(window.paypal);
@@ -50,10 +39,6 @@
   }
 
   function formatUSD(amount) {
-    return sharedFormatUSD ? sharedFormatUSD(amount) : formatUSDFallback(amount);
-  }
-
-  function formatUSDFallback(amount) {
     const n = Number(amount);
     if (!Number.isFinite(n)) return '';
     return `$${n.toFixed(2)}`;

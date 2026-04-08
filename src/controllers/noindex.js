@@ -8,7 +8,6 @@
 import { json } from '../utils/response.js';
 import { buildMinimalSitemapXml } from './seo-minimal.js';
 import { canonicalProductPath } from '../utils/formatting.js';
-import { isSensitiveNoindexPath } from '../utils/canonical.js';
 
 const CACHE_TTL = 60000;
 const EMPTY_RULES = Object.freeze({ noindex: [], index: [] });
@@ -51,6 +50,16 @@ function decodeXmlEntities(value) {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'");
+}
+
+function isSensitiveNoindexPath(pathname) {
+  const p = normalizePath(pathname);
+  if (p === '/admin' || p.startsWith('/admin/')) return true;
+  if (p === '/api' || p.startsWith('/api/')) return true;
+  if (p === '/checkout' || p === '/success' || p === '/buyer-order' || p === '/order-detail') return true;
+  if (p === '/order' || p.startsWith('/order/')) return true;
+  if (p === '/download' || p.startsWith('/download/')) return true;
+  return false;
 }
 
 function pushCandidate(list, seen, url, source) {

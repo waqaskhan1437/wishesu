@@ -6,6 +6,7 @@
 import { json, csvResponse } from './utils/response.js';
 import { initDB } from './config/db.js';
 import { isAdminAuthed } from './utils/auth.js';
+import { slugifyStr } from './utils/formatting.js';
 
 // CSV helpers
 function csvEscapeField(value) {
@@ -177,8 +178,7 @@ import {
   deleteQuestion,
   deleteReply,
   deleteAllForumContent,
-  getForumSidebar,
-  migrateForumSchema
+  getForumSidebar
 } from './controllers/forum.js';
 
 // Admin
@@ -1681,14 +1681,110 @@ export async function routeApiRequest(req, env, url, path, method) {
   // Admin: Migrate/fix forum tables
   if (method === 'POST' && path === '/api/admin/forum/migrate') {
     try {
-      const restored = await migrateForumSchema(env);
+      // Force recreate forum_replies table with proper schema
+      let existingReplies = [];
+      try {
+        const result = await env.DB.prepare(`SELECT * FROM forum_replies`).all();
+        existingReplies = result.results || [];
+      } catch (e) { /* table might not exist */ }
+
+      await env.DB.prepare(`DROP TABLE IF EXISTS forum_replies`).run();
+      await env.DB.prepare(`
+        CREATE TABLE forum_replies (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          question_id INTEGER NOT NULL DEFAULT 0,
+          name TEXT NOT NULL DEFAULT '',
+          email TEXT DEFAULT '',
+          content TEXT NOT NULL DEFAULT '',
+          status TEXT DEFAULT 'pending',
+          created_at INTEGER
+        )
+      `).run();
+
+      // Batch restore replies in parallel batches of 10
+      let restoredReplies = 0;
+      const batchSize = 10;
+      for (let i = 0; i < existingReplies.length; i += batchSize) {
+        const batch = existingReplies.slice(i, i + batchSize);
+        const results = await Promise.allSettled(batch.map(r =>
+          env.DB.prepare(`
+            INSERT INTO forum_replies (question_id, name, email, content, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(
+            r.question_id || 0,
+            r.name || '',
+            r.email || '',
+            r.content || '',
+            r.status || 'pending',
+            r.created_at || Date.now()
+          ).run()
+        ));
+        restoredReplies += results.filter(r => r.status === 'fulfilled').length;
+      }
+
+      // Force recreate forum_questions table
+      let existingQuestions = [];
+      try {
+        const result = await env.DB.prepare(`SELECT * FROM forum_questions`).all();
+        existingQuestions = result.results || [];
+      } catch (e) { /* table might not exist */ }
+
+      await env.DB.prepare(`DROP TABLE IF EXISTS forum_questions`).run();
+      await env.DB.prepare(`
+        CREATE TABLE forum_questions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          title TEXT NOT NULL DEFAULT '',
+          slug TEXT UNIQUE,
+          content TEXT NOT NULL DEFAULT '',
+          name TEXT NOT NULL DEFAULT '',
+          email TEXT DEFAULT '',
+          status TEXT DEFAULT 'pending',
+          reply_count INTEGER DEFAULT 0,
+          created_at INTEGER,
+          updated_at INTEGER
+        )
+      `).run();
+
+      // Batch restore questions in parallel batches of 10
+      const usedForumSlugs = new Set();
+      const buildMigratedForumSlug = (question, fallbackIndex) => {
+        const baseSlug = slugifyStr(String(question?.slug || question?.title || '')).slice(0, 80).replace(/^-+|-+$/g, '') || `question-${fallbackIndex}`;
+        let candidate = baseSlug;
+        let suffix = 1;
+        while (usedForumSlugs.has(candidate)) {
+          candidate = `${baseSlug}-${suffix++}`;
+        }
+        usedForumSlugs.add(candidate);
+        return candidate;
+      };
+      let restoredQuestions = 0;
+      for (let i = 0; i < existingQuestions.length; i += batchSize) {
+        const batch = existingQuestions.slice(i, i + batchSize);
+        const results = await Promise.allSettled(batch.map((q, batchIndex) =>
+          env.DB.prepare(`
+            INSERT INTO forum_questions (title, slug, content, name, email, status, reply_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            q.title || '',
+            buildMigratedForumSlug(q, i + batchIndex + 1),
+            q.content || '',
+            q.name || '',
+            q.email || '',
+            q.status || 'pending',
+            q.reply_count || 0,
+            q.created_at || Date.now(),
+            q.updated_at || Date.now()
+          ).run()
+        ));
+        restoredQuestions += results.filter(r => r.status === 'fulfilled').length;
+      }
 
       return json({
         success: true,
         message: 'Forum tables migrated successfully',
         restored: {
-          questions: restored.questions,
-          replies: restored.replies
+          questions: restoredQuestions,
+          replies: restoredReplies
         }
       });
     } catch (err) {

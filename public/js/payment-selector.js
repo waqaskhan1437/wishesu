@@ -51,26 +51,33 @@
     window.location.href = '/checkout';
   }
 
-  // Use shared utilities from shared-payment-utils.js
-  const { loadPaymentMethods: sharedLoadPaymentMethods, loadPayPalSDK: sharedLoadPayPalSDK } = window.SharedPaymentUtils || {};
-
   /**
    * Load available payment methods from API
    */
   async function loadPaymentMethods() {
-    const methods = await (sharedLoadPaymentMethods || loadPaymentMethods)();
-    paymentMethods = methods;
-    return paymentMethods;
+    try {
+      const res = await fetch('/api/payment/methods');
+      const data = await res.json();
+      paymentMethods = data.methods || [];
+      return paymentMethods;
+    } catch (e) {
+      console.error('Failed to load payment methods:', e);
+      // Fallback to Whop only
+      paymentMethods = [{
+        id: 'whop',
+        name: 'Card Payment',
+        icon: '💳',
+        description: 'Pay with Credit/Debit Card',
+        enabled: true
+      }];
+      return paymentMethods;
+    }
   }
 
   /**
    * Load PayPal SDK dynamically
    */
   function loadPayPalSDK(clientId) {
-    return sharedLoadPayPalSDK ? sharedLoadPayPalSDK(clientId) : loadPayPalSDKInternal(clientId);
-  }
-
-  function loadPayPalSDKInternal(clientId) {
     return new Promise((resolve, reject) => {
       if (window.paypal) {
         resolve(window.paypal);
