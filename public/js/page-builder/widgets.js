@@ -1,6 +1,6 @@
 export function initDynamicWidgets(wrapper) {
       // Setup custom limit input toggle
-      setupLimitCustomInput(wrapper);
+      setupWidgetConfigInputs(wrapper);
 
       // Product widget
       const productWidget = wrapper.querySelector('.product-widget-container[data-embed*="product"]');
@@ -128,7 +128,7 @@ export function initDynamicWidgets(wrapper) {
       return { type, limit, columns, layout, filter, ids };
     }
 
-    function setupLimitCustomInput(wrapper) {
+export function setupWidgetConfigInputs(wrapper) {
       const configPanel = wrapper.querySelector('.widget-config');
       if (!configPanel) return;
 
