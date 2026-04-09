@@ -8,11 +8,11 @@ var PageBuilderUtils = (function() {
   function createControls() {
     return `
       <div class="section-controls">
-        <button onclick="PageBuilderSections.moveSection(this.closest('.section-wrapper'), -1)" title="Move Up">↑</button>
-        <button onclick="PageBuilderSections.moveSection(this.closest('.section-wrapper'), 1)" title="Move Down">↓</button>
-        <button onclick="PageBuilderSections.editCode(this.closest('.section-wrapper'))" title="Edit Code">&lt;/&gt;</button>
-        <button onclick="PageBuilderSections.duplicateSection(this.closest('.section-wrapper'))" title="Duplicate">📋</button>
-        <button onclick="PageBuilderSections.deleteSection(this.closest('.section-wrapper'))" title="Delete">🗑️</button>
+        <button onclick="PageBuilderActions.moveSection(this.closest('.section-wrapper'), -1)" title="Move Up">↑</button>
+        <button onclick="PageBuilderActions.moveSection(this.closest('.section-wrapper'), 1)" title="Move Down">↓</button>
+        <button onclick="PageBuilderActions.editCode(this.closest('.section-wrapper'))" title="Edit Code">&lt;/&gt;</button>
+        <button onclick="PageBuilderActions.duplicateSection(this.closest('.section-wrapper'))" title="Duplicate">📋</button>
+        <button onclick="PageBuilderActions.deleteSection(this.closest('.section-wrapper'))" title="Delete">🗑️</button>
       </div>
     `;
   }

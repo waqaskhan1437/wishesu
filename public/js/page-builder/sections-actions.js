@@ -29,7 +29,7 @@ var PageBuilderSectionsActions = (function() {
       .map(function(child) { return child.outerHTML; })
       .join('\n');
     document.getElementById('code-editor').value = content;
-    PageBuilderUtils.showModal('code-modal');
+    window.showModal('code-modal');
   }
 
   function saveCode() {
@@ -50,7 +50,12 @@ var PageBuilderSectionsActions = (function() {
       }
     }
 
-    PageBuilderUtils.hideModal('code-modal');
+    window.hideModal('code-modal');
+    PageBuilderState.setState('editingSection', null);
+  }
+
+  function closeCodeModal() {
+    window.hideModal('code-modal');
     PageBuilderState.setState('editingSection', null);
   }
 
@@ -59,6 +64,15 @@ var PageBuilderSectionsActions = (function() {
     duplicateSection: duplicateSection,
     deleteSection: deleteSection,
     editCode: editCode,
-    saveCode: saveCode
+    saveCode: saveCode,
+    closeCodeModal: closeCodeModal
   };
 })();
+
+window.PageBuilderActions = PageBuilderSectionsActions;
+window.moveSection = function(w, d) { PageBuilderSectionsActions.moveSection(w, d); };
+window.duplicateSection = function(w) { PageBuilderSectionsActions.duplicateSection(w); };
+window.deleteSection = function(w) { PageBuilderSectionsActions.deleteSection(w); };
+window.editCode = function(w) { PageBuilderSectionsActions.editCode(w); };
+window.saveCode = function() { PageBuilderSectionsActions.saveCode(); };
+window.closeCodeModal = function() { PageBuilderSectionsActions.closeCodeModal(); };
