@@ -87,6 +87,8 @@ function loadTemplate(type) {
     const wrapper = createSectionWrapper();
     wrapper.innerHTML = template.content + createControls();
     canvas.appendChild(wrapper);
+    enableEditing(wrapper);
+    initDynamicWidgets(wrapper);
   } else if (template.sections) {
     template.sections.forEach(sectionType => addSection(sectionType));
   }

@@ -69,6 +69,9 @@ export function initDynamicWidgets(wrapper) {
       if (type === 'review') {
         return { type, limit: 6, columns: 3, minRating: 5, showAvatar: true };
       }
+      if (type === 'blog') {
+        return { type, limit: 6, columns: 3, layout: 'grid', filter: 'all', ids: [], showPagination: false };
+      }
       return { type, limit: 6, columns: 3, layout: 'grid', filter: 'all', ids: [] };
     }
 
@@ -196,7 +199,7 @@ export function setupWidgetConfigInputs(wrapper) {
           const opts = {
             limit: config.limit,
             columns: config.columns,
-            showPagination: false,
+            showPagination: config.showPagination === true,
             ids: config.ids || []
           };
           if (config.layout === 'slider' && BlogCards.renderSlider) {
