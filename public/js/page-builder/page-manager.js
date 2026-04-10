@@ -47,7 +47,7 @@ export function createPageManager(deps) {
       slugInput.readOnly = true;
       slugInput.placeholder = '/';
       slugInput.title = 'Default Home page always publishes at root URL /';
-      slugInput.style.background = '#f3f4f6';
+      slugInput.classList.add('field-readonly-locked');
       return;
     }
 
@@ -55,7 +55,7 @@ export function createPageManager(deps) {
     slugInput.readOnly = false;
     slugInput.placeholder = 'my-awesome-page';
     slugInput.title = '';
-    slugInput.style.background = '';
+    slugInput.classList.remove('field-readonly-locked');
 
     if (wasLocked && slugInput.value.trim() === '/') {
       const fallbackSlug = previousEditableSlug || (originalPageSlug && originalPageSlug !== 'home' ? originalPageSlug : 'home');
@@ -77,11 +77,11 @@ export function createPageManager(deps) {
     }
 
     if (type === 'custom') {
-      info.style.display = 'none';
+      info.hidden = true;
       isDefault.checked = false;
       isDefault.disabled = true;
     } else {
-      info.style.display = 'block';
+      info.hidden = false;
       info.textContent = `When set as default, this page will be used as the main ${type.replace('_', ' ')} page.`;
       isDefault.disabled = false;
     }
@@ -102,14 +102,14 @@ export function createPageManager(deps) {
         const icon = getPageTypeIcon(type);
         if (data.page) {
           const publicUrl = data.page.public_url || (type === 'home' ? '/' : `/${data.page.slug}`);
-          html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
-              <span>${icon}</span><span style="flex:1;font-weight:600;">${label}</span>
-              <span style="color:var(--success);font-size:0.8rem;">${publicUrl}</span>
+          html += `<div class="pbx-0174">
+              <span>${icon}</span><span class="pbx-0175">${label}</span>
+              <span class="pbx-0176">${publicUrl}</span>
             </div>`;
         } else {
-          html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
-              <span>${icon}</span><span style="flex:1;">${label}</span>
-              <span style="color:var(--gray);font-size:0.8rem;">Not set</span>
+          html += `<div class="pbx-0174">
+              <span>${icon}</span><span class="pbx-0177">${label}</span>
+              <span class="pbx-0178">Not set</span>
             </div>`;
         }
       } catch (error) {
@@ -117,7 +117,7 @@ export function createPageManager(deps) {
       }
     }
 
-    container.innerHTML = html || '<p style="color:var(--gray);">No defaults set</p>';
+    container.innerHTML = html || '<p class="pbx-0179">No defaults set</p>';
   }
 
   async function savePage() {

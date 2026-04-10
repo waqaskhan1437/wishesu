@@ -139,27 +139,33 @@ export function setupWidgetConfigInputs(wrapper) {
       const limitSelect = configPanel.querySelector('.widget-limit-select');
       const limitCustom = configPanel.querySelector('.widget-limit-custom');
       if (limitSelect && limitCustom) {
-        limitSelect.addEventListener('change', function() {
-          if (this.value === 'custom') {
-            limitCustom.style.display = 'block';
-            limitCustom.focus();
+        const syncLimitInput = shouldFocus => {
+          if (limitSelect.value === 'custom') {
+            limitCustom.hidden = false;
+            if (shouldFocus) limitCustom.focus();
           } else {
-            limitCustom.style.display = 'none';
+            limitCustom.hidden = true;
           }
-        });
+        };
+
+        limitSelect.addEventListener('change', () => syncLimitInput(true));
+        syncLimitInput(false);
       }
 
       // Filter custom IDs toggle
       const filterSelect = configPanel.querySelector('.widget-filter');
       const customIdsDiv = configPanel.querySelector('.widget-custom-ids');
       if (filterSelect && customIdsDiv) {
-        filterSelect.addEventListener('change', function() {
-          if (this.value === 'custom') {
-            customIdsDiv.style.display = 'block';
+        const syncCustomIds = () => {
+          if (filterSelect.value === 'custom') {
+            customIdsDiv.hidden = false;
           } else {
-            customIdsDiv.style.display = 'none';
+            customIdsDiv.hidden = true;
           }
-        });
+        };
+
+        filterSelect.addEventListener('change', syncCustomIds);
+        syncCustomIds();
       }
     }
 
@@ -170,7 +176,7 @@ export function setupWidgetConfigInputs(wrapper) {
     function renderProductWidget(containerId, config) {
       const container = document.getElementById(containerId);
       if (!container) return;
-      container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading products...</p>';
+      container.innerHTML = '<p class="pbx-0095">Loading products...</p>';
 
       setTimeout(() => {
         if (typeof ProductCards !== 'undefined') {
@@ -192,7 +198,7 @@ export function setupWidgetConfigInputs(wrapper) {
     function renderBlogWidget(containerId, config) {
       const container = document.getElementById(containerId);
       if (!container) return;
-      container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading blogs...</p>';
+      container.innerHTML = '<p class="pbx-0095">Loading blogs...</p>';
 
       setTimeout(() => {
         if (typeof BlogCards !== 'undefined') {
@@ -214,7 +220,7 @@ export function setupWidgetConfigInputs(wrapper) {
     function renderReviewsWidget(containerId, config) {
       const container = document.getElementById(containerId);
       if (!container) return;
-      container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:20px;">Loading reviews...</p>';
+      container.innerHTML = '<p class="pbx-0095">Loading reviews...</p>';
 
       setTimeout(() => {
         if (typeof ReviewsWidget !== 'undefined') {

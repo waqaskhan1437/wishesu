@@ -4,19 +4,11 @@ function escapeHtmlAttribute(value) {
 
 function buildSharedAssetsMarkup() {
   return `<link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/page-builder-runtime.css">
   <script defer src="/js/product-cards.js"><\/script>
   <script defer src="/js/blog-cards.js"><\/script>
   <script defer src="/js/reviews-widget.js"><\/script>
   <script defer src="/js/page-builder/runtime.js"><\/script>`;
-}
-
-function buildRuntimeStyles() {
-  return `<style>
-    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
-    .faq-item.open .faq-answer{max-height:500px !important;}
-    .faq-item.open .faq-toggle span:last-child{transform:rotate(180deg);}
-    .forum-question-card:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(0,0,0,0.1);}
-  </style>`;
 }
 
 export function generateOutputHtml({ canvasSelector = '#builder-canvas' } = {}) {
@@ -26,8 +18,7 @@ export function generateOutputHtml({ canvasSelector = '#builder-canvas' } = {}) 
     cloneWrapper.querySelectorAll('.section-controls').forEach(el => el.remove());
     cloneWrapper.querySelectorAll('[contenteditable]').forEach(el => {
       el.removeAttribute('contenteditable');
-      el.style.outline = '';
-      el.style.outlineOffset = '';
+      el.classList.remove('builder-editable', 'is-editing');
     });
     cloneWrapper.querySelectorAll('.widget-config').forEach(el => el.remove());
     cloneWrapper.querySelectorAll('.product-widget-container, .blog-widget-container, .reviews-widget-container').forEach(el => {
@@ -50,9 +41,8 @@ export function buildPublishedPageHtml({ title, description, seoOverrideTags = '
   <title>${title}</title>
   <meta name="description" content="${safeDescription}">${seoOverrideTags}
   ${buildSharedAssetsMarkup()}
-  ${buildRuntimeStyles()}
 </head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<body class="page-builder-runtime-body">
 ${html}
 </body>
 </html>`;
@@ -66,9 +56,8 @@ export function buildPreviewDocumentHtml({ title, html }) {
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>${title}</title>
   ${buildSharedAssetsMarkup()}
-  ${buildRuntimeStyles()}
 </head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<body class="page-builder-runtime-body">
   ${html}
 </body>
 </html>`;

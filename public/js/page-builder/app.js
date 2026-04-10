@@ -117,12 +117,12 @@ function createSectionWrapper() {
 
 function enableEditing(wrapper) {
   wrapper.querySelectorAll('[contenteditable]').forEach(el => {
+    el.classList.add('builder-editable');
     el.addEventListener('focus', () => {
-      el.style.outline = '2px solid #3b82f6';
-      el.style.outlineOffset = '2px';
+      el.classList.add('is-editing');
     });
     el.addEventListener('blur', () => {
-      el.style.outline = 'none';
+      el.classList.remove('is-editing');
     });
   });
 }

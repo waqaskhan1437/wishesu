@@ -70,23 +70,20 @@ export function renderFeaturePreview(url, previewId = 'feature-preview') {
 
   preview.replaceChildren();
   if (!url) {
-    preview.style.display = 'none';
+    preview.hidden = true;
     return;
   }
 
   const img = document.createElement('img');
+  img.className = 'feature-preview-image';
   img.src = url;
   img.alt = '';
-  img.style.width = '80px';
-  img.style.height = '60px';
-  img.style.objectFit = 'cover';
-  img.style.borderRadius = '6px';
   img.addEventListener('error', () => {
-    preview.style.display = 'none';
+    preview.hidden = true;
   });
 
   preview.appendChild(img);
-  preview.style.display = 'block';
+  preview.hidden = false;
 }
 
 export function createControls() {

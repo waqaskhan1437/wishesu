@@ -4,503 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Advanced Page Builder</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root {
-      --primary: #3b82f6;
-      --primary-dark: #2563eb;
-      --success: #10b981;
-      --success-dark: #059669;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --dark: #1f2937;
-      --gray: #6b7280;
-      --light: #f3f4f6;
-      --border: #e5e7eb;
-      --top-bar-height: 60px;
-    }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; }
-    
-    /* Top Bar */
-    .top-bar {
-      background: linear-gradient(135deg, var(--dark) 0%, #374151 100%);
-      color: white;
-      padding: 12px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
-      height: var(--top-bar-height);
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
-    .top-bar-left { display: flex; align-items: center; gap: 15px; }
-    .back-btn {
-      background: rgba(255,255,255,0.1);
-      color: white;
-      padding: 8px 16px;
-      border: none;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: 600;
-      transition: all 0.2s;
-      font-size: 0.9rem;
-    }
-    .back-btn:hover { background: rgba(255,255,255,0.2); }
-    .top-bar h1 { font-size: 1.3rem; font-weight: 600; }
-    .top-bar-actions { display: flex; gap: 10px; }
-    
-    .btn {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      font-size: 0.9rem;
-    }
-    .btn:hover { transform: translateY(-1px); }
-    .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover { background: var(--primary-dark); }
-    .btn-success { background: var(--success); color: white; }
-    .btn-success:hover { background: var(--success-dark); }
-    .btn-secondary { background: var(--gray); color: white; }
-    .btn-secondary:hover { background: #4b5563; }
-    
-    /* Main Layout */
-    .builder-wrapper {
-      display: flex;
-      height: calc(100vh - var(--top-bar-height));
-      margin-top: var(--top-bar-height);
-    }
-    
-    /* Left Sidebar - Templates */
-    .sidebar-left {
-      width: 240px;
-      background: white;
-      border-right: 1px solid var(--border);
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .sidebar-section {
-      padding: 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    .sidebar-section h3 {
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--gray);
-      margin-bottom: 15px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    /* Quick Templates */
-    .template-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    .template-card {
-      background: var(--light);
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      padding: 15px 10px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .template-card:hover {
-      border-color: var(--primary);
-      background: #eff6ff;
-      transform: translateY(-2px);
-    }
-    .template-card .icon {
-      font-size: 1.8rem;
-      margin-bottom: 8px;
-    }
-    .template-card .label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--dark);
-    }
-    
-    /* Section Blocks */
-    .block-list { display: flex; flex-direction: column; gap: 8px; }
-    .block-btn {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 100%;
-      padding: 12px 15px;
-      border-radius: 8px;
-      background: var(--light);
-      color: var(--dark);
-      border: 1px solid transparent;
-      text-align: left;
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .block-btn:hover {
-      background: #e5e7eb;
-      border-color: #d1d5db;
-    }
-    .block-btn .icon { font-size: 1.1rem; }
-    
-    /* Canvas */
-    #builder-canvas {
-      flex: 1;
-      padding: 25px;
-      overflow-y: auto;
-      background: #f1f5f9;
-    }
-    #builder-canvas.empty::before {
-      content: '👆 Select a quick template or add sections from the sidebar';
-      display: block;
-      text-align: center;
-      padding: 100px 40px;
-      color: var(--gray);
-      font-size: 1.1rem;
-      background: white;
-      border: 2px dashed var(--border);
-      border-radius: 12px;
-    }
-    
-    .section-wrapper {
-      position: relative;
-      border: 2px dashed var(--border);
-      margin-bottom: 20px;
-      padding: 20px;
-      background: white;
-      border-radius: 12px;
-      transition: all 0.2s;
-    }
-    .section-wrapper:hover { border-color: var(--primary); }
-    .section-wrapper:focus-within { border-color: var(--success); }
-    
-    .section-controls {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      display: flex;
-      gap: 5px;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .section-wrapper:hover .section-controls { opacity: 1; }
-    .section-controls button {
-      background: var(--dark);
-      color: white;
-      border: none;
-      padding: 6px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.75rem;
-      transition: all 0.15s;
-    }
-    .section-controls button:hover { background: #374151; transform: scale(1.05); }
-
-    /* Product & Blog Cards inside builder canvas */
-    #builder-canvas .product-cards-grid,
-    #builder-canvas .blog-cards-grid {
-      display: grid !important;
-      grid-template-columns: repeat(3, 1fr) !important;
-      gap: 20px !important;
-      max-width: 100% !important;
-    }
-    #builder-canvas .product-card,
-    #builder-canvas .blog-card {
-      background: white;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    #builder-canvas .product-thumbnail,
-    #builder-canvas .blog-thumbnail {
-      aspect-ratio: 16/9;
-      overflow: hidden;
-      background: #f3f4f6;
-    }
-    #builder-canvas .product-thumbnail img,
-    #builder-canvas .blog-thumbnail img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    #builder-canvas .product-content,
-    #builder-canvas .blog-content {
-      padding: 15px;
-    }
-    #builder-canvas .product-title,
-    #builder-canvas .blog-title {
-      font-size: 0.95rem;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      color: #1f2937;
-    }
-    #builder-canvas .book-now-btn,
-    #builder-canvas .blog-read-more {
-      display: block;
-      width: 100%;
-      padding: 10px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      text-align: center;
-      text-decoration: none;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 0.85rem;
-      margin-top: 10px;
-    }
-    @media (max-width: 1200px) {
-      #builder-canvas .product-cards-grid,
-      #builder-canvas .blog-cards-grid {
-        grid-template-columns: repeat(2, 1fr) !important;
-      }
-    }
-
-    /* Right Sidebar - Settings */
-    .sidebar-right {
-      width: 250px;
-      background: white;
-      border-left: 1px solid var(--border);
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-    }
-    
-    .settings-panel {
-      padding: 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    .settings-panel h3 {
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: var(--dark);
-      margin-bottom: 15px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    .form-group {
-      margin-bottom: 15px;
-    }
-    .form-group label {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--gray);
-      margin-bottom: 6px;
-    }
-    .form-group input,
-    .form-group select,
-    .form-group textarea {
-      width: 100%;
-      padding: 10px 12px;
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      font-size: 0.9rem;
-      transition: border-color 0.2s;
-    }
-    .form-group input:focus,
-    .form-group select:focus,
-    .form-group textarea:focus {
-      outline: none;
-      border-color: var(--primary);
-    }
-    .form-group textarea { min-height: 80px; resize: vertical; }
-    
-    /* Page Type Selector */
-    .page-type-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-    .type-option {
-      padding: 12px 10px;
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: white;
-    }
-    .type-option:hover { border-color: var(--primary); }
-    .type-option.active {
-      border-color: var(--primary);
-      background: #eff6ff;
-    }
-    .type-option .icon { font-size: 1.3rem; margin-bottom: 5px; }
-    .type-option .label { font-size: 0.75rem; font-weight: 600; color: var(--dark); }
-    
-    /* Default Toggle */
-    .default-toggle {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 15px;
-      background: var(--light);
-      border-radius: 10px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .default-toggle:hover { background: #e5e7eb; }
-    .default-toggle input { display: none; }
-    .toggle-switch {
-      width: 44px;
-      height: 24px;
-      background: #d1d5db;
-      border-radius: 12px;
-      position: relative;
-      transition: all 0.2s;
-      flex-shrink: 0;
-    }
-    .toggle-switch::after {
-      content: '';
-      position: absolute;
-      width: 18px;
-      height: 18px;
-      background: white;
-      border-radius: 50%;
-      top: 3px;
-      left: 3px;
-      transition: all 0.2s;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    .default-toggle input:checked + .toggle-switch {
-      background: var(--success);
-    }
-    .default-toggle input:checked + .toggle-switch::after {
-      left: 23px;
-    }
-    .toggle-label {
-      flex: 1;
-    }
-    .toggle-label .title {
-      font-weight: 600;
-      color: var(--dark);
-      font-size: 0.9rem;
-    }
-    .toggle-label .desc {
-      font-size: 0.75rem;
-      color: var(--gray);
-      margin-top: 2px;
-    }
-    
-    /* Code Editor Modal */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.6);
-      z-index: 1000;
-      justify-content: center;
-      align-items: center;
-    }
-    .modal-overlay.active { display: flex; }
-    .modal-content {
-      background: white;
-      border-radius: 16px;
-      width: 90%;
-      max-width: 700px;
-      max-height: 85vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    .modal-header {
-      padding: 20px;
-      background: var(--dark);
-      color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .modal-header h3 { margin: 0; }
-    .modal-close {
-      background: none;
-      border: none;
-      color: white;
-      font-size: 1.5rem;
-      cursor: pointer;
-    }
-    .modal-body {
-      padding: 20px;
-      flex: 1;
-      overflow-y: auto;
-    }
-    .modal-body textarea {
-      width: 100%;
-      height: 350px;
-      font-family: 'Monaco', 'Menlo', monospace;
-      font-size: 0.85rem;
-      padding: 15px;
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      resize: none;
-    }
-    .modal-footer {
-      padding: 15px 20px;
-      background: var(--light);
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-    }
-    
-    /* Responsive */
-    @media (max-width: 1200px) {
-      .sidebar-left { width: 200px; }
-      .sidebar-right { width: 220px; }
-    }
-    .preview-mode-btn.active { background: rgba(255,255,255,0.25) !important; }
-
-    /* Mobile/Tablet preview modes */
-    #builder-canvas.preview-tablet {
-      max-width: 768px;
-      margin: 0 auto;
-      border-left: 2px dashed #d1d5db;
-      border-right: 2px dashed #d1d5db;
-      transition: max-width 0.3s ease;
-    }
-    #builder-canvas.preview-mobile {
-      max-width: 375px;
-      margin: 0 auto;
-      border-left: 2px dashed #d1d5db;
-      border-right: 2px dashed #d1d5db;
-      transition: max-width 0.3s ease;
-    }
-
-    @media (max-width: 1100px) {
-      .sidebar-left, .sidebar-right { display: none; }
-      #builder-canvas { padding: 15px; }
-    }
-  </style>
+  <link rel="stylesheet" href="/css/page-builder-loader.css">
 </head>
 <body>
   <!-- Top Bar -->
   <div class="top-bar">
     <div class="top-bar-left">
-      <a href="/admin/dashboard.html" class="back-btn">← Dashboard</a>
-      <h1>🎨 Page Builder</h1>
+      <a href="/admin/dashboard.html" class="back-btn">â† Dashboard</a>
+      <h1>ðŸŽ¨ Page Builder</h1>
     </div>
     <div class="top-bar-actions">
-      <button class="btn btn-secondary" id="undo-btn" title="Undo" style="padding:10px 14px;" disabled>↩</button>
-      <button class="btn btn-secondary" id="redo-btn" title="Redo" style="padding:10px 14px;" disabled>↪</button>
-      <div style="display:flex;background:rgba(255,255,255,0.1);border-radius:8px;overflow:hidden;">
-        <button class="btn btn-secondary preview-mode-btn active" type="button" data-builder-action="preview-mode" data-mode="desktop" style="border-radius:0;padding:10px 12px;" title="Desktop">🖥️</button>
-        <button class="btn btn-secondary preview-mode-btn" type="button" data-builder-action="preview-mode" data-mode="tablet" style="border-radius:0;padding:10px 12px;" title="Tablet">📱</button>
-        <button class="btn btn-secondary preview-mode-btn" type="button" data-builder-action="preview-mode" data-mode="mobile" style="border-radius:0;padding:10px 12px;" title="Mobile">📲</button>
+      <button class="btn btn-secondary btn-icon-compact" id="undo-btn" title="Undo" disabled>â†©</button>
+      <button class="btn btn-secondary btn-icon-compact" id="redo-btn" title="Redo" disabled>â†ª</button>
+      <div class="preview-toggle-group">
+        <button class="btn btn-secondary preview-mode-btn active" type="button" data-builder-action="preview-mode" data-mode="desktop" title="Desktop">ðŸ–¥ï¸</button>
+        <button class="btn btn-secondary preview-mode-btn" type="button" data-builder-action="preview-mode" data-mode="tablet" title="Tablet">ðŸ“±</button>
+        <button class="btn btn-secondary preview-mode-btn" type="button" data-builder-action="preview-mode" data-mode="mobile" title="Mobile">ðŸ“²</button>
       </div>
-      <button class="btn btn-secondary" id="load-btn">📂 Load</button>
-      <button class="btn btn-secondary" id="preview-btn">👁️ Preview</button>
-      <button class="btn btn-success" id="save-btn">💾 Save Page</button>
+      <button class="btn btn-secondary" id="load-btn">ðŸ“‚ Load</button>
+      <button class="btn btn-secondary" id="preview-btn">ðŸ‘ï¸ Preview</button>
+      <button class="btn btn-success" id="save-btn">ðŸ’¾ Save Page</button>
     </div>
   </div>
 
@@ -509,22 +32,22 @@
     <div class="sidebar-left">
       <!-- Quick Templates -->
       <div class="sidebar-section">
-        <h3>⚡ Quick Templates</h3>
+        <h3>âš¡ Quick Templates</h3>
         <div class="template-grid">
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="home">
-            <div class="icon">🏠</div>
+            <div class="icon">ðŸ </div>
             <div class="label">Home Page</div>
           </div>
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="blog_archive">
-            <div class="icon">📝</div>
+            <div class="icon">ðŸ“</div>
             <div class="label">Blog Archive</div>
           </div>
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="forum_archive">
-            <div class="icon">💬</div>
+            <div class="icon">ðŸ’¬</div>
             <div class="label">Forum Page</div>
           </div>
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="product_grid">
-            <div class="icon">🛒</div>
+            <div class="icon">ðŸ›’</div>
             <div class="label">Product Grid</div>
           </div>
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="occasion_campaign">
@@ -545,73 +68,73 @@
           </div>
         </div>
       </div>
-      
+
       <!-- Section Blocks -->
-      <div class="sidebar-section" style="flex:1;">
-        <h3>📦 Add Sections</h3>
+      <div class="sidebar-section sidebar-section-fill">
+        <h3>ðŸ“¦ Add Sections</h3>
         <div class="block-list">
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="hero">
-            <span class="icon">🎯</span> Hero Banner
+            <span class="icon">ðŸŽ¯</span> Hero Banner
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="features">
-            <span class="icon">⭐</span> Features Grid
+            <span class="icon">â­</span> Features Grid
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="cta">
-            <span class="icon">📢</span> Call to Action
+            <span class="icon">ðŸ“¢</span> Call to Action
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="text">
-            <span class="icon">📄</span> Text Block
+            <span class="icon">ðŸ“„</span> Text Block
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="products">
-            <span class="icon">🛍️</span> Product Cards
+            <span class="icon">ðŸ›ï¸</span> Product Cards
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="blogs">
-            <span class="icon">📰</span> Blog Cards
+            <span class="icon">ðŸ“°</span> Blog Cards
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="forum">
-            <span class="icon">❓</span> Forum List
+            <span class="icon">â“</span> Forum List
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="reviews">
-            <span class="icon">â­</span> Review Cards
+            <span class="icon">Ã¢Â­Â</span> Review Cards
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="faq">
-            <span class="icon">❓</span> FAQ Accordion
+            <span class="icon">â“</span> FAQ Accordion
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="columns">
-            <span class="icon">▥</span> Columns Layout
+            <span class="icon">â–¥</span> Columns Layout
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="imagetext">
-            <span class="icon">🖼️</span> Image + Text
+            <span class="icon">ðŸ–¼ï¸</span> Image + Text
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="gallery">
-            <span class="icon">🎨</span> Image Gallery
+            <span class="icon">ðŸŽ¨</span> Image Gallery
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="video">
-            <span class="icon">▶️</span> Video Embed
+            <span class="icon">â–¶ï¸</span> Video Embed
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="testimonials">
-            <span class="icon">💬</span> Testimonials
+            <span class="icon">ðŸ’¬</span> Testimonials
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="stats">
-            <span class="icon">📊</span> Stats Counter
+            <span class="icon">ðŸ“Š</span> Stats Counter
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="logos">
-            <span class="icon">🏢</span> Logo Cloud
+            <span class="icon">ðŸ¢</span> Logo Cloud
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="countdown">
-            <span class="icon">⏰</span> Countdown Timer
+            <span class="icon">â°</span> Countdown Timer
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="banner">
-            <span class="icon">📣</span> Banner / Alert
+            <span class="icon">ðŸ“£</span> Banner / Alert
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="divider">
-            <span class="icon">➖</span> Divider / Spacer
+            <span class="icon">âž–</span> Divider / Spacer
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="footer">
-            <span class="icon">📌</span> Footer
+            <span class="icon">ðŸ“Œ</span> Footer
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="custom">
-            <span class="icon">💻</span> Custom HTML
+            <span class="icon">ðŸ’»</span> Custom HTML
           </button>
         </div>
       </div>
@@ -624,7 +147,7 @@
     <div class="sidebar-right">
       <!-- Page Info -->
       <div class="settings-panel">
-        <h3>📄 Page Settings</h3>
+        <h3>ðŸ“„ Page Settings</h3>
         <div class="form-group">
           <label>Page Title *</label>
           <input type="text" id="seo-title" placeholder="My Awesome Page">
@@ -638,27 +161,27 @@
           <textarea id="seo-desc" placeholder="Brief description for search engines..."></textarea>
         </div>
         <div class="form-group">
-          <label>🖼️ Feature Image</label>
-          <div style="display:flex;gap:8px;">
-            <input type="url" id="feature_image_url" placeholder="https://..." style="flex:1;padding:10px;border:2px solid var(--border);border-radius:8px;">
-            <label for="feature-image-file" style="cursor:pointer;padding:10px 16px;background:var(--primary);color:white;border-radius:8px;font-weight:600;">📤 Upload</label>
-            <input type="file" id="feature-image-file" accept="image/*" style="display:none;">
+          <label>ðŸ–¼ï¸ Feature Image</label>
+          <div class="feature-image-row">
+            <input type="url" id="feature_image_url" class="feature-image-url" placeholder="https://...">
+            <label for="feature-image-file" class="feature-upload-label">ðŸ“¤ Upload</label>
+            <input type="file" id="feature-image-file" class="feature-upload-input" accept="image/*">
           </div>
-          <div id="feature-preview" style="margin-top:8px;max-height:100px;overflow:hidden;border-radius:8px;display:none;"></div>
+          <div id="feature-preview" class="feature-preview" hidden></div>
           <small>URL or auto-upload to R2 (10MB max).</small>
         </div>
       </div>
 
       <!-- SEO Overrides -->
       <div class="settings-panel">
-        <h3>🔍 SEO Overrides</h3>
+        <h3>ðŸ” SEO Overrides</h3>
         <div class="form-group">
           <label>OG Title</label>
           <input type="text" id="seo-og-title" placeholder="Custom social share title (optional)">
         </div>
         <div class="form-group">
           <label>OG Description</label>
-          <textarea id="seo-og-desc" placeholder="Custom social share description (optional)" style="min-height:50px;"></textarea>
+          <textarea id="seo-og-desc" class="form-textarea-compact" placeholder="Custom social share description (optional)"></textarea>
         </div>
         <div class="form-group">
           <label>OG Image URL</label>
@@ -670,7 +193,7 @@
         </div>
         <div class="form-group">
           <label>Robots</label>
-          <select id="seo-robots" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;">
+          <select id="seo-robots">
             <option value="">Auto (default)</option>
             <option value="index, follow">Index, Follow</option>
             <option value="noindex, nofollow">Noindex, Nofollow</option>
@@ -678,46 +201,46 @@
           </select>
         </div>
         <!-- SERP Preview -->
-        <div style="margin-top:15px;padding:12px;background:#f9fafb;border-radius:8px;border:1px solid var(--border);">
-          <div style="font-size:0.75rem;color:var(--gray);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Google Preview</div>
+        <div class="serp-card">
+          <div class="serp-card-label">Google Preview</div>
           <div id="serp-preview">
-            <div id="serp-title" style="color:#1a0dab;font-size:1.1rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Page Title</div>
-            <div id="serp-url" style="color:#006621;font-size:0.85rem;margin:2px 0;">example.com/slug</div>
-            <div id="serp-desc" style="color:#545454;font-size:0.85rem;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">Meta description will appear here...</div>
+            <div id="serp-title" class="serp-title">Page Title</div>
+            <div id="serp-url" class="serp-url">example.com/slug</div>
+            <div id="serp-desc" class="serp-desc">Meta description will appear here...</div>
           </div>
         </div>
       </div>
 
       <!-- Page Type -->
       <div class="settings-panel">
-        <h3>📑 Page Type</h3>
+        <h3>ðŸ“‘ Page Type</h3>
         <div class="page-type-grid">
           <div class="type-option active" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="custom" data-type="custom">
-            <div class="icon">📄</div>
+            <div class="icon">ðŸ“„</div>
             <div class="label">Custom</div>
           </div>
           <div class="type-option" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="home" data-type="home">
-            <div class="icon">🏠</div>
+            <div class="icon">ðŸ </div>
             <div class="label">Home</div>
           </div>
           <div class="type-option" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="blog_archive" data-type="blog_archive">
-            <div class="icon">📝</div>
+            <div class="icon">ðŸ“</div>
             <div class="label">Blog</div>
           </div>
           <div class="type-option" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="forum_archive" data-type="forum_archive">
-            <div class="icon">💬</div>
+            <div class="icon">ðŸ’¬</div>
             <div class="label">Forum</div>
           </div>
           <div class="type-option" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="product_grid" data-type="product_grid">
-            <div class="icon">🛒</div>
+            <div class="icon">ðŸ›’</div>
             <div class="label">Products</div>
           </div>
         </div>
       </div>
-      
+
       <!-- Default Setting -->
       <div class="settings-panel">
-        <h3>⭐ Default Page</h3>
+        <h3>â­ Default Page</h3>
         <label class="default-toggle">
           <input type="checkbox" id="is-default">
           <span class="toggle-switch"></span>
@@ -726,13 +249,13 @@
             <div class="desc">Use this as the default page for selected type</div>
           </div>
         </label>
-        <p id="default-info" style="margin-top:12px;font-size:0.8rem;color:var(--gray);display:none;"></p>
+        <p id="default-info" class="default-info" hidden></p>
       </div>
-      
+
       <!-- Current Defaults -->
       <div class="settings-panel">
-        <h3>📌 Current Defaults</h3>
-        <div id="defaults-list" style="font-size:0.85rem;color:var(--gray);">
+        <h3>ðŸ“Œ Current Defaults</h3>
+        <div id="defaults-list" class="defaults-list">
           Loading...
         </div>
       </div>
@@ -743,14 +266,14 @@
   <div class="modal-overlay" id="code-modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>💻 Edit HTML Code</h3>
-        <button class="modal-close" type="button" data-builder-action="close-code-modal">×</button>
+        <h3>ðŸ’» Edit HTML Code</h3>
+        <button class="modal-close" type="button" data-builder-action="close-code-modal">Ã—</button>
       </div>
       <div class="modal-body">
         <textarea id="code-editor" placeholder="Enter your HTML code..."></textarea>
-        <div style="margin-top:15px;padding:12px;background:#fef3c7;border-radius:8px;font-size:0.85rem;">
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-            <input type="checkbox" id="preserve-custom-code" checked style="width:18px;height:18px;">
+        <div class="code-note">
+          <label class="code-note-label">
+            <input type="checkbox" id="preserve-custom-code" class="code-note-checkbox" checked>
             <span><strong>Preserve Custom Code</strong> - Uncheck to re-render product/blog widgets from API</span>
           </label>
         </div>
@@ -762,12 +285,6 @@
     </div>
   </div>
 
-  <script defer src="/js/product-cards.js"></script>
-  <script defer src="/js/blog-cards.js"></script>
-  <script defer src="/js/reviews-widget.js"></script>
-  <script defer src="/js/instant-upload.js"></script>
   <script type="module" src="/js/page-builder/loader.js"></script>
 </body>
 </html>
-
-
