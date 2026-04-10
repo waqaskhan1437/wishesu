@@ -102,14 +102,14 @@ export function createPageManager(deps) {
         const icon = getPageTypeIcon(type);
         if (data.page) {
           const publicUrl = data.page.public_url || (type === 'home' ? '/' : `/${data.page.slug}`);
-          html += `<div class="pbx-0174">
-              <span>${icon}</span><span class="pbx-0175">${label}</span>
-              <span class="pbx-0176">${publicUrl}</span>
+          html += `<div class="page-default-row">
+              <span>${icon}</span><span class="page-default-label">${label}</span>
+              <span class="page-default-url">${publicUrl}</span>
             </div>`;
         } else {
-          html += `<div class="pbx-0174">
-              <span>${icon}</span><span class="pbx-0177">${label}</span>
-              <span class="pbx-0178">Not set</span>
+          html += `<div class="page-default-row">
+              <span>${icon}</span><span class="page-default-label page-default-label--muted">${label}</span>
+              <span class="page-default-status">Not set</span>
             </div>`;
         }
       } catch (error) {
@@ -117,7 +117,7 @@ export function createPageManager(deps) {
       }
     }
 
-    container.innerHTML = html || '<p class="pbx-0179">No defaults set</p>';
+    container.innerHTML = html || '<p class="page-default-empty">No defaults set</p>';
   }
 
   async function savePage() {

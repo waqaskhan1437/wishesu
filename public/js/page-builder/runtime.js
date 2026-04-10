@@ -154,21 +154,21 @@
     var html = '';
 
     if (currentPage > 1) {
-      html += '<button type="button" data-forum-page="' + (currentPage - 1) + '" class="pbx-0180">Prev</button>';
+      html += '<button type="button" data-forum-page="' + (currentPage - 1) + '" class="forum-pagination-button">Prev</button>';
     }
 
     for (var page = 1; page <= totalPages; page += 1) {
       if (page === currentPage) {
-        html += '<button type="button" class="pbx-0181">' + page + '</button>';
+        html += '<button type="button" class="forum-pagination-button is-active">' + page + '</button>';
       } else if (page === 1 || page === totalPages || Math.abs(page - currentPage) <= 2) {
-        html += '<button type="button" data-forum-page="' + page + '" class="pbx-0180">' + page + '</button>';
+        html += '<button type="button" data-forum-page="' + page + '" class="forum-pagination-button">' + page + '</button>';
       } else if (Math.abs(page - currentPage) === 3) {
-        html += '<span class="pbx-0182">...</span>';
+        html += '<span class="forum-pagination-ellipsis">...</span>';
       }
     }
 
     if (currentPage < totalPages) {
-      html += '<button type="button" data-forum-page="' + (currentPage + 1) + '" class="pbx-0180">Next</button>';
+      html += '<button type="button" data-forum-page="' + (currentPage + 1) + '" class="forum-pagination-button">Next</button>';
     }
 
     container.innerHTML = html;
@@ -184,10 +184,10 @@
       ? '/forum/' + encodeURIComponent(question.slug)
       : '/forum/question.html?id=' + encodeURIComponent(question.id);
 
-    return '<a class="forum-question-card pbx-0183" href="' + questionHref + '">'
-      + '<h4 class="pbx-0184">' + escapeHtml(question.title) + '</h4>'
-      + '<p class="pbx-0185">' + escapeHtml(preview) + '</p>'
-      + '<div class="pbx-0186">'
+    return '<a class="forum-question-card" href="' + questionHref + '">'
+      + '<h4 class="forum-question-card-title">' + escapeHtml(question.title) + '</h4>'
+      + '<p class="forum-question-card-preview">' + escapeHtml(preview) + '</p>'
+      + '<div class="forum-question-card-meta">'
       + '<span>By ' + escapeHtml(question.name) + '</span>'
       + '<span>' + (question.reply_count || 0) + ' replies</span>'
       + '</div>'
@@ -209,7 +209,7 @@
       root.dataset.currentPage = String(currentPage);
 
       if (questionsContainer) {
-        questionsContainer.innerHTML = '<p class="pbx-0095">Loading questions...</p>';
+        questionsContainer.innerHTML = '<p class="forum-state">Loading questions...</p>';
       }
 
       fetch('/api/forum/questions?limit=20&page=' + currentPage)
@@ -224,19 +224,19 @@
           if (!questionsContainer) return;
 
           if (questions.length === 0) {
-            questionsContainer.innerHTML = '<p class="pbx-0187">No questions yet. Be the first to ask!</p>';
+            questionsContainer.innerHTML = '<p class="forum-state-card">No questions yet. Be the first to ask!</p>';
             if (paginationContainer) {
               paginationContainer.innerHTML = '';
             }
             return;
           }
 
-          questionsContainer.innerHTML = '<h3 class="pbx-0188">Recent Questions</h3>' + questions.map(buildForumQuestionCard).join('');
+          questionsContainer.innerHTML = '<h3 class="forum-section-heading">Recent Questions</h3>' + questions.map(buildForumQuestionCard).join('');
           renderForumPagination(paginationContainer, currentPage, totalPages);
         })
         .catch(function() {
           if (questionsContainer) {
-            questionsContainer.innerHTML = '<p class="pbx-0189">Error loading questions</p>';
+            questionsContainer.innerHTML = '<p class="forum-state-error">Error loading questions</p>';
           }
         });
     }

@@ -3,8 +3,7 @@ function escapeHtmlAttribute(value) {
 }
 
 function buildSharedAssetsMarkup() {
-  return `<link rel="stylesheet" href="/css/style.css">
-  <link rel="stylesheet" href="/css/page-builder-runtime.css">
+  return `<link rel="stylesheet" href="/css/page-builder-runtime-loader.css">
   <script defer src="/js/product-cards.js"><\/script>
   <script defer src="/js/blog-cards.js"><\/script>
   <script defer src="/js/reviews-widget.js"><\/script>
