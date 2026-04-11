@@ -117,6 +117,85 @@ function normalizeGalleryImages(body) {
 }
 
 /**
+ * Internal helper to save or update a product.
+ * Consolidates logic from saveProduct and duplicateProduct.
+ */
+async function internalSaveProduct(env, {
+  id,
+  title,
+  slug,
+  description = '',
+  normal_price = 0,
+  sale_price = null,
+  instant_delivery = false,
+  normal_delivery_text = '1',
+  delivery_time_days = null,
+  thumbnail_url = '',
+  video_url = '',
+  gallery_images = null, // can be array or null
+  addons = [],
+  addons_json = null, // can be string or null
+  seo_title = '',
+  seo_description = '',
+  seo_keywords = '',
+  seo_canonical = '',
+  whop_plan = '',
+  whop_price_map = '',
+  whop_product_id = '',
+  status = 'active',
+  sort_order = 0
+}) {
+  const cleanTitle = (title || '').trim();
+  if (!cleanTitle) throw new Error('Title required');
+
+  const finalSlug = (slug || '').trim() || slugifyStr(cleanTitle);
+  const finalAddonsJson = addons_json || JSON.stringify(addons || []);
+  
+  // gallery_images might already be normalized if coming from saveProduct
+  let finalGalleryJson;
+  if (typeof gallery_images === 'string') {
+    finalGalleryJson = gallery_images;
+  } else {
+    // If it's an object/array, we need to normalize it (if normalizeGalleryImages expects the whole body)
+    // For internal use, we'll assume it's already an array or we handle it
+    finalGalleryJson = JSON.stringify(Array.isArray(gallery_images) ? gallery_images : []);
+  }
+
+  const deliveryDays = delivery_time_days || normal_delivery_text || '1';
+  const { hasCreatedAt, hasUpdatedAt } = await getProductTimestampSupport(env);
+
+  const productData = [
+    cleanTitle, finalSlug, description || '', Number(normal_price) || 0, sale_price ? Number(sale_price) : null,
+    instant_delivery ? 1 : 0, String(deliveryDays),
+    thumbnail_url || '', video_url || '', finalGalleryJson, finalAddonsJson,
+    seo_title || '', seo_description || '', seo_keywords || '', seo_canonical || '',
+    whop_plan || '', whop_price_map || '', whop_product_id || ''
+  ];
+
+  if (id) {
+    await env.DB.prepare(`
+      UPDATE products SET title=?, slug=?, description=?, normal_price=?, sale_price=?,
+      instant_delivery=?, normal_delivery_text=?, thumbnail_url=?, video_url=?,
+      gallery_images=?, addons_json=?, seo_title=?, seo_description=?, seo_keywords=?, seo_canonical=?,
+      whop_plan=?, whop_price_map=?, whop_product_id=?${hasUpdatedAt ? ', updated_at=CURRENT_TIMESTAMP' : ''} WHERE id=?
+    `).bind(...productData, Number(id)).run();
+    
+    return { success: true, id, slug: finalSlug, url: `/product-${id}/${encodeURIComponent(finalSlug)}` };
+  }
+
+  const r = await env.DB.prepare(`
+    INSERT INTO products (title, slug, description, normal_price, sale_price,
+    instant_delivery, normal_delivery_text, thumbnail_url, video_url,
+    gallery_images, addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
+    whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''})
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})
+  `).bind(...productData, status, sort_order).run();
+
+  const newId = r.meta?.last_row_id;
+  return { success: true, id: newId, slug: finalSlug, url: `/product-${newId}/${encodeURIComponent(finalSlug)}` };
+}
+
+/**
  * Get active products (public)
  * OPTIMIZED: Single JOIN query + Pagination Support
  */
@@ -273,55 +352,20 @@ export async function getProduct(env, id, opts = {}) {
  * Save product (create or update)
  */
 export async function saveProduct(env, body) {
-  const title = (body.title || '').trim();
-  if (!title) return json({ error: 'Title required' }, 400);
-  
   // Invalidate products cache
   productsCache = null;
   productsCacheTime = 0;
-  
-  const slug = (body.slug || '').trim() || slugifyStr(title);
-  const addonsJson = JSON.stringify(body.addons || []);
-  const galleryJson = JSON.stringify(normalizeGalleryImages(body));
-  const { hasCreatedAt, hasUpdatedAt } = await getProductTimestampSupport(env);
-  
-  if (body.id) {
-    // Store delivery_time_days in normal_delivery_text field as days number
-    const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';
-    
-    await env.DB.prepare(`
-      UPDATE products SET title=?, slug=?, description=?, normal_price=?, sale_price=?,
-      instant_delivery=?, normal_delivery_text=?, thumbnail_url=?, video_url=?,
-      gallery_images=?, addons_json=?, seo_title=?, seo_description=?, seo_keywords=?, seo_canonical=?,
-      whop_plan=?, whop_price_map=?, whop_product_id=?${hasUpdatedAt ? ', updated_at=CURRENT_TIMESTAMP' : ''} WHERE id=?
-    `).bind(
-      title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
-      body.instant_delivery ? 1 : 0, String(deliveryDays),
-      body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
-      body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
-      body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || '', Number(body.id)
-    ).run();
-    return json({ success: true, id: body.id, slug, url: `/product-${body.id}/${encodeURIComponent(slug)}` });
+
+  try {
+    const galleryJson = JSON.stringify(normalizeGalleryImages(body));
+    const result = await internalSaveProduct(env, {
+      ...body,
+      gallery_images: galleryJson
+    });
+    return json(result);
+  } catch (err) {
+    return json({ error: err.message }, 400);
   }
-  
-  // Store delivery_time_days in normal_delivery_text field as days number
-  const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';
-  
-  const r = await env.DB.prepare(`
-    INSERT INTO products (title, slug, description, normal_price, sale_price,
-    instant_delivery, normal_delivery_text, thumbnail_url, video_url,
-    gallery_images, addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
-    whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''})
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})
-  `).bind(
-    title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
-    body.instant_delivery ? 1 : 0, String(deliveryDays),
-    body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
-    body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
-    body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || ''
-  ).run();
-  const newId = r.meta?.last_row_id;
-  return json({ success: true, id: newId, slug, url: `/product-${newId}/${encodeURIComponent(slug)}` });
 }
 
 /**
@@ -390,6 +434,11 @@ export async function duplicateProduct(env, body) {
   if (!row) {
     return json({ error: 'Product not found' }, 404);
   }
+
+  // Invalidate products cache
+  productsCache = null;
+  productsCacheTime = 0;
+
   const baseSlug = row.slug || slugifyStr(row.title);
   let newSlug = baseSlug + '-copy';
   let idx = 1;
@@ -399,37 +448,21 @@ export async function duplicateProduct(env, body) {
     idx++;
     exists = await env.DB.prepare('SELECT slug FROM products WHERE slug = ?').bind(newSlug).first();
   }
-  const { hasCreatedAt, hasUpdatedAt } = await getProductTimestampSupport(env);
   
-  const r = await env.DB.prepare(
-    `INSERT INTO products (
-      title, slug, description, normal_price, sale_price,
-      instant_delivery, normal_delivery_text, thumbnail_url, video_url,
-      addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
-      whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''}
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})`
-  ).bind(
-    (row.title || '') + ' Copy',
-    newSlug,
-    row.description || '',
-    row.normal_price || 0,
-    row.sale_price || null,
-    row.instant_delivery || 0,
-    row.normal_delivery_text || '',
-    row.thumbnail_url || '',
-    row.video_url || '',
-    row.addons_json || '[]',
-    row.seo_title || '',
-    row.seo_description || '',
-    row.seo_keywords || '',
-    row.seo_canonical || '',
-    row.whop_plan || '',
-    row.whop_price_map || '',
-    row.whop_product_id || '',
-    'draft',
-    0
-  ).run();
-  return json({ success: true, id: r.meta?.last_row_id, slug: newSlug });
+  try {
+    const result = await internalSaveProduct(env, {
+      ...row,
+      id: null,
+      title: (row.title || '') + ' Copy',
+      slug: newSlug,
+      status: 'draft',
+      sort_order: 0,
+      gallery_images: row.gallery_images // it's already a JSON string in DB
+    });
+    return json(result);
+  } catch (err) {
+    return json({ error: err.message }, 400);
+  }
 }
 
 /**
