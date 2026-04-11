@@ -30,7 +30,6 @@
         productIds = [],      // Array of product IDs to include reviews from
         ids = [],             // Specific review IDs to include
         rating = null,        // Filter by rating (1-5)
-        minRating = null,     // Filter by minimum rating
         limit = 10,           // How many reviews
         columns = 1,          // Layout columns
         showAvatar = true     // Show user avatar
@@ -39,17 +38,7 @@
       const bootstrap = this.getBootstrap(container);
       if (bootstrap && container.dataset.ssrReviewsWidget === '1') {
         const resolvedOptions = Object.assign({}, bootstrap.options || {}, options || {});
-        let bootstrapReviews = Array.isArray(bootstrap.reviews) ? bootstrap.reviews : [];
-
-        if (resolvedOptions.rating != null) {
-          bootstrapReviews = bootstrapReviews.filter(r => Number(r.rating) === Number(resolvedOptions.rating));
-        }
-        if (resolvedOptions.minRating != null) {
-          bootstrapReviews = bootstrapReviews.filter(r => Number(r.rating) >= Number(resolvedOptions.minRating));
-        }
-        if (resolvedOptions.limit) {
-          bootstrapReviews = bootstrapReviews.slice(0, resolvedOptions.limit);
-        }
+        const bootstrapReviews = Array.isArray(bootstrap.reviews) ? bootstrap.reviews : [];
 
         if (bootstrapReviews.length === 0) {
           container.innerHTML = `
@@ -92,11 +81,8 @@
         reviews = data.reviews || [];
 
         // Filter by rating
-        if (rating != null) {
-          reviews = reviews.filter(r => Number(r.rating) === Number(rating));
-        }
-        if (minRating != null) {
-          reviews = reviews.filter(r => Number(r.rating) >= Number(minRating));
+        if (rating) {
+          reviews = reviews.filter(r => r.rating === rating);
         }
 
         // Limit
