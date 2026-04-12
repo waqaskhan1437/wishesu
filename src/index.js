@@ -5758,12 +5758,16 @@ if (method === 'GET' || method === 'HEAD') {
         // Generic path resolution: for extensionless paths not already
         // aliased above, try resolving to {path}.html or {path}/index.html
         // to prevent the asset layer from returning 307 redirects.
+        // EXCLUDE: /product/* URLs - they should use the new canonical format
         if (!archiveTarget && !assetPath.includes('.') && assetPath !== '/') {
-          const cleanPath = assetPath.endsWith('/') ? assetPath.slice(0, -1) : assetPath;
-          const rewritten = new URL(req.url);
-          rewritten.pathname = cleanPath + '.html';
-          assetReq = new Request(rewritten.toString(), req);
-          assetPath = cleanPath + '.html';
+          // Don't add .html for product URLs - they need special handling
+          if (!assetPath.startsWith('/product/')) {
+            const cleanPath = assetPath.endsWith('/') ? assetPath.slice(0, -1) : assetPath;
+            const rewritten = new URL(req.url);
+            rewritten.pathname = cleanPath + '.html';
+            assetReq = new Request(rewritten.toString(), req);
+            assetPath = cleanPath + '.html';
+          }
         }
 
         // Broader path rejection: skip the asset layer for requests that are
@@ -5982,7 +5986,27 @@ if (method === 'GET' || method === 'HEAD') {
 
             // Product detail page - inject individual product schema
             if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
-              const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
+              // NEW FORMAT: /product/<slug> - fetch product by slug, not ID
+              const pathProductMatch = path.match(/^\/product\/([^/]+)$/);
+              let productId = schemaProductId ? String(schemaProductId) : null;
+              let productBySlug = null;
+              
+              // If using new format /product/<slug>, look up by slug
+              if (!productId && pathProductMatch) {
+                const slug = decodeURIComponent(pathProductMatch[1]);
+                if (slug && env.DB) {
+                  await initDB(env);
+                  productBySlug = await env.DB.prepare('SELECT id, title, slug FROM products WHERE slug = ? AND status = ? LIMIT 1').bind(slug, 'active').first();
+                  if (productBySlug) {
+                    productId = String(productBySlug.id);
+                  }
+                }
+              }
+              
+              if (!productId) {
+                productId = url.searchParams.get('id');
+              }
+              
               if (productId && env.DB) {
                 await initDB(env);
 
