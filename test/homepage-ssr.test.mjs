@@ -5,6 +5,9 @@ import {
   HOME_PRODUCTS_BOOTSTRAP_ID,
   buildHomeProductsBootstrap,
   renderHomepageHeroPlayerSsr,
+  renderLegacyHomepageHeroPlayerSsr,
+  renderLegacyHomepageProductSliderSsr,
+  renderLegacyHomepageReviewsSliderSsr,
   renderHomepageProductGridSsr,
   renderReviewsWidgetSsrMarkup
 } from '../src/utils/homepage-ssr.js';
@@ -28,9 +31,21 @@ const sampleProducts = [
     thumbnail_url: 'https://cdn.example.com/wedding.jpg',
     normal_price: 80,
     sale_price: 80,
+    instant_delivery: 1,
     review_count: 4,
     average_rating: 4.5,
     video_url: 'https://cdn.example.com/wedding.mp4'
+  }
+];
+
+const sampleReviews = [
+  {
+    id: 1,
+    author_name: 'Ayesha Khan',
+    comment: 'Amazing video gift',
+    rating: 5,
+    created_at: '2026-03-01T10:00:00Z',
+    product_title: 'Birthday Surprise'
   }
 ];
 
@@ -58,25 +73,41 @@ test('renderHomepageHeroPlayerSsr renders first featured video and dots', () => 
   assert.equal(hero.targetHref, '/product-10/birthday-surprise');
 });
 
+test('renderLegacyHomepageHeroPlayerSsr renders stage, thumbnails, dots, and info', () => {
+  const hero = renderLegacyHomepageHeroPlayerSsr(sampleProducts);
+  assert.match(hero.stageHtml, /youtube\.com\/embed\/abc123XYZ/);
+  assert.match(hero.thumbnailsHtml, /player-thumb active/);
+  assert.match(hero.dotsHtml, /hero-player-dot active/);
+  assert.match(hero.infoHtml, /Birthday Surprise/);
+  assert.equal(hero.targetHref, '/product-10/birthday-surprise');
+});
+
+test('renderLegacyHomepageProductSliderSsr renders slider cards for legacy homepage', () => {
+  const html = renderLegacyHomepageProductSliderSsr(sampleProducts, { mode: 'instant', limit: 4 });
+  assert.match(html, /slider-item/);
+  assert.match(html, /product-card/);
+  assert.match(html, /Wedding Wish/);
+  assert.match(html, /instant-badge/);
+});
+
+test('renderLegacyHomepageReviewsSliderSsr renders review cards for legacy homepage', () => {
+  const html = renderLegacyHomepageReviewsSliderSsr(sampleReviews);
+  assert.match(html, /slider-item/);
+  assert.match(html, /review-card/);
+  assert.match(html, /Ayesha Khan/);
+  assert.match(html, /Birthday Surprise/);
+});
+
 test('renderReviewsWidgetSsrMarkup includes bootstrap hydration payload', () => {
   const rendered = renderReviewsWidgetSsrMarkup({
     containerId: 'reviews-widget',
-    reviews: [
-      {
-        id: 1,
-        author_name: 'Ayesha',
-        comment: 'Amazing video gift',
-        rating: 5,
-        created_at: '2026-03-01T10:00:00Z',
-        product_title: 'Birthday Surprise'
-      }
-    ],
+    reviews: sampleReviews,
     options: { limit: 8, columns: 3, minRating: 5 }
   });
 
   assert.match(rendered.innerHtml, /class="reviews-grid"/);
   assert.match(rendered.innerHtml, /repeat\(3, 1fr\)/);
-  assert.match(rendered.innerHtml, /Ayesha/);
+  assert.match(rendered.innerHtml, /Ayesha Khan/);
   assert.equal(rendered.attrs['data-ssr-reviews-widget'], '1');
   assert.match(rendered.afterHtml, /reviews-widget-bootstrap-reviews-widget/);
   assert.match(rendered.afterHtml, /"minRating":5/);
