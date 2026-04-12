@@ -249,7 +249,6 @@ export async function generateBackupData(env) {
  */
 export async function getBackupHistory(env) {
   try {
-    await ensureBackupsTable(env);
     const res = await env.DB
       .prepare('SELECT id, created_at as timestamp, size, media_count FROM backups ORDER BY created_at DESC LIMIT 30')
       .all();
@@ -261,7 +260,6 @@ export async function getBackupHistory(env) {
 
 
 async function createBackupInternal(env, meta = {}) {
-  await ensureBackupsTable(env);
 
   const BUCKET = getBackupBucket(env);
   if (!BUCKET) {
@@ -380,7 +378,6 @@ export async function createBackup(env, meta = {}) {
  */
 export async function downloadBackup(env, backupId) {
   try {
-    await ensureBackupsTable(env);
 
     const BUCKET = getBackupBucket(env);
 
@@ -453,7 +450,6 @@ async function insertRows(env, table, columns, rows) {
  */
 export async function restoreBackup(env, body = {}) {
   try {
-    await ensureBackupsTable(env);
 
     let backupObj = null;
 

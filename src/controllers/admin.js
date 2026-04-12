@@ -298,31 +298,8 @@ export async function maybePurgeCache(env, initDB) {
 /**
  * Get Whop settings
  */
-async function ensurePaymentGatewaysTable(env) {
-  try {
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS payment_gateways (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        gateway_type TEXT DEFAULT '',
-        webhook_url TEXT,
-        webhook_secret TEXT,
-        custom_code TEXT,
-        is_enabled INTEGER DEFAULT 1,
-        whop_product_id TEXT DEFAULT '',
-        whop_api_key TEXT DEFAULT '',
-        whop_theme TEXT DEFAULT 'light',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
-  } catch (e) {
-    // Continue with legacy settings fallback if table creation fails
-  }
-}
 
 export async function getWhopSettings(env) {
-  await ensurePaymentGatewaysTable(env);
 
   // Prefer payment_gateways (new system), fallback to legacy settings table
   try {
@@ -366,7 +343,6 @@ export async function getWhopSettings(env) {
  * Save Whop settings
  */
 export async function saveWhopSettings(env, body) {
-  await ensurePaymentGatewaysTable(env);
 
   const productId = (body.default_product_id || body.product_id || '').trim();
   const theme = (body.theme || 'light').trim();

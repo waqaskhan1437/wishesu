@@ -38,46 +38,7 @@ async function enforceSingleActiveGateway(env, gatewayType, activeId) {
 /**
  * Ensure payment gateways table exists
  */
-async function ensureTable(env) {
-  if (!env.DB) return;
 
-  try {
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS payment_gateways (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        gateway_type TEXT DEFAULT '',
-        webhook_url TEXT,
-        webhook_secret TEXT,
-        custom_code TEXT,
-        is_enabled INTEGER DEFAULT 1,
-        whop_product_id TEXT DEFAULT '',
-        whop_api_key TEXT DEFAULT '',
-        whop_theme TEXT DEFAULT 'light',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
-
-    // Add new columns if they don't exist (for existing tables)
-    const columns = ['gateway_type', 'whop_product_id', 'whop_api_key', 'whop_theme'];
-    for (const col of columns) {
-      try {
-        await env.DB.prepare(`ALTER TABLE payment_gateways ADD COLUMN ${col} TEXT DEFAULT ''`).run();
-      } catch (e) {
-        // Column already exists, ignore
-      }
-    }
-
-    // Auto-migrate legacy Whop settings (only once per worker instance)
-    if (!migrationDone) {
-      await migrateLegacyWhopSettings(env);
-      migrationDone = true;
-    }
-  } catch (e) {
-    console.error('Payment gateways table error:', e);
-  }
-}
 
 /**
  * Auto-migrate legacy Whop settings from 'settings' table to payment_gateways
@@ -166,8 +127,6 @@ async function getPaymentGateways(env) {
     return gatewaysCache;
   }
 
-  await ensureTable(env);
-
   try {
     // Explicitly select all columns to ensure compatibility
     const result = await env.DB.prepare(`
@@ -232,7 +191,6 @@ export async function getPaymentGatewaysApi(env) {
  */
 export async function addPaymentGatewayApi(env, body) {
   try {
-    await ensureTable(env);
 
     const gateway = {
       name: (body.name || '').trim(),
@@ -284,7 +242,6 @@ export async function addPaymentGatewayApi(env, body) {
  */
 export async function updatePaymentGatewayApi(env, id, body) {
   try {
-    await ensureTable(env);
 
     const gateway = {
       name: (body.name || '').trim(),
@@ -351,7 +308,6 @@ export async function updatePaymentGatewayApi(env, id, body) {
  */
 export async function deletePaymentGatewayApi(env, id) {
   try {
-    await ensureTable(env);
 
     await env.DB.prepare('DELETE FROM payment_gateways WHERE id = ?').bind(id).run();
 
@@ -369,7 +325,6 @@ export async function deletePaymentGatewayApi(env, id) {
  */
 export async function getWhopCheckoutSettings(env) {
   try {
-    await ensureTable(env);
 
     // Find enabled Whop gateway
     const whopGateway = await env.DB.prepare(`
@@ -424,7 +379,6 @@ function identifyGateway(payload, gateway) {
 export async function handleUniversalWebhook(env, payload, headers, rawBody) {
   try {
     // Ensure payment gateways table exists
-    await ensureTable(env);
     
     // Check if this is a PayPal or Whop webhook that should be processed by the original handler
     // for backward compatibility
@@ -892,7 +846,6 @@ export async function handleDeletePaymentGateway(env, id) {
  */
 export async function handlePaymentTab(env) {
   // Ensure the payment_gateways table exists
-  await ensureTable(env);
   
   // Attempt to migrate existing PayPal and Whop settings if they exist and not yet migrated
   await migratePayPalSettings(env).catch(console.error);

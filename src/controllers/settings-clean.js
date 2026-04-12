@@ -27,52 +27,7 @@ const DEFAULT_SETTINGS = {
 /**
  * Ensure settings table exists
  */
-async function ensureTable(env) {
-  if (!env.DB) return;
-  
-  try {
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS clean_settings (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        site_title TEXT NOT NULL,
-        site_description TEXT NOT NULL,
-        admin_email TEXT NOT NULL,
-        enable_paypal INTEGER DEFAULT 0,
-        enable_stripe INTEGER DEFAULT 0,
-        paypal_client_id TEXT,
-        paypal_secret TEXT,
-        stripe_pub_key TEXT,
-        stripe_secret_key TEXT,
-        enable_rate_limit INTEGER DEFAULT 1,
-        rate_limit INTEGER DEFAULT 10
-      )
-    `).run();
 
-    // Add missing columns for older schemas
-    const columns = [
-      ['site_title', "TEXT DEFAULT ''"],
-      ['site_description', "TEXT DEFAULT ''"],
-      ['admin_email', "TEXT DEFAULT ''"],
-      ['enable_paypal', 'INTEGER DEFAULT 0'],
-      ['enable_stripe', 'INTEGER DEFAULT 0'],
-      ['paypal_client_id', "TEXT DEFAULT ''"],
-      ['paypal_secret', "TEXT DEFAULT ''"],
-      ['stripe_pub_key', "TEXT DEFAULT ''"],
-      ['stripe_secret_key', "TEXT DEFAULT ''"],
-      ['enable_rate_limit', 'INTEGER DEFAULT 1'],
-      ['rate_limit', 'INTEGER DEFAULT 10']
-    ];
-    for (const [col, def] of columns) {
-      try {
-        await env.DB.prepare(`ALTER TABLE clean_settings ADD COLUMN ${col} ${def}`).run();
-      } catch (e) {
-        // Column already exists, ignore
-      }
-    }
-  } catch (e) {
-    console.error('Settings table error:', e);
-  }
-}
 
 async function upsertCleanSettings(env, settings) {
   await env.DB.prepare(`
@@ -165,8 +120,6 @@ export async function getCleanSettings(env) {
     return settingsCache;
   }
 
-  await ensureTable(env);
-
   try {
     const row = await env.DB.prepare('SELECT * FROM clean_settings WHERE id = 1').first();
     let settings = { ...DEFAULT_SETTINGS, ...(row || {}) };
@@ -202,7 +155,6 @@ export async function getCleanSettingsApi(env) {
  */
 export async function saveCleanSettingsApi(env, body) {
   try {
-    await ensureTable(env);
 
     const current = await getCleanSettings(env);
     

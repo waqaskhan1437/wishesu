@@ -313,6 +313,86 @@ export async function initDB(env, ctx) {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           )
         `),
+        // Additional integrations
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS payment_gateways (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            gateway_type TEXT DEFAULT '',
+            webhook_url TEXT,
+            webhook_secret TEXT,
+            custom_code TEXT,
+            is_enabled INTEGER DEFAULT 1,
+            whop_product_id TEXT DEFAULT '',
+            whop_api_key TEXT DEFAULT '',
+            whop_theme TEXT DEFAULT 'light',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `),
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS webhook_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gateway TEXT NOT NULL,
+            event_id TEXT UNIQUE NOT NULL,
+            event_type TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            status TEXT DEFAULT 'pending',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `),
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS analytics_settings (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            ga_id TEXT,
+            fb_pixel TEXT,
+            tiktok_pixel TEXT,
+            snapchat_pixel TEXT,
+            twitter_pixel TEXT,
+            pinterest_pixel TEXT,
+            custom_head TEXT,
+            custom_body TEXT
+          )
+        `),
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS email_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT UNIQUE,
+            subject TEXT,
+            body TEXT,
+            is_active INTEGER DEFAULT 1
+          )
+        `),
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS leads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT,
+            source TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `),
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS clean_settings (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            site_title TEXT NOT NULL,
+            site_description TEXT NOT NULL,
+            contact_email TEXT NOT NULL,
+            footer_text TEXT NOT NULL,
+            logo_url TEXT,
+            favicon_url TEXT,
+            primary_color TEXT DEFAULT '#3b82f6'
+          )
+        `),
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS settings_media_uploads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            r2_key TEXT NOT NULL UNIQUE,
+            size_bytes INTEGER DEFAULT 0,
+            content_type TEXT DEFAULT 'video/mp4',
+            uploaded_at INTEGER NOT NULL
+          )
+        `),
         // API Key usage logs table
         env.DB.prepare(`
           CREATE TABLE IF NOT EXISTS api_key_usage (
@@ -414,7 +494,11 @@ async function runMigrations(env) {
     { table: 'chat_sessions', column: 'last_message_content', type: 'TEXT' },
     { table: 'chat_sessions', column: 'last_message_at', type: 'DATETIME' },
     { table: 'checkout_sessions', column: 'metadata', type: 'TEXT' },
-    { table: 'orders', column: 'revision_reason', type: 'TEXT' }
+    { table: 'orders', column: 'revision_reason', type: 'TEXT' },
+    { table: 'payment_gateways', column: 'gateway_type', type: "TEXT DEFAULT ''" },
+    { table: 'payment_gateways', column: 'whop_product_id', type: "TEXT DEFAULT ''" },
+    { table: 'payment_gateways', column: 'whop_api_key', type: "TEXT DEFAULT ''" },
+    { table: 'payment_gateways', column: 'whop_theme', type: "TEXT DEFAULT 'light'" }
   ];
 
   // Run migrations sequentially to avoid overloading D1 and exceeding subrequest limits

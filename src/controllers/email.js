@@ -69,7 +69,6 @@ export async function getEmailTemplates(env, type = null) {
     }
     return templatesCache;
   }
-  await ensureEmailTables(env);
   try {
     const sql = type ? 'SELECT * FROM email_templates WHERE type = ?' : 'SELECT * FROM email_templates';
     const stmt = env.DB.prepare(sql);
@@ -111,7 +110,6 @@ export async function getEmailTemplatesApi(env, req) {
  */
 export async function saveEmailTemplate(env, body) {
   try {
-    await ensureEmailTables(env);
     const type = String(body.type || '').trim();
     const subject = String(body.subject || '').trim();
     const content = String(body.body || '').trim();
@@ -261,7 +259,6 @@ export async function sendCustomEmailApi(env, body) {
  */
 export async function addLead(env, body) {
   try {
-    await ensureEmailTables(env);
     const email = String(body.email || '').trim().toLowerCase();
     const name = body.name ? String(body.name).trim() : '';
     const source = body.source ? String(body.source).trim() : '';

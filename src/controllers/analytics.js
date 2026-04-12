@@ -16,7 +16,6 @@ import { getMinimalSEOSettings, getSettings as getSeoSettingsDirect } from './se
 // Cache for analytics settings
 let analyticsCache = null;
 let analyticsCacheTime = 0;
-let analyticsTableEnsured = false;
 const ANALYTICS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes (was 1 minute)
 
 // Default values for analytics settings
@@ -40,39 +39,7 @@ const DEFAULT_ANALYTICS_SETTINGS = {
  *
  * @param {object} env Cloudflare environment with DB binding
  */
-async function ensureAnalyticsTable(env) {
-  if (!env.DB || analyticsTableEnsured) return;
-  try {
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS analytics_settings (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        ga_id TEXT,
-        google_verify TEXT,
-        bing_verify TEXT,
-        fb_pixel_id TEXT,
-        custom_script TEXT
-      )
-    `).run();
-    // Add missing columns in case of schema upgrades
-    const columns = [
-      ['ga_id', 'TEXT'],
-      ['google_verify', 'TEXT'],
-      ['bing_verify', 'TEXT'],
-      ['fb_pixel_id', 'TEXT'],
-      ['custom_script', 'TEXT']
-    ];
-    for (const [col, def] of columns) {
-      try {
-        await env.DB.prepare(`ALTER TABLE analytics_settings ADD COLUMN ${col} ${def}`).run();
-      } catch (e) {
-        // Column already exists, ignore
-      }
-    }
-    analyticsTableEnsured = true;
-  } catch (e) {
-    console.error('Analytics table error:', e);
-  }
-}
+
 
 /**
  * Retrieve analytics settings from the database. Results are cached to
@@ -87,7 +54,6 @@ export async function getAnalyticsSettings(env) {
   if (analyticsCache && (now - analyticsCacheTime) < ANALYTICS_CACHE_TTL) {
     return analyticsCache;
   }
-  await ensureAnalyticsTable(env);
   try {
     const row = await env.DB.prepare('SELECT * FROM analytics_settings WHERE id = 1').first();
     analyticsCache = { ...DEFAULT_ANALYTICS_SETTINGS, ...(row || {}) };
@@ -123,7 +89,6 @@ export async function getAnalyticsSettingsApi(env) {
  */
 export async function saveAnalyticsSettings(env, body) {
   try {
-    await ensureAnalyticsTable(env);
     const gaId = String(body.ga_id || '').trim();
     const googleVerify = String(body.google_verify || '').trim();
     const bingVerify = String(body.bing_verify || '').trim();

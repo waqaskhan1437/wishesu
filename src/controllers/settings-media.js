@@ -21,36 +21,7 @@ function normalizeFilename(input) {
   return /\.mp4$/i.test(cleaned) ? cleaned : `${cleaned}.mp4`;
 }
 
-async function ensureMediaTable(env) {
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TABLE_NAME} (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      filename TEXT NOT NULL,
-      r2_key TEXT NOT NULL UNIQUE,
-      size_bytes INTEGER DEFAULT 0,
-      content_type TEXT DEFAULT 'video/mp4',
-      uploaded_at INTEGER NOT NULL
-    )
-  `).run();
 
-  const columns = [
-    ['filename', "TEXT DEFAULT 'video.mp4'"],
-    ['r2_key', "TEXT DEFAULT ''"],
-    ['size_bytes', 'INTEGER DEFAULT 0'],
-    ['content_type', "TEXT DEFAULT 'video/mp4'"],
-    ['uploaded_at', 'INTEGER DEFAULT 0']
-  ];
-
-  for (const [column, definition] of columns) {
-    try {
-      await env.DB.prepare(
-        `ALTER TABLE ${TABLE_NAME} ADD COLUMN ${column} ${definition}`
-      ).run();
-    } catch (_) {
-      // Column already exists.
-    }
-  }
-}
 
 async function requireAdmin(req, env) {
   if (!env.ADMIN_SESSION_SECRET) return null;
@@ -73,8 +44,6 @@ export async function uploadSettingsMediaFile(env, req, url) {
 
     const authError = await requireAdmin(req, env);
     if (authError) return authError;
-
-    await ensureMediaTable(env);
 
     const formData = await req.formData();
     const file = formData.get('file');
@@ -156,8 +125,6 @@ export async function listSettingsMediaFiles(env, req, url) {
   try {
     const authError = await requireAdmin(req, env);
     if (authError) return authError;
-
-    await ensureMediaTable(env);
     const result = await env.DB.prepare(`
       SELECT id, filename, size_bytes, content_type, uploaded_at
       FROM ${TABLE_NAME}
@@ -188,8 +155,6 @@ export async function deleteSettingsMediaFile(env, req, url) {
   try {
     const authError = await requireAdmin(req, env);
     if (authError) return authError;
-
-    await ensureMediaTable(env);
     const id = parseMediaId(url.searchParams.get('id'));
     if (!id) return json({ error: 'Valid id is required' }, 400);
 
@@ -222,7 +187,6 @@ export async function deleteSettingsMediaFile(env, req, url) {
 export async function getPublicSettingsMediaFile(env, id) {
   try {
     if (!env.R2_BUCKET) return json({ error: 'R2 storage not configured' }, 500);
-    await ensureMediaTable(env);
 
     const mediaId = parseMediaId(id);
     if (!mediaId) return json({ error: 'Invalid media id' }, 400);
