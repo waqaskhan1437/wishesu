@@ -44,6 +44,16 @@ export async function getPublishedBlogs(env, url) {
     const limit = parseInt(url.searchParams.get('limit') || '30');
     const offset = (page - 1) * limit;
 
+    const kvKey = `api_cache:blogs:published:${page}:${limit}`;
+    if (env.PAGE_CACHE) {
+      try {
+        const cached = await env.PAGE_CACHE.get(kvKey);
+        if (cached) {
+          return cachedJson(JSON.parse(cached));
+        }
+      } catch(e) {}
+    }
+
     // OPTIMIZED: Run count and data queries in parallel
     const [countResult, result] = await Promise.all([
       env.DB.prepare(`SELECT COUNT(*) as total FROM blogs WHERE status = 'published'`).first(),
@@ -58,8 +68,7 @@ export async function getPublishedBlogs(env, url) {
     
     const total = countResult?.total || 0;
 
-    // Cache for 3 minutes
-    return cachedJson({
+    const responseData = {
       success: true,
       blogs: result.results || [],
       pagination: {
@@ -70,7 +79,14 @@ export async function getPublishedBlogs(env, url) {
         hasNext: offset + limit < total,
         hasPrev: page > 1
       }
-    });
+    };
+
+    if (env.PAGE_CACHE) {
+      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+    }
+
+    // Cache for 3 minutes
+    return cachedJson(responseData);
   } catch (err) {
     return json({ error: err.message }, 500);
   }
@@ -109,6 +125,16 @@ export async function getBlog(env, idOrSlug) {
  */
 export async function getPublishedBlog(env, slug) {
   try {
+    const kvKey = `api_cache:blogs:get:${slug}`;
+    if (env.PAGE_CACHE) {
+      try {
+        const cached = await env.PAGE_CACHE.get(kvKey);
+        if (cached) {
+          return json(JSON.parse(cached));
+        }
+      } catch(e) {}
+    }
+
     const blog = await env.DB.prepare(`
       SELECT * FROM blogs WHERE slug = ? AND status = 'published'
     `).bind(slug).first();
@@ -117,7 +143,12 @@ export async function getPublishedBlog(env, slug) {
       return json({ error: 'Blog post not found' }, 404);
     }
 
-    return json({ success: true, blog });
+    const responseData = { success: true, blog };
+    if (env.PAGE_CACHE) {
+      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+    }
+
+    return json(responseData);
   } catch (err) {
     return json({ error: err.message }, 500);
   }

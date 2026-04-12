@@ -27,6 +27,16 @@ export async function getReviews(env, url) {
   const productId = params.get('productId');
   const productIds = params.get('productIds');
   const ids = params.get('ids');
+
+  const kvKey = `api_cache:reviews:list:${rating || ''}:${productId || ''}:${productIds || ''}:${ids || ''}`;
+  if (!isAdminBypassCache && env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return cachedJson(JSON.parse(cached), 120);
+      }
+    } catch(e) {}
+  }
   
   let sql = 'SELECT r.*, p.title as product_title FROM reviews r LEFT JOIN products p ON r.product_id = p.id WHERE 1 = 1';
   const binds = [];
@@ -75,14 +85,29 @@ export async function getReviews(env, url) {
     return review;
   });
 
+  const responseData = { reviews };
+  if (!isAdminBypassCache && env.PAGE_CACHE) {
+    try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+  }
+
   // Cache for 2 minutes - reviews don't change often
-  return isAdminBypassCache ? json({ reviews }) : cachedJson({ reviews }, 120);
+  return isAdminBypassCache ? json(responseData) : cachedJson(responseData, 120);
 }
 
 /**
  * Get reviews for a product
  */
 export async function getProductReviews(env, productId) {
+  const kvKey = `api_cache:reviews:product:${productId}`;
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return json(JSON.parse(cached));
+      }
+    } catch(e) {}
+  }
+
   const r = await env.DB.prepare(
     `SELECT reviews.*,
             -- Prefer review overrides first; fall back to order delivery links
@@ -103,7 +128,12 @@ export async function getProductReviews(env, productId) {
     return review;
   });
 
-  return json({ reviews });
+  const responseData = { reviews };
+  if (env.PAGE_CACHE) {
+    try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+  }
+
+  return json(responseData);
 }
 
 export async function getReviewMigrationStatus(env) {

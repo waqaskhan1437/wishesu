@@ -233,18 +233,21 @@ export async function purgeKVCache(env, path = null) {
     if (path) {
       await env.PAGE_CACHE.delete(`page_html:${path}`);
     } else {
-      // Purge all keys starting with page_html:
-      let list;
-      let cursor;
-      do {
-        list = await env.PAGE_CACHE.list({ prefix: 'page_html:', cursor });
-        if (list && list.keys) {
-          for (const key of list.keys) {
-            await env.PAGE_CACHE.delete(key.name);
+      // Purge all keys starting with page_html: and api_cache:
+      const prefixes = ['page_html:', 'api_cache:'];
+      for (const prefix of prefixes) {
+        let list;
+        let cursor;
+        do {
+          list = await env.PAGE_CACHE.list({ prefix, cursor });
+          if (list && list.keys) {
+            for (const key of list.keys) {
+              await env.PAGE_CACHE.delete(key.name);
+            }
           }
-        }
-        cursor = list && !list.list_complete ? list.cursor : null;
-      } while (cursor);
+          cursor = list && !list.list_complete ? list.cursor : null;
+        } while (cursor);
+      }
     }
   } catch (e) {
     console.error('KV Cache purge error:', e);
@@ -870,11 +873,23 @@ const BRANDING_CACHE_TTL = 300000; // 5 minutes
  * OPTIMIZED: In-memory caching to reduce DB queries
  */
 export async function getBrandingSettings(env) {
+  const kvKey = 'api_cache:settings:branding';
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return json(JSON.parse(cached));
+      }
+    } catch(e) {}
+  }
+
   const now = Date.now();
 
   // Return cached data if still valid
   if (brandingCache && (now - brandingCacheTime) < BRANDING_CACHE_TTL) {
-    return json({ success: true, branding: brandingCache });
+    const resp = { success: true, branding: brandingCache };
+    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    return json(resp);
   }
 
   try {
@@ -882,11 +897,15 @@ export async function getBrandingSettings(env) {
     if (row?.value) {
       brandingCache = JSON.parse(row.value);
       brandingCacheTime = now;
-      return json({ success: true, branding: brandingCache });
+      const resp = { success: true, branding: brandingCache };
+      if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+      return json(resp);
     }
     brandingCache = { logo_url: '', favicon_url: '' };
     brandingCacheTime = now;
-    return json({ success: true, branding: brandingCache });
+    const resp = { success: true, branding: brandingCache };
+    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    return json(resp);
   } catch (e) {
     console.error('Get branding error:', e);
     return json({ success: true, branding: { logo_url: '', favicon_url: '' } });
@@ -995,19 +1014,33 @@ function sanitizePublicSiteComponents(components) {
 export async function getSiteComponents(env, options = {}) {
   const publicView = options.publicView === true;
 
+  const kvKey = `api_cache:settings:components:${publicView}`;
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return json(JSON.parse(cached));
+      }
+    } catch(e) {}
+  }
+
   try {
     const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('site_components').first();
     if (row && row.value) {
       try {
         const components = normalizeSiteComponentsPayload(JSON.parse(row.value));
-        return json({
+        const resp = {
           components: publicView ? sanitizePublicSiteComponents(components) : components
-        });
+        };
+        if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+        return json(resp);
       } catch (e) {
         return json({ components: null });
       }
     }
-    return json({ components: null });
+    const resp = { components: null };
+    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    return json(resp);
   } catch (e) {
     console.error('Failed to get components:', e);
     // Return null components if table doesn't exist yet or query fails

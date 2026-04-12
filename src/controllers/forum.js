@@ -258,11 +258,21 @@ async function ensureForumTables(env) {
  */
 export async function getPublishedQuestions(env, url) {
   try {
-    await ensureForumTables(env);
-    
     const page = parseInt(url.searchParams.get('page') || '1');
     const limit = parseInt(url.searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
+
+    const kvKey = `api_cache:forum:published:${page}:${limit}`;
+    if (env.PAGE_CACHE) {
+      try {
+        const cached = await env.PAGE_CACHE.get(kvKey);
+        if (cached) {
+          return cachedJson(JSON.parse(cached), 120);
+        }
+      } catch(e) {}
+    }
+
+    await ensureForumTables(env);
 
     // OPTIMIZED: Run count and data queries in parallel
     const [countResult, result] = await Promise.all([
@@ -278,8 +288,7 @@ export async function getPublishedQuestions(env, url) {
     
     const total = countResult?.total || 0;
 
-    // Cache for 2 minutes
-    return cachedJson({
+    const responseData = {
       success: true,
       questions: result.results || [],
       pagination: {
@@ -290,7 +299,14 @@ export async function getPublishedQuestions(env, url) {
         hasNext: offset + limit < total,
         hasPrev: page > 1
       }
-    }, 120);
+    };
+
+    if (env.PAGE_CACHE) {
+      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+    }
+
+    // Cache for 2 minutes
+    return cachedJson(responseData, 120);
   } catch (err) {
     console.error('getPublishedQuestions error:', err);
     return json({ error: err.message, questions: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false, hasPrev: false } }, 500);
@@ -302,6 +318,16 @@ export async function getPublishedQuestions(env, url) {
  */
 export async function getQuestion(env, slug) {
   try {
+    const kvKey = `api_cache:forum:get:${slug}`;
+    if (env.PAGE_CACHE) {
+      try {
+        const cached = await env.PAGE_CACHE.get(kvKey);
+        if (cached) {
+          return json(JSON.parse(cached));
+        }
+      } catch(e) {}
+    }
+
     await ensureForumTables(env);
 
     const question = await env.DB.prepare(`
@@ -320,11 +346,17 @@ export async function getQuestion(env, slug) {
       ORDER BY created_at ASC
     `).bind(question.id).all();
 
-    return json({
+    const responseData = {
       success: true,
       question,
       replies: replies.results || []
-    });
+    };
+
+    if (env.PAGE_CACHE) {
+      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+    }
+
+    return json(responseData);
   } catch (err) {
     return json({ error: err.message }, 500);
   }
@@ -335,6 +367,16 @@ export async function getQuestion(env, slug) {
  */
 export async function getQuestionById(env, id) {
   try {
+    const kvKey = `api_cache:forum:getById:${id}`;
+    if (env.PAGE_CACHE) {
+      try {
+        const cached = await env.PAGE_CACHE.get(kvKey);
+        if (cached) {
+          return json(JSON.parse(cached));
+        }
+      } catch(e) {}
+    }
+
     await ensureForumTables(env);
     
     if (!id) {
@@ -349,10 +391,16 @@ export async function getQuestionById(env, id) {
       return json({ error: 'Question not found' }, 404);
     }
 
-    return json({
+    const responseData = {
       success: true,
       question
-    });
+    };
+
+    if (env.PAGE_CACHE) {
+      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+    }
+
+    return json(responseData);
   } catch (err) {
     return json({ error: err.message }, 500);
   }

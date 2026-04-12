@@ -130,12 +130,26 @@ export async function getProducts(env, url) {
   const offset = (page - 1) * limit;
   const filter = params.get('filter') || 'all';
 
+  const kvKey = `api_cache:products:list:${page}:${limit}:${filter}`;
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return cachedJson(JSON.parse(cached), 120);
+      }
+    } catch(e) {}
+  }
+
   // Cache key based on params
   const now = Date.now();
 
   // Return cached data ONLY if no specific limit/filter provided (default view)
   if (!limitStr && filter === 'all' && productsCache && (now - productsCacheTime) < PRODUCTS_CACHE_TTL) {
-    return cachedJson({ products: productsCache, pagination: { page: 1, limit: 1000, total: productsCache.length, pages: 1 } }, 120);
+    const defaultData = { products: productsCache, pagination: { page: 1, limit: 1000, total: productsCache.length, pages: 1 } };
+    if (env.PAGE_CACHE) {
+      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(defaultData), { expirationTtl: 86400 }); } catch(e) {}
+    }
+    return cachedJson(defaultData, 120);
   }
 
   // Build Query
@@ -174,8 +188,7 @@ export async function getProducts(env, url) {
     productsCacheTime = Date.now();
   }
 
-  // Cache for 2 minutes on edge
-  return cachedJson({
+  const responseData = {
     products,
     pagination: {
       page,
@@ -183,7 +196,16 @@ export async function getProducts(env, url) {
       total,
       pages: Math.ceil(total / limit)
     }
-  }, 120);
+  };
+
+  if (env.PAGE_CACHE) {
+    try {
+      await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 });
+    } catch(e) {}
+  }
+
+  // Cache for 2 minutes on edge
+  return cachedJson(responseData, 120);
 }
 
 /**
@@ -208,6 +230,17 @@ export async function getProductsList(env) {
  */
 export async function getProduct(env, id, opts = {}) {
   const includeHidden = !!opts.includeHidden;
+
+  const kvKey = `api_cache:products:get:${id}:${includeHidden}`;
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return json(JSON.parse(cached));
+      }
+    } catch(e) {}
+  }
+
   const visibilitySql = includeHidden ? '' : ` AND ${buildPublicProductStatusWhere('status')}`;
   let row;
   if (isNaN(Number(id))) {
@@ -256,7 +289,7 @@ export async function getProduct(env, id, opts = {}) {
   // Extract delivery_time_days from normal_delivery_text (stores days as number string)
   const deliveryTimeDays = parseInt(row.normal_delivery_text) || 1;
   
-  return json({
+  const responseData = {
     product: {
       ...row,
       delivery_time_days: deliveryTimeDays,
@@ -266,7 +299,15 @@ export async function getProduct(env, id, opts = {}) {
       reviews: reviews
     },
     addons
-  });
+  };
+
+  if (env.PAGE_CACHE) {
+    try {
+      await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 });
+    } catch(e) {}
+  }
+
+  return json(responseData);
 }
 
 /**

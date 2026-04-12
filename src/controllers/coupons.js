@@ -49,11 +49,23 @@ export async function getCoupons(env) {
  * OPTIMIZED: With in-memory caching
  */
 export async function getActiveCoupons(env) {
+  const kvKey = 'api_cache:coupons:active';
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return cachedJson(JSON.parse(cached), 60);
+      }
+    } catch(e) {}
+  }
+
   const now = Date.now();
   
   // Return cached if valid
   if (couponsCache && (now - couponsCacheTime) < COUPONS_CACHE_TTL) {
-    return cachedJson({ success: true, coupons: couponsCache }, 60);
+    const resp = { success: true, coupons: couponsCache };
+    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    return cachedJson(resp, 60);
   }
   
   try {
@@ -69,7 +81,9 @@ export async function getActiveCoupons(env) {
     couponsCache = result.results || [];
     couponsCacheTime = now;
     
-    return cachedJson({ success: true, coupons: couponsCache }, 60);
+    const resp = { success: true, coupons: couponsCache };
+    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    return cachedJson(resp, 60);
   } catch (e) {
     console.error('Get active coupons error:', e);
     return json({ success: true, coupons: [] });

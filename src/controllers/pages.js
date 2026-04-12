@@ -67,6 +67,16 @@ async function freeHomeSlugForPage(env, targetId = null) {
  * Get active pages (public - cached)
  */
 export async function getPages(env) {
+  const kvKey = 'api_cache:pages:list';
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return cachedJson(JSON.parse(cached), 120);
+      }
+    } catch(e) {}
+  }
+
   const r = await env.DB.prepare(
     'SELECT id, slug, title, meta_description, page_type, is_default, created_at, updated_at FROM pages WHERE status = ? ORDER BY id DESC'
   ).bind('published').all();
@@ -77,8 +87,13 @@ export async function getPages(env) {
     return page;
   });
 
+  const responseData = { pages };
+  if (env.PAGE_CACHE) {
+    try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+  }
+
   // Cache for 2 minutes
-  return cachedJson({ pages }, 120);
+  return cachedJson(responseData, 120);
 }
 
 /**
@@ -144,19 +159,44 @@ export async function getPagesList(env) {
  * Get page by slug
  */
 export async function getPage(env, slug) {
+  const kvKey = `api_cache:pages:get:${slug}`;
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return json(JSON.parse(cached));
+      }
+    } catch(e) {}
+  }
+
   const row = await env.DB.prepare('SELECT * FROM pages WHERE slug = ?').bind(slug).first();
   if (!row) return json({ error: 'Page not found' }, 404);
 
   if (row.created_at) row.created_at = toISO8601(row.created_at);
   if (row.updated_at) row.updated_at = toISO8601(row.updated_at);
 
-  return json({ page: row });
+  const responseData = { page: row };
+  if (env.PAGE_CACHE) {
+    try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+  }
+
+  return json(responseData);
 }
 
 /**
  * Get default page by type
  */
 export async function getDefaultPage(env, pageType) {
+  const kvKey = `api_cache:pages:default:${pageType}`;
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return json(JSON.parse(cached));
+      }
+    } catch(e) {}
+  }
+
   try {
     const row = await env.DB.prepare(
       'SELECT * FROM pages WHERE page_type = ? AND is_default = 1 AND status = ?'
@@ -168,7 +208,12 @@ export async function getDefaultPage(env, pageType) {
     if (row.updated_at) row.updated_at = toISO8601(row.updated_at);
     row.public_url = isRootHomePage(row.page_type, row.is_default) ? '/' : `/${row.slug}`;
 
-    return json({ page: row });
+    const responseData = { page: row };
+    if (env.PAGE_CACHE) {
+      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+    }
+
+    return json(responseData);
   } catch (e) {
     // Columns might not exist yet
     return json({ page: null });

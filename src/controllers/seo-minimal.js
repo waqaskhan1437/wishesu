@@ -84,8 +84,21 @@ async function ensureTable(env) {
  * Get settings with cache
  */
 export async function getSettings(env) {
+  const kvKey = 'api_cache:settings:seo_minimal';
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(kvKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch(e) {}
+  }
+
   const now = Date.now();
-  if (cache && (now - cacheTime) < TTL) return cache;
+  if (cache && (now - cacheTime) < TTL) {
+    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(cache), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    return cache;
+  }
 
   await ensureTable(env);
 
@@ -93,6 +106,7 @@ export async function getSettings(env) {
     const row = await env.DB.prepare('SELECT * FROM seo_minimal WHERE id = 1').first();
     cache = row || DEFAULT;
     cacheTime = now;
+    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(cache), { expirationTtl: 86400 * 7 }); } catch(e) {} }
     return cache;
   } catch (e) {
     return DEFAULT;
