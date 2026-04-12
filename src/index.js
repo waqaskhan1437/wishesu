@@ -1615,18 +1615,49 @@ function hasGlobalFooterMarkup(html) {
 
 function injectMarkupIntoSlot(html, slotId, markup) {
   if (!html || !slotId || !markup) return html;
-  const slotRe = new RegExp(
-    `<([a-zA-Z0-9:-]+)([^>]*)\\bid=["']${slotId}["']([^>]*)>[\\s\\S]*?<\\/\\1>`,
-    'i'
-  );
-  if (!slotRe.test(html)) return html;
-  return String(html).replace(slotRe, (_full, tagName, before = '', after = '') => {
-    const attrsBase = `${before} id="${slotId}"${after}`;
-    const attrs = /\bdata-injected\s*=/.test(attrsBase)
-      ? attrsBase
-      : `${attrsBase} data-injected="1"`;
-    return `<${tagName}${attrs}>${markup}</${tagName}>`;
-  });
+  
+  // Safe manual string parsing to avoid Regex backreference ( \1 ) and catastrophic backtracking
+  const source = String(html);
+  
+  let idAttr = `id="${slotId}"`;
+  let idx = source.indexOf(idAttr);
+  if (idx === -1) {
+    idAttr = `id='${slotId}'`;
+    idx = source.indexOf(idAttr);
+  }
+  if (idx === -1) return source;
+
+  // Backtrack to find `<tag`
+  let startIdx = idx;
+  while (startIdx > 0 && source[startIdx] !== '<') {
+    startIdx--;
+  }
+  if (source[startIdx] !== '<') return source;
+
+  // Find the end of opening tag `>`
+  const openTagEnd = source.indexOf('>', idx);
+  if (openTagEnd === -1) return source;
+
+  // Extract tag name
+  const tagMatch = source.substring(startIdx, idx).match(/^<([a-zA-Z0-9:-]+)/);
+  if (!tagMatch) return source;
+  const tagName = tagMatch[1];
+
+  // Find closing tag `</tagName>`
+  const closeTag = `</${tagName}>`;
+  const closeIdx = source.indexOf(closeTag, openTagEnd);
+  if (closeIdx === -1) return source;
+
+  const before = source.substring(0, startIdx);
+  const tagAttrsBase = source.substring(startIdx + 1, openTagEnd);
+  
+  const finalAttrs = tagAttrsBase.includes('data-injected=') 
+    ? tagAttrsBase 
+    : `${tagAttrsBase} data-injected="1"`;
+
+  const after = source.substring(closeIdx + closeTag.length);
+
+  return `${before}<${finalAttrs}>${markup}${closeTag}${after}`;
 }
 
 function injectGlobalHeaderSsr(html, headerCode) {
