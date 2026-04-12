@@ -165,7 +165,7 @@ test('products archive route renders product cards on server', async () => {
 test('legacy checkout alias redirects to canonical SSR product route', async () => {
   const response = await callRoute('/checkout?id=7');
   assert.equal(response.status, 302);
-  assert.equal(response.headers.get('location'), 'https://example.com/product-7/birthday-blast');
+  assert.equal(response.headers.get('location'), 'https://example.com/product/birthday-blast');
 });
 
 test('legacy buyer order alias redirects to SSR order route', async () => {

@@ -527,9 +527,9 @@ test('legacy product routes redirect to canonical product URLs', async () => {
   assert.equal(fromId.status, 301);
   assert.equal(fromSlug.status, 301);
   assert.equal(fromBareCanonical.status, 301);
-  assert.equal(fromId.headers.get('location'), 'https://example.com/product-62/pure-magic');
-  assert.equal(fromSlug.headers.get('location'), 'https://example.com/product-62/pure-magic');
-  assert.equal(fromBareCanonical.headers.get('location'), 'https://example.com/product-62/pure-magic');
+  assert.equal(fromId.headers.get('location'), 'https://example.com/product/pure-magic');
+  assert.equal(fromSlug.headers.get('location'), 'https://example.com/product/pure-magic');
+  assert.equal(fromBareCanonical.headers.get('location'), 'https://example.com/product/pure-magic');
 });
 
 test('terms fallback page renders without redirect', async () => {

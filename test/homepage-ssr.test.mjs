@@ -70,7 +70,7 @@ test('renderHomepageHeroPlayerSsr renders first featured video and dots', () => 
   assert.match(hero.innerHtml, /hero-player-stage/);
   assert.match(hero.innerHtml, /youtube\.com\/embed\/abc123XYZ/);
   assert.match(hero.innerHtml, /hero-player-dot active/);
-  assert.equal(hero.targetHref, '/product-10/birthday-surprise');
+  assert.equal(hero.targetHref, '/product/birthday-surprise');
 });
 
 test('renderLegacyHomepageHeroPlayerSsr renders stage, thumbnails, dots, and info', () => {
@@ -79,7 +79,7 @@ test('renderLegacyHomepageHeroPlayerSsr renders stage, thumbnails, dots, and inf
   assert.match(hero.thumbnailsHtml, /player-thumb active/);
   assert.match(hero.dotsHtml, /hero-player-dot active/);
   assert.match(hero.infoHtml, /Birthday Surprise/);
-  assert.equal(hero.targetHref, '/product-10/birthday-surprise');
+  assert.equal(hero.targetHref, '/product/birthday-surprise');
 });
 
 test('renderLegacyHomepageProductSliderSsr renders slider cards for legacy homepage', () => {
