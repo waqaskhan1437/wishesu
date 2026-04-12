@@ -6356,7 +6356,6 @@ if (method === 'GET' || method === 'HEAD') {
                 
                 // Store in cache asynchronously
                 ctx.waitUntil(caches.default.put(cacheKey, cacheResponse));
-                console.log('Cached response for:', req.url);
               } catch (cacheError) {
                 console.warn('Cache storage failed:', cacheError);
                 // Continue even if caching fails
@@ -6421,7 +6420,6 @@ if (method === 'GET' || method === 'HEAD') {
   // Keeps DB connection warm and prevents cold start issues
   async scheduled(event, env, ctx) {
     setVersion(env.VERSION);
-    console.log('Cron job started:', event.cron, 'at', new Date().toISOString());
 
     try {
       if (env.DB) {
@@ -6444,13 +6442,10 @@ if (method === 'GET' || method === 'HEAD') {
             const backupResp = await createBackupApi(env, { trigger: 'cron', base_url: baseUrl });
             if (!backupResp?.ok) {
               const errBody = await backupResp.text().catch(() => '');
-              console.log('Daily backup API returned non-OK:', backupResp?.status, errBody);
             } else {
               const payload = await backupResp.clone().json().catch(() => ({}));
-              console.log('Daily backup created:', payload?.id || 'unknown-id');
             }
           } catch (e) {
-            console.log('Daily backup failed:', e?.message || e);
           }
         }
 
@@ -6466,9 +6461,7 @@ if (method === 'GET' || method === 'HEAD') {
             env.DB.prepare('SELECT id FROM blogs WHERE status = ? LIMIT 1').bind('published').first().catch(() => null),
             env.DB.prepare('SELECT id FROM forum_questions LIMIT 1').first().catch(() => null)
           ]);
-          console.log('Daily maintenance DB health check completed');
         } else {
-          console.log('DB connection warmed with lightweight ping');
         }
 
         // Cleanup expired Whop checkout sessions (daily cron only)
@@ -6477,9 +6470,7 @@ if (method === 'GET' || method === 'HEAD') {
           const result = await cleanupExpired(env);
           try {
             const data = await result.json();
-            console.log('Cleanup result:', data);
           } catch (_) {
-            console.log('Cleanup finished (non-JSON response)');
           }
         }
       }

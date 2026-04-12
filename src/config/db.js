@@ -419,7 +419,6 @@ export async function initDB(env, ctx) {
       if (env.PAGE_CACHE && ctx && ctx.waitUntil) {
         ctx.waitUntil(env.PAGE_CACHE.put('sys_db_init_v1', 'true', { expirationTtl: 86400 * 30 }));
       }
-      console.log(`DB init completed in ${Date.now() - initStartTime}ms`);
 
       // Run migrations and page migrations asynchronously (background)
       if (!migrationsDone) {
@@ -467,7 +466,6 @@ async function runPagesMigration(env) {
   for (const m of pagesMigrations) {
     try {
       await env.DB.prepare(`ALTER TABLE pages ADD COLUMN ${m.column} ${m.type}`).run();
-      console.log(`Added pages.${m.column}`);
     } catch (e) {
       // Column already exists - this is expected
     }

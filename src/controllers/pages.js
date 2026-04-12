@@ -335,29 +335,31 @@ export async function savePage(env, body) {
       return json({ error: 'page not found' }, 404);
     }
 
-    let slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(finalSlug).first();
     let baseSlug = finalSlug;
     let idx = 1;
-    while (slugOwner && Number(slugOwner.id) !== updateId) {
-      finalSlug = `${baseSlug}-${idx++}`;
-      slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(finalSlug).first();
-    }
-
     await clearDefaultsIfNeeded();
 
-    await env.DB.prepare(
-      'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, feature_image_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-    ).bind(
-      finalSlug,
-      body.title,
-      body.content || '',
-      body.meta_description || '',
-      pageType,
-      isDefault,
-      body.feature_image_url || '',
-      body.status || 'published',
-      updateId
-    ).run();
+    while (true) {
+      try {
+        await env.DB.prepare(
+          'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, feature_image_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+        ).bind(
+          finalSlug,
+          body.title,
+          body.content || '',
+          body.meta_description || '',
+          pageType,
+          isDefault,
+          body.feature_image_url || '',
+          body.status || 'published',
+          updateId
+        ).run();
+        break;
+      } catch (err) {
+        if (!err.message.includes('UNIQUE constraint')) throw err;
+        finalSlug = `${baseSlug}-${idx++}`;
+      }
+    }
     return json({ success: true, id: updateId, slug: finalSlug, public_url: forcedHomeSlug ? '/' : `/${finalSlug}` });
   }
 
@@ -367,46 +369,57 @@ export async function savePage(env, body) {
     if (existingBySlug) {
       await clearDefaultsIfNeeded();
 
-      await env.DB.prepare(
-        'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, feature_image_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-      ).bind(
-        finalSlug,
-        body.title,
-        body.content || '',
-        body.meta_description || '',
-        pageType,
-        isDefault,
-        body.feature_image_url || '',
-        body.status || 'published',
-        existingBySlug.id
-      ).run();
+      let baseSlug = finalSlug;
+      let idx = 1;
+      while (true) {
+        try {
+          await env.DB.prepare(
+            'UPDATE pages SET slug=?, title=?, content=?, meta_description=?, page_type=?, is_default=?, feature_image_url=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+          ).bind(
+            finalSlug,
+            body.title,
+            body.content || '',
+            body.meta_description || '',
+            pageType,
+            isDefault,
+            body.feature_image_url || '',
+            body.status || 'published',
+            existingBySlug.id
+          ).run();
+          break;
+        } catch (err) {
+          if (!err.message.includes('UNIQUE constraint')) throw err;
+          finalSlug = `${baseSlug}-${idx++}`;
+        }
+      }
       return json({ success: true, id: existingBySlug.id, slug: finalSlug, public_url: forcedHomeSlug ? '/' : `/${finalSlug}` });
     }
   } catch (e) {
     // ignore errors from lookup; fall through to insert below
   }
 
-  // Ensure slug uniqueness for new pages
-  let uniqueSlug = finalSlug;
-  if (!forcedHomeSlug) {
-    let idx = 1;
-    while (true) {
-      const exists = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(uniqueSlug).first();
-      if (!exists) break;
-      uniqueSlug = `${finalSlug}-${idx++}`;
-    }
-  } else {
-    const existingHome = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind('home').first();
-    if (existingHome) {
-      return json({ error: 'default home page could not claim the home slug' }, 409);
-    }
-  }
-
   await clearDefaultsIfNeeded();
 
-  const r = await env.DB.prepare(
-    'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(uniqueSlug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published').run();
+  let uniqueSlug = finalSlug;
+  let r;
+  let insertIdx = 1;
+  while (true) {
+    try {
+      if (forcedHomeSlug && uniqueSlug === 'home') {
+        const existingHome = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind('home').first();
+        if (existingHome) {
+          return json({ error: 'default home page could not claim the home slug' }, 409);
+        }
+      }
+      r = await env.DB.prepare(
+        'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(uniqueSlug, body.title, body.content || '', body.meta_description || '', pageType, isDefault, body.feature_image_url || '', body.status || 'published').run();
+      break;
+    } catch (err) {
+      if (!err.message.includes('UNIQUE constraint') || forcedHomeSlug) throw err;
+      uniqueSlug = `${finalSlug}-${insertIdx++}`;
+    }
+  }
   return json({ success: true, id: r.meta?.last_row_id, slug: uniqueSlug, public_url: forcedHomeSlug ? '/' : `/${uniqueSlug}` });
 }
 
@@ -456,26 +469,29 @@ export async function savePageBuilder(env, body) {
   }
 
   if (existing) {
-    let slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(name).first();
     let baseName = name;
     let nameIdx = 1;
-    while (slugOwner && Number(slugOwner.id) !== Number(existing.id)) {
-      name = `${baseName}-${nameIdx++}`;
-      slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(name).first();
-    }
-
     await clearDefaultsIfNeeded();
 
-    // Try with new columns first, fallback to old schema
-    try {
-      await env.DB.prepare(
-        'UPDATE pages SET slug=?, content=?, page_type=?, is_default=?, feature_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-      ).bind(name, content, pageType, isDefault, body.feature_image_url || '', existing.id).run();
-    } catch (e) {
-      // Fallback: columns don't exist, use basic update
-      await env.DB.prepare(
-        'UPDATE pages SET slug=?, content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
-      ).bind(name, content, existing.id).run();
+    while (true) {
+      try {
+        // Try with new columns first, fallback to old schema
+        try {
+          await env.DB.prepare(
+            'UPDATE pages SET slug=?, content=?, page_type=?, is_default=?, feature_image_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+          ).bind(name, content, pageType, isDefault, body.feature_image_url || '', existing.id).run();
+        } catch (e) {
+          if (e.message.includes('UNIQUE constraint')) throw e; // Pass unique constraints upwards
+          // Fallback: columns don't exist, use basic update
+          await env.DB.prepare(
+            'UPDATE pages SET slug=?, content=?, updated_at=CURRENT_TIMESTAMP WHERE id=?'
+          ).bind(name, content, existing.id).run();
+        }
+        break;
+      } catch (err) {
+        if (!err.message.includes('UNIQUE constraint')) throw err;
+        name = `${baseName}-${nameIdx++}`;
+      }
     }
     return json({ success: true, id: existing.id, slug: name, public_url: forcedHomeSlug ? '/' : `/${name}` });
   }
@@ -483,19 +499,30 @@ export async function savePageBuilder(env, body) {
   // If setting as default, clear other defaults first
   await clearDefaultsIfNeeded();
 
-  // Try with new columns first, fallback to old schema
-  try {
-    const r = await env.DB.prepare(
-      'INSERT INTO pages (slug, title, content, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(name, name, content, pageType, isDefault, body.feature_image_url || '', 'published').run();
-    return json({ success: true, id: r.meta?.last_row_id, slug: name, public_url: forcedHomeSlug ? '/' : `/${name}` });
-  } catch (e) {
-    // Fallback: columns don't exist, use basic insert
-    const r = await env.DB.prepare(
-      'INSERT INTO pages (slug, title, content, status) VALUES (?, ?, ?, ?)'
-    ).bind(name, name, content, 'published').run();
-    return json({ success: true, id: r.meta?.last_row_id, slug: name, public_url: forcedHomeSlug ? '/' : `/${name}` });
+  let baseName = name;
+  let insertIdx = 1;
+  let r;
+  while (true) {
+    try {
+      // Try with new columns first, fallback to old schema
+      try {
+        r = await env.DB.prepare(
+          'INSERT INTO pages (slug, title, content, page_type, is_default, feature_image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).bind(name, name, content, pageType, isDefault, body.feature_image_url || '', 'published').run();
+      } catch (e) {
+        if (e.message.includes('UNIQUE constraint')) throw e; // Pass unique constraints upwards
+        // Fallback: columns don't exist, use basic insert
+        r = await env.DB.prepare(
+          'INSERT INTO pages (slug, title, content, status) VALUES (?, ?, ?, ?)'
+        ).bind(name, name, content, 'published').run();
+      }
+      break;
+    } catch (err) {
+      if (!err.message.includes('UNIQUE constraint') || forcedHomeSlug) throw err;
+      name = `${baseName}-${insertIdx++}`;
+    }
   }
+  return json({ success: true, id: r.meta?.last_row_id, slug: name, public_url: forcedHomeSlug ? '/' : `/${name}` });
 }
 
 /**
@@ -636,24 +663,27 @@ export async function duplicatePage(env, body) {
   const baseSlug = row.slug || 'page';
   let newSlug = baseSlug + '-copy';
   let idx = 1;
-  let exists = await env.DB.prepare('SELECT slug FROM pages WHERE slug = ?').bind(newSlug).first();
-  while (exists) {
-    newSlug = `${baseSlug}-copy${idx}`;
-    idx++;
-    exists = await env.DB.prepare('SELECT slug FROM pages WHERE slug = ?').bind(newSlug).first();
-  }
+  let r;
   
-  const r = await env.DB.prepare(
-    'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    newSlug,
-    (row.title || '') + ' Copy',
-    row.content || '',
-    row.meta_description || '',
-    row.page_type || 'custom',
-    0, // Never copy default status
-    'draft'
-  ).run();
+  while (true) {
+    try {
+      r = await env.DB.prepare(
+        'INSERT INTO pages (slug, title, content, meta_description, page_type, is_default, status) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        newSlug,
+        (row.title || '') + ' Copy',
+        row.content || '',
+        row.meta_description || '',
+        row.page_type || 'custom',
+        0, // Never copy default status
+        'draft'
+      ).run();
+      break;
+    } catch (err) {
+      if (!err.message.includes('UNIQUE constraint')) throw err;
+      newSlug = `${baseSlug}-copy${idx++}`;
+    }
+  }
   
   return json({ success: true, id: r.meta?.last_row_id, slug: newSlug });
 }

@@ -124,13 +124,10 @@ export async function createPayPalOrder(env, body, origin) {
   }
 
   try {
-    console.log('🅿️ PayPal: Getting access token...');
-    console.log('🅿️ Mode:', credentials.mode);
 
     let accessToken;
     try {
       accessToken = await getAccessToken(credentials);
-      console.log('🅿️ Access token obtained successfully');
     } catch (authErr) {
       console.error('🅿️ PayPal auth failed:', authErr.message);
       return json({ error: 'PayPal authentication failed: ' + authErr.message }, 500);
@@ -164,7 +161,6 @@ export async function createPayPalOrder(env, body, origin) {
       }
     };
 
-    console.log('🅿️ Creating PayPal order with payload:', JSON.stringify(orderPayload, null, 2));
 
     // Create order
     const orderResponse = await fetchWithTimeout(`${baseUrl}/v2/checkout/orders`, {
@@ -177,8 +173,6 @@ export async function createPayPalOrder(env, body, origin) {
     }, PAYPAL_API_TIMEOUT);
 
     const responseText = await orderResponse.text();
-    console.log('🅿️ PayPal response status:', orderResponse.status);
-    console.log('🅿️ PayPal response:', responseText);
 
     if (!orderResponse.ok) {
       let errorMessage = 'Failed to create PayPal order';
@@ -228,7 +222,6 @@ export async function createPayPalOrder(env, body, origin) {
         JSON.stringify(sessionMetadata)
       ).run();
     } catch (e) {
-      console.log('Checkout session storage skipped:', e.message);
     }
 
     // Find approval URL
@@ -263,7 +256,6 @@ export async function capturePayPalOrder(env, body) {
   }
 
   try {
-    console.log('🅿️ Capturing PayPal order:', order_id);
 
     const accessToken = await getAccessToken(credentials);
     const baseUrl = getPayPalBaseUrl(credentials.mode);
@@ -278,8 +270,6 @@ export async function capturePayPalOrder(env, body) {
     }, PAYPAL_API_TIMEOUT);
 
     const responseText = await captureResponse.text();
-    console.log('🅿️ Capture response status:', captureResponse.status);
-    console.log('🅿️ Capture response:', responseText);
 
     if (!captureResponse.ok) {
       let errorMessage = 'Payment capture failed';
@@ -304,7 +294,6 @@ export async function capturePayPalOrder(env, body) {
           metadata = JSON.parse(sessionRow.metadata);
         }
       } catch (e) {
-        console.log('Failed to get stored metadata:', e);
       }
 
       // Parse custom_id from PayPal response (minimal data)
@@ -315,7 +304,6 @@ export async function capturePayPalOrder(env, body) {
           customData = JSON.parse(customId);
         }
       } catch (e) {
-        console.log('Failed to parse custom_id:', e);
       }
 
       // Create order in database
@@ -381,13 +369,11 @@ export async function capturePayPalOrder(env, body) {
             deliveryTimeMinutes = calculateDeliveryMinutes(product);
           }
         } catch (e) {
-          console.log('Could not get product delivery time for PayPal order:', e);
           if (!deliveryTimeMinutes || deliveryTimeMinutes <= 0) {
             deliveryTimeMinutes = 60;
           }
         }
       }
-      console.log('🅿️ Delivery time for PayPal order:', deliveryTimeMinutes, 'minutes');
 
       const encryptedData = {
         email: buyerEmail,
@@ -406,7 +392,6 @@ export async function capturePayPalOrder(env, body) {
         encryptedData
       });
 
-      console.log('🅿️ Order created:', orderId, 'Delivery:', deliveryTimeMinutes, 'minutes');
 
       // Send transactional buyer/admin emails via Brevo (best effort)
       try {
@@ -466,7 +451,6 @@ export async function handlePayPalWebhook(env, body, headers, rawBody) {
   const eventType = body.event_type;
   const resource = body.resource;
   
-  console.log('PayPal webhook received:', eventType, resource?.id);
 
   // NOTE: Full PayPal signature verification requires fetching PayPal public keys
   // and verifying the signature against the raw body. 
@@ -476,7 +460,6 @@ export async function handlePayPalWebhook(env, body, headers, rawBody) {
     const captureId = resource.id;
     const orderId = resource.supplementary_data?.related_ids?.order_id || resource.parent_payment;
     
-    console.log('💰 PayPal Payment Captured:', captureId, 'Order:', orderId);
     
     // Check if order already exists (idempotency)
     try {
@@ -485,7 +468,6 @@ export async function handlePayPalWebhook(env, body, headers, rawBody) {
       ).bind(`%"paypalOrderId":"${orderId}"%`).first();
       
       if (existingOrder) {
-        console.log('Order already exists for this PayPal checkout, skipping webhook processing');
         return json({ received: true, duplicate: true });
       }
     } catch (e) {
@@ -510,7 +492,6 @@ export async function handlePayPalWebhook(env, body, headers, rawBody) {
           const amount = resource.amount?.value || metadata.amount || 0;
           const productTitle = String(metadata.productTitle || metadata.product_title || '').trim();
           
-          console.log('🔄 Reconciling missing PayPal order from webhook:', newOrderId);
           
           await createOrderRecord(env, {
             orderId: newOrderId,
@@ -553,7 +534,6 @@ export async function handlePayPalWebhook(env, body, headers, rawBody) {
           await env.DB.prepare(
             'UPDATE orders SET tip_paid = 1, tip_amount = ? WHERE order_id = ?'
           ).bind(parseFloat(resource.amount?.value || metadata.tipAmount || 0), metadata.orderId).run();
-          console.log('✅ Reconciled tip from PayPal webhook:', metadata.orderId);
         }
       }
     } catch (e) {
@@ -613,10 +593,8 @@ export async function savePayPalSettings(env, body) {
       if (existing?.value) {
         const old = JSON.parse(existing.value);
         settings.secret = old.secret || '';
-        console.log('🅿️ Keeping existing secret');
       }
     } catch (e) {
-      console.log('🅿️ No existing settings found');
     }
   }
 
@@ -631,7 +609,6 @@ export async function savePayPalSettings(env, body) {
     'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'
   ).bind('paypal', JSON.stringify(settings)).run();
 
-  console.log('🅿️ PayPal settings saved successfully');
 
   return json({ success: true });
 }

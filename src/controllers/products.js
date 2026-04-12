@@ -326,59 +326,57 @@ export async function saveProduct(env, body) {
   const galleryJson = JSON.stringify(normalizeGalleryImages(body));
   const { hasCreatedAt, hasUpdatedAt } = await getProductTimestampSupport(env);
   
-  // Ensure slug uniqueness
+  const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';
   let baseSlug = slug;
   let slugIdx = 1;
+
   if (body.id) {
-    let exists = await env.DB.prepare('SELECT id FROM products WHERE slug = ? AND id != ?').bind(slug, Number(body.id)).first();
-    while (exists) {
-      slug = `${baseSlug}-${slugIdx++}`;
-      exists = await env.DB.prepare('SELECT id FROM products WHERE slug = ? AND id != ?').bind(slug, Number(body.id)).first();
+    while (true) {
+      try {
+        await env.DB.prepare(`
+          UPDATE products SET title=?, slug=?, description=?, normal_price=?, sale_price=?,
+          instant_delivery=?, normal_delivery_text=?, thumbnail_url=?, video_url=?,
+          gallery_images=?, addons_json=?, seo_title=?, seo_description=?, seo_keywords=?, seo_canonical=?,
+          whop_plan=?, whop_price_map=?, whop_product_id=?${hasUpdatedAt ? ', updated_at=CURRENT_TIMESTAMP' : ''} WHERE id=?
+        `).bind(
+          title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
+          body.instant_delivery ? 1 : 0, String(deliveryDays),
+          body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
+          body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
+          body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || '', Number(body.id)
+        ).run();
+        break;
+      } catch (err) {
+        if (!err.message.includes('UNIQUE constraint')) throw err;
+        slug = `${baseSlug}-${slugIdx++}`;
+      }
     }
-  } else {
-    let exists = await env.DB.prepare('SELECT id FROM products WHERE slug = ?').bind(slug).first();
-    while (exists) {
-      slug = `${baseSlug}-${slugIdx++}`;
-      exists = await env.DB.prepare('SELECT id FROM products WHERE slug = ?').bind(slug).first();
-    }
-  }
-  
-  if (body.id) {
-    // Store delivery_time_days in normal_delivery_text field as days number
-    const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';
-    
-    await env.DB.prepare(`
-      UPDATE products SET title=?, slug=?, description=?, normal_price=?, sale_price=?,
-      instant_delivery=?, normal_delivery_text=?, thumbnail_url=?, video_url=?,
-      gallery_images=?, addons_json=?, seo_title=?, seo_description=?, seo_keywords=?, seo_canonical=?,
-      whop_plan=?, whop_price_map=?, whop_product_id=?${hasUpdatedAt ? ', updated_at=CURRENT_TIMESTAMP' : ''} WHERE id=?
-    `).bind(
-      title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
-      body.instant_delivery ? 1 : 0, String(deliveryDays),
-      body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
-      body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
-      body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || '', Number(body.id)
-    ).run();
     return json({ success: true, id: body.id, slug, url: `/product-${body.id}/${encodeURIComponent(slug)}` });
   }
-  
-  // Store delivery_time_days in normal_delivery_text field as days number
-  const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';
-  
-  const r = await env.DB.prepare(`
-    INSERT INTO products (title, slug, description, normal_price, sale_price,
-    instant_delivery, normal_delivery_text, thumbnail_url, video_url,
-    gallery_images, addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
-    whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''})
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})
-  `).bind(
-    title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
-    body.instant_delivery ? 1 : 0, String(deliveryDays),
-    body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
-    body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
-    body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || ''
-  ).run();
-  const newId = r.meta?.last_row_id;
+
+  let newId;
+  while (true) {
+    try {
+      const r = await env.DB.prepare(`
+        INSERT INTO products (title, slug, description, normal_price, sale_price,
+        instant_delivery, normal_delivery_text, thumbnail_url, video_url,
+        gallery_images, addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
+        whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''})
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})
+      `).bind(
+        title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
+        body.instant_delivery ? 1 : 0, String(deliveryDays),
+        body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
+        body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
+        body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || ''
+      ).run();
+      newId = r.meta?.last_row_id;
+      break;
+    } catch (err) {
+      if (!err.message.includes('UNIQUE constraint')) throw err;
+      slug = `${baseSlug}-${slugIdx++}`;
+    }
+  }
   return json({ success: true, id: newId, slug, url: `/product-${newId}/${encodeURIComponent(slug)}` });
 }
 
@@ -451,43 +449,47 @@ export async function duplicateProduct(env, body) {
   const baseSlug = row.slug || slugifyStr(row.title);
   let newSlug = baseSlug + '-copy';
   let idx = 1;
-  let exists = await env.DB.prepare('SELECT slug FROM products WHERE slug = ?').bind(newSlug).first();
-  while (exists) {
-    newSlug = `${baseSlug}-copy${idx}`;
-    idx++;
-    exists = await env.DB.prepare('SELECT slug FROM products WHERE slug = ?').bind(newSlug).first();
-  }
   const { hasCreatedAt, hasUpdatedAt } = await getProductTimestampSupport(env);
   
-  const r = await env.DB.prepare(
-    `INSERT INTO products (
-      title, slug, description, normal_price, sale_price,
-      instant_delivery, normal_delivery_text, thumbnail_url, video_url,
-      addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
-      whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''}
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})`
-  ).bind(
-    (row.title || '') + ' Copy',
-    newSlug,
-    row.description || '',
-    row.normal_price || 0,
-    row.sale_price || null,
-    row.instant_delivery || 0,
-    row.normal_delivery_text || '',
-    row.thumbnail_url || '',
-    row.video_url || '',
-    row.addons_json || '[]',
-    row.seo_title || '',
-    row.seo_description || '',
-    row.seo_keywords || '',
-    row.seo_canonical || '',
-    row.whop_plan || '',
-    row.whop_price_map || '',
-    row.whop_product_id || '',
-    'draft',
-    0
-  ).run();
-  return json({ success: true, id: r.meta?.last_row_id, slug: newSlug });
+  let newId;
+  while (true) {
+    try {
+      const r = await env.DB.prepare(
+        `INSERT INTO products (
+          title, slug, description, normal_price, sale_price,
+          instant_delivery, normal_delivery_text, thumbnail_url, video_url,
+          addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
+          whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''}
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})`
+      ).bind(
+        (row.title || '') + ' Copy',
+        newSlug,
+        row.description || '',
+        row.normal_price || 0,
+        row.sale_price || null,
+        row.instant_delivery || 0,
+        row.normal_delivery_text || '',
+        row.thumbnail_url || '',
+        row.video_url || '',
+        row.addons_json || '[]',
+        row.seo_title || '',
+        row.seo_description || '',
+        row.seo_keywords || '',
+        row.seo_canonical || '',
+        row.whop_plan || '',
+        row.whop_price_map || '',
+        row.whop_product_id || '',
+        'draft',
+        0
+      ).run();
+      newId = r.meta?.last_row_id;
+      break;
+    } catch (err) {
+      if (!err.message.includes('UNIQUE constraint')) throw err;
+      newSlug = `${baseSlug}-copy${idx++}`;
+    }
+  }
+  return json({ success: true, id: newId, slug: newSlug });
 }
 
 /**

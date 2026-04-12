@@ -216,23 +216,8 @@ export async function saveBlog(env, body) {
         .replace(/-+/g, '-');
     }
 
-    // Ensure slug uniqueness
     let baseSlug = finalSlug;
     let slugIdx = 1;
-    if (id) {
-      let exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ? AND id != ?').bind(finalSlug, Number(id)).first();
-      while (exists) {
-        finalSlug = `${baseSlug}-${slugIdx++}`;
-        exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ? AND id != ?').bind(finalSlug, Number(id)).first();
-      }
-    } else {
-      let exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ?').bind(finalSlug).first();
-      while (exists) {
-        finalSlug = `${baseSlug}-${slugIdx++}`;
-        exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ?').bind(finalSlug).first();
-      }
-    }
-
     const now = Date.now();
 
     if (id) {
@@ -245,58 +230,75 @@ export async function saveBlog(env, body) {
       // Helper: use the new value only if the key was present in the request body
       const pick = (key, fallback) => (key in body) ? (body[key] ?? '') : (fallback ?? '');
 
-      await env.DB.prepare(`
-        UPDATE blogs SET
-          title = ?,
-          slug = ?,
-          description = ?,
-          content = ?,
-          thumbnail_url = ?,
-          custom_css = ?,
-          custom_js = ?,
-          seo_title = ?,
-          seo_description = ?,
-          seo_keywords = ?,
-          status = ?,
-          updated_at = ?
-        WHERE id = ?
-      `).bind(
-        title,
-        finalSlug,
-        pick('description', existing.description),
-        pick('content', existing.content),
-        pick('thumbnail_url', existing.thumbnail_url),
-        pick('custom_css', existing.custom_css),
-        pick('custom_js', existing.custom_js),
-        pick('seo_title', existing.seo_title),
-        pick('seo_description', existing.seo_description),
-        pick('seo_keywords', existing.seo_keywords),
-        pick('status', existing.status),
-        now,
-        id
-      ).run();
+      while (true) {
+        try {
+          await env.DB.prepare(`
+            UPDATE blogs SET
+              title = ?,
+              slug = ?,
+              description = ?,
+              content = ?,
+              thumbnail_url = ?,
+              custom_css = ?,
+              custom_js = ?,
+              seo_title = ?,
+              seo_description = ?,
+              seo_keywords = ?,
+              status = ?,
+              updated_at = ?
+            WHERE id = ?
+          `).bind(
+            title,
+            finalSlug,
+            pick('description', existing.description),
+            pick('content', existing.content),
+            pick('thumbnail_url', existing.thumbnail_url),
+            pick('custom_css', existing.custom_css),
+            pick('custom_js', existing.custom_js),
+            pick('seo_title', existing.seo_title),
+            pick('seo_description', existing.seo_description),
+            pick('seo_keywords', existing.seo_keywords),
+            pick('status', existing.status),
+            now,
+            id
+          ).run();
+          break;
+        } catch (err) {
+          if (!err.message.includes('UNIQUE constraint')) throw err;
+          finalSlug = `${baseSlug}-${slugIdx++}`;
+        }
+      }
 
       return json({ success: true, id, slug: finalSlug });
     } else {
       // Create new blog
-      const result = await env.DB.prepare(`
-        INSERT INTO blogs (title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        title,
-        finalSlug,
-        description || '',
-        content || '',
-        thumbnail_url || '',
-        custom_css || '',
-        custom_js || '',
-        seo_title || '',
-        seo_description || '',
-        seo_keywords || '',
-        status,
-        now,
-        now
-      ).run();
+      let result;
+      while (true) {
+        try {
+          result = await env.DB.prepare(`
+            INSERT INTO blogs (title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            title,
+            finalSlug,
+            description || '',
+            content || '',
+            thumbnail_url || '',
+            custom_css || '',
+            custom_js || '',
+            seo_title || '',
+            seo_description || '',
+            seo_keywords || '',
+            status,
+            now,
+            now
+          ).run();
+          break;
+        } catch (err) {
+          if (!err.message.includes('UNIQUE constraint')) throw err;
+          finalSlug = `${baseSlug}-${slugIdx++}`;
+        }
+      }
 
       return json({ success: true, id: result.meta?.last_row_id, slug: finalSlug });
     }
@@ -396,29 +398,33 @@ export async function duplicateBlog(env, body) {
     }
     let newSlugCandidate = `${baseSlug}-copy`;
     let counter = 1;
-    while (true) {
-      const exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ? LIMIT 1').bind(newSlugCandidate).first();
-      if (!exists) break;
-      newSlugCandidate = `${baseSlug}-copy${counter++}`;
-    }
     const now = Date.now();
-    const result = await env.DB.prepare(`
-      INSERT INTO blogs (title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
-    `).bind(
-      `${original.title} (Copy)`,
-      newSlugCandidate,
-      original.description || '',
-      original.content || '',
-      original.thumbnail_url || '',
-      original.custom_css || '',
-      original.custom_js || '',
-      original.seo_title || '',
-      original.seo_description || '',
-      original.seo_keywords || '',
-      now,
-      now
-    ).run();
+    let result;
+    while (true) {
+      try {
+        result = await env.DB.prepare(`
+          INSERT INTO blogs (title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
+        `).bind(
+          `${original.title} (Copy)`,
+          newSlugCandidate,
+          original.description || '',
+          original.content || '',
+          original.thumbnail_url || '',
+          original.custom_css || '',
+          original.custom_js || '',
+          original.seo_title || '',
+          original.seo_description || '',
+          original.seo_keywords || '',
+          now,
+          now
+        ).run();
+        break;
+      } catch (err) {
+        if (!err.message.includes('UNIQUE constraint')) throw err;
+        newSlugCandidate = `${baseSlug}-copy${counter++}`;
+      }
+    }
 
     return json({ success: true, id: result.meta?.last_row_id, slug: newSlugCandidate });
   } catch (err) {
