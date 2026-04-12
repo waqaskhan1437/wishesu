@@ -1501,30 +1501,48 @@ async function getCachedSettings(env, keys) {
   const now = Date.now();
   const missing = [];
   const result = new Map();
+
   for (const key of keys) {
-    const cached = settingsCache.get(key);
+    const kvCacheKey = `api_cache:ssr:settings:${key}`;
+    const cached = settingsCache.get(kvCacheKey);
     if (cached && (now - cached.ts) < SETTINGS_CACHE_TTL) {
       result.set(key, cached.value);
     } else {
+      try {
+        const kvData = await env.PAGE_CACHE.get(kvCacheKey, 'json');
+        if (kvData !== null) {
+          settingsCache.set(kvCacheKey, { value: kvData.value, ts: now });
+          result.set(key, kvData.value);
+          continue;
+        }
+      } catch (err) {}
       missing.push(key);
     }
   }
+
   if (missing.length > 0 && env?.DB) {
     try {
-      await initDB(env);
       const rows = await env.DB.prepare(
         `SELECT key, value FROM settings WHERE key IN (${missing.map(() => '?').join(',')})`
       ).bind(...missing).all();
+      
+      const foundKeys = new Set();
       for (const row of (rows.results || [])) {
         const k = String(row.key || '');
-        settingsCache.set(k, { value: row.value, ts: now });
+        const kvCacheKey = `api_cache:ssr:settings:${k}`;
+        settingsCache.set(kvCacheKey, { value: row.value, ts: now });
         result.set(k, row.value);
+        foundKeys.add(k);
+        try { await env.PAGE_CACHE.put(kvCacheKey, JSON.stringify({ value: row.value }), { expirationTtl: 86400 * 7 }); } catch (e) {}
       }
+      
       // Cache nulls for missing keys to avoid re-querying
       for (const key of missing) {
-        if (!result.has(key)) {
-          settingsCache.set(key, { value: null, ts: now });
+        if (!foundKeys.has(key)) {
+          const kvCacheKey = `api_cache:ssr:settings:${key}`;
+          settingsCache.set(kvCacheKey, { value: null, ts: now });
           result.set(key, null);
+          try { await env.PAGE_CACHE.put(kvCacheKey, JSON.stringify({ value: null }), { expirationTtl: 86400 * 7 }); } catch (e) {}
         }
       }
     } catch (_) {}
@@ -1674,8 +1692,19 @@ async function getSiteComponentsForSsr(env) {
   if (siteComponentsSsrCache.hasValue && (now - siteComponentsSsrCache.fetchedAt) < SITE_COMPONENTS_SSR_TTL_MS) {
     return siteComponentsSsrCache.value;
   }
+  
+  const kvCacheKey = 'api_cache:ssr:settings:site_components';
   try {
-    await initDB(env);
+    const kvData = await env.PAGE_CACHE.get(kvCacheKey, 'json');
+    if (kvData !== null) {
+      siteComponentsSsrCache.value = kvData.value;
+      siteComponentsSsrCache.fetchedAt = now;
+      siteComponentsSsrCache.hasValue = true;
+      return kvData.value;
+    }
+  } catch (err) {}
+
+  try {
     const row = await env.DB.prepare(
       'SELECT value FROM settings WHERE key = ?'
     ).bind('site_components').first();
@@ -1693,6 +1722,9 @@ async function getSiteComponentsForSsr(env) {
     siteComponentsSsrCache.value = parsed;
     siteComponentsSsrCache.fetchedAt = now;
     siteComponentsSsrCache.hasValue = true;
+    
+    try { await env.PAGE_CACHE.put(kvCacheKey, JSON.stringify({ value: parsed }), { expirationTtl: 86400 * 7 }); } catch (e) {}
+
     return parsed;
   } catch (error) {
     console.warn('Failed to load site components for SSR:', error);
@@ -2361,13 +2393,27 @@ async function queryProductsForComponentSsr(env, options = {}) {
   const filter = String(options.filter || 'all').trim().toLowerCase();
   const requestedIds = normalizeSsrIdList(options.ids);
 
-  // Check cache (skip for ID-based queries as they're less frequent)
-  const cacheKey = requestedIds.length > 0
+  const cacheKeyStr = requestedIds.length > 0
     ? `ids:${requestedIds.join(',')}:${limit}`
     : `${filter}:${page}:${limit}`;
-  const cached = productQueryCache.get(cacheKey);
+  const kvCacheKey = `api_cache:ssr:products:${cacheKeyStr}`;
+
+  // L1: Memory cache
+  const cached = productQueryCache.get(kvCacheKey);
   if (cached && (Date.now() - cached.ts) < PRODUCT_QUERY_CACHE_TTL) {
     return cached.value;
+  }
+
+  // L2: KV cache
+  try {
+    const kvData = await env.PAGE_CACHE.get(kvCacheKey, 'json');
+    if (kvData) {
+      productQueryCache.set(kvCacheKey, { value: kvData, ts: Date.now() });
+      if (productQueryCache.size > 100) productQueryCache.delete(productQueryCache.keys().next().value);
+      return kvData;
+    }
+  } catch (err) {
+    // Ignore KV error
   }
 
   if (requestedIds.length > 0) {
@@ -2422,8 +2468,14 @@ async function queryProductsForComponentSsr(env, options = {}) {
       products: ordered,
       pagination: { page: 1, limit, total: ordered.length, pages: 1 }
     };
-    productQueryCache.set(cacheKey, { value: result, ts: Date.now() });
+    
+    // Save to L1 and L2
+    productQueryCache.set(kvCacheKey, { value: result, ts: Date.now() });
     if (productQueryCache.size > 100) productQueryCache.delete(productQueryCache.keys().next().value);
+    try {
+      await env.PAGE_CACHE.put(kvCacheKey, JSON.stringify(result), { expirationTtl: 86400 * 7 });
+    } catch (e) {}
+
     return result;
   }
 
@@ -2467,16 +2519,46 @@ async function queryProductsForComponentSsr(env, options = {}) {
       pages: Math.max(1, Math.ceil((totalRow?.count || 0) / limit))
     }
   };
-  productQueryCache.set(cacheKey, { value: result, ts: Date.now() });
+  
+  // Save to L1 and L2
+  productQueryCache.set(kvCacheKey, { value: result, ts: Date.now() });
   if (productQueryCache.size > 100) productQueryCache.delete(productQueryCache.keys().next().value);
+  try {
+    await env.PAGE_CACHE.put(kvCacheKey, JSON.stringify(result), { expirationTtl: 86400 * 7 });
+  } catch (e) {}
+
   return result;
 }
+
+const blogQueryCache = new Map();
+const BLOG_QUERY_CACHE_TTL = 3 * 60 * 1000;
 
 async function queryBlogsForComponentSsr(env, options = {}) {
   const limit = normalizeSsrInteger(options.limit, 30, 1, 100);
   const page = normalizeSsrInteger(options.page, 1, 1, 100);
   const offset = (page - 1) * limit;
   const requestedIds = normalizeSsrIdList(options.ids);
+
+  const cacheKeyStr = requestedIds.length > 0
+    ? `ids:${requestedIds.join(',')}:${limit}`
+    : `all:${page}:${limit}`;
+  const kvCacheKey = `api_cache:ssr:blogs:${cacheKeyStr}`;
+
+  // L1: Memory cache
+  const cached = blogQueryCache.get(kvCacheKey);
+  if (cached && (Date.now() - cached.ts) < BLOG_QUERY_CACHE_TTL) {
+    return cached.value;
+  }
+
+  // L2: KV cache
+  try {
+    const kvData = await env.PAGE_CACHE.get(kvCacheKey, 'json');
+    if (kvData) {
+      blogQueryCache.set(kvCacheKey, { value: kvData, ts: Date.now() });
+      if (blogQueryCache.size > 100) blogQueryCache.delete(blogQueryCache.keys().next().value);
+      return kvData;
+    }
+  } catch (err) {}
 
   if (requestedIds.length > 0) {
     const numericIds = requestedIds.filter((item) => /^\d+$/.test(item));
@@ -2511,10 +2593,16 @@ async function queryBlogsForComponentSsr(env, options = {}) {
       .filter(Boolean)
       .slice(0, limit);
 
-    return {
+    const result = {
       blogs,
       pagination: { page: 1, limit, total: blogs.length, totalPages: 1, hasNext: false, hasPrev: false }
     };
+    
+    blogQueryCache.set(kvCacheKey, { value: result, ts: Date.now() });
+    if (blogQueryCache.size > 100) blogQueryCache.delete(blogQueryCache.keys().next().value);
+    try { await env.PAGE_CACHE.put(kvCacheKey, JSON.stringify(result), { expirationTtl: 86400 * 7 }); } catch (e) {}
+
+    return result;
   }
 
   const [countResult, rows] = await Promise.all([
@@ -2529,7 +2617,7 @@ async function queryBlogsForComponentSsr(env, options = {}) {
   ]);
 
   const total = countResult?.total || 0;
-  return {
+  const result = {
     blogs: rows.results || [],
     pagination: {
       page,
@@ -2540,12 +2628,37 @@ async function queryBlogsForComponentSsr(env, options = {}) {
       hasPrev: page > 1
     }
   };
+
+  blogQueryCache.set(kvCacheKey, { value: result, ts: Date.now() });
+  if (blogQueryCache.size > 100) blogQueryCache.delete(blogQueryCache.keys().next().value);
+  try { await env.PAGE_CACHE.put(kvCacheKey, JSON.stringify(result), { expirationTtl: 86400 * 7 }); } catch (e) {}
+
+  return result;
 }
+
+const forumQueryCache = new Map();
+const FORUM_QUERY_CACHE_TTL = 3 * 60 * 1000;
 
 async function queryForumQuestionsForSsr(env, options = {}) {
   const limit = normalizeSsrInteger(options.limit, 20, 1, 100);
   const page = normalizeSsrInteger(options.page, 1, 1, 100);
   const offset = (page - 1) * limit;
+
+  const kvCacheKey = `api_cache:ssr:forum:${page}:${limit}`;
+
+  const cached = forumQueryCache.get(kvCacheKey);
+  if (cached && (Date.now() - cached.ts) < FORUM_QUERY_CACHE_TTL) {
+    return cached.value;
+  }
+
+  try {
+    const kvData = await env.PAGE_CACHE.get(kvCacheKey, 'json');
+    if (kvData) {
+      forumQueryCache.set(kvCacheKey, { value: kvData, ts: Date.now() });
+      if (forumQueryCache.size > 100) forumQueryCache.delete(forumQueryCache.keys().next().value);
+      return kvData;
+    }
+  } catch (err) {}
 
   const [countResult, rows] = await Promise.all([
     env.DB.prepare(`SELECT COUNT(*) as total FROM forum_questions WHERE status = 'approved'`).first(),
@@ -2559,7 +2672,7 @@ async function queryForumQuestionsForSsr(env, options = {}) {
   ]);
 
   const total = countResult?.total || 0;
-  return {
+  const result = {
     questions: rows.results || [],
     pagination: {
       page,
@@ -2570,7 +2683,16 @@ async function queryForumQuestionsForSsr(env, options = {}) {
       hasPrev: page > 1
     }
   };
+
+  forumQueryCache.set(kvCacheKey, { value: result, ts: Date.now() });
+  if (forumQueryCache.size > 100) forumQueryCache.delete(forumQueryCache.keys().next().value);
+  try { await env.PAGE_CACHE.put(kvCacheKey, JSON.stringify(result), { expirationTtl: 86400 * 7 }); } catch (e) {}
+
+  return result;
 }
+
+const reviewQueryCache = new Map();
+const REVIEW_QUERY_CACHE_TTL = 3 * 60 * 1000;
 
 async function queryReviewsForSsr(env, options = {}) {
   const limit = normalizeSsrInteger(options.limit, 6, 1, 50);
@@ -2579,6 +2701,23 @@ async function queryReviewsForSsr(env, options = {}) {
   const rating = options.rating == null ? null : normalizeSsrInteger(options.rating, null, 1, 5);
   const minRating = options.minRating == null ? null : normalizeSsrInteger(options.minRating, null, 1, 5);
   const productId = options.productId == null ? null : normalizeSsrInteger(options.productId, null, 1, Number.MAX_SAFE_INTEGER);
+
+  const cacheKeyStr = `${limit}:${requestedProductIds.join(',')}:${requestedReviewIds.join(',')}:${rating}:${minRating}:${productId}`;
+  const kvCacheKey = `api_cache:ssr:reviews:${cacheKeyStr}`;
+
+  const cached = reviewQueryCache.get(kvCacheKey);
+  if (cached && (Date.now() - cached.ts) < REVIEW_QUERY_CACHE_TTL) {
+    return cached.value;
+  }
+
+  try {
+    const kvData = await env.PAGE_CACHE.get(kvCacheKey, 'json');
+    if (kvData) {
+      reviewQueryCache.set(kvCacheKey, { value: kvData, ts: Date.now() });
+      if (reviewQueryCache.size > 100) reviewQueryCache.delete(reviewQueryCache.keys().next().value);
+      return kvData;
+    }
+  } catch (err) {}
 
   let sql = `
     SELECT r.*, p.title as product_title
@@ -2623,7 +2762,13 @@ async function queryReviewsForSsr(env, options = {}) {
   bindings.push(limit);
 
   const rows = await env.DB.prepare(sql).bind(...bindings).all();
-  return rows.results || [];
+  const result = rows.results || [];
+
+  reviewQueryCache.set(kvCacheKey, { value: result, ts: Date.now() });
+  if (reviewQueryCache.size > 100) reviewQueryCache.delete(reviewQueryCache.keys().next().value);
+  try { await env.PAGE_CACHE.put(kvCacheKey, JSON.stringify(result), { expirationTtl: 86400 * 7 }); } catch (e) {}
+
+  return result;
 }
 
 function replaceSimpleTextByIdSsr(html, elementId, value) {
@@ -4197,7 +4342,7 @@ export default {
 
     let cacheKey = null;
     if (isCacheableHtmlGet && env.PAGE_CACHE) {
-      cacheKey = `page_html:${path}`;
+      cacheKey = `page_html:${path}${url.search}`;
       try {
         const cachedHtml = await env.PAGE_CACHE.get(cacheKey);
         if (cachedHtml) {
