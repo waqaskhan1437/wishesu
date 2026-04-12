@@ -181,7 +181,7 @@ const SECTIONS = {
   text: `
     <section class="pbx-0021">
       <h2 contenteditable="true" class="pbx-0022">About Us</h2>
-      <p contenteditable="true" class="pbx-0023">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+      <p contenteditable="true" class="pbx-0023">Welcome to our website! We provide the best service in the industry. Our goal is to make sure our customers are 100% satisfied with our high-quality products.</p>
     </section>
   `,
   products: buildContentWidgetSection({
