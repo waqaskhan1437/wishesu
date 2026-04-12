@@ -4532,24 +4532,22 @@ export default {
     }
 
 // Route flags (computed once per request)
-const isAdminUI = (path === '/admin' || path === '/admin/' || path.startsWith('/admin/'));
-const isAdminAPI = path.startsWith('/api/admin/');
-const isLoginRoute = (path === '/admin/login' || path === '/admin/login/');
-const isLogoutRoute = (path === '/admin/logout' || path === '/admin/logout/');
+const normalizedReqPath = normalizeCanonicalPath(path);
+const routePath = normalizedReqPath.length > 1 && normalizedReqPath.endsWith('/') ? normalizedReqPath.slice(0, -1) : normalizedReqPath;
+
+const isAdminUI = (routePath === '/admin' || routePath.startsWith('/admin/'));
+const isAdminAPI = routePath.startsWith('/api/admin/');
+const isLoginRoute = (routePath === '/admin/login');
+const isLogoutRoute = (routePath === '/admin/logout');
 const noJsSsrEnabled = isNoJsSsrEnabled(env);
 
 // Some admin-only pages live outside /admin (legacy routes used by dashboard links)
-const isAdminProtectedPage = (
-  path === '/order-detail' ||
-  path === '/order-detail/' ||
-  path === '/order-detail.html' ||
-  path === '/page-builder-v2' ||
-  path === '/page-builder-v2/' ||
-  path === '/page-builder-v2.html' ||
-  path === '/landing-builder' ||
-  path === '/landing-builder/' ||
-  path === '/landing-builder.html'
-);
+const ADMIN_PROTECTED_PAGES = new Set([
+  '/order-detail',
+  '/admin/page-builder-v2.html',
+  '/admin/landing-builder.html'
+]);
+const isAdminProtectedPage = ADMIN_PROTECTED_PAGES.has(routePath);
 
 async function requireAdmin() {
   const ok = await isAdminAuthed(req, env);
@@ -5504,29 +5502,23 @@ if (method === 'GET' || method === 'HEAD') {
       // Check for default pages and serve them instead of static files
       if ((method === 'GET' || method === 'HEAD') && env.DB) {
         let defaultPageType = null;
+        const pReqPath = normalizeCanonicalPath(path);
+        const pRoute = pReqPath.length > 1 && pReqPath.endsWith('/') ? pReqPath.slice(0, -1) : pReqPath;
         
         // Home page — serve default home from DB only at the canonical root URL.
-        if (path === '/' || path === '/index.html') {
+        if (pRoute === '/') {
           defaultPageType = 'home';
         }
         // Blog archive
-        else if (path === '/blog/' || path === '/blog/index.html' || path === '/blog' || path === '/blog.html') {
+        else if (pRoute === '/blog') {
           defaultPageType = 'blog_archive';
         }
         // Forum archive
-        else if (path === '/forum/' || path === '/forum/index.html' || path === '/forum' || path === '/forum.html') {
+        else if (pRoute === '/forum') {
           defaultPageType = 'forum_archive';
         }
         // Product grid
-        else if (
-          path === '/products' ||
-          path === '/products/' ||
-          path === '/products/index.html' ||
-          path === '/products.html' ||
-          path === '/products-grid' ||
-          path === '/products-grid/' ||
-          path === '/products-grid.html'
-        ) {
+        else if (pRoute === '/products') {
           defaultPageType = 'product_grid';
         }
         
