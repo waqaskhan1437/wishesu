@@ -288,6 +288,20 @@ export async function submitQuestion(env, body) {
       return json({ error: 'Invalid email format' }, 400);
     }
 
+    // Check for identical duplicate question by same user (prevent spam/double-clicks)
+    const duplicate = await env.DB.prepare(`
+      SELECT id FROM forum_questions 
+      WHERE email = ? AND title = ? AND content = ?
+      LIMIT 1
+    `).bind(trimmedEmail, trimmedTitle, trimmedContent).first();
+
+    if (duplicate) {
+      return json({ 
+        success: true, 
+        message: 'Question already submitted! It will appear after admin approval.' 
+      });
+    }
+
     // Check for pending (wrap in try-catch in case email column doesn't exist)
     let pendingQ = null;
     let pendingR = null;
@@ -395,6 +409,20 @@ export async function submitReply(env, body) {
 
     if (!question) {
       return json({ error: 'Question not found' }, 404);
+    }
+
+    // Check for identical duplicate reply by same user (prevent spam/double-clicks)
+    const duplicate = await env.DB.prepare(`
+      SELECT id FROM forum_replies 
+      WHERE question_id = ? AND email = ? AND content = ?
+      LIMIT 1
+    `).bind(question_id, trimmedEmail, trimmedContent).first();
+
+    if (duplicate) {
+      return json({ 
+        success: true, 
+        message: 'Reply already submitted! It will appear after admin approval.' 
+      });
     }
 
     // Check for pending (wrap in try-catch in case email column doesn't exist)

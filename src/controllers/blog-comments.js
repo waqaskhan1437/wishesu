@@ -79,6 +79,20 @@ export async function addBlogComment(env, body) {
       return json({ error: 'Invalid email format' }, 400);
     }
 
+    // Check for identical duplicate comment by same user (prevent spam)
+    const duplicate = await env.DB.prepare(`
+      SELECT id FROM blog_comments 
+      WHERE blog_id = ? AND email = ? AND comment = ?
+      LIMIT 1
+    `).bind(blog_id, trimmedEmail, trimmedComment).first();
+
+    if (duplicate) {
+      return json({ 
+        success: true, 
+        message: 'Comment already submitted! It will appear after admin approval.' 
+      });
+    }
+
     // Check if user has pending comment on this blog
     const pending = await env.DB.prepare(`
       SELECT id FROM blog_comments 
