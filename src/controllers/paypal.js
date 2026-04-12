@@ -642,7 +642,7 @@ export async function savePayPalSettings(env, body) {
 export async function testPayPalConnection(env) {
   const credentials = await getPayPalCredentials(env);
   if (!credentials || !credentials.clientId) {
-    return json({ success: false, error: 'PayPal credentials not configured' });
+    return json({ success: false, error: 'PayPal credentials not configured' }, 500);
   }
 
   try {
@@ -653,7 +653,7 @@ export async function testPayPalConnection(env) {
       mode: credentials.mode
     });
   } catch (e) {
-    return json({ success: false, error: e.message });
+    return json({ success: false, error: e.message }, 500);
   }
 }
 

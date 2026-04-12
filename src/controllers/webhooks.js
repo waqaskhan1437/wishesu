@@ -432,7 +432,7 @@ export async function testWebhook(env, endpointId) {
   const endpoint = (config.endpoints || []).find(e => e.id === endpointId);
   
   if (!endpoint) {
-    return json({ success: false, error: 'Endpoint not found' });
+    return json({ success: false, error: 'Endpoint not found' }, 404);
   }
   
   const testPayload = createPayload('test.webhook', {
