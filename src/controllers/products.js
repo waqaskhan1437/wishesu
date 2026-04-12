@@ -666,9 +666,19 @@ export async function handleProductRouting(env, url, path) {
     }
   }
 
+  // Handle legacy /product-<id> (bare)
   const bareCanonicalMatch = path.match(/^\/product-(\d+)\/?$/);
   if (bareCanonicalMatch) {
     const row = await getProductById(bareCanonicalMatch[1]);
+    if (row) {
+      return buildCanonicalResponse(row);
+    }
+  }
+
+  // Handle legacy /product-<id>/<slug> → redirect to /product/<slug>
+  const legacyIdSlugMatch = path.match(/^\/product-(\d+)\/(.+)$/);
+  if (legacyIdSlugMatch) {
+    const row = await getProductById(legacyIdSlugMatch[1]);
     if (row) {
       return buildCanonicalResponse(row);
     }

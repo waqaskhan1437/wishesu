@@ -2064,7 +2064,13 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
 
   const productMatch = path.match(/^\/product-(\d+)(?:\/[^/]+)?\/?$/);
   if (method === 'GET' && productMatch) {
-    return renderProduct(env, url, Number(productMatch[1]));
+    // Legacy format: /product-<id>/<slug> → redirect to /product/<slug>
+    const canonical = await resolveProductPath(env, Number(productMatch[1]));
+    if (canonical && canonical !== '/') {
+      return Response.redirect(new URL(canonical, url.origin).toString(), 301);
+    }
+    // If no product found, render 404
+    return new Response('Product not found', { status: 404 });
   }
 
   if (method === 'POST' && path === '/order/create') {
