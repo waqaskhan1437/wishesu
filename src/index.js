@@ -10,7 +10,7 @@ import { initDB, warmupDB } from './config/db.js';
 import { VERSION, setVersion } from './config/constants.js';
 import { routeApiRequest } from './router.js';
 import { handleProductRouting } from './controllers/products.js';
-import { handleSecureDownload, maybePurgeCache } from './controllers/admin.js';
+import { handleSecureDownload, maybePurgeCache, purgeKVCache } from './controllers/admin.js';
 import { cleanupExpired } from './controllers/whop.js';
 import { generateBackupData, sendBackupEmail, createBackup as createBackupApi } from './controllers/backup.js';
 import { generateProductSchema, generateCollectionSchema, generateVideoSchema, injectSchemaIntoHTML, generateBlogPostingSchema, generateQAPageSchema, generateBreadcrumbSchema, generateOrganizationSchema, generateWebSiteSchema, generateWebPageSchema, generateFAQPageSchema } from './utils/schema.js';
@@ -4185,6 +4185,64 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
 
 export default {
   async fetch(req, env, ctx) {
+    const url = new URL(req.url);
+    const path = url.pathname;
+    
+    // Check if it's a candidate for KV caching
+    const isCacheableHtmlGet = req.method === 'GET' && 
+      !path.startsWith('/admin') && 
+      !path.startsWith('/api') && 
+      !path.startsWith('/download') &&
+      (path === '/' || path.startsWith('/blog') || path.startsWith('/forum') || path.startsWith('/product') || path.startsWith('/page') || !path.includes('.'));
+
+    let cacheKey = null;
+    if (isCacheableHtmlGet && env.PAGE_CACHE) {
+      cacheKey = `page_html:${path}`;
+      try {
+        const cachedHtml = await env.PAGE_CACHE.get(cacheKey);
+        if (cachedHtml) {
+          return new Response(cachedHtml, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/html; charset=utf-8',
+              'Cache-Control': 'public, max-age=120',
+              'X-KV-Cache': 'Hit',
+              'X-Worker-Version': env.VERSION || '27'
+            }
+          });
+        }
+      } catch (err) {
+        console.error('KV Cache read error:', err);
+      }
+    }
+
+    const response = await this.fetchOriginal(req, env, ctx);
+
+    // Save successful HTML responses to KV
+    if (isCacheableHtmlGet && env.PAGE_CACHE && response && response.status === 200) {
+      const contentType = response.headers.get('Content-Type') || '';
+      if (contentType.includes('text/html')) {
+        try {
+          const html = await response.clone().text();
+          ctx.waitUntil(env.PAGE_CACHE.put(cacheKey, html));
+          
+          const newHeaders = new Headers(response.headers);
+          newHeaders.set('X-KV-Cache', 'Miss');
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: newHeaders
+          });
+        } catch (err) {
+          console.error('KV Cache write error:', err);
+        }
+      }
+    }
+    
+    return response;
+  },
+
+  async fetchOriginal(req, env, ctx) {
     setVersion(env.VERSION);
     const url = new URL(req.url);
     const method = req.method;
@@ -4968,7 +5026,15 @@ if (method === 'GET' || method === 'HEAD') {
       // ----- API ROUTES -----
       if (path.startsWith('/api/') || path === '/submit-order') {
         const apiResponse = await routeApiRequest(req, env, url, path, method);
-        if (apiResponse) return finalizeResponse(apiResponse, req);
+        if (apiResponse) {
+          // Auto-purge KV cache on data mutations (admin paths & orders)
+          if (apiResponse.status >= 200 && apiResponse.status < 300 && method !== 'GET' && method !== 'HEAD') {
+            if (path.startsWith('/api/admin/') || path === '/submit-order' || path.startsWith('/api/products/status')) {
+              ctx.waitUntil(purgeKVCache(env).catch(e => console.error('Auto KV purge error:', e)));
+            }
+          }
+          return finalizeResponse(apiResponse, req);
+        }
       }
 
       // ----- SECURE DOWNLOAD -----

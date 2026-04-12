@@ -203,6 +203,9 @@ export function getArchiveCredentials(env) {
  */
 export async function purgeCache(env) {
   try {
+    // Purge KV Page Cache if configured
+    await purgeKVCache(env);
+
     const zoneId = env.CF_ZONE_ID;
     const token = env.CF_API_TOKEN;
     if (!zoneId || !token) return json({ error: 'Cloudflare credentials not configured' }, 500);
@@ -218,6 +221,33 @@ export async function purgeCache(env) {
     return json({ success: true });
   } catch (e) {
     return json({ error: e.message }, 500);
+  }
+}
+
+/**
+ * Purge KV Page Cache
+ */
+export async function purgeKVCache(env, path = null) {
+  if (!env.PAGE_CACHE) return;
+  try {
+    if (path) {
+      await env.PAGE_CACHE.delete(`page_html:${path}`);
+    } else {
+      // Purge all keys starting with page_html:
+      let list;
+      let cursor;
+      do {
+        list = await env.PAGE_CACHE.list({ prefix: 'page_html:', cursor });
+        if (list && list.keys) {
+          for (const key of list.keys) {
+            await env.PAGE_CACHE.delete(key.name);
+          }
+        }
+        cursor = list && !list.list_complete ? list.cursor : null;
+      } while (cursor);
+    }
+  } catch (e) {
+    console.error('KV Cache purge error:', e);
   }
 }
 

@@ -55,3 +55,7 @@ crons = ["*/5 * * * *", "0 2 * * *"]
 VERSION = "27"
 CANONICAL_HOST = "prankwish.com"
 ENABLE_NOJS_SSR = "false"
+
+[[kv_namespaces]]
+binding = "PAGE_CACHE"
+id = "599e16ff5d294b77809034a27fd99634"
