@@ -147,7 +147,7 @@ export async function getProducts(env, url) {
   if (!limitStr && filter === 'all' && productsCache && (now - productsCacheTime) < PRODUCTS_CACHE_TTL) {
     const defaultData = { products: productsCache, pagination: { page: 1, limit: 1000, total: productsCache.length, pages: 1 } };
     if (env.PAGE_CACHE) {
-      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(defaultData), { expirationTtl: 86400 }); } catch(e) {}
+      await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(defaultData), { expirationTtl: 86400 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })()
     }
     return cachedJson(defaultData, 120);
   }
@@ -199,9 +199,7 @@ export async function getProducts(env, url) {
   };
 
   if (env.PAGE_CACHE) {
-    try {
-      await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 });
-    } catch(e) {}
+    await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })()
   }
 
   // Cache for 2 minutes on edge
@@ -302,9 +300,7 @@ export async function getProduct(env, id, opts = {}) {
   };
 
   if (env.PAGE_CACHE) {
-    try {
-      await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 });
-    } catch(e) {}
+    await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })()
   }
 
   return json(responseData);

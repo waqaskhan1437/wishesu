@@ -76,7 +76,7 @@ export async function getSettings(env) {
 
   const now = Date.now();
   if (cache && (now - cacheTime) < TTL) {
-    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(cache), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    if (env.PAGE_CACHE) { await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(cache), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })() }
     return cache;
   }
 
@@ -84,7 +84,7 @@ export async function getSettings(env) {
     const row = await env.DB.prepare('SELECT * FROM seo_minimal WHERE id = 1').first();
     cache = row || DEFAULT;
     cacheTime = now;
-    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(cache), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    if (env.PAGE_CACHE) { await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(cache), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })() }
     return cache;
   } catch (e) {
     return DEFAULT;

@@ -21,7 +21,8 @@ function clearRulesCache(env) {
   rulesCache = null;
   cacheTime = 0;
   if (env?.PAGE_CACHE) {
-    try { env.PAGE_CACHE.delete('api_cache:seo_rules'); } catch(e) {}
+    const _kvP = env.PAGE_CACHE.delete('api_cache:seo_rules').catch(()=>{});
+    if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP);
   }
 }
 
@@ -418,7 +419,7 @@ async function getRulePatterns(env) {
     cacheTime = now;
     
     if (env.PAGE_CACHE) {
-      try { await env.PAGE_CACHE.put(cacheKey, JSON.stringify(rulesCache), { expirationTtl: 86400 * 7 }); } catch(e) {}
+      await (async () => { const _kvP = env.PAGE_CACHE.put(cacheKey, JSON.stringify(rulesCache), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })()
     }
     
     return rulesCache;

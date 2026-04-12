@@ -46,7 +46,7 @@ export async function getActiveCoupons(env) {
   // Return cached if valid
   if (couponsCache && (now - couponsCacheTime) < COUPONS_CACHE_TTL) {
     const resp = { success: true, coupons: couponsCache };
-    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    if (env.PAGE_CACHE) { await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })() }
     return cachedJson(resp, 60);
   }
   
@@ -64,7 +64,7 @@ export async function getActiveCoupons(env) {
     couponsCacheTime = now;
     
     const resp = { success: true, coupons: couponsCache };
-    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    if (env.PAGE_CACHE) { await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })() }
     return cachedJson(resp, 60);
   } catch (e) {
     console.error('Get active coupons error:', e);

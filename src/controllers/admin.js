@@ -844,7 +844,7 @@ export async function getBrandingSettings(env) {
   // Return cached data if still valid
   if (brandingCache && (now - brandingCacheTime) < BRANDING_CACHE_TTL) {
     const resp = { success: true, branding: brandingCache };
-    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    if (env.PAGE_CACHE) { await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })() }
     return json(resp);
   }
 
@@ -854,13 +854,13 @@ export async function getBrandingSettings(env) {
       brandingCache = JSON.parse(row.value);
       brandingCacheTime = now;
       const resp = { success: true, branding: brandingCache };
-      if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+      if (env.PAGE_CACHE) { await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })() }
       return json(resp);
     }
     brandingCache = { logo_url: '', favicon_url: '' };
     brandingCacheTime = now;
     const resp = { success: true, branding: brandingCache };
-    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    if (env.PAGE_CACHE) { await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })() }
     return json(resp);
   } catch (e) {
     console.error('Get branding error:', e);
@@ -988,14 +988,14 @@ export async function getSiteComponents(env, options = {}) {
         const resp = {
           components: publicView ? sanitizePublicSiteComponents(components) : components
         };
-        if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+        if (env.PAGE_CACHE) { await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })() }
         return json(resp);
       } catch (e) {
         return json({ components: null });
       }
     }
     const resp = { components: null };
-    if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }); } catch(e) {} }
+    if (env.PAGE_CACHE) { await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(resp), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })() }
     return json(resp);
   } catch (e) {
     console.error('Failed to get components:', e);

@@ -82,7 +82,7 @@ export async function getPublishedBlogs(env, url) {
     };
 
     if (env.PAGE_CACHE) {
-      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+      await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })()
     }
 
     // Cache for 3 minutes
@@ -145,7 +145,7 @@ export async function getPublishedBlog(env, slug) {
 
     const responseData = { success: true, blog };
     if (env.PAGE_CACHE) {
-      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+      await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })()
     }
 
     return json(responseData);

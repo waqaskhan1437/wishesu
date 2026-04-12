@@ -89,7 +89,7 @@ export async function getPages(env) {
 
   const responseData = { pages };
   if (env.PAGE_CACHE) {
-    try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+    await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })()
   }
 
   // Cache for 2 minutes
@@ -177,7 +177,7 @@ export async function getPage(env, slug) {
 
   const responseData = { page: row };
   if (env.PAGE_CACHE) {
-    try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+    await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })()
   }
 
   return json(responseData);
@@ -210,7 +210,7 @@ export async function getDefaultPage(env, pageType) {
 
     const responseData = { page: row };
     if (env.PAGE_CACHE) {
-      try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }); } catch(e) {}
+      await (async () => { const _kvP = env.PAGE_CACHE.put(kvKey, JSON.stringify(responseData), { expirationTtl: 86400 * 7 }).catch(()=>{}); if (env.ctx && env.ctx.waitUntil) env.ctx.waitUntil(_kvP); else await _kvP; })()
     }
 
     return json(responseData);
