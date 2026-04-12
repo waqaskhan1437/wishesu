@@ -4,26 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Advanced Page Builder</title>
-  <link rel="stylesheet" href="/css/page-builder-loader.css?v=28">
+  <link rel="stylesheet" href="/css/page-builder-loader.css?v=29">
 </head>
 <body>
   <!-- Top Bar -->
   <div class="top-bar">
     <div class="top-bar-left">
-      <a href="/admin/dashboard.html" class="back-btn">â† Dashboard</a>
-      <h1>ðŸŽ¨ Page Builder</h1>
+      <a href="/admin/dashboard.html" class="back-btn">← Dashboard</a>
+      <h1>🎨 Page Builder</h1>
     </div>
     <div class="top-bar-actions">
-      <button class="btn btn-secondary btn-icon-compact" id="undo-btn" title="Undo" disabled>â†©</button>
-      <button class="btn btn-secondary btn-icon-compact" id="redo-btn" title="Redo" disabled>â†ª</button>
+      <button class="btn btn-secondary btn-icon-compact" id="undo-btn" title="Undo" disabled>↺</button>
+      <button class="btn btn-secondary btn-icon-compact" id="redo-btn" title="Redo" disabled>↻</button>
       <div class="preview-toggle-group">
-        <button class="btn btn-secondary preview-mode-btn active" type="button" data-builder-action="preview-mode" data-mode="desktop" title="Desktop">ðŸ–¥ï¸</button>
-        <button class="btn btn-secondary preview-mode-btn" type="button" data-builder-action="preview-mode" data-mode="tablet" title="Tablet">ðŸ“±</button>
-        <button class="btn btn-secondary preview-mode-btn" type="button" data-builder-action="preview-mode" data-mode="mobile" title="Mobile">ðŸ“²</button>
+        <button class="btn btn-secondary preview-mode-btn active" type="button" data-builder-action="preview-mode" data-mode="desktop" title="Desktop">🖥️</button>
+        <button class="btn btn-secondary preview-mode-btn" type="button" data-builder-action="preview-mode" data-mode="tablet" title="Tablet">📱</button>
+        <button class="btn btn-secondary preview-mode-btn" type="button" data-builder-action="preview-mode" data-mode="mobile" title="Mobile">📲</button>
       </div>
-      <button class="btn btn-secondary" id="load-btn">ðŸ“‚ Load</button>
-      <button class="btn btn-secondary" id="preview-btn">ðŸ‘ï¸ Preview</button>
-      <button class="btn btn-success" id="save-btn">ðŸ’¾ Save Page</button>
+      <button class="btn btn-secondary" id="load-btn">📂 Load</button>
+      <button class="btn btn-secondary" id="preview-btn">👁️ Preview</button>
+      <button class="btn btn-success" id="save-btn">💾 Save Page</button>
     </div>
   </div>
 
@@ -32,22 +32,22 @@
     <div class="sidebar-left">
       <!-- Quick Templates -->
       <div class="sidebar-section">
-        <h3>âš¡ Quick Templates</h3>
+        <h3>⚡ Quick Templates</h3>
         <div class="template-grid">
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="home">
-            <div class="icon">ðŸ </div>
+            <div class="icon">🏠</div>
             <div class="label">Home Page</div>
           </div>
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="blog_archive">
-            <div class="icon">ðŸ“</div>
+            <div class="icon">📝</div>
             <div class="label">Blog Archive</div>
           </div>
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="forum_archive">
-            <div class="icon">ðŸ’¬</div>
+            <div class="icon">💬</div>
             <div class="label">Forum Page</div>
           </div>
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="product_grid">
-            <div class="icon">ðŸ›’</div>
+            <div class="icon">🛒</div>
             <div class="label">Product Grid</div>
           </div>
           <div class="template-card" role="button" tabindex="0" data-builder-action="load-template" data-template="occasion_campaign">
@@ -71,49 +71,49 @@
 
       <!-- Section Blocks -->
       <div class="sidebar-section sidebar-section-fill">
-        <h3>ðŸ“¦ Add Sections</h3>
+        <h3>📦 Add Sections</h3>
         <div class="block-list">
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="hero">
-            <span class="icon">ðŸŽ¯</span> Hero Banner
+            <span class="icon">🎯</span> Hero Banner
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="features">
-            <span class="icon">â­</span> Features Grid
+            <span class="icon">⭐</span> Features Grid
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="cta">
-            <span class="icon">ðŸ“¢</span> Call to Action
+            <span class="icon">📣</span> Call to Action
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="text">
-            <span class="icon">ðŸ“„</span> Text Block
+            <span class="icon">📄</span> Text Block
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="products">
-            <span class="icon">ðŸ›ï¸</span> Product Cards
+            <span class="icon">🛍️</span> Product Cards
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="blogs">
-            <span class="icon">ðŸ“°</span> Blog Cards
+            <span class="icon">📰</span> Blog Cards
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="forum">
-            <span class="icon">â“</span> Forum List
+            <span class="icon">❓</span> Forum List
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="reviews">
-            <span class="icon">Ã¢Â­Â</span> Review Cards
+            <span class="icon">⭐</span> Review Cards
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="faq">
-            <span class="icon">â“</span> FAQ Accordion
+            <span class="icon">❓</span> FAQ Accordion
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="columns">
-            <span class="icon">â–¥</span> Columns Layout
+            <span class="icon">◫</span> Columns Layout
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="imagetext">
-            <span class="icon">ðŸ–¼ï¸</span> Image + Text
+            <span class="icon">🖼️</span> Image + Text
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="gallery">
-            <span class="icon">ðŸŽ¨</span> Image Gallery
+            <span class="icon">🎨</span> Image Gallery
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="video">
-            <span class="icon">â–¶ï¸</span> Video Embed
+            <span class="icon">▶️</span> Video Embed
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="testimonials">
-            <span class="icon">ðŸ’¬</span> Testimonials
+            <span class="icon">💬</span> Testimonials
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="stats">
             <span class="icon">ðŸ“Š</span> Stats Counter
@@ -122,19 +122,19 @@
             <span class="icon">ðŸ¢</span> Logo Cloud
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="countdown">
-            <span class="icon">â°</span> Countdown Timer
+            <span class="icon">⏱️</span> Countdown Timer
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="banner">
             <span class="icon">ðŸ“£</span> Banner / Alert
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="divider">
-            <span class="icon">âž–</span> Divider / Spacer
+            <span class="icon">➖</span> Divider / Spacer
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="footer">
             <span class="icon">ðŸ“Œ</span> Footer
           </button>
           <button class="block-btn" type="button" data-builder-action="add-section" data-section="custom">
-            <span class="icon">ðŸ’»</span> Custom HTML
+            <span class="icon">💻</span> Custom HTML
           </button>
         </div>
       </div>
@@ -147,7 +147,7 @@
     <div class="sidebar-right">
       <!-- Page Info -->
       <div class="settings-panel">
-        <h3>ðŸ“„ Page Settings</h3>
+        <h3>📄 Page Settings</h3>
         <div class="form-group">
           <label>Page Title *</label>
           <input type="text" id="seo-title" placeholder="My Awesome Page">
@@ -161,7 +161,7 @@
           <textarea id="seo-desc" placeholder="Brief description for search engines..."></textarea>
         </div>
         <div class="form-group">
-          <label>ðŸ–¼ï¸ Feature Image</label>
+          <label>🖼️ Feature Image</label>
           <div class="feature-image-row">
             <input type="url" id="feature_image_url" class="feature-image-url" placeholder="https://...">
             <label for="feature-image-file" class="feature-upload-label">ðŸ“¤ Upload</label>
@@ -216,23 +216,23 @@
         <h3>ðŸ“‘ Page Type</h3>
         <div class="page-type-grid">
           <div class="type-option active" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="custom" data-type="custom">
-            <div class="icon">ðŸ“„</div>
+            <div class="icon">📄</div>
             <div class="label">Custom</div>
           </div>
           <div class="type-option" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="home" data-type="home">
-            <div class="icon">ðŸ </div>
+            <div class="icon">🏠</div>
             <div class="label">Home</div>
           </div>
           <div class="type-option" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="blog_archive" data-type="blog_archive">
-            <div class="icon">ðŸ“</div>
+            <div class="icon">📝</div>
             <div class="label">Blog</div>
           </div>
           <div class="type-option" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="forum_archive" data-type="forum_archive">
-            <div class="icon">ðŸ’¬</div>
+            <div class="icon">💬</div>
             <div class="label">Forum</div>
           </div>
           <div class="type-option" role="button" tabindex="0" data-builder-action="set-page-type" data-page-type="product_grid" data-type="product_grid">
-            <div class="icon">ðŸ›’</div>
+            <div class="icon">🛒</div>
             <div class="label">Products</div>
           </div>
         </div>
@@ -240,7 +240,7 @@
 
       <!-- Default Setting -->
       <div class="settings-panel">
-        <h3>â­ Default Page</h3>
+        <h3>⭐ Default Page</h3>
         <label class="default-toggle">
           <input type="checkbox" id="is-default">
           <span class="toggle-switch"></span>
@@ -266,7 +266,7 @@
   <div class="modal-overlay" id="code-modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>ðŸ’» Edit HTML Code</h3>
+        <h3>💻 Edit HTML Code</h3>
         <button class="modal-close" type="button" data-builder-action="close-code-modal">Ã—</button>
       </div>
       <div class="modal-body">
@@ -285,6 +285,6 @@
     </div>
   </div>
 
-  <script type="module" src="/js/page-builder/loader.js?v=28"></script>
+  <script type="module" src="/js/page-builder/loader.js?v=29"></script>
 </body>
 </html>

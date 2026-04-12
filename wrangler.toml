@@ -53,7 +53,7 @@ bucket_name = "temp-uploads-bucket"
 # attached to static asset responses via the X-Worker-Version header.  It can
 # help confirm that you are receiving the latest build.
 [vars]
-VERSION = "28"
+VERSION = "29"
 CANONICAL_HOST = "prankwish.com"
 ENABLE_NOJS_SSR = "false"
 

@@ -89,11 +89,11 @@ export function renderFeaturePreview(url, previewId = 'feature-preview') {
 export function createControls() {
   return `
     <div class="section-controls">
-      <button type="button" data-builder-action="move-up" title="Move Up">â†‘</button>
-      <button type="button" data-builder-action="move-down" title="Move Down">â†“</button>
+      <button type="button" data-builder-action="move-up" title="Move Up">↑</button>
+      <button type="button" data-builder-action="move-down" title="Move Down">↓</button>
       <button type="button" data-builder-action="edit-code" title="Edit Code">&lt;/&gt;</button>
-      <button type="button" data-builder-action="duplicate-section" title="Duplicate">ðŸ“‹</button>
-      <button type="button" data-builder-action="delete-section" title="Delete">ðŸ—‘ï¸</button>
+      <button type="button" data-builder-action="duplicate-section" title="Duplicate">📋</button>
+      <button type="button" data-builder-action="delete-section" title="Delete">🗑️</button>
     </div>
   `;
 }
