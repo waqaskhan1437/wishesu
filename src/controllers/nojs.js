@@ -2181,7 +2181,7 @@ export async function handleNoJsRoutes(req, env, url, path, method) {
 
   if (method === 'GET' && (
     path === '/admin/pages' ||
-    path === '/admin/page-builder.html' ||
+    path === '/admin/page-builder-v2.html' ||
     path === '/admin/landing-builder.html'
   )) {
     return renderAdminPages(env, url);

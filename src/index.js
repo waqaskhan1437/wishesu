@@ -1372,9 +1372,9 @@ const CANONICAL_ALIAS_MAP = new Map([
   ['/index.html', '/'],
   ['/home', '/'],
   ['/home/', '/'],
-  ['/page-builder', '/admin/page-builder.html'],
-  ['/page-builder/', '/admin/page-builder.html'],
-  ['/page-builder.html', '/admin/page-builder.html'],
+  ['/page-builder-v2', '/admin/page-builder-v2.html'],
+  ['/page-builder-v2/', '/admin/page-builder-v2.html'],
+  ['/page-builder-v2.html', '/admin/page-builder-v2.html'],
   ['/landing-builder', '/admin/landing-builder.html'],
   ['/landing-builder/', '/admin/landing-builder.html'],
   ['/landing-builder.html', '/admin/landing-builder.html'],
@@ -4540,9 +4540,9 @@ const isAdminProtectedPage = (
   path === '/order-detail' ||
   path === '/order-detail/' ||
   path === '/order-detail.html' ||
-  path === '/page-builder' ||
-  path === '/page-builder/' ||
-  path === '/page-builder.html' ||
+  path === '/page-builder-v2' ||
+  path === '/page-builder-v2/' ||
+  path === '/page-builder-v2.html' ||
   path === '/landing-builder' ||
   path === '/landing-builder/' ||
   path === '/landing-builder.html'
@@ -5247,7 +5247,7 @@ if (method === 'GET' || method === 'HEAD') {
           ['/admin/product-form.html', '/admin/product-form.html'],
           ['/admin/blog-form.html', '/admin/blog-form.html'],
           // Source file currently lives at project root for legacy compatibility.
-          ['/admin/page-builder.html', '/page-builder.html'],
+          ['/admin/page-builder-v2.html', '/page-builder-v2.html'],
           ['/admin/landing-builder.html', '/admin/landing-builder.html'],
           ['/admin/migrate-reviews.html', '/admin/migrate-reviews.html']
         ]);

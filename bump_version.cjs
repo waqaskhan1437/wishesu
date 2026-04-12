@@ -25,12 +25,12 @@ function updateFile(file) {
 }
 
 const htmlFiles = [
-    'public/page-builder.html',
+    'public/page-builder-v2.html',
     'public/admin/landing-builder.html'
 ];
 htmlFiles.forEach(updateFile);
 
-const jsDir = 'public/js/page-builder';
+const jsDir = 'public/js/page-builder-v2';
 if(fs.existsSync(jsDir)){
     fs.readdirSync(jsDir).filter(f => f.endsWith('.js')).forEach(f => {
         updateFile(path.join(jsDir, f));

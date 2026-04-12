@@ -94,7 +94,7 @@ test('legacy aliases stay recognized and now redirect to canonical URLs', () => 
 });
 
 test('non-direct aliases still canonicalize', () => {
-  assert.equal(getCanonicalRedirectPath('/page-builder'), '/admin/page-builder.html');
+  assert.equal(getCanonicalRedirectPath('/page-builder-v2'), '/admin/page-builder-v2.html');
 });
 
 test('HEAD-safe API matcher stays limited to read endpoints', () => {

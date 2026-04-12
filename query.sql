@@ -1,0 +1,1 @@
+SELECT id, slug, title FROM pages WHERE content LIKE '%lorem%';
