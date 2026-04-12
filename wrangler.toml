@@ -44,7 +44,8 @@ bucket_name = "temp-uploads-bucket"
 # This prevents cold start issues and connection reset errors
 # Moderate ping frequency to reduce background request volume
 # Also runs cleanup at 2 AM daily
-crons = ["*/5 * * * *", "0 2 * * *"]
+# NOTE: Cloudflare Free Plan limits account to 5 crons total.
+# crons = ["0 2 * * *"]
 
 # Optional build-time variables.  You can update VERSION before each publish
 # to force Cloudflare to treat your worker and static assets as a new
