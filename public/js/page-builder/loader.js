@@ -33,4 +33,4 @@ function loadScript(src) {
 }
 
 await Promise.all(builderDependencyScripts.map(loadScript));
-await import('./app.js');
+await import('./app.js?v=28');
