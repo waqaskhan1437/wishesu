@@ -18,6 +18,7 @@ let migrationsDone = false;
 let pagesMigrationDone = false;
 let initPromise = null;
 let initStartTime = 0;
+let checkPromise = null; // NEW: deduplicate fast-checks
 
 // Maximum time to wait for DB initialization (prevents hanging)
 // Increased timeout for better cold start handling
@@ -32,39 +33,49 @@ const DB_INIT_TIMEOUT_MS = 5000;
  */
 export async function initDB(env, ctx) {
   if (dbReady || !env.DB) return;
-  
-  // NEW OPTIMIZATION: Ultra-fast KV check to see if DB is already fully initialized
-  // This completely bypasses D1 CPU spikes and looping on cold starts
-  if (env.PAGE_CACHE) {
+
+  if (checkPromise) {
+    await checkPromise;
+    if (dbReady) return;
+  }
+
+  checkPromise = (async () => {
+    // NEW OPTIMIZATION: Ultra-fast KV check to see if DB is already fully initialized
+    // This completely bypasses D1 CPU spikes and looping on cold starts
+    if (env.PAGE_CACHE) {
+      try {
+        const isInit = await env.PAGE_CACHE.get('sys_db_init_v1');
+        if (isInit === 'true') {
+          dbReady = true;
+          migrationsDone = true;
+          pagesMigrationDone = true;
+          return;
+        }
+      } catch (e) {
+        // Ignore KV error
+      }
+    }
+
+    // Fallback fast check to see if DB is already fully initialized
+    // This prevents running 20+ CREATE TABLE and 15+ ALTER TABLE queries on every cold start
     try {
-      const isInit = await env.PAGE_CACHE.get('sys_db_init_v1');
-      if (isInit === 'true') {
+      const check = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='products'").first();
+      if (check) {
         dbReady = true;
         migrationsDone = true;
         pagesMigrationDone = true;
+        if (env.PAGE_CACHE && ctx && ctx.waitUntil) {
+          ctx.waitUntil(env.PAGE_CACHE.put('sys_db_init_v1', 'true', { expirationTtl: 86400 * 30 }));
+        }
         return;
       }
     } catch (e) {
-      // Ignore KV error
+      // Ignore and proceed to normal init if check fails
     }
-  }
+  })();
 
-  // Fallback fast check to see if DB is already fully initialized
-  // This prevents running 20+ CREATE TABLE and 15+ ALTER TABLE queries on every cold start
-  try {
-    const check = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='products'").first();
-    if (check) {
-      dbReady = true;
-      migrationsDone = true;
-      pagesMigrationDone = true;
-      if (env.PAGE_CACHE && ctx && ctx.waitUntil) {
-        ctx.waitUntil(env.PAGE_CACHE.put('sys_db_init_v1', 'true', { expirationTtl: 86400 * 30 }));
-      }
-      return;
-    }
-  } catch (e) {
-    // Ignore and proceed to normal init if check fails
-  }
+  await checkPromise;
+  if (dbReady) return;
 
   if (initPromise) {
     // If initialization is taking too long, don't wait

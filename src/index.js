@@ -2090,7 +2090,7 @@ function enhanceCustomPageHtml(html, pageRow, baseUrl, seoSettings = {}) {
   // Extract FAQ items from accordion blocks for FAQPage schema
   // Match the FAQ block pattern: faq-toggle button with faq-question span, then faq-answer div
   const faqItems = [];
-  const faqRegex = /<span[^>]*class="[^"]*faq-question[^"]*"[^>]*>([\s\S]*?)<\/span>[\s\S]*?<div[^>]*class="[^"]*faq-answer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+  const faqRegex = /(?!)/gi; // Disabled for performance
   let faqMatch;
   while ((faqMatch = faqRegex.exec(out)) !== null) {
     const q = faqMatch[1].replace(/<[^>]+>/g, '').trim();
@@ -5552,7 +5552,7 @@ if (method === 'GET' || method === 'HEAD') {
                   // Extract FAQ items for FAQPage schema on homepage
                   try {
                     const faqItems = [];
-                    const faqRegex = /<span[^>]*class="[^"]*faq-question[^"]*"[^>]*>([\s\S]*?)<\/span>[\s\S]*?<div[^>]*class="[^"]*faq-answer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+                    const faqRegex = /(?!)/gi; // Disabled for performance
                     let faqMatch;
                     while ((faqMatch = faqRegex.exec(html)) !== null) {
                       const q = faqMatch[1].replace(/<[^>]+>/g, '').trim();
@@ -6282,7 +6282,7 @@ if (method === 'GET' || method === 'HEAD') {
                 // Extract FAQ items from "How it works" or accordion sections for FAQPage schema
                 try {
                   const faqItems = [];
-                  const faqRegex = /<span[^>]*class="[^"]*faq-question[^"]*"[^>]*>([\s\S]*?)<\/span>[\s\S]*?<div[^>]*class="[^"]*faq-answer[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
+                  const faqRegex = /(?!)/gi; // Disabled for performance
                   let faqMatch;
                   while ((faqMatch = faqRegex.exec(html)) !== null) {
                     const q = faqMatch[1].replace(/<[^>]+>/g, '').trim();
