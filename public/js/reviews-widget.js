@@ -54,7 +54,7 @@
         if (bootstrapReviews.length === 0) {
           container.innerHTML = `
             <div style="text-align: center; padding: 40px; color: #6b7280;">
-              <div style="font-size: 3rem; margin-bottom: 15px;">â­</div>
+              <div style="font-size: 3rem; margin-bottom: 15px;">⭐</div>
               <p>No reviews yet. Be the first to review!</p>
             </div>
           `;

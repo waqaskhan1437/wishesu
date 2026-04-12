@@ -1,8 +1,8 @@
-import { buildPreviewDocumentHtml, buildPublishedPageHtml, generateOutputHtml } from './page-documents.js?v=29';
-import { createPageManager } from './page-manager.js?v=29';
-import { getSectionMarkup, TEMPLATES } from './templates.js?v=29';
-import { attachBuilderActionDelegates, createControls, renderFeaturePreview } from './ui.js?v=29';
-import { initDynamicWidgets, setupWidgetConfigInputs } from './widgets.js?v=29';
+import { buildPreviewDocumentHtml, buildPublishedPageHtml, generateOutputHtml } from './page-documents.js?v=30';
+import { createPageManager } from './page-manager.js?v=30';
+import { getSectionMarkup, TEMPLATES } from './templates.js?v=30';
+import { attachBuilderActionDelegates, createControls, renderFeaturePreview } from './ui.js?v=30';
+import { initDynamicWidgets, setupWidgetConfigInputs } from './widgets.js?v=30';
 
 let editingSection = null;
 
