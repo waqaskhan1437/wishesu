@@ -289,7 +289,7 @@ export async function savePage(env, body) {
   // hyphens for separators, and trim leading/trailing hyphens. This prevents
   // invalid characters from being stored in the database and ensures URLs
   // remain SEO-friendly.
-  const finalSlug = forcedHomeSlug
+  let finalSlug = forcedHomeSlug
     ? 'home'
     : sanitizePageSlug(
         body.slug && typeof body.slug === 'string' && body.slug.trim().length > 0
@@ -420,7 +420,7 @@ export async function savePageBuilder(env, body) {
   const wantsDefault = isTruthyDefault(body.is_default);
   const isDefault = wantsDefault && pageType !== 'custom' ? 1 : 0;
   const forcedHomeSlug = isRootHomePage(pageType, isDefault);
-  const name = forcedHomeSlug ? 'home' : sanitizePageSlug((body.name || '').trim());
+  let name = forcedHomeSlug ? 'home' : sanitizePageSlug((body.name || '').trim());
 
   if (!name) return json({ error: 'name required' }, 400);
 
