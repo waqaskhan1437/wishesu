@@ -4343,35 +4343,12 @@ export default {
       });
     }
 
-    // COLD START FIX: Start DB initialization early and WAIT for critical paths
-    // For API routes and dynamic pages, we need the DB ready before processing
-    const noJsSsrEarly = isNoJsSsrEnabled(env);
-    const isHtmlLikeRequest = (method === 'GET' || method === 'HEAD') &&
-      !/\.(css|js|ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot|mp4|webm|mp3|pdf)$/i.test(path);
-    const requiresDB = path.startsWith('/api/') || 
-                       path.startsWith('/blog/') || 
-                       path.startsWith('/forum/') ||
-                       path.startsWith('/product-') ||
-                       path.startsWith('/admin/') ||
-                       path === '/' ||
-                       path === '/index.html' ||
-                       (noJsSsrEarly && isHtmlLikeRequest);
-    
+    // COLD START FIX: Database initialization is now extremely fast thanks to KV caching.
+    // We run it asynchronously so it never blocks the request flow, completely eliminating CPU spikes
+    // and dropped requests on cold starts.
     if (env.DB) {
-      if (requiresDB) {
-        // Wait for DB to be ready for critical paths (with timeout protection)
-        try {
-          await Promise.race([
-            initDB(env, ctx),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('DB init timeout')), 4000))
-          ]);
-        } catch (e) {
-          console.warn('DB init delayed:', e.message);
-          // Continue anyway - the request handler will retry if needed
-        }
-      } else {
-        // For static assets, warm up in background without blocking
-        warmupDB(env, ctx);
+      if (ctx && ctx.waitUntil) {
+        ctx.waitUntil(initDB(env, ctx).catch(e => console.warn('DB init error in background:', e)));
       }
     }
 

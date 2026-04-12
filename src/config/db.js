@@ -33,7 +33,23 @@ const DB_INIT_TIMEOUT_MS = 5000;
 export async function initDB(env, ctx) {
   if (dbReady || !env.DB) return;
   
-  // NEW OPTIMIZATION: Fast check to see if DB is already fully initialized
+  // NEW OPTIMIZATION: Ultra-fast KV check to see if DB is already fully initialized
+  // This completely bypasses D1 CPU spikes and looping on cold starts
+  if (env.PAGE_CACHE) {
+    try {
+      const isInit = await env.PAGE_CACHE.get('sys_db_init_v1');
+      if (isInit === 'true') {
+        dbReady = true;
+        migrationsDone = true;
+        pagesMigrationDone = true;
+        return;
+      }
+    } catch (e) {
+      // Ignore KV error
+    }
+  }
+
+  // Fallback fast check to see if DB is already fully initialized
   // This prevents running 20+ CREATE TABLE and 15+ ALTER TABLE queries on every cold start
   try {
     const check = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='products'").first();
@@ -41,6 +57,9 @@ export async function initDB(env, ctx) {
       dbReady = true;
       migrationsDone = true;
       pagesMigrationDone = true;
+      if (env.PAGE_CACHE && ctx && ctx.waitUntil) {
+        ctx.waitUntil(env.PAGE_CACHE.put('sys_db_init_v1', 'true', { expirationTtl: 86400 * 30 }));
+      }
       return;
     }
   } catch (e) {
@@ -289,6 +308,9 @@ export async function initDB(env, ctx) {
 
       // Mark DB as ready as soon as the core CREATE TABLEs complete
       dbReady = true;
+      if (env.PAGE_CACHE && ctx && ctx.waitUntil) {
+        ctx.waitUntil(env.PAGE_CACHE.put('sys_db_init_v1', 'true', { expirationTtl: 86400 * 30 }));
+      }
       console.log(`DB init completed in ${Date.now() - initStartTime}ms`);
 
       // Run migrations and page migrations asynchronously (background)
