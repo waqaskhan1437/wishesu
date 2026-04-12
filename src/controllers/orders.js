@@ -36,73 +36,6 @@ const ADDON_LIMITS = {
 };
 
 /**
- * Internal helper to dispatch order notifications (emails and webhooks).
- */
-async function internalNotifyOrder(env, {
-  orderId,
-  customerEmail,
-  amount,
-  productTitle,
-  productId,
-  addons = [],
-  deliveryTimeMinutes = 60,
-  paymentMethod = 'Website Checkout',
-  orderSource = 'frontend'
-}) {
-  // Send transactional buyer/admin emails via Brevo (best effort)
-  try {
-    const emailResult = await sendOrderNotificationEmails(env, {
-      orderId,
-      customerEmail,
-      amount,
-      currency: 'USD',
-      productId,
-      productTitle,
-      addons,
-      deliveryTimeMinutes,
-      paymentMethod,
-      orderSource
-    });
-    logOrderEmailDispatchResult(`${orderSource} order email notification`, emailResult, { orderId, source: orderSource });
-  } catch (e) {
-    console.error(`${orderSource} order email notification failed:`, e?.message || e);
-  }
-
-  // Send notifications via Universal Webhooks
-  const deliveryTime = deliveryTimeMinutes < 1440 ? `${Math.round(deliveryTimeMinutes / 60)} hour(s)` : `${Math.round(deliveryTimeMinutes / 1440)} day(s)`;
-  
-  notifyOrderReceived(env, { orderId, email: customerEmail, amount, productTitle, productId, customerName: '', currency: 'USD' }).catch(() => { });
-  notifyCustomerOrderConfirmed(env, { orderId, email: customerEmail, amount, productTitle, deliveryTime }).catch(() => { });
-
-  // Send Google Apps Script webhook
-  try {
-    const googleScriptUrl = await getGoogleScriptUrl(env);
-    if (googleScriptUrl) {
-      const gsPayload = {
-        event: 'order.received',
-        data: {
-          orderId,
-          productId,
-          productTitle,
-          customerName: '',
-          customerEmail,
-          amount,
-          currency: 'USD',
-          createdAt: new Date().toISOString()
-        }
-      };
-      await fetch(googleScriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(gsPayload)
-      }).catch(err => console.error(`Failed to send ${orderSource} order webhook:`, err));
-    }
-  } catch (err) {
-    console.error(`Error triggering ${orderSource} order webhook:`, err);
-  }
-}
-
-/**
  * Validate and sanitize addons array
  */
 function validateAddons(addons) {
@@ -276,18 +209,59 @@ export async function createOrder(env, body) {
     encryptedData: data
   });
 
-  // Dispatch notifications (emails and webhooks)
-  internalNotifyOrder(env, {
-    orderId,
-    customerEmail: email,
-    amount,
-    productTitle,
-    productId: body.productId,
-    addons,
-    deliveryTimeMinutes: deliveryMinutes,
-    paymentMethod: body.paymentMethod || 'Website Checkout',
-    orderSource: 'frontend'
-  });
+  // Send transactional buyer/admin emails via Brevo (best effort)
+  try {
+    const emailResult = await sendOrderNotificationEmails(env, {
+      orderId,
+      customerEmail: email,
+      amount,
+      currency: 'USD',
+      productId: body.productId,
+      productTitle,
+      addons,
+      deliveryTimeMinutes: deliveryMinutes,
+      paymentMethod: body.paymentMethod || 'Website Checkout',
+      orderSource: 'frontend'
+    });
+    logOrderEmailDispatchResult('Order email notification', emailResult, { orderId, source: 'frontend' });
+  } catch (e) {
+    console.error('Order email notification failed:', e?.message || e);
+  }
+
+  // Send notifications (async, don't wait)
+  const deliveryTime = deliveryMinutes < 1440 ? `${Math.round(deliveryMinutes / 60)} hour(s)` : `${Math.round(deliveryMinutes / 1440)} day(s)`;
+
+  // Send notifications via Universal Webhooks
+  notifyOrderReceived(env, { orderId, email, amount, productTitle }).catch(() => { });
+  notifyCustomerOrderConfirmed(env, { orderId, email, amount, productTitle, deliveryTime }).catch(() => { });
+
+  // Send Google Apps Script webhook in the same format used by the universal system.
+  // This uses the "order.received" event name and flattens the payload into a "data" object.
+  try {
+    const googleScriptUrl = await getGoogleScriptUrl(env);
+    if (googleScriptUrl) {
+      const gsPayload = {
+        event: 'order.received',
+        data: {
+          orderId: orderId,
+          productId: body.productId,
+          productTitle: productTitle,
+          customerName: '', // customer name not available in this context
+          customerEmail: email,
+          amount: amount,
+          currency: 'USD',
+          createdAt: new Date().toISOString()
+        }
+      };
+      await fetch(googleScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(gsPayload)
+      }).catch(err => console.error('Failed to send new order webhook:', err));
+    }
+  } catch (err) {
+    console.error('Error triggering new order webhook:', err);
+  }
 
   return json({ success: true, orderId, amount });
 }
@@ -324,9 +298,8 @@ export async function createManualOrder(env, body) {
     manualOrder: true
   });
   const manualDeliveryMinutes = Number(body.deliveryTime) || 60;
-  const manualAmount = parseFloat(body.amount) || 0;
 
-  await env.DB.prepare(
+      await env.DB.prepare(
     'INSERT INTO orders (order_id, product_id, encrypted_data, status, delivery_time_minutes) VALUES (?, ?, ?, ?, ?)'
   ).bind(
     orderId,
@@ -335,32 +308,86 @@ export async function createManualOrder(env, body) {
     body.status || 'paid',
     manualDeliveryMinutes
   ).run();
+      // Load product title for notifications
+      let productTitle = '';
+      try {
+        const product = await env.DB.prepare('SELECT title FROM products WHERE id = ?').bind(Number(body.productId)).first();
+        if (product) {
+          productTitle = product.title || '';
+        }
+      } catch (e) {
+        console.warn('Could not load product title for manual order notification');
+      }
 
-  // Load product title for notifications
-  let productTitle = '';
-  try {
-    const product = await env.DB.prepare('SELECT title FROM products WHERE id = ?').bind(Number(body.productId)).first();
-    if (product) {
-      productTitle = product.title || '';
-    }
-  } catch (e) {
-    console.warn('Could not load product title for manual order notification');
-  }
+      // Determine numeric amount (manual orders may not include addons)
+      const manualAmount = parseFloat(body.amount) || 0;
 
-  // Dispatch notifications (emails and webhooks)
-  internalNotifyOrder(env, {
-    orderId,
-    customerEmail: email,
-    amount: manualAmount,
-    productTitle,
-    productId: body.productId,
-    addons,
-    deliveryTimeMinutes: manualDeliveryMinutes,
-    paymentMethod: 'Manual Order',
-    orderSource: 'admin-manual'
-  });
+      // Send transactional buyer/admin emails via Brevo (best effort)
+      try {
+        const emailResult = await sendOrderNotificationEmails(env, {
+          orderId,
+          customerEmail: email,
+          amount: manualAmount,
+          currency: 'USD',
+          productId: body.productId,
+          productTitle,
+          addons,
+          deliveryTimeMinutes: manualDeliveryMinutes,
+          paymentMethod: 'Manual Order',
+          orderSource: 'admin-manual'
+        });
+        logOrderEmailDispatchResult('Manual order email notification', emailResult, { orderId, source: 'admin-manual' });
+      } catch (e) {
+        console.error('Manual order email notification failed:', e?.message || e);
+      }
 
-  return json({ success: true, orderId });
+      // Dispatch universal webhook for admin notification
+      notifyOrderReceived(env, {
+        orderId,
+        productId: body.productId,
+        productTitle,
+        customerName: '',
+        customerEmail: email,
+        amount: manualAmount,
+        currency: 'USD'
+      }).catch(() => {});
+
+      // Dispatch universal webhook for customer confirmation
+      notifyCustomerOrderConfirmed(env, {
+        orderId,
+        email,
+        amount: manualAmount,
+        productTitle
+      }).catch(() => {});
+
+      // Send Google Apps Script webhook using universal event format (if configured)
+      try {
+        const googleScriptUrl = await getGoogleScriptUrl(env);
+        if (googleScriptUrl) {
+          const gsPayload = {
+            event: 'order.received',
+            data: {
+              orderId: orderId,
+              productId: body.productId,
+              productTitle: productTitle,
+              customerName: '',
+              customerEmail: email,
+              amount: manualAmount,
+              currency: 'USD',
+              createdAt: new Date().toISOString()
+            }
+          };
+          await fetch(googleScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(gsPayload)
+          }).catch(err => console.error('Failed to send manual order webhook:', err));
+        }
+      } catch (err) {
+        console.error('Error triggering manual order webhook:', err);
+      }
+
+      return json({ success: true, orderId });
 }
 
 /**

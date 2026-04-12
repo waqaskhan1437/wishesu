@@ -6,81 +6,6 @@
 import { json, cachedJson } from '../utils/response.js';
 
 /**
- * Internal helper to sanitize blog slug.
- */
-function sanitizeBlogSlug(input) {
-  return String(input || '')
-    .toLowerCase()
-    .replace(/['"`]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-+/g, '-');
-}
-
-/**
- * Internal helper to save or update a blog post.
- * Consolidates logic from saveBlog and duplicateBlog.
- */
-async function internalSaveBlog(env, {
-  id,
-  title,
-  slug,
-  description = '',
-  content = '',
-  thumbnail_url = '',
-  custom_css = '',
-  custom_js = '',
-  seo_title = '',
-  seo_description = '',
-  seo_keywords = '',
-  status = 'draft',
-  created_at = null,
-  updated_at = null
-}) {
-  if (!title) throw new Error('Title is required');
-
-  const finalSlug = sanitizeBlogSlug(slug || title);
-  const now = Date.now();
-  const finalCreatedAt = created_at || now;
-  const finalUpdatedAt = updated_at || now;
-
-  const blogData = [
-    title,
-    finalSlug,
-    description || '',
-    content || '',
-    thumbnail_url || '',
-    custom_css || '',
-    custom_js || '',
-    seo_title || '',
-    seo_description || '',
-    seo_keywords || '',
-    status
-  ];
-
-  if (id) {
-    await env.DB.prepare(`
-      UPDATE blogs SET
-        title = ?, slug = ?, description = ?, content = ?, thumbnail_url = ?,
-        custom_css = ?, custom_js = ?, seo_title = ?, seo_description = ?,
-        seo_keywords = ?, status = ?, updated_at = ?
-      WHERE id = ?
-    `).bind(...blogData, finalUpdatedAt, id).run();
-
-    return { success: true, id, slug: finalSlug };
-  }
-
-  const result = await env.DB.prepare(`
-    INSERT INTO blogs (
-      title, slug, description, content, thumbnail_url, custom_css, custom_js,
-      seo_title, seo_description, seo_keywords, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(...blogData, finalCreatedAt, finalUpdatedAt).run();
-
-  return { success: true, id: result.meta?.last_row_id, slug: finalSlug };
-}
-
-/**
  * Get all blog posts (admin - no cache)
  */
 export async function getBlogs(env) {
@@ -222,30 +147,111 @@ export async function getPreviousBlogs(env, currentId, limit = 2) {
  */
 export async function saveBlog(env, body) {
   try {
-    let blogParams = { ...body };
+    const {
+      id,
+      title,
+      slug,
+      description,
+      content,
+      thumbnail_url,
+      custom_css,
+      custom_js,
+      seo_title,
+      seo_description,
+      seo_keywords,
+      status = 'draft'
+    } = body;
 
-    if (body.id) {
-      const existing = await env.DB.prepare('SELECT * FROM blogs WHERE id = ?').bind(body.id).first();
-      if (!existing) return json({ error: 'Blog post not found' }, 404);
-      
-      const pick = (key, fallback) => (key in body) ? (body[key] ?? '') : (fallback ?? '');
-      blogParams = {
-        ...existing,
-        ...body,
-        description: pick('description', existing.description),
-        content: pick('content', existing.content),
-        thumbnail_url: pick('thumbnail_url', existing.thumbnail_url),
-        custom_css: pick('custom_css', existing.custom_css),
-        custom_js: pick('custom_js', existing.custom_js),
-        seo_title: pick('seo_title', existing.seo_title),
-        seo_description: pick('seo_description', existing.seo_description),
-        seo_keywords: pick('seo_keywords', existing.seo_keywords),
-        status: pick('status', existing.status)
-      };
+    if (!title) {
+      return json({ error: 'Title is required' }, 400);
     }
 
-    const result = await internalSaveBlog(env, blogParams);
-    return json(result);
+    // Generate or sanitize the slug.
+    // If a slug is provided by the user, sanitize it to ensure it follows
+    // SEO best practices (lowercase, hyphens only, trimmed). Otherwise, generate
+    // one from the title. Avoid underscores or other special characters.
+    let finalSlug;
+    if (slug && typeof slug === 'string' && slug.trim().length > 0) {
+      finalSlug = slug.toLowerCase()
+        .replace(/['"`]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-+/g, '-');
+    } else {
+      finalSlug = title.toLowerCase()
+        .replace(/['"`]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-+/g, '-');
+    }
+
+    const now = Date.now();
+
+    if (id) {
+      // Partial update: fetch existing blog and only overwrite fields that were explicitly sent
+      const existing = await env.DB.prepare('SELECT * FROM blogs WHERE id = ?').bind(id).first();
+      if (!existing) {
+        return json({ error: 'Blog post not found' }, 404);
+      }
+
+      // Helper: use the new value only if the key was present in the request body
+      const pick = (key, fallback) => (key in body) ? (body[key] ?? '') : (fallback ?? '');
+
+      await env.DB.prepare(`
+        UPDATE blogs SET
+          title = ?,
+          slug = ?,
+          description = ?,
+          content = ?,
+          thumbnail_url = ?,
+          custom_css = ?,
+          custom_js = ?,
+          seo_title = ?,
+          seo_description = ?,
+          seo_keywords = ?,
+          status = ?,
+          updated_at = ?
+        WHERE id = ?
+      `).bind(
+        title,
+        finalSlug,
+        pick('description', existing.description),
+        pick('content', existing.content),
+        pick('thumbnail_url', existing.thumbnail_url),
+        pick('custom_css', existing.custom_css),
+        pick('custom_js', existing.custom_js),
+        pick('seo_title', existing.seo_title),
+        pick('seo_description', existing.seo_description),
+        pick('seo_keywords', existing.seo_keywords),
+        pick('status', existing.status),
+        now,
+        id
+      ).run();
+
+      return json({ success: true, id, slug: finalSlug });
+    } else {
+      // Create new blog
+      const result = await env.DB.prepare(`
+        INSERT INTO blogs (title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        title,
+        finalSlug,
+        description || '',
+        content || '',
+        thumbnail_url || '',
+        custom_css || '',
+        custom_js || '',
+        seo_title || '',
+        seo_description || '',
+        seo_keywords || '',
+        status,
+        now,
+        now
+      ).run();
+
+      return json({ success: true, id: result.meta?.last_row_id, slug: finalSlug });
+    }
   } catch (err) {
     return json({ error: err.message }, 500);
   }
@@ -326,7 +332,20 @@ export async function duplicateBlog(env, body) {
       return json({ error: 'Blog not found' }, 404);
     }
 
-    let baseSlug = sanitizeBlogSlug(original.slug || 'post');
+    // Generate a readable slug for the duplicated blog post. Instead of
+    // appending a timestamp, which produces long and unreadable URLs,
+    // append a simple "-copy" suffix and increment it until the slug is
+    // unique. This maintains SEO best practices for short, descriptive slugs.
+    let baseSlug = (original.slug || '')
+      .toString()
+      .toLowerCase()
+      .replace(/['"`]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/-+/g, '-');
+    if (!baseSlug) {
+      baseSlug = 'post';
+    }
     let newSlugCandidate = `${baseSlug}-copy`;
     let counter = 1;
     while (true) {
@@ -334,16 +353,26 @@ export async function duplicateBlog(env, body) {
       if (!exists) break;
       newSlugCandidate = `${baseSlug}-copy${counter++}`;
     }
+    const now = Date.now();
+    const result = await env.DB.prepare(`
+      INSERT INTO blogs (title, slug, description, content, thumbnail_url, custom_css, custom_js, seo_title, seo_description, seo_keywords, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)
+    `).bind(
+      `${original.title} (Copy)`,
+      newSlugCandidate,
+      original.description || '',
+      original.content || '',
+      original.thumbnail_url || '',
+      original.custom_css || '',
+      original.custom_js || '',
+      original.seo_title || '',
+      original.seo_description || '',
+      original.seo_keywords || '',
+      now,
+      now
+    ).run();
 
-    const result = await internalSaveBlog(env, {
-      ...original,
-      id: null,
-      title: `${original.title} (Copy)`,
-      slug: newSlugCandidate,
-      status: 'draft'
-    });
-
-    return json(result);
+    return json({ success: true, id: result.meta?.last_row_id, slug: newSlugCandidate });
   } catch (err) {
     return json({ error: err.message }, 500);
   }
