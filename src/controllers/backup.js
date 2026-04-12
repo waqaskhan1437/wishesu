@@ -128,47 +128,7 @@ function extractLinksFromValue(val) {
   return links;
 }
 
-async function ensureBackupsTable(env) {
-  // Create table if missing
-  await env.DB
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS backups (
-        id TEXT PRIMARY KEY,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        size INTEGER DEFAULT 0,
-        media_count INTEGER DEFAULT 0,
-        r2_key TEXT
-      )`
-    )
-    .run();
 
-  // If table existed from an older version, migrate missing columns
-  const info = await env.DB.prepare('PRAGMA table_info(backups)').all();
-  const cols = new Set((info?.results || []).map((r) => r.name));
-
-  // Older schema might have `timestamp` instead of `created_at`
-  if (!cols.has('created_at') && cols.has('timestamp')) {
-    await env.DB.prepare('ALTER TABLE backups ADD COLUMN created_at DATETIME').run();
-    await env.DB.prepare('UPDATE backups SET created_at = timestamp WHERE created_at IS NULL').run();
-    cols.add('created_at');
-  } else if (!cols.has('created_at')) {
-    await env.DB.prepare('ALTER TABLE backups ADD COLUMN created_at DATETIME').run();
-    cols.add('created_at');
-  }
-
-  if (!cols.has('size')) {
-    await env.DB.prepare('ALTER TABLE backups ADD COLUMN size INTEGER DEFAULT 0').run();
-    cols.add('size');
-  }
-  if (!cols.has('media_count')) {
-    await env.DB.prepare('ALTER TABLE backups ADD COLUMN media_count INTEGER DEFAULT 0').run();
-    cols.add('media_count');
-  }
-  if (!cols.has('r2_key')) {
-    await env.DB.prepare('ALTER TABLE backups ADD COLUMN r2_key TEXT').run();
-    cols.add('r2_key');
-  }
-}
 
 async function getBackupsColumns(env) {
   const info = await env.DB.prepare('PRAGMA table_info(backups)').all();

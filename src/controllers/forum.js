@@ -13,10 +13,7 @@ import {
 } from './webhooks.js';
 
 // Cache for schema validation - avoids repeated checks per request
-let forumSchemaValidated = false;
-let forumSchemaValidationPromise = null;
-let forumSlugHealthChecked = false;
-let forumSlugHealthPromise = null;
+
 
 function buildForumQuestionBaseSlug(title, fallbackSeed = Date.now()) {
   const baseSlug = slugifyStr(String(title || '')).slice(0, 80).replace(/^-+|-+$/g, '');
@@ -65,193 +62,13 @@ async function normalizeExistingForumQuestionSlugs(env) {
   `).run();
 }
 
-async function ensureForumQuestionSlugHealth(env) {
-  if (forumSlugHealthChecked) return;
-  if (forumSlugHealthPromise) return forumSlugHealthPromise;
-
-  forumSlugHealthPromise = (async () => {
-    let needsNormalization = false;
-
-    try {
-      const missingSlugRow = await env.DB.prepare(`
-        SELECT id
-        FROM forum_questions
-        WHERE slug IS NULL OR TRIM(slug) = ''
-        LIMIT 1
-      `).first();
-      needsNormalization = !!missingSlugRow;
-    } catch (_) {
-      needsNormalization = true;
-    }
-
-    if (!needsNormalization) {
-      try {
-        const duplicateSlugRow = await env.DB.prepare(`
-          SELECT slug
-          FROM forum_questions
-          WHERE slug IS NOT NULL AND TRIM(slug) != ''
-          GROUP BY slug
-          HAVING COUNT(*) > 1
-          LIMIT 1
-        `).first();
-        needsNormalization = !!duplicateSlugRow;
-      } catch (_) {
-        needsNormalization = true;
-      }
-    }
-
-    if (needsNormalization) {
-      await normalizeExistingForumQuestionSlugs(env);
-    } else {
-      try {
-        await env.DB.prepare(`
-          CREATE UNIQUE INDEX IF NOT EXISTS idx_forum_questions_slug_unique
-          ON forum_questions(slug)
-        `).run();
-      } catch (_) {}
-    }
-
-    forumSlugHealthChecked = true;
-  })();
-
-  try {
-    await forumSlugHealthPromise;
-  } finally {
-    forumSlugHealthPromise = null;
-  }
-}
+async function ensureForumQuestionSlugHealth(env) { /* migrated to db.js */ }
 
 /**
  * Ensure forum tables exist with proper schema
  * Uses caching to avoid repeated checks on every request
  */
-async function ensureForumTables(env) {
-  // Skip if already validated in this worker instance
-  if (forumSchemaValidated) return;
-  if (forumSchemaValidationPromise) return forumSchemaValidationPromise;
-
-  forumSchemaValidationPromise = (async () => {
-    try {
-      // Quick check - if both columns exist, we're good
-      let repliesOk = false;
-      let questionsOk = false;
-      
-      try {
-        await env.DB.prepare(`SELECT question_id FROM forum_replies LIMIT 1`).first();
-        repliesOk = true;
-      } catch (e) { /* needs fix */ }
-      
-      try {
-        await env.DB.prepare(`SELECT email FROM forum_questions LIMIT 1`).first();
-        questionsOk = true;
-      } catch (e) { /* needs fix */ }
-      
-      // If both tables are OK, avoid a full-table rewrite unless the slug data
-      // is actually missing or duplicated.
-      if (repliesOk && questionsOk) {
-        await ensureForumQuestionSlugHealth(env);
-        forumSchemaValidated = true;
-        return;
-      }
-
-      forumSlugHealthChecked = false;
-
-      // Only recreate if needed (rare - only on first deploy or schema change)
-      if (!repliesOk) {
-        // Backup and recreate forum_replies
-        let existingReplies = [];
-        try {
-          const result = await env.DB.prepare(`SELECT * FROM forum_replies`).all();
-          existingReplies = result.results || [];
-        } catch (e) { /* table might not exist */ }
-
-        await env.DB.prepare(`DROP TABLE IF EXISTS forum_replies`).run();
-        await env.DB.prepare(`
-          CREATE TABLE forum_replies (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question_id INTEGER NOT NULL DEFAULT 0,
-            name TEXT NOT NULL DEFAULT '',
-            email TEXT DEFAULT '',
-            content TEXT NOT NULL DEFAULT '',
-            status TEXT DEFAULT 'pending',
-            created_at INTEGER
-          )
-        `).run();
-
-        // Batch insert for better performance
-        if (existingReplies.length > 0) {
-          const batch = existingReplies.map(r => 
-            env.DB.prepare(`INSERT INTO forum_replies (id, question_id, name, email, content, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-              .bind(r.id || null, r.question_id || 0, r.name || '', r.email || '', r.content || '', r.status || 'pending', r.created_at || Date.now())
-          );
-          // Execute in parallel batches of 10
-          for (let i = 0; i < batch.length; i += 10) {
-            await Promise.all(batch.slice(i, i + 10).map(stmt => stmt.run().catch(() => {})));
-          }
-        }
-      }
-
-      if (!questionsOk) {
-        // Backup and recreate forum_questions
-        let existingQuestions = [];
-        try {
-          const result = await env.DB.prepare(`SELECT * FROM forum_questions`).all();
-          existingQuestions = result.results || [];
-        } catch (e) { /* table might not exist */ }
-
-        await env.DB.prepare(`DROP TABLE IF EXISTS forum_questions`).run();
-        await env.DB.prepare(`
-          CREATE TABLE forum_questions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL DEFAULT '',
-            slug TEXT UNIQUE,
-            content TEXT NOT NULL DEFAULT '',
-            name TEXT NOT NULL DEFAULT '',
-            email TEXT DEFAULT '',
-            status TEXT DEFAULT 'pending',
-            reply_count INTEGER DEFAULT 0,
-            created_at INTEGER,
-            updated_at INTEGER
-          )
-        `).run();
-
-        // Batch insert for better performance
-        if (existingQuestions.length > 0) {
-          const usedForumSlugs = new Set();
-          const buildRestoredForumSlug = (question, fallbackIndex) => {
-            const baseSlug = buildForumQuestionBaseSlug(question?.slug || question?.title || '', fallbackIndex);
-            let candidate = baseSlug;
-            let suffix = 1;
-            while (usedForumSlugs.has(candidate)) {
-              candidate = `${baseSlug}-${suffix++}`;
-            }
-            usedForumSlugs.add(candidate);
-            return candidate;
-          };
-          const batch = existingQuestions.map(q =>
-            env.DB.prepare(`INSERT INTO forum_questions (id, title, slug, content, name, email, status, reply_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-              .bind(q.id || null, q.title || '', buildRestoredForumSlug(q, q.id || Date.now()), q.content || '', q.name || '', q.email || '', q.status || 'pending', q.reply_count || 0, q.created_at || Date.now(), q.updated_at || Date.now())
-          );
-          for (let i = 0; i < batch.length; i += 10) {
-            await Promise.all(batch.slice(i, i + 10).map(stmt => stmt.run().catch(() => {})));
-          }
-        }
-      }
-
-      await normalizeExistingForumQuestionSlugs(env);
-      forumSlugHealthChecked = true;
-      forumSchemaValidated = true;
-    } catch (e) {
-      console.error('Forum table creation error:', e);
-    }
-  })();
-
-  try {
-    await forumSchemaValidationPromise;
-  } finally {
-    forumSchemaValidationPromise = null;
-  }
-}
+async function ensureForumTables(env) { /* migrated to db.js */ }
 
 /**
  * Get published questions for forum page with pagination
@@ -271,8 +88,6 @@ export async function getPublishedQuestions(env, url) {
         }
       } catch(e) {}
     }
-
-    await ensureForumTables(env);
 
     // OPTIMIZED: Run count and data queries in parallel
     const [countResult, result] = await Promise.all([
@@ -328,8 +143,6 @@ export async function getQuestion(env, slug) {
       } catch(e) {}
     }
 
-    await ensureForumTables(env);
-
     const question = await env.DB.prepare(`
       SELECT * FROM forum_questions WHERE slug = ? AND status = 'approved'
     `).bind(slug).first();
@@ -376,8 +189,6 @@ export async function getQuestionById(env, id) {
         }
       } catch(e) {}
     }
-
-    await ensureForumTables(env);
     
     if (!id) {
       return json({ error: 'Question ID required' }, 400);
@@ -411,7 +222,6 @@ export async function getQuestionById(env, id) {
  */
 export async function getQuestionReplies(env, questionId) {
   try {
-    await ensureForumTables(env);
     
     if (!questionId) {
       return json({ replies: [] });
@@ -439,7 +249,6 @@ export async function getQuestionReplies(env, questionId) {
  */
 export async function checkPendingForum(env, email) {
   try {
-    await ensureForumTables(env);
     
     // Check pending questions
     let pendingQuestion = null;
@@ -477,7 +286,6 @@ export async function checkPendingForum(env, email) {
  */
 export async function submitQuestion(env, body) {
   try {
-    await ensureForumTables(env);
     
     const { title, content, name, email } = body;
 
@@ -585,7 +393,6 @@ export async function submitQuestion(env, body) {
  */
 export async function submitReply(env, body) {
   try {
-    await ensureForumTables(env);
     
     const { question_id, content, name, email } = body;
 
@@ -699,7 +506,6 @@ export async function submitReply(env, body) {
  */
 export async function getAdminQuestions(env, url) {
   try {
-    await ensureForumTables(env);
     
     const status = url.searchParams.get('status') || 'all';
 
@@ -739,7 +545,6 @@ export async function getAdminQuestions(env, url) {
  */
 export async function getAdminReplies(env, url) {
   try {
-    await ensureForumTables(env);
     
     const status = url.searchParams.get('status') || 'all';
     const questionId = url.searchParams.get('question_id');

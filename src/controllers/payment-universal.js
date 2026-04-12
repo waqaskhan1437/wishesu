@@ -581,16 +581,6 @@ function isPaymentSuccessEvent(eventType, payload, gatewayName) {
 async function logWebhookEvent(env, gatewayName, payload) {
   try {
     await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS webhook_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        gateway TEXT NOT NULL,
-        event_type TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        processed_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
-    
-    await env.DB.prepare(`
       INSERT INTO webhook_events (gateway, event_type, payload)
       VALUES (?, ?, ?)
     `).bind(gatewayName, payload.type || payload.event_type || 'unknown', JSON.stringify(payload)).run();

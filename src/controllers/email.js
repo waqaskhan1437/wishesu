@@ -20,37 +20,6 @@ const TEMPLATES_CACHE_TTL = 60000; // 1 minute
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 const BREVO_TIMEOUT_MS = 10000;
 
-/**
- * Ensure the email_templates and leads tables exist. If they do not, create
- * them. This function is idempotent and can be called multiple times without
- * side effects. The email_templates table stores a unique template per type.
- * The leads table stores captured leads with a timestamp.
- *
- * @param {object} env Cloudflare environment with DB binding
- */
-async function ensureEmailTables(env) {
-  if (!env.DB) return;
-  // Create email_templates table
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS email_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type TEXT UNIQUE,
-      subject TEXT,
-      body TEXT,
-      updated_at INTEGER
-    )
-  `).run();
-  // Create leads table
-  await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS leads (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT,
-      name TEXT,
-      source TEXT,
-      created_at INTEGER
-    )
-  `).run();
-}
 
 /**
  * Fetch all email templates from the database. Results are cached for a
