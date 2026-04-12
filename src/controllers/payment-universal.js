@@ -537,11 +537,18 @@ async function processPaymentEvent(env, gateway, payload) {
       console.log(`Failed payment from ${gateway.name}:`, { eventId, eventType });
     }
 
-    // Store webhook event for debugging
-    await env.DB.prepare(`
-      INSERT INTO webhook_events (gateway, event_type, payload, processed_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-    `).bind(gateway.name, eventType, JSON.stringify(payload)).run();
+    // Deduplicate and store webhook event
+    try {
+      await env.DB.prepare(`
+        INSERT INTO webhook_events (gateway, event_id, event_type, payload, processed_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `).bind(gateway.name, eventId || `evt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`, eventType, JSON.stringify(payload)).run();
+    } catch (e) {
+      if (e.message && e.message.includes('UNIQUE constraint')) {
+        console.log(`Duplicate webhook ignored: ${eventId}`);
+        return; // Skip duplicate processing
+      }
+    }
   } catch (e) {
     console.error('Payment event processing error:', e);
   }
@@ -580,12 +587,15 @@ function isPaymentSuccessEvent(eventType, payload, gatewayName) {
  */
 async function logWebhookEvent(env, gatewayName, payload) {
   try {
+    const eventId = payload.id || payload.event_id || payload.payment_id || `evt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     await env.DB.prepare(`
-      INSERT INTO webhook_events (gateway, event_type, payload)
-      VALUES (?, ?, ?)
-    `).bind(gatewayName, payload.type || payload.event_type || 'unknown', JSON.stringify(payload)).run();
+      INSERT INTO webhook_events (gateway, event_id, event_type, payload)
+      VALUES (?, ?, ?, ?)
+    `).bind(gatewayName, eventId, payload.type || payload.event_type || 'unknown', JSON.stringify(payload)).run();
   } catch (e) {
-    console.error('Webhook logging error:', e);
+    if (!e.message || !e.message.includes('UNIQUE constraint')) {
+      console.error('Webhook logging error:', e);
+    }
   }
 }
 

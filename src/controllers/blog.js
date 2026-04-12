@@ -216,6 +216,23 @@ export async function saveBlog(env, body) {
         .replace(/-+/g, '-');
     }
 
+    // Ensure slug uniqueness
+    let baseSlug = finalSlug;
+    let slugIdx = 1;
+    if (id) {
+      let exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ? AND id != ?').bind(finalSlug, Number(id)).first();
+      while (exists) {
+        finalSlug = `${baseSlug}-${slugIdx++}`;
+        exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ? AND id != ?').bind(finalSlug, Number(id)).first();
+      }
+    } else {
+      let exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ?').bind(finalSlug).first();
+      while (exists) {
+        finalSlug = `${baseSlug}-${slugIdx++}`;
+        exists = await env.DB.prepare('SELECT id FROM blogs WHERE slug = ?').bind(finalSlug).first();
+      }
+    }
+
     const now = Date.now();
 
     if (id) {

@@ -321,10 +321,27 @@ export async function saveProduct(env, body) {
   productsCache = null;
   productsCacheTime = 0;
   
-  const slug = (body.slug || '').trim() || slugifyStr(title);
+  let slug = (body.slug || '').trim() || slugifyStr(title);
   const addonsJson = JSON.stringify(body.addons || []);
   const galleryJson = JSON.stringify(normalizeGalleryImages(body));
   const { hasCreatedAt, hasUpdatedAt } = await getProductTimestampSupport(env);
+  
+  // Ensure slug uniqueness
+  let baseSlug = slug;
+  let slugIdx = 1;
+  if (body.id) {
+    let exists = await env.DB.prepare('SELECT id FROM products WHERE slug = ? AND id != ?').bind(slug, Number(body.id)).first();
+    while (exists) {
+      slug = `${baseSlug}-${slugIdx++}`;
+      exists = await env.DB.prepare('SELECT id FROM products WHERE slug = ? AND id != ?').bind(slug, Number(body.id)).first();
+    }
+  } else {
+    let exists = await env.DB.prepare('SELECT id FROM products WHERE slug = ?').bind(slug).first();
+    while (exists) {
+      slug = `${baseSlug}-${slugIdx++}`;
+      exists = await env.DB.prepare('SELECT id FROM products WHERE slug = ?').bind(slug).first();
+    }
+  }
   
   if (body.id) {
     // Store delivery_time_days in normal_delivery_text field as days number

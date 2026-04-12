@@ -526,6 +526,31 @@ async function runMigrations(env) {
     `).run();
   } catch (_) {}
 
+  // Deduplicate product slugs before enforcing unique index
+  try {
+    const dups = await env.DB.prepare('SELECT slug FROM products WHERE slug IS NOT NULL GROUP BY slug HAVING COUNT(*) > 1').all();
+    if (dups && dups.results && dups.results.length > 0) {
+      for (const d of dups.results) {
+        const rows = await env.DB.prepare('SELECT id FROM products WHERE slug = ? ORDER BY id ASC').bind(d.slug).all();
+        if (rows && rows.results && rows.results.length > 1) {
+          for (let i = 1; i < rows.results.length; i++) {
+            const rowId = rows.results[i].id;
+            await env.DB.prepare('UPDATE products SET slug = ? WHERE id = ?').bind(`${d.slug}-${rowId}`, rowId).run();
+          }
+        }
+      }
+    }
+  } catch(e) {
+    console.error('Slug deduplication error:', e);
+  }
+
+  // Enforce unique index now that duplicates are resolved
+  try {
+    await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_products_slug ON products(slug)').run();
+  } catch(e) {
+    console.error('Index creation error:', e);
+  }
+
   clearProductTableColumnsCache();
 }
 

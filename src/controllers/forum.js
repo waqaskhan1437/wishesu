@@ -25,42 +25,6 @@ function isForumSlugUniqueConstraintError(error) {
   return message.includes('unique') && message.includes('forum_questions.slug');
 }
 
-async function normalizeExistingForumQuestionSlugs(env) {
-  const rows = await env.DB.prepare(`
-    SELECT id, title, slug
-    FROM forum_questions
-    ORDER BY created_at ASC, id ASC
-  `).all();
-
-  const questions = rows.results || [];
-  const used = new Set();
-
-  for (const question of questions) {
-    const stableSeed = question?.id || Date.now();
-    const preferredBase = buildForumQuestionBaseSlug(question?.slug || question?.title || '', stableSeed);
-    let candidate = preferredBase;
-    let suffix = 1;
-
-    while (used.has(candidate)) {
-      candidate = `${preferredBase}-${suffix++}`;
-    }
-
-    if (String(question?.slug || '') !== candidate) {
-      await env.DB.prepare(`
-        UPDATE forum_questions
-        SET slug = ?, updated_at = ?
-        WHERE id = ?
-      `).bind(candidate, Date.now(), question.id).run();
-    }
-
-    used.add(candidate);
-  }
-
-  await env.DB.prepare(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_forum_questions_slug_unique
-    ON forum_questions(slug)
-  `).run();
-}
 
 async function ensureForumQuestionSlugHealth(env) { /* migrated to db.js */ }
 

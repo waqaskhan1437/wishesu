@@ -71,14 +71,13 @@ export async function startChat(env, body) {
     
     // Batch migrate sessions - process in parallel
     if (otherIds.length > 0) {
-      await Promise.all(otherIds.map(async (sid) => {
-        await env.DB.prepare(
-          `UPDATE chat_messages SET session_id = ? WHERE session_id = ?`
-        ).bind(canonicalId, sid).run();
-        await env.DB.prepare(
-          `DELETE FROM chat_sessions WHERE id = ?`
-        ).bind(sid).run();
-      }));
+      const placeholders = otherIds.map(() => '?').join(',');
+      await env.DB.prepare(
+        `UPDATE chat_messages SET session_id = ? WHERE session_id IN (${placeholders})`
+      ).bind(canonicalId, ...otherIds).run();
+      await env.DB.prepare(
+        `DELETE FROM chat_sessions WHERE id IN (${placeholders})`
+      ).bind(...otherIds).run();
     }
 
     return json({ sessionId: canonicalId, reused: true });
