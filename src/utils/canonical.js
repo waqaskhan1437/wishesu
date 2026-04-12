@@ -122,7 +122,8 @@ export function shouldServeCanonicalAliasDirectly(pathname) {
 
 export function normalizeCanonicalPath(pathname) {
   let path = collapsePathname(pathname);
-  path = CANONICAL_ALIAS_MAP.get(path) || path;
+  let lowerPath = path.toLowerCase();
+  path = CANONICAL_ALIAS_MAP.get(lowerPath) || CANONICAL_ALIAS_MAP.get(path) || path;
 
   if (
     path.length > 1 &&

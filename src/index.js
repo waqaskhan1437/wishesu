@@ -1446,7 +1446,8 @@ export function shouldServeCanonicalAliasDirectly(pathname) {
 
 function normalizeCanonicalPath(pathname) {
   let p = String(pathname || '/').trim() || '/';
-  p = CANONICAL_ALIAS_MAP.get(p) || p;
+  let lowerP = p.toLowerCase();
+  p = CANONICAL_ALIAS_MAP.get(lowerP) || CANONICAL_ALIAS_MAP.get(p) || p;
 
   // Keep trailing slash only for root and admin/api namespaces.
   if (
