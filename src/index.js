@@ -3812,7 +3812,7 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
 
   // Sidebar products
   const productsHTML = (sidebar.products || []).map(p => `
-    <a href="/product/${encodeURIComponent(p.slug || '')}" class="sidebar-card">
+    <a href="/product-${p.id}/${p.slug || p.id}" class="sidebar-card">
       <img src="${p.thumbnail_url || 'https://via.placeholder.com/150x84?text=Product'}" alt="${p.title}">
       <div class="sidebar-card-info">
         <div class="sidebar-card-title">${(p.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
@@ -5705,63 +5705,54 @@ if (method === 'GET' || method === 'HEAD') {
         let schemaProductId = null;
         let schemaProduct = null;
 
-        // Canonical product URLs: /product-<id>/<slug> - REDIRECT to /product/<slug>
+        // Canonical product URLs: /product-<id>/<slug>
         if ((method === 'GET' || method === 'HEAD')) {
           const canonicalMatch = assetPath.match(/^\/product-(\d+)\/(.+)$/);
           if (canonicalMatch) {
             const pid = Number(canonicalMatch[1]);
-            const oldSlug = decodeURIComponent(canonicalMatch[2] || '');
-            if (!Number.isNaN(pid) && env.DB) {
-              // Get product slug and redirect to new format
-              await initDB(env);
-              const product = await env.DB.prepare('SELECT slug FROM products WHERE id = ? LIMIT 1').bind(pid).first();
-              if (product && product.slug) {
-                const newPath = `/product/${encodeURIComponent(product.slug)}`;
-                // Don't redirect if new path equals current path (prevents redirect loop)
-                if (newPath !== path) {
-                  return Response.redirect(new URL(newPath, url.origin).toString(), 301);
-                }
-              }
+            if (!Number.isNaN(pid)) {
+              schemaProductId = pid;
+              const rewritten = new URL(req.url);
+              rewritten.pathname = '/_product_template.tpl';
+              rewritten.searchParams.set('id', String(schemaProductId));
+              assetReq = new Request(rewritten.toString(), req);
+              assetPath = '/_product_template.tpl';
             }
           }
-        }
 
-        // Archive aliases: resolve folder URLs to concrete index assets to avoid
-        // asset-layer redirect loops and allow SSR injection in one code path.
-        const archiveAssetAliases = {
-          '/blog': '/blog/index.html',
-          '/blog/': '/blog/index.html',
-          '/forum': '/forum/index.html',
-          '/forum/': '/forum/index.html',
-          '/products': '/products-grid.html',
-          '/products/': '/products-grid.html',
-          '/products/index.html': '/products-grid.html',
-          '/products-grid': '/products-grid.html',
-          '/products-grid/': '/products-grid.html',
-          '/checkout': '/checkout.html',
-          '/checkout/': '/checkout.html',
-          '/success': '/success.html',
-          '/success/': '/success.html',
-          '/buyer-order': '/buyer-order.html',
-          '/buyer-order/': '/buyer-order.html',
-          '/order-detail': '/order-detail.html',
-          '/order-detail/': '/order-detail.html'
-        };
-        const archiveTarget = archiveAssetAliases[assetPath];
-        if (archiveTarget) {
-          const rewritten = new URL(req.url);
-          rewritten.pathname = archiveTarget;
-          assetReq = new Request(rewritten.toString(), req);
-          assetPath = archiveTarget;
-        }
+          // Archive aliases: resolve folder URLs to concrete index assets to avoid
+          // asset-layer redirect loops and allow SSR injection in one code path.
+          const archiveAssetAliases = {
+            '/blog': '/blog/index.html',
+            '/blog/': '/blog/index.html',
+            '/forum': '/forum/index.html',
+            '/forum/': '/forum/index.html',
+            '/products': '/products-grid.html',
+            '/products/': '/products-grid.html',
+            '/products/index.html': '/products-grid.html',
+            '/products-grid': '/products-grid.html',
+            '/products-grid/': '/products-grid.html',
+            '/checkout': '/checkout.html',
+            '/checkout/': '/checkout.html',
+            '/success': '/success.html',
+            '/success/': '/success.html',
+            '/buyer-order': '/buyer-order.html',
+            '/buyer-order/': '/buyer-order.html',
+            '/order-detail': '/order-detail.html',
+            '/order-detail/': '/order-detail.html'
+          };
+          const archiveTarget = archiveAssetAliases[assetPath];
+          if (archiveTarget) {
+            const rewritten = new URL(req.url);
+            rewritten.pathname = archiveTarget;
+            assetReq = new Request(rewritten.toString(), req);
+            assetPath = archiveTarget;
+          }
 
-        // Generic path resolution: for extensionless paths not already
-        // aliased above, try resolving to {path}.html or {path}/index.html
-        // to prevent the asset layer from returning 307 redirects.
-        // EXCLUDE: /product/* URLs - they should use the new canonical format
-        if (!archiveTarget && !assetPath.includes('.') && assetPath !== '/') {
-          // Don't add .html for product URLs - they need special handling
-          if (!assetPath.startsWith('/product/')) {
+          // Generic path resolution: for extensionless paths not already
+          // aliased above, try resolving to {path}.html or {path}/index.html
+          // to prevent the asset layer from returning 307 redirects.
+          if (!archiveTarget && !assetPath.includes('.') && assetPath !== '/') {
             const cleanPath = assetPath.endsWith('/') ? assetPath.slice(0, -1) : assetPath;
             const rewritten = new URL(req.url);
             rewritten.pathname = cleanPath + '.html';
@@ -5985,29 +5976,8 @@ if (method === 'GET' || method === 'HEAD') {
             }
 
             // Product detail page - inject individual product schema
-            // Handle: /_product_template.tpl, /product, /product.html, /product/<slug> (NEW FORMAT)
-            if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product' || assetPath.startsWith('/product/')) {
-              // NEW FORMAT: /product/<slug> - fetch product by slug, not ID
-              const pathProductMatch = path.match(/^\/product\/([^/]+)$/);
-              let productId = schemaProductId ? String(schemaProductId) : null;
-              let productBySlug = null;
-              
-              // If using new format /product/<slug>, look up by slug
-              if (!productId && pathProductMatch) {
-                const slug = decodeURIComponent(pathProductMatch[1]);
-                if (slug && env.DB) {
-                  await initDB(env);
-                  productBySlug = await env.DB.prepare('SELECT id, title, slug FROM products WHERE slug = ? AND status = ? LIMIT 1').bind(slug, 'active').first();
-                  if (productBySlug) {
-                    productId = String(productBySlug.id);
-                  }
-                }
-              }
-              
-              if (!productId) {
-                productId = url.searchParams.get('id');
-              }
-              
+            if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
+              const productId = schemaProductId ? String(schemaProductId) : url.searchParams.get('id');
               if (productId && env.DB) {
                 await initDB(env);
 
@@ -6142,14 +6112,14 @@ if (method === 'GET' || method === 'HEAD') {
                           title: prev.title,
                           slug: prev.slug,
                           thumbnail_url: prev.thumbnail_url,
-                          url: `/product/${encodeURIComponent(prev.slug || '')}`
+                          url: `/product-${prev.id}/${encodeURIComponent(prev.slug || '')}`
                         } : null,
                         next: next ? {
                           id: next.id,
                           title: next.title,
                           slug: next.slug,
                           thumbnail_url: next.thumbnail_url,
-                          url: `/product/${encodeURIComponent(next.slug || '')}`
+                          url: `/product-${next.id}/${encodeURIComponent(next.slug || '')}`
                         } : null
                       };
                     } catch (_) {}

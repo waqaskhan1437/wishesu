@@ -89,17 +89,13 @@
     try {
       const params = new URLSearchParams(location.search);
       let productId = params.get('id');
-      // Handle both URL formats:
-      // - New: /product/<slug> (ID via ?id= query param, or fetch by slug)
-      // - Legacy: /product-<id>/<slug> (extract ID from path)
+      // Canonical URLs are /product-<id>/<slug>. If the worker forgets to
+      // inject ?id=, we can still recover the numeric id from the path.
       if (!productId) {
-        // Try legacy format: /product-<id>/<slug>
-        const legacyMatch = (location.pathname || '').match(/^\/product-(\d+)\//);
-        if (legacyMatch && legacyMatch[1]) {
-          productId = legacyMatch[1];
+        const m = (location.pathname || '').match(/^\/product-(\d+)\//);
+        if (m && m[1]) {
+          productId = m[1];
         }
-        // For new format /product/<slug>, we don't have ID - will need to fetch by slug
-        // The backend will handle the lookup
       }
 
       const container = document.getElementById('product-container');

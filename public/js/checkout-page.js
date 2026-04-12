@@ -404,13 +404,7 @@
     } else if (intent.sourceUrl) {
       setBackLink(intent.sourceUrl);
     } else {
-      // Get product slug for clean URL format /product/<slug>
-      getProduct(intent.productId).then(data => {
-        const slug = data?.product?.slug || 'product';
-        setBackLink(`/product/${encodeURIComponent(slug)}`);
-      }).catch(() => {
-        setBackLink('/products');
-      });
+      setBackLink(`/product-${encodeURIComponent(intent.productId)}`);
     }
   }
 

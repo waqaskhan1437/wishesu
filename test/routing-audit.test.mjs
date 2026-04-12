@@ -519,21 +519,17 @@ test('legacy product routes redirect to canonical product URLs', async () => {
   const idUrl = new URL('https://example.com/product?id=62');
   const slugUrl = new URL('https://example.com/product/pure-magic');
   const bareCanonicalUrl = new URL('https://example.com/product-62');
-  const legacyWithIdSlugUrl = new URL('https://example.com/product-62/pure-magic');
 
   const fromId = await handleProductRouting(env, idUrl, idUrl.pathname);
   const fromSlug = await handleProductRouting(env, slugUrl, slugUrl.pathname);
   const fromBareCanonical = await handleProductRouting(env, bareCanonicalUrl, bareCanonicalUrl.pathname);
-  const fromLegacyWithIdSlug = await handleProductRouting(env, legacyWithIdSlugUrl, legacyWithIdSlugUrl.pathname);
 
   assert.equal(fromId.status, 301);
-  assert.equal(fromSlug, null); // New canonical format - no redirect needed (prevents loops)
+  assert.equal(fromSlug.status, 301);
   assert.equal(fromBareCanonical.status, 301);
-  // Legacy format /product-<id>/<slug> should redirect to new format
-  assert.equal(fromLegacyWithIdSlug.status, 301);
-  assert.equal(fromId.headers.get('location'), 'https://example.com/product/pure-magic');
-  assert.equal(fromBareCanonical.headers.get('location'), 'https://example.com/product/pure-magic');
-  assert.equal(fromLegacyWithIdSlug.headers.get('location'), 'https://example.com/product/pure-magic');
+  assert.equal(fromId.headers.get('location'), 'https://example.com/product-62/pure-magic');
+  assert.equal(fromSlug.headers.get('location'), 'https://example.com/product-62/pure-magic');
+  assert.equal(fromBareCanonical.headers.get('location'), 'https://example.com/product-62/pure-magic');
 });
 
 test('terms fallback page renders without redirect', async () => {

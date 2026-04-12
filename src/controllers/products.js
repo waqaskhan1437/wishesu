@@ -307,50 +307,7 @@ export async function getProduct(env, id, opts = {}) {
 }
 
 /**
- * Check if slug is available for use (not used by another product)
- * @param {Object} env - Environment object with DB
- * @param {string} slug - The slug to check
- * @param {number|null} excludeId - Product ID to exclude (for edit mode)
- * @returns {Object} - { available: boolean, suggestions: string[] }
- */
-async function checkSlugAvailable(env, slug, excludeId = null) {
-  const cleanSlug = (slug || '').trim().toLowerCase();
-  if (!cleanSlug) return { available: false, suggestions: [] };
-
-  let query = 'SELECT id, title FROM products WHERE LOWER(slug) = ?';
-  const params = [cleanSlug];
-
-  if (excludeId) {
-    query += ' AND id != ?';
-    params.push(Number(excludeId));
-  }
-
-  const result = await env.DB.prepare(query).bind(...params).all();
-
-  if (result.length === 0) {
-    return { available: true, suggestions: [] };
-  }
-
-  // Generate suggestions
-  const suggestions = [];
-  const baseSlug = cleanSlug.replace(/-(\d+)$/, '');
-  for (let i = 1; i <= 3; i++) {
-    suggestions.push(`${baseSlug}-${i}`);
-  }
-  if (result[0]?.title) {
-    const titleSlug = slugifyStr(result[0].title).toLowerCase();
-    if (titleSlug !== cleanSlug && !suggestions.includes(titleSlug)) {
-      suggestions.unshift(titleSlug);
-    }
-  }
-
-  return { available: false, suggestions };
-}
-
-/**
  * Save product (create or update)
- * SECURITY: Slug uniqueness check added - prevents duplicate slugs
- * URL FORMAT: Changed to /product/<slug> (no ID in URL)
  */
 export async function saveProduct(env, body) {
   const title = (body.title || '').trim();
@@ -366,49 +323,57 @@ export async function saveProduct(env, body) {
   const { hasCreatedAt, hasUpdatedAt } = await getProductTimestampSupport(env);
   
   const deliveryDays = body.delivery_time_days || body.normal_delivery_text || '1';
-
-  // SECURITY CHECK: Validate slug uniqueness before saving
-  const slugCheck = await checkSlugAvailable(env, slug, body.id || null);
-  if (!slugCheck.available) {
-    return json({
-      error: `Slug '${slug}' is already taken by another product`,
-      suggestions: slugCheck.suggestions
-    }, 400);
-  }
+  let baseSlug = slug;
+  let slugIdx = 1;
 
   if (body.id) {
-    // UPDATE existing product
-    await env.DB.prepare(`
-      UPDATE products SET title=?, slug=?, description=?, normal_price=?, sale_price=?,
-      instant_delivery=?, normal_delivery_text=?, thumbnail_url=?, video_url=?,
-      gallery_images=?, addons_json=?, seo_title=?, seo_description=?, seo_keywords=?, seo_canonical=?,
-      whop_plan=?, whop_price_map=?, whop_product_id=?${hasUpdatedAt ? ', updated_at=CURRENT_TIMESTAMP' : ''} WHERE id=?
-    `).bind(
-      title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
-      body.instant_delivery ? 1 : 0, String(deliveryDays),
-      body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
-      body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
-      body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || '', Number(body.id)
-    ).run();
-    return json({ success: true, id: body.id, slug, url: `/product/${encodeURIComponent(slug)}` });
+    while (true) {
+      try {
+        await env.DB.prepare(`
+          UPDATE products SET title=?, slug=?, description=?, normal_price=?, sale_price=?,
+          instant_delivery=?, normal_delivery_text=?, thumbnail_url=?, video_url=?,
+          gallery_images=?, addons_json=?, seo_title=?, seo_description=?, seo_keywords=?, seo_canonical=?,
+          whop_plan=?, whop_price_map=?, whop_product_id=?${hasUpdatedAt ? ', updated_at=CURRENT_TIMESTAMP' : ''} WHERE id=?
+        `).bind(
+          title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
+          body.instant_delivery ? 1 : 0, String(deliveryDays),
+          body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
+          body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
+          body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || '', Number(body.id)
+        ).run();
+        break;
+      } catch (err) {
+        if (!err.message.includes('UNIQUE constraint')) throw err;
+        slug = `${baseSlug}-${slugIdx++}`;
+      }
+    }
+    return json({ success: true, id: body.id, slug, url: `/product-${body.id}/${encodeURIComponent(slug)}` });
   }
 
-  // INSERT new product
-  const r = await env.DB.prepare(`
-    INSERT INTO products (title, slug, description, normal_price, sale_price,
-    instant_delivery, normal_delivery_text, thumbnail_url, video_url,
-    gallery_images, addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
-    whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''})
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})
-  `).bind(
-    title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
-    body.instant_delivery ? 1 : 0, String(deliveryDays),
-    body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
-    body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
-    body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || ''
-  ).run();
-  const newId = r.meta?.last_row_id;
-  return json({ success: true, id: newId, slug, url: `/product/${encodeURIComponent(slug)}` });
+  let newId;
+  while (true) {
+    try {
+      const r = await env.DB.prepare(`
+        INSERT INTO products (title, slug, description, normal_price, sale_price,
+        instant_delivery, normal_delivery_text, thumbnail_url, video_url,
+        gallery_images, addons_json, seo_title, seo_description, seo_keywords, seo_canonical,
+        whop_plan, whop_price_map, whop_product_id, status, sort_order${hasCreatedAt ? ', created_at' : ''}${hasUpdatedAt ? ', updated_at' : ''})
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0${hasCreatedAt ? ', CURRENT_TIMESTAMP' : ''}${hasUpdatedAt ? ', CURRENT_TIMESTAMP' : ''})
+      `).bind(
+        title, slug, body.description || '', Number(body.normal_price) || 0, body.sale_price ? Number(body.sale_price) : null,
+        body.instant_delivery ? 1 : 0, String(deliveryDays),
+        body.thumbnail_url || '', body.video_url || '', galleryJson, addonsJson,
+        body.seo_title || '', body.seo_description || '', body.seo_keywords || '', body.seo_canonical || '',
+        body.whop_plan || '', body.whop_price_map || '', body.whop_product_id || ''
+      ).run();
+      newId = r.meta?.last_row_id;
+      break;
+    } catch (err) {
+      if (!err.message.includes('UNIQUE constraint')) throw err;
+      slug = `${baseSlug}-${slugIdx++}`;
+    }
+  }
+  return json({ success: true, id: newId, slug, url: `/product-${newId}/${encodeURIComponent(slug)}` });
 }
 
 /**
@@ -572,14 +537,14 @@ export async function getAdjacentProducts(env, id) {
       title: prev.title,
       slug: prev.slug,
       thumbnail_url: prev.thumbnail_url,
-      url: `/product/${encodeURIComponent(prev.slug || '')}`
+      url: `/product-${prev.id}/${encodeURIComponent(prev.slug || '')}`
     } : null,
     next: next ? {
       id: next.id,
       title: next.title,
       slug: next.slug,
       thumbnail_url: next.thumbnail_url,
-      url: `/product/${encodeURIComponent(next.slug || '')}`
+      url: `/product-${next.id}/${encodeURIComponent(next.slug || '')}`
     } : null
   });
 }
@@ -640,12 +605,14 @@ export async function handleProductRouting(env, url, path) {
   }
 
   /*
-   * Legacy handling - Redirects to new canonical format /product/<slug>
+   * Legacy handling
    *
-   * Old URLs (301 redirect to new format):
-   *   1. /product?id=123      → /product/<slug>
-   *   2. /product/<slug>      → /product/<slug> (no change)
-   *   3. /product-123/<slug> → /product/<slug>
+   * Canonical product URLs live at `/product-<id>/<slug>`.
+   *   1. /product?id=123  → canonical slug path `/product-123/<slug>`
+   *   2. /product/<slug>  → canonical slug path `/product-<id>/<slug>`
+   *
+   * Keep old entry points working, but always 301 them onto the canonical path
+   * so search engines and users converge on one stable URL.
    */
 
   // Handle legacy /product?id=123
@@ -657,30 +624,18 @@ export async function handleProductRouting(env, url, path) {
     }
   }
 
-  // Handle legacy /product/<slug> - only redirect if URL doesn't match expected canonical format
+  // Handle legacy /product/<slug>
   if (path.startsWith('/product/') && path.length > '/product/'.length) {
     const slugIn = decodeURIComponent(path.slice('/product/'.length));
     const row = await getProductBySlug(slugIn);
-    if (row) {
-      // NEW FORMAT: /product/<slug> - don't redirect, just return null to render
-      // The product exists with the slug, so no redirect needed
-      return null;
-    }
-  }
-
-  // Handle legacy /product-<id> (bare)
-  const bareCanonicalMatch = path.match(/^\/product-(\d+)\/?$/);
-  if (bareCanonicalMatch) {
-    const row = await getProductById(bareCanonicalMatch[1]);
     if (row) {
       return buildCanonicalResponse(row);
     }
   }
 
-  // Handle legacy /product-<id>/<slug> → redirect to /product/<slug>
-  const legacyIdSlugMatch = path.match(/^\/product-(\d+)\/(.+)$/);
-  if (legacyIdSlugMatch) {
-    const row = await getProductById(legacyIdSlugMatch[1]);
+  const bareCanonicalMatch = path.match(/^\/product-(\d+)\/?$/);
+  if (bareCanonicalMatch) {
+    const row = await getProductById(bareCanonicalMatch[1]);
     if (row) {
       return buildCanonicalResponse(row);
     }

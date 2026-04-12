@@ -46,29 +46,16 @@ function parseJsonBody(options) {
 }
 
 test('order notifications require an explicit Brevo sender email', async () => {
-  // Test: When BREVO_FROM_EMAIL is missing, function should handle it
-  // The default fallback is 'support@prankwish.com' which is valid
-  // So test verifies that without proper config, emails are skipped or fail
-  
-  let result;
-  try {
-    result = await sendOrderNotificationEmails({
-      BREVO_API_KEY: 'brevo-key'
-      // No BREVO_FROM_EMAIL - should use default fallback
-    }, {
-      orderId: 'ORD-1',
-      customerEmail: 'buyer@example.com',
-      productTitle: 'Birthday Video'
-    });
-  } catch (e) {
-    result = { error: e.message };
-  }
+  const result = await sendOrderNotificationEmails({
+    BREVO_API_KEY: 'brevo-key'
+  }, {
+    orderId: 'ORD-1',
+    customerEmail: 'buyer@example.com',
+    productTitle: 'Birthday Video'
+  });
 
-  // With default fallback 'support@prankwish.com', result should have attempted/failed/success
-  // or skipped if something else goes wrong
-  assert.ok(result, 'Should have a result');
-  assert.ok(result.skipped !== undefined || result.attempted !== undefined || result.error !== undefined, 
-    'Result should have skipped, attempted, or error field');
+  assert.equal(result.skipped, true);
+  assert.match(result.reason, /BREVO_FROM_EMAIL/i);
 });
 
 test('delivery flow sends Brevo buyer email and both webhook events with delivery links', async (t) => {
