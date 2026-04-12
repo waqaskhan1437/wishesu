@@ -4219,9 +4219,18 @@ export default {
     const response = await this.fetchOriginal(req, env, ctx);
 
     // Save successful HTML responses to KV
-    if (isCacheableHtmlGet && env.PAGE_CACHE && response && response.status === 200) {
+    if (isCacheableHtmlGet && response && response.status === 200) {
       const contentType = response.headers.get('Content-Type') || '';
       if (contentType.includes('text/html')) {
+        if (!env.PAGE_CACHE) {
+          const newHeaders = new Headers(response.headers);
+          newHeaders.set('X-KV-Debug', 'NO_ENV_PAGE_CACHE');
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: newHeaders
+          });
+        }
         try {
           const html = await response.clone().text();
           ctx.waitUntil(env.PAGE_CACHE.put(cacheKey, html));
@@ -4235,6 +4244,13 @@ export default {
           });
         } catch (err) {
           console.error('KV Cache write error:', err);
+          const newHeaders = new Headers(response.headers);
+          newHeaders.set('X-KV-Debug', 'WRITE_ERROR: ' + err.message);
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: newHeaders
+          });
         }
       }
     }
@@ -4346,7 +4362,7 @@ export default {
         // Wait for DB to be ready for critical paths (with timeout protection)
         try {
           await Promise.race([
-            initDB(env),
+            initDB(env, ctx),
             new Promise((_, reject) => setTimeout(() => reject(new Error('DB init timeout')), 4000))
           ]);
         } catch (e) {

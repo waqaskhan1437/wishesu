@@ -28,8 +28,9 @@ const DB_INIT_TIMEOUT_MS = 5000;
  * OPTIMIZED: Skips if already done in this isolate
  * Includes timeout to prevent cold start hanging
  * @param {Object} env - Environment bindings
+ * @param {ExecutionContext} [ctx] - Execution context (optional)
  */
-export async function initDB(env) {
+export async function initDB(env, ctx) {
   if (dbReady || !env.DB) return;
   if (initPromise) {
     // If initialization is taking too long, don't wait
@@ -277,11 +278,13 @@ export async function initDB(env) {
 
       // Run migrations and page migrations asynchronously (background)
       if (!migrationsDone) {
-        Promise.resolve().then(() => runMigrations(env).then(() => { migrationsDone = true; }).catch(() => { }));
+        const migPromise = runMigrations(env).then(() => { migrationsDone = true; }).catch(e => console.error('DB Migration error:', e));
+        if (ctx && ctx.waitUntil) ctx.waitUntil(migPromise);
       }
 
       if (!pagesMigrationDone) {
-        Promise.resolve().then(() => runPagesMigration(env).then(() => { pagesMigrationDone = true; }).catch(() => { }));
+        const pageMigPromise = runPagesMigration(env).then(() => { pagesMigrationDone = true; }).catch(e => console.error('DB Page migration error:', e));
+        if (ctx && ctx.waitUntil) ctx.waitUntil(pageMigPromise);
       }
     } catch (e) {
       console.error('DB init error:', e);
@@ -303,7 +306,7 @@ export async function initDB(env) {
 export function warmupDB(env, ctx) {
   if (dbReady || !env.DB) return;
   if (ctx && ctx.waitUntil) {
-    ctx.waitUntil(initDB(env).catch(() => { }));
+    ctx.waitUntil(initDB(env, ctx).catch(() => { }));
   }
 }
 
@@ -349,12 +352,14 @@ async function runMigrations(env) {
     { table: 'orders', column: 'revision_reason', type: 'TEXT' }
   ];
 
-  // Run all migrations in parallel - most will fail silently (column exists)
-  await Promise.allSettled(
-    migrations.map(m =>
-      env.DB.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`).run().catch(() => { })
-    )
-  );
+  // Run migrations sequentially to avoid overloading D1 and exceeding subrequest limits
+  for (const m of migrations) {
+    try {
+      await env.DB.prepare(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`).run();
+    } catch (e) {
+      // Column likely already exists, ignore
+    }
+  }
 
   try {
     await env.DB.prepare(`
