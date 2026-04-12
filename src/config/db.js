@@ -32,6 +32,21 @@ const DB_INIT_TIMEOUT_MS = 5000;
  */
 export async function initDB(env, ctx) {
   if (dbReady || !env.DB) return;
+  
+  // NEW OPTIMIZATION: Fast check to see if DB is already fully initialized
+  // This prevents running 20+ CREATE TABLE and 15+ ALTER TABLE queries on every cold start
+  try {
+    const check = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='products'").first();
+    if (check) {
+      dbReady = true;
+      migrationsDone = true;
+      pagesMigrationDone = true;
+      return;
+    }
+  } catch (e) {
+    // Ignore and proceed to normal init if check fails
+  }
+
   if (initPromise) {
     // If initialization is taking too long, don't wait
     if (initStartTime && Date.now() - initStartTime > DB_INIT_TIMEOUT_MS) {

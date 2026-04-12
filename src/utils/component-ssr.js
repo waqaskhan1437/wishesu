@@ -315,10 +315,14 @@ export function parseInlineRenderOptions(raw = '') {
 
 export function extractInlineRenderConfigs(html, globalName) {
   const configs = new Map();
+  const input = String(html || '');
+  if (!input.includes(globalName + '.render')) {
+    return configs;
+  }
   const pattern = new RegExp(`${globalName}\\.(renderSlider|render)\\(\\s*['"]([^'"]+)['"]\\s*,\\s*({[\\s\\S]*?})\\s*\\)`, 'g');
   let match;
 
-  while ((match = pattern.exec(String(html || ''))) !== null) {
+  while ((match = pattern.exec(input)) !== null) {
     const [, method, containerId, rawOptions] = match;
     const options = parseInlineRenderOptions(rawOptions);
     if (method === 'renderSlider') {
