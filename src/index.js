@@ -3812,7 +3812,7 @@ function generateForumQuestionHTML(question, replies = [], sidebar = {}) {
 
   // Sidebar products
   const productsHTML = (sidebar.products || []).map(p => `
-    <a href="/product-${p.id}/${p.slug || p.id}" class="sidebar-card">
+    <a href="/product/${encodeURIComponent(p.slug || '')}" class="sidebar-card">
       <img src="${p.thumbnail_url || 'https://via.placeholder.com/150x84?text=Product'}" alt="${p.title}">
       <div class="sidebar-card-info">
         <div class="sidebar-card-title">${(p.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
@@ -6112,14 +6112,14 @@ if (method === 'GET' || method === 'HEAD') {
                           title: prev.title,
                           slug: prev.slug,
                           thumbnail_url: prev.thumbnail_url,
-                          url: `/product-${prev.id}/${encodeURIComponent(prev.slug || '')}`
+                          url: `/product/${encodeURIComponent(prev.slug || '')}`
                         } : null,
                         next: next ? {
                           id: next.id,
                           title: next.title,
                           slug: next.slug,
                           thumbnail_url: next.thumbnail_url,
-                          url: `/product-${next.id}/${encodeURIComponent(next.slug || '')}`
+                          url: `/product/${encodeURIComponent(next.slug || '')}`
                         } : null
                       };
                     } catch (_) {}

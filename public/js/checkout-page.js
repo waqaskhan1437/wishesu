@@ -404,7 +404,13 @@
     } else if (intent.sourceUrl) {
       setBackLink(intent.sourceUrl);
     } else {
-      setBackLink(`/product-${encodeURIComponent(intent.productId)}`);
+      // Get product slug for clean URL format /product/<slug>
+      getProduct(intent.productId).then(data => {
+        const slug = data?.product?.slug || 'product';
+        setBackLink(`/product/${encodeURIComponent(slug)}`);
+      }).catch(() => {
+        setBackLink('/products');
+      });
     }
   }
 

@@ -32,14 +32,13 @@ export function slugifyStr(input) {
 }
 
 /**
- * Generate canonical product path
+ * Generate canonical product path (NO ID in URL - SEO friendly)
  * @param {Object} product
  * @returns {string}
  */
 export function canonicalProductPath(product) {
-  const id = product && product.id != null ? String(product.id) : '';
   const slug = (product && product.slug) ? String(product.slug) : slugifyStr(product && product.title ? product.title : 'product');
-  return `/product-${id}/${encodeURIComponent(slug)}`;
+  return `/product/${encodeURIComponent(slug)}`;
 }
 
 /**

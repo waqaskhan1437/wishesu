@@ -278,10 +278,18 @@ window.updateDeliveryPreview = updateDeliveryPreview;
         body: JSON.stringify(payload)
       });
 
-      const data = await resp.json();
+       const data = await resp.json();
 
       if(!resp.ok || !data.success){
-        throw new Error(data.error || 'Save failed');
+        const errorMsg = data.error || 'Save failed';
+        // Handle slug uniqueness error with suggestions
+        if (data.suggestions && data.suggestions.length > 0) {
+          const suggestionsText = data.suggestions.map(s => `\n• ${s}`).join('');
+          alert(`Error: ${errorMsg}\n\nAvailable alternatives:${suggestionsText}\n\nPlease choose a different slug.`);
+        } else {
+          alert('Error: ' + errorMsg);
+        }
+        return;
       }
 
       alert('Product saved successfully! ID: ' + data.id);
