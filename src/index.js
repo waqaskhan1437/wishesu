@@ -4544,8 +4544,8 @@ const noJsSsrEnabled = isNoJsSsrEnabled(env);
 // Some admin-only pages live outside /admin (legacy routes used by dashboard links)
 const ADMIN_PROTECTED_PAGES = new Set([
   '/order-detail',
-  '/admin/page-builder-v2.html',
-  '/admin/landing-builder.html'
+  '/page-builder-v2.html',
+  '/landing-builder.html'
 ]);
 const isAdminProtectedPage = ADMIN_PROTECTED_PAGES.has(routePath);
 
