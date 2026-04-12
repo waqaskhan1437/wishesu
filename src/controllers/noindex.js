@@ -15,11 +15,14 @@ const PREVIEW_LIMIT = 250;
 
 let rulesCache = null;
 let cacheTime = 0;
-let tablesEnsured = false;
 
-function clearRulesCache() {
+
+function clearRulesCache(env) {
   rulesCache = null;
   cacheTime = 0;
+  if (env?.PAGE_CACHE) {
+    try { env.PAGE_CACHE.delete('api_cache:seo_rules'); } catch(e) {}
+  }
 }
 
 function normalizePath(value) {
@@ -384,35 +387,23 @@ function normalizeMode(value) {
   return String(value || '').toLowerCase() === 'index' ? 'index' : 'noindex';
 }
 
-async function ensureTables(env) {
-  if (!env.DB || tablesEnsured) return;
-  try {
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS noindex_pages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        url_pattern TEXT NOT NULL UNIQUE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
 
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS index_pages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        url_pattern TEXT NOT NULL UNIQUE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
-    tablesEnsured = true;
-  } catch (e) {
-    console.error('SEO visibility table error:', e);
-  }
-}
 
 async function getRulePatterns(env) {
   const now = Date.now();
-  if (rulesCache && (now - cacheTime) < CACHE_TTL) return rulesCache;
+  if (rulesCache && (now - cacheTime) < 60000) return rulesCache;
 
-  await ensureTables(env);
+  const cacheKey = 'api_cache:seo_rules';
+  if (env.PAGE_CACHE) {
+    try {
+      const cached = await env.PAGE_CACHE.get(cacheKey, 'json');
+      if (cached && cached.noindex) {
+        rulesCache = cached;
+        cacheTime = now;
+        return rulesCache;
+      }
+    } catch(e) {}
+  }
 
   try {
     const [noindexResult, indexResult] = await Promise.all([
@@ -425,6 +416,11 @@ async function getRulePatterns(env) {
       index: (indexResult.results || []).map((r) => r.url_pattern).filter(Boolean)
     };
     cacheTime = now;
+    
+    if (env.PAGE_CACHE) {
+      try { await env.PAGE_CACHE.put(cacheKey, JSON.stringify(rulesCache), { expirationTtl: 86400 * 7 }); } catch(e) {}
+    }
+    
     return rulesCache;
   } catch (_) {
     return EMPTY_RULES;
@@ -456,7 +452,6 @@ export async function getNoindexList(env, req) {
  */
 export async function addNoindexUrl(env, body) {
   try {
-    await ensureTables(env);
 
     const mode = normalizeMode(body?.mode);
     const rule = normalizeRuleInput(body?.url);
@@ -468,7 +463,7 @@ export async function addNoindexUrl(env, body) {
     const table = mode === 'index' ? 'index_pages' : 'noindex_pages';
     await env.DB.prepare(`INSERT OR IGNORE INTO ${table} (url_pattern) VALUES (?)`).bind(rule).run();
 
-    clearRulesCache();
+    clearRulesCache(env);
     return json({ success: true, mode, url: rule });
   } catch (e) {
     return json({ error: e.message }, 500);
@@ -481,7 +476,6 @@ export async function addNoindexUrl(env, body) {
  */
 export async function removeNoindexUrl(env, body) {
   try {
-    await ensureTables(env);
 
     const mode = normalizeMode(body?.mode);
     const index = body?.index;
@@ -500,7 +494,7 @@ export async function removeNoindexUrl(env, body) {
     const rule = rows[index].url_pattern;
     await env.DB.prepare(`DELETE FROM ${table} WHERE url_pattern = ? LIMIT 1`).bind(rule).run();
 
-    clearRulesCache();
+    clearRulesCache(env);
     return json({ success: true, mode, url: rule });
   } catch (e) {
     return json({ error: e.message }, 500);

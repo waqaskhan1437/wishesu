@@ -17,7 +17,7 @@ import { buildPublicProductStatusWhere, getProductTableColumns } from '../utils/
 // Simple cache
 let cache = null;
 let cacheTime = 0;
-let seoTableEnsured = false;
+
 const TTL = 3 * 60 * 1000; // 3 minutes (was 1 minute)
 
 const DEFAULT = {
@@ -58,27 +58,7 @@ function toSitemapDate(value) {
 /**
  * Ensure table
  */
-async function ensureTable(env) {
-  if (!env.DB || seoTableEnsured) return;
 
-  try {
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS seo_minimal (
-        id INTEGER PRIMARY KEY DEFAULT 1,
-        site_url TEXT NOT NULL,
-        site_title TEXT NOT NULL,
-        site_description TEXT NOT NULL,
-        sitemap_enabled INTEGER DEFAULT 1,
-        robots_enabled INTEGER DEFAULT 1,
-        og_enabled INTEGER DEFAULT 0,
-        og_image TEXT
-      )
-    `).run();
-    seoTableEnsured = true;
-  } catch (e) {
-    console.error('SEO table error:', e);
-  }
-}
 
 /**
  * Get settings with cache
@@ -99,8 +79,6 @@ export async function getSettings(env) {
     if (env.PAGE_CACHE) { try { await env.PAGE_CACHE.put(kvKey, JSON.stringify(cache), { expirationTtl: 86400 * 7 }); } catch(e) {} }
     return cache;
   }
-
-  await ensureTable(env);
 
   try {
     const row = await env.DB.prepare('SELECT * FROM seo_minimal WHERE id = 1').first();
@@ -130,7 +108,6 @@ export async function getMinimalSEOSettings(env) {
  */
 export async function saveMinimalSEOSettings(env, body) {
   try {
-    await ensureTable(env);
 
     const s = {
       site_url: (body.site_url || '').trim(),

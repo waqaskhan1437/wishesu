@@ -285,6 +285,34 @@ export async function initDB(env, ctx) {
             expires_at DATETIME
           )
         `),
+        // SEO Minimal settings table
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS seo_minimal (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            site_url TEXT NOT NULL,
+            site_title TEXT NOT NULL,
+            site_description TEXT NOT NULL,
+            sitemap_enabled INTEGER DEFAULT 1,
+            robots_enabled INTEGER DEFAULT 1,
+            og_enabled INTEGER DEFAULT 0,
+            og_image TEXT
+          )
+        `),
+        // SEO Visibility tables
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS noindex_pages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url_pattern TEXT NOT NULL UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `),
+        env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS index_pages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url_pattern TEXT NOT NULL UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `),
         // API Key usage logs table
         env.DB.prepare(`
           CREATE TABLE IF NOT EXISTS api_key_usage (

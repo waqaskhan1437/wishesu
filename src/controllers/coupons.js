@@ -15,24 +15,6 @@ const COUPONS_CACHE_TTL = 60000; // 1 minute
  */
 export async function getCoupons(env) {
   try {
-    // Ensure table exists
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS coupons (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT UNIQUE NOT NULL,
-        discount_type TEXT DEFAULT 'percentage',
-        discount_value REAL NOT NULL,
-        min_order_amount REAL DEFAULT 0,
-        max_uses INTEGER DEFAULT 0,
-        used_count INTEGER DEFAULT 0,
-        valid_from INTEGER,
-        valid_until INTEGER,
-        product_ids TEXT,
-        status TEXT DEFAULT 'active',
-        created_at INTEGER
-      )
-    `).run();
-    
     const result = await env.DB.prepare(`
       SELECT * FROM coupons ORDER BY created_at DESC
     `).all();
@@ -95,24 +77,6 @@ export async function getActiveCoupons(env) {
  */
 export async function getCouponsEnabled(env) {
   try {
-    // First ensure coupons table exists
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS coupons (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT UNIQUE NOT NULL,
-        discount_type TEXT DEFAULT 'percentage',
-        discount_value REAL NOT NULL,
-        min_order_amount REAL DEFAULT 0,
-        max_uses INTEGER DEFAULT 0,
-        used_count INTEGER DEFAULT 0,
-        valid_from INTEGER,
-        valid_until INTEGER,
-        product_ids TEXT,
-        status TEXT DEFAULT 'active',
-        created_at INTEGER
-      )
-    `).run();
-    
     const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('coupons_enabled').first();
     const enabled = row?.value === 'true';
     return cachedJson({ success: true, enabled }, 120);
@@ -382,3 +346,4 @@ export async function toggleCouponStatus(env, body) {
     return json({ error: e.message }, 500);
   }
 }
+
