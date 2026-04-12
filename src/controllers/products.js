@@ -657,12 +657,14 @@ export async function handleProductRouting(env, url, path) {
     }
   }
 
-  // Handle legacy /product/<slug>
+  // Handle legacy /product/<slug> - only redirect if URL doesn't match expected canonical format
   if (path.startsWith('/product/') && path.length > '/product/'.length) {
     const slugIn = decodeURIComponent(path.slice('/product/'.length));
     const row = await getProductBySlug(slugIn);
     if (row) {
-      return buildCanonicalResponse(row);
+      // NEW FORMAT: /product/<slug> - don't redirect, just return null to render
+      // The product exists with the slug, so no redirect needed
+      return null;
     }
   }
 

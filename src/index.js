@@ -5710,13 +5710,17 @@ if (method === 'GET' || method === 'HEAD') {
           const canonicalMatch = assetPath.match(/^\/product-(\d+)\/(.+)$/);
           if (canonicalMatch) {
             const pid = Number(canonicalMatch[1]);
+            const oldSlug = decodeURIComponent(canonicalMatch[2] || '');
             if (!Number.isNaN(pid) && env.DB) {
               // Get product slug and redirect to new format
               await initDB(env);
               const product = await env.DB.prepare('SELECT slug FROM products WHERE id = ? LIMIT 1').bind(pid).first();
               if (product && product.slug) {
                 const newPath = `/product/${encodeURIComponent(product.slug)}`;
-                return Response.redirect(new URL(newPath, url.origin).toString(), 301);
+                // Don't redirect if new path equals current path (prevents redirect loop)
+                if (newPath !== path) {
+                  return Response.redirect(new URL(newPath, url.origin).toString(), 301);
+                }
               }
             }
           }
