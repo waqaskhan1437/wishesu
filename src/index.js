@@ -5705,60 +5705,61 @@ if (method === 'GET' || method === 'HEAD') {
         let schemaProductId = null;
         let schemaProduct = null;
 
-        // Canonical product URLs: /product-<id>/<slug>
+        // Canonical product URLs: /product-<id>/<slug> - REDIRECT to /product/<slug>
         if ((method === 'GET' || method === 'HEAD')) {
           const canonicalMatch = assetPath.match(/^\/product-(\d+)\/(.+)$/);
           if (canonicalMatch) {
             const pid = Number(canonicalMatch[1]);
-            if (!Number.isNaN(pid)) {
-              schemaProductId = pid;
-              const rewritten = new URL(req.url);
-              rewritten.pathname = '/_product_template.tpl';
-              rewritten.searchParams.set('id', String(schemaProductId));
-              assetReq = new Request(rewritten.toString(), req);
-              assetPath = '/_product_template.tpl';
+            if (!Number.isNaN(pid) && env.DB) {
+              // Get product slug and redirect to new format
+              await initDB(env);
+              const product = await env.DB.prepare('SELECT slug FROM products WHERE id = ? LIMIT 1').bind(pid).first();
+              if (product && product.slug) {
+                const newPath = `/product/${encodeURIComponent(product.slug)}`;
+                return Response.redirect(new URL(newPath, url.origin).toString(), 301);
+              }
             }
           }
+        }
 
-          // Archive aliases: resolve folder URLs to concrete index assets to avoid
-          // asset-layer redirect loops and allow SSR injection in one code path.
-          const archiveAssetAliases = {
-            '/blog': '/blog/index.html',
-            '/blog/': '/blog/index.html',
-            '/forum': '/forum/index.html',
-            '/forum/': '/forum/index.html',
-            '/products': '/products-grid.html',
-            '/products/': '/products-grid.html',
-            '/products/index.html': '/products-grid.html',
-            '/products-grid': '/products-grid.html',
-            '/products-grid/': '/products-grid.html',
-            '/checkout': '/checkout.html',
-            '/checkout/': '/checkout.html',
-            '/success': '/success.html',
-            '/success/': '/success.html',
-            '/buyer-order': '/buyer-order.html',
-            '/buyer-order/': '/buyer-order.html',
-            '/order-detail': '/order-detail.html',
-            '/order-detail/': '/order-detail.html'
-          };
-          const archiveTarget = archiveAssetAliases[assetPath];
-          if (archiveTarget) {
-            const rewritten = new URL(req.url);
-            rewritten.pathname = archiveTarget;
-            assetReq = new Request(rewritten.toString(), req);
-            assetPath = archiveTarget;
-          }
+        // Archive aliases: resolve folder URLs to concrete index assets to avoid
+        // asset-layer redirect loops and allow SSR injection in one code path.
+        const archiveAssetAliases = {
+          '/blog': '/blog/index.html',
+          '/blog/': '/blog/index.html',
+          '/forum': '/forum/index.html',
+          '/forum/': '/forum/index.html',
+          '/products': '/products-grid.html',
+          '/products/': '/products-grid.html',
+          '/products/index.html': '/products-grid.html',
+          '/products-grid': '/products-grid.html',
+          '/products-grid/': '/products-grid.html',
+          '/checkout': '/checkout.html',
+          '/checkout/': '/checkout.html',
+          '/success': '/success.html',
+          '/success/': '/success.html',
+          '/buyer-order': '/buyer-order.html',
+          '/buyer-order/': '/buyer-order.html',
+          '/order-detail': '/order-detail.html',
+          '/order-detail/': '/order-detail.html'
+        };
+        const archiveTarget = archiveAssetAliases[assetPath];
+        if (archiveTarget) {
+          const rewritten = new URL(req.url);
+          rewritten.pathname = archiveTarget;
+          assetReq = new Request(rewritten.toString(), req);
+          assetPath = archiveTarget;
+        }
 
-          // Generic path resolution: for extensionless paths not already
-          // aliased above, try resolving to {path}.html or {path}/index.html
-          // to prevent the asset layer from returning 307 redirects.
-          if (!archiveTarget && !assetPath.includes('.') && assetPath !== '/') {
-            const cleanPath = assetPath.endsWith('/') ? assetPath.slice(0, -1) : assetPath;
-            const rewritten = new URL(req.url);
-            rewritten.pathname = cleanPath + '.html';
-            assetReq = new Request(rewritten.toString(), req);
-            assetPath = cleanPath + '.html';
-          }
+        // Generic path resolution: for extensionless paths not already
+        // aliased above, try resolving to {path}.html or {path}/index.html
+        // to prevent the asset layer from returning 307 redirects.
+        if (!archiveTarget && !assetPath.includes('.') && assetPath !== '/') {
+          const cleanPath = assetPath.endsWith('/') ? assetPath.slice(0, -1) : assetPath;
+          const rewritten = new URL(req.url);
+          rewritten.pathname = cleanPath + '.html';
+          assetReq = new Request(rewritten.toString(), req);
+          assetPath = cleanPath + '.html';
         }
 
         // Broader path rejection: skip the asset layer for requests that are
