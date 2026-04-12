@@ -5985,7 +5985,8 @@ if (method === 'GET' || method === 'HEAD') {
             }
 
             // Product detail page - inject individual product schema
-            if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product') {
+            // Handle: /_product_template.tpl, /product, /product.html, /product/<slug> (NEW FORMAT)
+            if (assetPath === '/_product_template.tpl' || assetPath === '/product.html' || assetPath === '/product' || assetPath.startsWith('/product/')) {
               // NEW FORMAT: /product/<slug> - fetch product by slug, not ID
               const pathProductMatch = path.match(/^\/product\/([^/]+)$/);
               let productId = schemaProductId ? String(schemaProductId) : null;
