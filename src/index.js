@@ -1398,7 +1398,11 @@ const CANONICAL_ALIAS_MAP = new Map([
   ['/order-detail/', '/order-detail'],
   ['/order-detail.html', '/order-detail'],
   ['/order-success', '/success'],
-  ['/order-success.html', '/success']
+  ['/order-success.html', '/success'],
+  ['/sitemap', '/sitemap.xml'],
+  ['/sitemap/', '/sitemap.xml'],
+  ['/robots', '/robots.txt'],
+  ['/robots/', '/robots.txt']
 ]);
 
 const DIRECT_INTERNAL_ALIAS_PATHS = new Set([
@@ -4765,7 +4769,9 @@ if (method === 'GET' || method === 'HEAD') {
 
     // Dynamic robots.txt + sitemap.xml (Minimal SEO 2025 - Google Standards)
     if ((method === 'GET' || method === 'HEAD')) {
-      if (path === '/.well-known/apple-developer-merchantid-domain-association') {
+      const lowerPath = path.toLowerCase();
+      
+      if (lowerPath === '/.well-known/apple-developer-merchantid-domain-association') {
         if (env.ASSETS) {
           // Try canonical Apple Pay verification path first.
           let assetResp = await env.ASSETS.fetch(new Request(new URL('/.well-known/apple-developer-merchantid-domain-association', req.url)));
@@ -4787,7 +4793,7 @@ if (method === 'GET' || method === 'HEAD') {
         return new Response('Not found', { status: 404 });
       }
 
-      if (path === '/robots.txt') {
+      if (lowerPath === '/robots.txt') {
         if (env.DB) await initDB(env);
         const txt = await buildMinimalRobotsTxt(env, req);
         return new Response(txt, {
@@ -4799,7 +4805,7 @@ if (method === 'GET' || method === 'HEAD') {
         });
       }
 
-      if (path === '/sitemap.xml') {
+      if (lowerPath === '/sitemap.xml') {
         if (env.DB) await initDB(env);
         const sm = await buildMinimalSitemapXml(env, req);
         return new Response(sm.body, {
@@ -4813,7 +4819,7 @@ if (method === 'GET' || method === 'HEAD') {
 
       // Handle common browser/crawler auto-requested files that don't exist
       // to prevent unnecessary 404s and reduce noise in logs
-      if (path === '/manifest.json' || path === '/site.webmanifest') {
+      if (lowerPath === '/manifest.json' || lowerPath === '/site.webmanifest') {
         return new Response(JSON.stringify({
           name: 'Site',
           short_name: 'Site',
@@ -4832,7 +4838,7 @@ if (method === 'GET' || method === 'HEAD') {
         });
       }
 
-      if (path === '/apple-touch-icon.png' || path === '/apple-touch-icon-precomposed.png' || path === '/apple-touch-icon-120x120.png' || path === '/apple-touch-icon-152x152.png' || path === '/apple-touch-icon-180x180.png') {
+      if (lowerPath === '/apple-touch-icon.png' || lowerPath === '/apple-touch-icon-precomposed.png' || lowerPath === '/apple-touch-icon-120x120.png' || lowerPath === '/apple-touch-icon-152x152.png' || lowerPath === '/apple-touch-icon-180x180.png') {
         // Redirect to existing favicon
         return new Response(null, {
           status: 301,
@@ -4840,7 +4846,7 @@ if (method === 'GET' || method === 'HEAD') {
         });
       }
 
-      if (path === '/browserconfig.xml') {
+      if (lowerPath === '/browserconfig.xml') {
         return new Response('<?xml version="1.0" encoding="utf-8"?><browserconfig><msapplication><tile><square150x150logo src="/favicon.ico"/><TileColor>#ffffff</TileColor></tile></msapplication></browserconfig>', {
           status: 200,
           headers: {

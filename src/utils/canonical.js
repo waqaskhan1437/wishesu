@@ -28,7 +28,11 @@ const CANONICAL_ALIAS_ENTRIES = Object.freeze([
   ['/order-detail/', '/order-detail'],
   ['/order-detail.html', '/order-detail'],
   ['/order-success', '/success'],
-  ['/order-success.html', '/success']
+  ['/order-success.html', '/success'],
+  ['/sitemap', '/sitemap.xml'],
+  ['/sitemap/', '/sitemap.xml'],
+  ['/robots', '/robots.txt'],
+  ['/robots/', '/robots.txt']
 ]);
 
 const DIRECT_INTERNAL_ALIAS_PATHS = new Set([
