@@ -214,72 +214,94 @@ export async function migrateReviewMediaFromOrders(env) {
  * Add review
  */
 export async function addReview(env, body, options = {}) {
-  const allowStatusOverride = !!options.allowStatusOverride;
-  const shouldNotify = options.notify !== false;
-  const productId = Number(body.productId ?? body.product_id ?? 0);
-  const hasRating = body.rating !== undefined && body.rating !== null && String(body.rating).trim() !== '';
-
-  if (!productId || !hasRating) return json({ error: 'productId and rating required' }, 400);
-
-  const authorInput = body.author ?? body.author_name ?? 'Customer';
-  const commentInput = body.comment ?? '';
-  const showOnProductInput = body.showOnProduct ?? body.show_on_product;
-  const deliveredVideoUrlInput = body.deliveredVideoUrl ?? body.delivered_video_url;
-  const deliveredThumbnailUrlInput = body.deliveredThumbnailUrl ?? body.delivered_thumbnail_url;
-  const orderIdInput = body.orderId ?? body.order_id ?? null;
-
-  // Validate and sanitize inputs with defined limits
-  const authorName = String(authorInput).trim().substring(0, REVIEW_LIMITS.author_name);
-  const comment = String(commentInput).trim().substring(0, REVIEW_LIMITS.comment);
-  const rating = Math.min(REVIEW_LIMITS.rating_max, Math.max(REVIEW_LIMITS.rating_min, parseInt(body.rating, 10) || 5));
-  const status = allowStatusOverride ? String(body.status || 'approved').trim() : 'approved';
-  const showOnProduct = showOnProductInput !== undefined
-    ? ((showOnProductInput === true || showOnProductInput === 1 || showOnProductInput === '1' || String(showOnProductInput).toLowerCase() === 'true') ? 1 : 0)
-    : 1;
-  const deliveredVideoUrl = String(deliveredVideoUrlInput || '').trim();
-  const deliveredThumbnailUrl = String(deliveredThumbnailUrlInput || '').trim();
-
-  if (!['approved', 'pending', 'rejected'].includes(status)) {
-    return json({ error: 'Invalid status' }, 400);
-  }
-  
-  // Validate author name
-  if (authorName.length < 1) {
-    return json({ error: 'Name is required' }, 400);
-  }
-  
-  // Validate comment length
-  if (comment.length > 0 && comment.length < 3) {
-    return json({ error: 'Comment must be at least 3 characters' }, 400);
-  }
-  
-  await env.DB.prepare(
-    'INSERT INTO reviews (product_id, author_name, rating, comment, status, order_id, show_on_product, delivered_video_url, delivered_thumbnail_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(
-    productId,
-    authorName, 
-    rating, 
-    comment, 
-    status,
-    orderIdInput || null,
-    showOnProduct,
-    deliveredVideoUrl || null,
-    deliveredThumbnailUrl || null
-  ).run();
-  
-  // Get product title for notification
-  let productTitle = '';
   try {
-    const product = await env.DB.prepare('SELECT title FROM products WHERE id = ?').bind(productId).first();
-    productTitle = product?.title || '';
-  } catch (e) {}
-  
-  // Notify admin about new review (async)
-  if (shouldNotify) {
-    notifyReviewSubmitted(env, { productId, productTitle, rating, authorName, comment }).catch(() => {});
+    const allowStatusOverride = !!options.allowStatusOverride;
+    const shouldNotify = options.notify !== false;
+    const productId = Number(body.productId ?? body.product_id ?? 0);
+    const hasRating = body.rating !== undefined && body.rating !== null && String(body.rating).trim() !== '';
+
+    if (!productId || !hasRating) return json({ error: 'productId and rating required' }, 400);
+
+    const authorInput = body.author ?? body.author_name ?? 'Customer';
+    const commentInput = body.comment ?? '';
+    const showOnProductInput = body.showOnProduct ?? body.show_on_product;
+    const deliveredVideoUrlInput = body.deliveredVideoUrl ?? body.delivered_video_url;
+    const deliveredThumbnailUrlInput = body.deliveredThumbnailUrl ?? body.delivered_thumbnail_url;
+    const orderIdInput = body.orderId ?? body.order_id ?? null;
+
+    // Validate and sanitize inputs with defined limits
+    const authorName = String(authorInput).trim().substring(0, REVIEW_LIMITS.author_name);
+    const comment = String(commentInput).trim().substring(0, REVIEW_LIMITS.comment);
+    const rating = Math.min(REVIEW_LIMITS.rating_max, Math.max(REVIEW_LIMITS.rating_min, parseInt(body.rating, 10) || 5));
+    const status = allowStatusOverride ? String(body.status || 'approved').trim() : 'approved';
+    const showOnProduct = showOnProductInput !== undefined
+      ? ((showOnProductInput === true || showOnProductInput === 1 || showOnProductInput === '1' || String(showOnProductInput).toLowerCase() === 'true') ? 1 : 0)
+      : 1;
+    const deliveredVideoUrl = String(deliveredVideoUrlInput || '').trim();
+    const deliveredThumbnailUrl = String(deliveredThumbnailUrlInput || '').trim();
+
+    if (!['approved', 'pending', 'rejected'].includes(status)) {
+      return json({ error: 'Invalid status' }, 400);
+    }
+    
+    // Validate author name
+    if (authorName.length < 1) {
+      return json({ error: 'Name is required' }, 400);
+    }
+    
+    // Validate comment length
+    if (comment.length > 0 && comment.length < 3) {
+      return json({ error: 'Comment must be at least 3 characters' }, 400);
+    }
+
+    // Check for duplicates to prevent spam
+    if (orderIdInput) {
+      const existing = await env.DB.prepare(
+        'SELECT id FROM reviews WHERE order_id = ? LIMIT 1'
+      ).bind(orderIdInput).first();
+      if (existing) {
+        return json({ error: 'A review for this order already exists.' }, 409);
+      }
+    } else {
+      const recent = await env.DB.prepare(
+        'SELECT id FROM reviews WHERE product_id = ? AND author_name = ? AND comment = ? AND status = ? LIMIT 1'
+      ).bind(productId, authorName, comment, status).first();
+      if (recent) {
+        return json({ error: 'This exact review was already submitted.', hasPending: true }, 409);
+      }
+    }
+    
+    await env.DB.prepare(
+      'INSERT INTO reviews (product_id, author_name, rating, comment, status, order_id, show_on_product, delivered_video_url, delivered_thumbnail_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(
+      productId,
+      authorName, 
+      rating, 
+      comment, 
+      status,
+      orderIdInput || null,
+      showOnProduct,
+      deliveredVideoUrl || null,
+      deliveredThumbnailUrl || null
+    ).run();
+    
+    // Get product title for notification
+    let productTitle = '';
+    try {
+      const product = await env.DB.prepare('SELECT title FROM products WHERE id = ?').bind(productId).first();
+      productTitle = product?.title || '';
+    } catch (e) {}
+    
+    // Notify admin about new review (async)
+    if (shouldNotify) {
+      notifyReviewSubmitted(env, { productId, productTitle, rating, authorName, comment }).catch(() => {});
+    }
+    
+    return json({ success: true });
+  } catch (err) {
+    console.error('addReview Error:', err);
+    return json({ error: 'Failed to add review' }, 500);
   }
-  
-  return json({ success: true });
 }
 
 /**

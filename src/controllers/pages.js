@@ -335,11 +335,12 @@ export async function savePage(env, body) {
       return json({ error: 'page not found' }, 404);
     }
 
-    const slugOwner = await env.DB.prepare(
-      'SELECT id FROM pages WHERE slug = ? LIMIT 1'
-    ).bind(finalSlug).first();
-    if (slugOwner && Number(slugOwner.id) !== updateId) {
-      return json({ error: 'slug already exists' }, 409);
+    let slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(finalSlug).first();
+    let baseSlug = finalSlug;
+    let idx = 1;
+    while (slugOwner && Number(slugOwner.id) !== updateId) {
+      finalSlug = `${baseSlug}-${idx++}`;
+      slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(finalSlug).first();
     }
 
     await clearDefaultsIfNeeded();
@@ -455,9 +456,12 @@ export async function savePageBuilder(env, body) {
   }
 
   if (existing) {
-    const slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(name).first();
-    if (slugOwner && Number(slugOwner.id) !== Number(existing.id)) {
-      return json({ error: 'slug already exists' }, 409);
+    let slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(name).first();
+    let baseName = name;
+    let nameIdx = 1;
+    while (slugOwner && Number(slugOwner.id) !== Number(existing.id)) {
+      name = `${baseName}-${nameIdx++}`;
+      slugOwner = await env.DB.prepare('SELECT id FROM pages WHERE slug = ? LIMIT 1').bind(name).first();
     }
 
     await clearDefaultsIfNeeded();
